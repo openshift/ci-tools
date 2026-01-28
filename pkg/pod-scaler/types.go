@@ -384,8 +384,8 @@ type FullMetadata struct {
 	Container string `json:"container"`
 	// Measured indicates if this pod was marked as measured (for accurate resource measurement)
 	Measured bool `json:"measured,omitempty"`
-	// WorkloadType is the type of workload (e.g., "builds", "tests") from the ci-workload label
-	WorkloadType string `json:"workload_type,omitempty"`
+	// WorkloadClass is the class of workload (e.g., "builds", "tests") from the ci-workload label
+	WorkloadClass string `json:"workload_class,omitempty"`
 }
 
 func (m FullMetadata) LogFields() logrus.Fields {

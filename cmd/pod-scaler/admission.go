@@ -117,11 +117,15 @@ func (m *podMutator) Handle(ctx context.Context, req admission.Request) admissio
 		return admission.Allowed("Failed to handle rehearsal Pod, ignoring.")
 	}
 
-	// Determine if pod should be measured
+	// Determine if pod should be measured (check if label already set for idempotency)
 	isMeasured := m.shouldBeMeasured(pod)
 	if isMeasured {
 		m.markPodAsMeasured(pod, logger)
 		m.addMeasuredPodAntiaffinity(pod, logger)
+	} else if m.percentageMeasured > 0 {
+		// Only set the label to "false" if measured pods feature is enabled (for idempotency)
+		// This ensures backward compatibility when percentageMeasured is 0
+		m.setMeasuredLabel(pod, false, logger)
 	}
 
 	mutatePodResources(pod, m.resources, m.mutateResourceLimits, m.cpuCap, m.memoryCap, isMeasured, m.nodeCache, m.measuredPodCPUIncrease, m.reporter, logger)
@@ -320,32 +324,74 @@ func preventUnschedulable(resources *corev1.ResourceRequirements, cpuCap int64, 
 }
 
 func mutatePodResources(pod *corev1.Pod, server *resourceServer, mutateResourceLimits bool, cpuCap int64, memoryCap string, isMeasured bool, nodeCache *nodeAllocatableCache, measuredPodCPUIncrease float64, reporter results.PodScalerReporter, logger *logrus.Entry) {
+	// Set measured and workload class in metadata
+	workloadClass := pod.Labels[ciWorkloadLabel]
+
 	mutateResources := func(containers []corev1.Container) {
 		for i := range containers {
 			meta := podscaler.MetadataFor(pod.ObjectMeta.Labels, pod.ObjectMeta.Name, containers[i].Name)
-			// Set measured and workload type in metadata
-			meta.Measured = isMeasured
-			meta.WorkloadType = pod.Labels[ciWorkloadLabel]
-			resources, recommendationExists := server.recommendedRequestFor(meta)
+			meta.WorkloadClass = workloadClass
+
+			// Get recommendations from both measured and unmeasured runs, use maximum
+			var resources corev1.ResourceRequirements
+			recommendationExists := false
+
+			// Query for measured recommendation
+			meta.Measured = true
+			measuredResources, measuredExists := server.recommendedRequestFor(meta)
+
+			// Query for unmeasured recommendation
+			meta.Measured = false
+			unmeasuredResources, unmeasuredExists := server.recommendedRequestFor(meta)
+
+			// Use maximum from both measured and unmeasured runs
+			if measuredExists || unmeasuredExists {
+				recommendationExists = true
+				resources = corev1.ResourceRequirements{
+					Requests: corev1.ResourceList{},
+					Limits:   corev1.ResourceList{},
+				}
+
+				// Take maximum CPU and memory from both
+				for _, resourceName := range []corev1.ResourceName{corev1.ResourceCPU, corev1.ResourceMemory} {
+					var maxRequest *resource.Quantity
+					if measuredExists && measuredResources.Requests != nil {
+						if q, ok := measuredResources.Requests[resourceName]; ok {
+							maxRequest = &q
+						}
+					}
+					if unmeasuredExists && unmeasuredResources.Requests != nil {
+						if q, ok := unmeasuredResources.Requests[resourceName]; ok {
+							if maxRequest == nil || q.Cmp(*maxRequest) > 0 {
+								maxRequest = &q
+							}
+						}
+					}
+					if maxRequest != nil {
+						resources.Requests[resourceName] = *maxRequest
+					}
+				}
+			}
+
 			if recommendationExists {
-				logger.Debugf("recommendation exists for: %s", containers[i].Name)
+				logger.Debugf("recommendation exists for: %s (using max of measured and unmeasured)", containers[i].Name)
 				workloadType := determineWorkloadType(pod.Annotations, pod.Labels)
 				workloadName := determineWorkloadName(pod.Name, containers[i].Name, workloadType, pod.Labels)
-				workloadClass := pod.Labels[ciWorkloadLabel]
 				useOursIfLarger(&resources, &containers[i].Resources, workloadName, workloadType, isMeasured, workloadClass, reporter, logger)
 				if mutateResourceLimits {
 					reconcileLimits(&containers[i].Resources)
 				}
-			}
-			// For measured pods, increase CPU requests by configured percentage
-			if isMeasured {
-				increaseCPUForMeasuredPod(&containers[i].Resources, pod.Labels, nodeCache, measuredPodCPUIncrease, logger)
 			}
 			preventUnschedulable(&containers[i].Resources, cpuCap, memoryCap, logger)
 		}
 	}
 	mutateResources(pod.Spec.InitContainers)
 	mutateResources(pod.Spec.Containers)
+
+	// For measured pods, increase CPU requests at pod level (sum of all containers) with proper capping
+	if isMeasured {
+		increaseCPUForMeasuredPod(pod, nodeCache, measuredPodCPUIncrease, logger)
+	}
 }
 
 const (
@@ -403,59 +449,97 @@ const (
 )
 
 // shouldBeMeasured determines if a pod should be marked as measured based on the configured percentage
+// Uses true randomness so all pods have a chance to be measured
 func (m *podMutator) shouldBeMeasured(pod *corev1.Pod) bool {
 	if m.percentageMeasured <= 0 {
 		return false
 	}
-	// Use pod name as seed for deterministic randomness
-	// Hash the pod name to get a consistent seed
-	seed := int64(0)
-	for _, c := range pod.Name {
-		seed = seed*31 + int64(c)
+	// Check if label is already set (for webhook idempotency)
+	if pod.Labels != nil {
+		if value, exists := pod.Labels[measuredPodLabel]; exists {
+			return value == "true"
+		}
 	}
-	r := rand.New(rand.NewSource(seed))
-	chance := r.Float64() * 100
+	// Use true randomness - each pod gets a chance to be measured
+	chance := rand.Float64() * 100
 	return chance < m.percentageMeasured
 }
 
 // markPodAsMeasured adds the measured label to the pod
 func (m *podMutator) markPodAsMeasured(pod *corev1.Pod, logger *logrus.Entry) {
+	m.setMeasuredLabel(pod, true, logger)
+}
+
+// setMeasuredLabel sets the measured label to "true" or "false" for idempotency
+func (m *podMutator) setMeasuredLabel(pod *corev1.Pod, measured bool, logger *logrus.Entry) {
 	if pod.Labels == nil {
 		pod.Labels = make(map[string]string)
 	}
-	pod.Labels[measuredPodLabel] = "true"
-	logger.WithField("pod", pod.Name).Debugf("Marked pod as measured")
+	if measured {
+		pod.Labels[measuredPodLabel] = "true"
+		logger.WithField("pod", pod.Name).Debugf("Marked pod as measured")
+	} else {
+		pod.Labels[measuredPodLabel] = "false"
+	}
 }
 
-// increaseCPUForMeasuredPod increases CPU requests by the configured percentage for measured pods, with proper capping
-func increaseCPUForMeasuredPod(resources *corev1.ResourceRequirements, podLabels map[string]string, nodeCache *nodeAllocatableCache, cpuIncreasePercent float64, logger *logrus.Entry) {
-	if resources.Requests == nil {
-		return
+// increaseCPUForMeasuredPod increases CPU requests for all containers in a measured pod by the configured percentage,
+// with proper capping at the pod level (sum of all non-init containers)
+func increaseCPUForMeasuredPod(pod *corev1.Pod, nodeCache *nodeAllocatableCache, cpuIncreasePercent float64, logger *logrus.Entry) {
+	// Calculate total CPU request for all non-init containers
+	type containerCPUInfo struct {
+		index        int
+		originalCPU  resource.Quantity
+		originalName string
 	}
-	cpuRequest, ok := resources.Requests[corev1.ResourceCPU]
-	if !ok {
+
+	var containerInfos []containerCPUInfo
+	var totalCPU float64
+
+	for i := range pod.Spec.Containers {
+		if pod.Spec.Containers[i].Resources.Requests == nil {
+			continue
+		}
+		cpuRequest, ok := pod.Spec.Containers[i].Resources.Requests[corev1.ResourceCPU]
+		if !ok {
+			continue
+		}
+		cpuValue := cpuRequest.AsApproximateFloat64()
+		totalCPU += cpuValue
+		containerInfos = append(containerInfos, containerCPUInfo{
+			index:        i,
+			originalCPU:  cpuRequest,
+			originalName: pod.Spec.Containers[i].Name,
+		})
+	}
+
+	if totalCPU == 0 || len(containerInfos) == 0 {
 		return
 	}
 
-	// Increase by configured percentage (default 50% to provide headroom for accurate measurement)
+	// Increase by configured percentage
 	multiplier := 1.0 + (cpuIncreasePercent / 100.0)
-	cpuValue := cpuRequest.AsApproximateFloat64()
-	increasedValue := cpuValue * multiplier
+	increasedTotalCPU := totalCPU * multiplier
 
-	// Get workload type from pod labels to determine max CPU
-	workloadType := podLabels[ciWorkloadLabel]
-	maxCPU := nodeCache.getMaxCPUForWorkload(workloadType)
+	// Get workload class from pod labels to determine max CPU
+	workloadClass := pod.Labels[ciWorkloadLabel]
+	maxCPU := nodeCache.getMaxCPUForWorkload(workloadClass)
 
-	// Cap at the maximum allocatable CPU for the workload type
-	if increasedValue > float64(maxCPU) {
-		increasedValue = float64(maxCPU)
-		logger.Debugf("Capped increased CPU to %d cores (workload type: %s)", maxCPU, workloadType)
+	// Cap at the maximum allocatable CPU for the workload type (pod-level cap)
+	var scaleFactor float64 = 1.0
+	if increasedTotalCPU > float64(maxCPU) {
+		scaleFactor = float64(maxCPU) / increasedTotalCPU
+		logger.Debugf("Capped increased CPU to %d cores total (workload class: %s), scaling factor: %.2f", maxCPU, workloadClass, scaleFactor)
 	}
 
-	increasedCPU := *resource.NewMilliQuantity(int64(increasedValue*1000), resource.DecimalSI)
-
-	logger.Debugf("Increased CPU request from %s to %s for measured pod", cpuRequest.String(), increasedCPU.String())
-	resources.Requests[corev1.ResourceCPU] = increasedCPU
+	// Apply proportional scaling to all containers
+	for _, info := range containerInfos {
+		originalValue := info.originalCPU.AsApproximateFloat64()
+		increasedValue := originalValue * multiplier * scaleFactor
+		newCPU := *resource.NewMilliQuantity(int64(increasedValue*1000), resource.DecimalSI)
+		pod.Spec.Containers[info.index].Resources.Requests[corev1.ResourceCPU] = newCPU
+		logger.Debugf("Container %s: increased CPU from %s to %s", info.originalName, info.originalCPU.String(), newCPU.String())
+	}
 }
 
 // addMeasuredPodAntiaffinity adds anti-affinity rules for measured pods
@@ -474,20 +558,18 @@ func (m *podMutator) addMeasuredPodAntiaffinity(pod *corev1.Pod, logger *logrus.
 			MatchExpressions: []metav1.LabelSelectorRequirement{
 				{
 					Key:      measuredPodLabel,
-					Operator: metav1.LabelSelectorOpDoesNotExist,
+					Operator: metav1.LabelSelectorOpNotIn,
+					Values:   []string{"true"},
 				},
 			},
 		},
 		TopologyKey: "kubernetes.io/hostname",
 	}
 
-	// Use preferred anti-affinity to avoid scheduling failures while still preferring isolation
-	pod.Spec.Affinity.PodAntiAffinity.PreferredDuringSchedulingIgnoredDuringExecution = append(
-		pod.Spec.Affinity.PodAntiAffinity.PreferredDuringSchedulingIgnoredDuringExecution,
-		corev1.WeightedPodAffinityTerm{
-			Weight:          100,
-			PodAffinityTerm: antiAffinityTerm,
-		},
+	// Use required anti-affinity to force node scaling if no viable node exists
+	pod.Spec.Affinity.PodAntiAffinity.RequiredDuringSchedulingIgnoredDuringExecution = append(
+		pod.Spec.Affinity.PodAntiAffinity.RequiredDuringSchedulingIgnoredDuringExecution,
+		antiAffinityTerm,
 	)
 
 	logger.Debugf("Added anti-affinity for measured pod against non-measured pods")
@@ -542,21 +624,17 @@ func (c *nodeAllocatableCache) refresh() {
 		workloadNodes[workloadType] = append(workloadNodes[workloadType], node)
 	}
 
-	// Find minimum allocatable CPU for each workload type (minus 2 cores for system)
+	// Find minimum allocatable CPU for each workload type
+	// Note: Allocatable already accounts for system/kubelet reserved resources
 	for workloadType, nodeList := range workloadNodes {
 		minAllocatable := int64(0)
 		for _, node := range nodeList {
 			cpu := node.Status.Allocatable[corev1.ResourceCPU]
 			// AsApproximateFloat64() returns the value in cores
 			cpuCores := int64(cpu.AsApproximateFloat64())
-			// Subtract 2 cores for system overhead
-			availableCores := cpuCores - 2
-			if availableCores < 0 {
-				availableCores = 0
-			}
 
-			if minAllocatable == 0 || availableCores < minAllocatable {
-				minAllocatable = availableCores
+			if minAllocatable == 0 || cpuCores < minAllocatable {
+				minAllocatable = cpuCores
 			}
 		}
 
@@ -569,12 +647,6 @@ func (c *nodeAllocatableCache) refresh() {
 			newCache[workloadType] = minAllocatable
 			logger.Debugf("Workload type %s: min allocatable CPU = %d cores", workloadType, minAllocatable)
 		}
-	}
-
-	// If no workload-specific nodes found, use default of 10 cores
-	if len(newCache) == 0 {
-		newCache["default"] = 10
-		logger.Debug("No workload-specific nodes found, using default cap of 10 cores")
 	}
 
 	c.lock.Lock()

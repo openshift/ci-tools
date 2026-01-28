@@ -558,6 +558,42 @@ func GitHubToken(reuseDecorationVolume bool) PodSpecMutator {
 	}
 }
 
+var (
+	gsmConfigVolume = corev1.Volume{
+		Name: cioperatorapi.GSMConfigConfigMap,
+		VolumeSource: corev1.VolumeSource{
+			ConfigMap: &corev1.ConfigMapVolumeSource{
+				LocalObjectReference: corev1.LocalObjectReference{
+					Name: cioperatorapi.GSMConfigConfigMap,
+				},
+			},
+		},
+	}
+	gsmConfigVolumeMount = corev1.VolumeMount{
+		Name:      cioperatorapi.GSMConfigConfigMap,
+		MountPath: cioperatorapi.GSMConfigMountPath,
+		ReadOnly:  true,
+	}
+	gsmConfigParameter = cioperatorapi.GSMConfigFileParameter
+)
+
+// GSMConfig mounts the gsm-config ConfigMap and configures ci-operator to use
+// it via the --gsm-config flag. This mapping file defines how GSM secrets are
+// bundled and consumed, supporting bundle references and auto-discovery of fields.
+func GSMConfig() PodSpecMutator {
+	return func(spec *corev1.PodSpec) error {
+		container := &spec.Containers[0]
+		if err := addVolume(spec, gsmConfigVolume); err != nil {
+			return err
+		}
+		if err := addVolumeMount(container, gsmConfigVolumeMount); err != nil {
+			return err
+		}
+		addUniqueParameter(container, gsmConfigParameter)
+		return nil
+	}
+}
+
 func Variant(variant string) PodSpecMutator {
 	return func(spec *corev1.PodSpec) error {
 		if len(variant) > 0 {

@@ -67,6 +67,7 @@ type consumerOptions struct {
 	cpuCap                int64
 	memoryCap             string
 	cpuPriorityScheduling int64
+	percentageMeasured    float64
 }
 
 func bindOptions(fs *flag.FlagSet) *options {
@@ -89,6 +90,7 @@ func bindOptions(fs *flag.FlagSet) *options {
 	fs.Int64Var(&o.cpuCap, "cpu-cap", 10, "The maximum CPU request value, ex: 10")
 	fs.StringVar(&o.memoryCap, "memory-cap", "20Gi", "The maximum memory request value, ex: '20Gi'")
 	fs.Int64Var(&o.cpuPriorityScheduling, "cpu-priority-scheduling", 8, "Pods with CPU requests at, or above, this value will be admitted with priority scheduling")
+	fs.Float64Var(&o.percentageMeasured, "percentage-measured", 0, "Percentage of pods to mark as measured (0-100). Measured pods get increased CPU requests and anti-affinity rules.")
 	o.resultsOptions.Bind(fs)
 	return &o
 }
@@ -121,6 +123,9 @@ func (o *options) validate() error {
 		}
 		if memoryCap := resource.MustParse(o.memoryCap); memoryCap.Sign() <= 0 {
 			return errors.New("--memory-cap must be greater than 0")
+		}
+		if o.percentageMeasured < 0 || o.percentageMeasured > 100 {
+			return errors.New("--percentage-measured must be between 0 and 100")
 		}
 		if err := o.resultsOptions.Validate(); err != nil {
 			return err
@@ -268,7 +273,7 @@ func mainAdmission(opts *options, cache Cache) {
 		logrus.WithError(err).Fatal("Failed to create pod-scaler reporter.")
 	}
 
-	go admit(opts.port, opts.instrumentationOptions.HealthPort, opts.certDir, client, loaders(cache), opts.mutateResourceLimits, opts.cpuCap, opts.memoryCap, opts.cpuPriorityScheduling, reporter)
+	go admit(opts.port, opts.instrumentationOptions.HealthPort, opts.certDir, client, loaders(cache), opts.mutateResourceLimits, opts.cpuCap, opts.memoryCap, opts.cpuPriorityScheduling, opts.percentageMeasured, reporter)
 }
 
 func loaders(cache Cache) map[string][]*cacheReloader {

@@ -35,7 +35,7 @@ type mockReporter struct {
 	called bool
 }
 
-func (r *mockReporter) ReportResourceConfigurationWarning(string, string, string, string, string) {
+func (r *mockReporter) ReportResourceConfigurationWarning(string, string, string, string, string, bool, string) {
 	r.called = true
 }
 
@@ -554,7 +554,7 @@ func TestMutatePodResources(t *testing.T) {
 	for _, testCase := range testCases {
 		t.Run(testCase.name, func(t *testing.T) {
 			original := testCase.pod.DeepCopy()
-			mutatePodResources(testCase.pod, testCase.server, testCase.mutateResourceLimits, 10, "20Gi", &defaultReporter, logrus.WithField("test", testCase.name))
+			mutatePodResources(testCase.pod, testCase.server, testCase.mutateResourceLimits, 10, "20Gi", false, nil, &defaultReporter, logrus.WithField("test", testCase.name))
 			diff := cmp.Diff(original, testCase.pod)
 			// In some cases, cmp.Diff decides to use non-breaking spaces, and it's not
 			// particularly deterministic about this. We don't care.
@@ -729,7 +729,7 @@ func TestUseOursIfLarger(t *testing.T) {
 	}
 	for _, testCase := range testCases {
 		t.Run(testCase.name, func(t *testing.T) {
-			useOursIfLarger(&testCase.ours, &testCase.theirs, "test", "build", &defaultReporter, logrus.WithField("test", testCase.name))
+			useOursIfLarger(&testCase.ours, &testCase.theirs, "test", "build", false, "", &defaultReporter, logrus.WithField("test", testCase.name))
 			if diff := cmp.Diff(testCase.theirs, testCase.expected); diff != "" {
 				t.Errorf("%s: got incorrect resources after mutation: %v", testCase.name, diff)
 			}
@@ -814,7 +814,7 @@ func TestUseOursIsLarger_ReporterReports(t *testing.T) {
 
 	for _, tc := range testCases {
 		t.Run(tc.name, func(t *testing.T) {
-			useOursIfLarger(&tc.ours, &tc.theirs, "test", "build", &tc.reporter, logrus.WithField("test", tc.name))
+			useOursIfLarger(&tc.ours, &tc.theirs, "test", "build", false, "", &tc.reporter, logrus.WithField("test", tc.name))
 
 			if diff := cmp.Diff(tc.reporter.called, tc.expected); diff != "" {
 				t.Errorf("actual and expected reporter states don't match, : %v", diff)

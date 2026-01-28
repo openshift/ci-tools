@@ -5,15 +5,19 @@ import (
 	"encoding/json"
 	"errors"
 	"fmt"
+	"math/rand"
 	"net/http"
 	"sort"
 	"strconv"
+	"sync"
+	"time"
 
 	"github.com/sirupsen/logrus"
 
 	corev1 "k8s.io/api/core/v1"
 	"k8s.io/apimachinery/pkg/api/resource"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
+	"k8s.io/client-go/kubernetes"
 	"k8s.io/client-go/kubernetes/scheme"
 	"sigs.k8s.io/controller-runtime/pkg/webhook"
 	"sigs.k8s.io/controller-runtime/pkg/webhook/admission"
@@ -31,20 +35,32 @@ import (
 	"github.com/openshift/ci-tools/pkg/rehearse"
 	"github.com/openshift/ci-tools/pkg/results"
 	"github.com/openshift/ci-tools/pkg/steps"
+	"github.com/openshift/ci-tools/pkg/util"
 )
 
-func admit(port, healthPort int, certDir string, client buildclientv1.BuildV1Interface, loaders map[string][]*cacheReloader, mutateResourceLimits bool, cpuCap int64, memoryCap string, cpuPriorityScheduling int64, reporter results.PodScalerReporter) {
+func admit(port, healthPort int, certDir string, client buildclientv1.BuildV1Interface, loaders map[string][]*cacheReloader, mutateResourceLimits bool, cpuCap int64, memoryCap string, cpuPriorityScheduling int64, percentageMeasured float64, reporter results.PodScalerReporter) {
 	logger := logrus.WithField("component", "pod-scaler admission")
 	logger.Infof("Initializing admission webhook server with %d loaders.", len(loaders))
 	health := pjutil.NewHealthOnPort(healthPort)
 	resources := newResourceServer(loaders, health)
 	decoder := admission.NewDecoder(scheme.Scheme)
 
+	// Initialize node allocatable CPU cache
+	restConfig, err := util.LoadClusterConfig()
+	if err != nil {
+		logrus.WithError(err).Fatal("Failed to load cluster config for node cache.")
+	}
+	kubeClient, err := kubernetes.NewForConfig(restConfig)
+	if err != nil {
+		logrus.WithError(err).Fatal("Failed to create Kubernetes client for node cache.")
+	}
+	nodeCache := newNodeAllocatableCache(kubeClient)
+
 	server := webhook.NewServer(webhook.Options{
 		Port:    port,
 		CertDir: certDir,
 	})
-	server.Register("/pods", &webhook.Admission{Handler: &podMutator{logger: logger, client: client, decoder: decoder, resources: resources, mutateResourceLimits: mutateResourceLimits, cpuCap: cpuCap, memoryCap: memoryCap, cpuPriorityScheduling: cpuPriorityScheduling, reporter: reporter}})
+	server.Register("/pods", &webhook.Admission{Handler: &podMutator{logger: logger, client: client, decoder: decoder, resources: resources, mutateResourceLimits: mutateResourceLimits, cpuCap: cpuCap, memoryCap: memoryCap, cpuPriorityScheduling: cpuPriorityScheduling, percentageMeasured: percentageMeasured, nodeCache: nodeCache, reporter: reporter}})
 	logger.Info("Serving admission webhooks.")
 	if err := server.Start(interrupts.Context()); err != nil {
 		logrus.WithError(err).Fatal("Failed to serve webhooks.")
@@ -60,6 +76,8 @@ type podMutator struct {
 	cpuCap                int64
 	memoryCap             string
 	cpuPriorityScheduling int64
+	percentageMeasured    float64
+	nodeCache             *nodeAllocatableCache
 	reporter              results.PodScalerReporter
 }
 
@@ -97,8 +115,19 @@ func (m *podMutator) Handle(ctx context.Context, req admission.Request) admissio
 		logger.WithError(err).Error("Failed to handle rehearsal Pod.")
 		return admission.Allowed("Failed to handle rehearsal Pod, ignoring.")
 	}
-	mutatePodResources(pod, m.resources, m.mutateResourceLimits, m.cpuCap, m.memoryCap, m.reporter, logger)
+
+	// Determine if pod should be measured
+	isMeasured := m.shouldBeMeasured(pod)
+	if isMeasured {
+		m.markPodAsMeasured(pod, logger)
+	}
+
+	mutatePodResources(pod, m.resources, m.mutateResourceLimits, m.cpuCap, m.memoryCap, isMeasured, m.nodeCache, m.reporter, logger)
 	m.addPriorityClass(pod)
+
+	if isMeasured {
+		m.addMeasuredPodAntiaffinity(pod, logger)
+	}
 
 	marshaledPod, err := json.Marshal(pod)
 	if err != nil {
@@ -197,7 +226,7 @@ func mutatePodLabels(pod *corev1.Pod, build *buildv1.Build) {
 }
 
 // useOursIfLarger updates fields in theirs when ours are larger
-func useOursIfLarger(allOfOurs, allOfTheirs *corev1.ResourceRequirements, workloadName, workloadType string, reporter results.PodScalerReporter, logger *logrus.Entry) {
+func useOursIfLarger(allOfOurs, allOfTheirs *corev1.ResourceRequirements, workloadName, workloadType string, isMeasured bool, workloadClass string, reporter results.PodScalerReporter, logger *logrus.Entry) {
 	for _, item := range []*corev1.ResourceRequirements{allOfOurs, allOfTheirs} {
 		if item.Requests == nil {
 			item.Requests = corev1.ResourceList{}
@@ -234,7 +263,7 @@ func useOursIfLarger(allOfOurs, allOfTheirs *corev1.ResourceRequirements, worklo
 				fieldLogger.Debug("determined amount larger than configured")
 				(*pair.theirs)[field] = our
 				if their.Value() > 0 && our.Value() > (their.Value()*10) {
-					reporter.ReportResourceConfigurationWarning(workloadName, workloadType, their.String(), our.String(), field.String())
+					reporter.ReportResourceConfigurationWarning(workloadName, workloadType, their.String(), our.String(), field.String(), isMeasured, workloadClass)
 				}
 			} else if cmp < 0 {
 				fieldLogger.Debug("determined amount smaller than configured")
@@ -292,19 +321,27 @@ func preventUnschedulable(resources *corev1.ResourceRequirements, cpuCap int64, 
 	}
 }
 
-func mutatePodResources(pod *corev1.Pod, server *resourceServer, mutateResourceLimits bool, cpuCap int64, memoryCap string, reporter results.PodScalerReporter, logger *logrus.Entry) {
+func mutatePodResources(pod *corev1.Pod, server *resourceServer, mutateResourceLimits bool, cpuCap int64, memoryCap string, isMeasured bool, nodeCache *nodeAllocatableCache, reporter results.PodScalerReporter, logger *logrus.Entry) {
 	mutateResources := func(containers []corev1.Container) {
 		for i := range containers {
 			meta := podscaler.MetadataFor(pod.ObjectMeta.Labels, pod.ObjectMeta.Name, containers[i].Name)
+			// Set measured and workload type in metadata
+			meta.Measured = isMeasured
+			meta.WorkloadType = pod.Labels[ciWorkloadLabel]
 			resources, recommendationExists := server.recommendedRequestFor(meta)
 			if recommendationExists {
 				logger.Debugf("recommendation exists for: %s", containers[i].Name)
 				workloadType := determineWorkloadType(pod.Annotations, pod.Labels)
 				workloadName := determineWorkloadName(pod.Name, containers[i].Name, workloadType, pod.Labels)
-				useOursIfLarger(&resources, &containers[i].Resources, workloadName, workloadType, reporter, logger)
+				workloadClass := pod.Labels[ciWorkloadLabel]
+				useOursIfLarger(&resources, &containers[i].Resources, workloadName, workloadType, isMeasured, workloadClass, reporter, logger)
 				if mutateResourceLimits {
 					reconcileLimits(&containers[i].Resources)
 				}
+			}
+			// For measured pods, increase CPU requests by 50%
+			if isMeasured {
+				increaseCPUForMeasuredPod(&containers[i].Resources, pod.Labels, nodeCache, logger)
 			}
 			preventUnschedulable(&containers[i].Resources, cpuCap, memoryCap, logger)
 		}
@@ -360,4 +397,204 @@ func (m *podMutator) addPriorityClass(pod *corev1.Pod) {
 		pod.Spec.PreemptionPolicy = nil // We cannot have PreemptionPolicy defined if we are using a priority class with preemption of "Never"
 		pod.Spec.PriorityClassName = priorityClassName
 	}
+}
+
+const (
+	measuredPodLabel = "pod-scaler.openshift.io/measured"
+	ciWorkloadLabel  = "ci-workload"
+)
+
+// shouldBeMeasured determines if a pod should be marked as measured based on the configured percentage
+func (m *podMutator) shouldBeMeasured(pod *corev1.Pod) bool {
+	if m.percentageMeasured <= 0 {
+		return false
+	}
+	// Use pod name as seed for deterministic randomness
+	// Hash the pod name to get a consistent seed
+	seed := int64(0)
+	for _, c := range pod.Name {
+		seed = seed*31 + int64(c)
+	}
+	r := rand.New(rand.NewSource(seed))
+	chance := r.Float64() * 100
+	return chance < m.percentageMeasured
+}
+
+// markPodAsMeasured adds the measured label to the pod
+func (m *podMutator) markPodAsMeasured(pod *corev1.Pod, logger *logrus.Entry) {
+	if pod.Labels == nil {
+		pod.Labels = make(map[string]string)
+	}
+	pod.Labels[measuredPodLabel] = "true"
+	logger.Debugf("Marked pod as measured")
+}
+
+// increaseCPUForMeasuredPod increases CPU requests by 50% for measured pods, with proper capping
+func increaseCPUForMeasuredPod(resources *corev1.ResourceRequirements, podLabels map[string]string, nodeCache *nodeAllocatableCache, logger *logrus.Entry) {
+	if resources.Requests == nil {
+		return
+	}
+	cpuRequest, ok := resources.Requests[corev1.ResourceCPU]
+	if !ok {
+		return
+	}
+
+	// Increase by 50%
+	cpuValue := cpuRequest.AsApproximateFloat64()
+	increasedValue := cpuValue * 1.5
+
+	// Get workload type from pod labels to determine max CPU
+	workloadType := podLabels[ciWorkloadLabel]
+	maxCPU := nodeCache.getMaxCPUForWorkload(workloadType)
+
+	// Cap at the maximum allocatable CPU for the workload type
+	if increasedValue > float64(maxCPU) {
+		increasedValue = float64(maxCPU)
+		logger.Debugf("Capped increased CPU to %d cores (workload type: %s)", maxCPU, workloadType)
+	}
+
+	increasedCPU := *resource.NewMilliQuantity(int64(increasedValue*1000), resource.DecimalSI)
+
+	logger.Debugf("Increased CPU request from %s to %s for measured pod", cpuRequest.String(), increasedCPU.String())
+	resources.Requests[corev1.ResourceCPU] = increasedCPU
+}
+
+// addMeasuredPodAntiaffinity adds anti-affinity rules for measured pods
+func (m *podMutator) addMeasuredPodAntiaffinity(pod *corev1.Pod, logger *logrus.Entry) {
+	if pod.Spec.Affinity == nil {
+		pod.Spec.Affinity = &corev1.Affinity{}
+	}
+	if pod.Spec.Affinity.PodAntiAffinity == nil {
+		pod.Spec.Affinity.PodAntiAffinity = &corev1.PodAntiAffinity{}
+	}
+
+	// Measured pods should not run with non-measured pods
+	// But measured pods can run together (no anti-affinity between measured pods)
+	antiAffinityTerm := corev1.PodAffinityTerm{
+		LabelSelector: &metav1.LabelSelector{
+			MatchExpressions: []metav1.LabelSelectorRequirement{
+				{
+					Key:      measuredPodLabel,
+					Operator: metav1.LabelSelectorOpDoesNotExist,
+				},
+			},
+		},
+		TopologyKey: "kubernetes.io/hostname",
+	}
+
+	// Use preferred anti-affinity to avoid scheduling failures while still preferring isolation
+	pod.Spec.Affinity.PodAntiAffinity.PreferredDuringSchedulingIgnoredDuringExecution = append(
+		pod.Spec.Affinity.PodAntiAffinity.PreferredDuringSchedulingIgnoredDuringExecution,
+		corev1.WeightedPodAffinityTerm{
+			Weight:          100,
+			PodAffinityTerm: antiAffinityTerm,
+		},
+	)
+
+	logger.Debugf("Added anti-affinity for measured pod against non-measured pods")
+}
+
+// nodeAllocatableCache caches node allocatable CPU information
+type nodeAllocatableCache struct {
+	client     kubernetes.Interface
+	lock       sync.RWMutex
+	cache      map[string]int64 // workload type -> max allocatable CPU (in cores)
+	lastUpdate time.Time
+}
+
+const nodeCacheRefreshInterval = 15 * time.Minute
+
+func newNodeAllocatableCache(client kubernetes.Interface) *nodeAllocatableCache {
+	cache := &nodeAllocatableCache{
+		client: client,
+		cache:  make(map[string]int64),
+	}
+
+	// Initial load
+	cache.refresh()
+
+	// Periodic refresh
+	interrupts.TickLiteral(cache.refresh, nodeCacheRefreshInterval)
+
+	return cache
+}
+
+// refresh updates the cache with current node allocatable CPU information
+func (c *nodeAllocatableCache) refresh() {
+	logger := logrus.WithField("component", "node-allocatable-cache")
+	logger.Debug("Refreshing node allocatable CPU cache")
+
+	nodes, err := c.client.CoreV1().Nodes().List(context.Background(), metav1.ListOptions{})
+	if err != nil {
+		logger.WithError(err).Warn("Failed to list nodes for allocatable CPU cache")
+		return
+	}
+
+	newCache := make(map[string]int64)
+
+	// Group nodes by workload type (ci-workload label)
+	workloadNodes := make(map[string][]*corev1.Node)
+	for i := range nodes.Items {
+		node := &nodes.Items[i]
+		workloadType := node.Labels[ciWorkloadLabel]
+		if workloadType == "" {
+			continue
+		}
+		workloadNodes[workloadType] = append(workloadNodes[workloadType], node)
+	}
+
+	// Find minimum allocatable CPU for each workload type (minus 2 cores for system)
+	for workloadType, nodeList := range workloadNodes {
+		minAllocatable := int64(0)
+		for _, node := range nodeList {
+			cpu := node.Status.Allocatable[corev1.ResourceCPU]
+			// AsApproximateFloat64() returns the value in cores
+			cpuCores := int64(cpu.AsApproximateFloat64())
+			// Subtract 2 cores for system overhead
+			availableCores := cpuCores - 2
+			if availableCores < 0 {
+				availableCores = 0
+			}
+
+			if minAllocatable == 0 || availableCores < minAllocatable {
+				minAllocatable = availableCores
+			}
+		}
+
+		// Cap at 10 cores maximum
+		if minAllocatable > 10 {
+			minAllocatable = 10
+		}
+
+		if minAllocatable > 0 {
+			newCache[workloadType] = minAllocatable
+			logger.Debugf("Workload type %s: max allocatable CPU = %d cores", workloadType, minAllocatable)
+		}
+	}
+
+	// If no workload-specific nodes found, use default of 10 cores
+	if len(newCache) == 0 {
+		newCache["default"] = 10
+		logger.Debug("No workload-specific nodes found, using default cap of 10 cores")
+	}
+
+	c.lock.Lock()
+	c.cache = newCache
+	c.lastUpdate = time.Now()
+	c.lock.Unlock()
+
+	logger.Debug("Node allocatable CPU cache refreshed")
+}
+
+// getMaxCPUForWorkload returns the maximum CPU (in cores) for a given workload type
+func (c *nodeAllocatableCache) getMaxCPUForWorkload(workloadType string) int64 {
+	c.lock.RLock()
+	defer c.lock.RUnlock()
+
+	if maxCPU, ok := c.cache[workloadType]; ok {
+		return maxCPU
+	}
+
+	// Default to 10 cores if workload type not found
+	return 10
 }

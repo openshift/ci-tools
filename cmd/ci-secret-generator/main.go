@@ -2,6 +2,7 @@ package main
 
 import (
 	"bytes"
+	"context"
 	"errors"
 	"flag"
 	"fmt"
@@ -10,7 +11,9 @@ import (
 	"reflect"
 	"strings"
 
+	secretmanager "cloud.google.com/go/secretmanager/apiv1"
 	"github.com/sirupsen/logrus"
+	"google.golang.org/api/option"
 
 	utilerrors "k8s.io/apimachinery/pkg/util/errors"
 	"k8s.io/apimachinery/pkg/util/sets"
@@ -19,6 +22,7 @@ import (
 	"github.com/openshift/ci-tools/pkg/api/secretbootstrap"
 	"github.com/openshift/ci-tools/pkg/api/secretgenerator"
 	gsm "github.com/openshift/ci-tools/pkg/gsm-secrets"
+	gsmvalidation "github.com/openshift/ci-tools/pkg/gsm-validation"
 	"github.com/openshift/ci-tools/pkg/prowconfigutils"
 	"github.com/openshift/ci-tools/pkg/secrets"
 )
@@ -141,18 +145,18 @@ func cmdEmptyErr(itemIndex, entryIndex int, entry string) error {
 func (o *options) validateConfig() error {
 	for i, item := range o.config {
 		if item.ItemName == "" {
-			return fmt.Errorf("config[%d].itemName: empty key is not allowed", i)
+			return fmt.Errorf("config[%d].ItemName: empty key is not allowed", i)
 		}
 
 		for fieldIndex, field := range item.Fields {
 			if field.Name != "" && field.Cmd == "" {
-				return cmdEmptyErr(i, fieldIndex, "fields")
+				return cmdEmptyErr(i, fieldIndex, "Fields")
 			}
 		}
 		var hasCluster bool
 		for paramName, params := range item.Params {
 			if len(params) == 0 {
-				return fmt.Errorf("at least one argument required for param: %s, itemName: %s", paramName, item.ItemName)
+				return fmt.Errorf("at least one argument required for param: %s, ItemName: %s", paramName, item.ItemName)
 			}
 			if paramName == "cluster" {
 				hasCluster = true
@@ -211,10 +215,71 @@ func fmtExecCmdErr(action, cmd string, wrappedErr error, stdout, stderr []byte, 
 		stdout, stderrPreamble, stderr)
 }
 
-func updateSecrets(config secretgenerator.Config, client secrets.Client, disabledClusters sets.Set[string]) error {
+func parseIndexSecretContent(content []byte) sets.Set[string] {
+	return sets.New(gsm.ParseIndexSecretContent(content)...)
+}
+
+func updateSecrets(config secretgenerator.Config, client secrets.Client, disabledClusters sets.Set[string], existingIndexEntries sets.Set[string]) error {
 	var errs []error
+
+	secretsToUpdate, indexFields, err := buildSecretsToUpdate(config, disabledClusters, existingIndexEntries)
+	if err != nil {
+		errs = append(errs, err)
+	}
+
+	for _, item := range secretsToUpdate {
+		logger := logrus.WithField("item", item.ItemName)
+		for _, field := range item.Fields {
+			if err := client.SetFieldOnItem(item.ItemName, field.FieldName, field.Payload); err != nil {
+				errs = append(errs, fmt.Errorf("failed to upload field %s on item %s: %w", field.FieldName, item.ItemName, err))
+				continue
+			}
+		}
+
+		// Adding the Notes not empty check here since we don't want to overwrite any Notes that might already be present
+		// If Notes have to be deleted, it would have to be a manual operation where the user goes to the bw web UI and removes
+		// the Notes
+		if item.Notes != "" {
+			logger.Info("adding Notes")
+			if err := client.UpdateNotesOnItem(item.ItemName, item.Notes); err != nil {
+				errs = append(errs, fmt.Errorf("failed to update Notes on item %s: %w", item.ItemName, err))
+			}
+		}
+	}
+
+	if err := client.UpdateIndexSecret(secrets.TestPlatformCollection, gsm.ConstructIndexSecretContent(indexFields)); err != nil {
+		errs = append(errs, err)
+	}
+
+	return utilerrors.NewAggregate(errs)
+}
+
+type ItemUpdateInfo struct {
+	ItemName string
+	Notes    string
+	Fields   []FieldUpdateInfo
+}
+
+type FieldUpdateInfo struct {
+	FieldName string
+	Payload   []byte
+}
+
+func buildSecretsToUpdate(config secretgenerator.Config, disabledClusters sets.Set[string], previousIndexEntries sets.Set[string]) ([]ItemUpdateInfo, []string, error) {
+	var errs []error
+	var newIndexEntries []string
+	var secretsToUpdate []ItemUpdateInfo
+
 	for _, item := range config {
 		logger := logrus.WithField("item", item.ItemName)
+		itemStruct := ItemUpdateInfo{
+			ItemName: item.ItemName,
+		}
+		if item.Notes != "" {
+			logger = logger.WithField("notes", item.Notes)
+			itemStruct.Notes = item.Notes
+		}
+
 		for _, field := range item.Fields {
 			logger = logger.WithFields(logrus.Fields{
 				"field":   field.Name,
@@ -225,38 +290,31 @@ func updateSecrets(config secretgenerator.Config, client secrets.Client, disable
 				logger.Info("ignored field for disabled cluster")
 				continue
 			}
+			normalizedGroup := gsmvalidation.NormalizeName(item.ItemName)
+			normalizedField := gsmvalidation.NormalizeName(field.Name)
+			gsmSecretName := fmt.Sprintf("%s%s%s", normalizedGroup, gsmvalidation.CollectionSecretDelimiter, normalizedField)
+
 			logger.Info("processing field")
 			out, err := executeCommand(field.Cmd)
 			if err != nil {
 				msg := "failed to generate field"
 				logger.WithError(err).Error(msg)
 				errs = append(errs, errors.New(msg))
+				if previousIndexEntries.Has(gsmSecretName) {
+					newIndexEntries = append(newIndexEntries, gsmSecretName)
+				}
 				continue
 			}
-			if err := client.SetFieldOnItem(item.ItemName, field.Name, out); err != nil {
-				msg := "failed to upload field"
-				logger.WithError(err).Error(msg)
-				errs = append(errs, errors.New(msg))
-				continue
-			}
-		}
-
-		// Adding the notes not empty check here since we dont want to overwrite any notes that might already be present
-		// If notes have to be deleted, it would have to be a manual operation where the user goes to the bw web UI and removes
-		// the notes
-		if item.Notes != "" {
-			logger = logger.WithFields(logrus.Fields{
-				"notes": item.Notes,
+			itemStruct.Fields = append(itemStruct.Fields, FieldUpdateInfo{
+				FieldName: field.Name,
+				Payload:   out,
 			})
-			logger.Info("adding notes")
-			if err := client.UpdateNotesOnItem(item.ItemName, item.Notes); err != nil {
-				msg := "failed to update notes"
-				logger.WithError(err).Error(msg)
-				errs = append(errs, errors.New(msg))
-			}
+			newIndexEntries = append(newIndexEntries, gsmSecretName)
 		}
+		secretsToUpdate = append(secretsToUpdate, itemStruct)
 	}
-	return utilerrors.NewAggregate(errs)
+
+	return secretsToUpdate, newIndexEntries, utilerrors.NewAggregate(errs)
 }
 
 func main() {
@@ -293,6 +351,7 @@ func main() {
 
 func generateSecrets(o options, censor *secrets.DynamicCensor) (errs []error) {
 	var client secrets.Client
+	var existingIndexEntries sets.Set[string]
 
 	if o.dryRun {
 		var err error
@@ -323,14 +382,42 @@ func generateSecrets(o options, censor *secrets.DynamicCensor) (errs []error) {
 				return append(errs, fmt.Errorf("failed to enable GSM sync: %w", err))
 			}
 			logrus.Info("GSM sync enabled for cluster-init secret")
+			indexContent, err := readIndexSecret(o)
+			if err != nil {
+				return append(errs, fmt.Errorf("failed to read index secret for %s: %w", secrets.TestPlatformCollection, err))
+			}
+			existingIndexEntries = parseIndexSecretContent(indexContent)
 		}
 	}
 
-	if err := updateSecrets(o.config, client, o.disabledClusters); err != nil {
+	if err := updateSecrets(o.config, client, o.disabledClusters, existingIndexEntries); err != nil {
 		errs = append(errs, fmt.Errorf("failed to update secrets: %w", err))
 	}
 
 	return errs
+}
+
+func readIndexSecret(o options) ([]byte, error) {
+	ctx := context.Background()
+	var opts []option.ClientOption
+	if o.gsmCredentialsFile != "" {
+		opts = append(opts, option.WithCredentialsFile(o.gsmCredentialsFile))
+	}
+
+	gsmClient, err := secretmanager.NewClient(ctx, opts...)
+	if err != nil {
+		return nil, err
+	}
+	defer gsmClient.Close()
+
+	indexSecretName := gsm.GetIndexSecretName(secrets.TestPlatformCollection)
+	secretResourceName := fmt.Sprintf("projects/%s/secrets/%s", o.gcpProjectConfig.ProjectIdNumber, indexSecretName)
+
+	indexContent, err := gsm.GetSecretPayload(ctx, gsmClient, secretResourceName)
+	if err != nil {
+		return nil, err
+	}
+	return indexContent, nil
 }
 
 func itemContextsFromConfig(items secretgenerator.Config) []secretbootstrap.ItemContext {

@@ -1328,11 +1328,18 @@
         command:
         - ci-operator
         env:
+        - name: CI_OPERATOR_POD_IP
+          valueFrom:
+            fieldRef:
+              fieldPath: status.podIP
         - name: CONFIG_SPEC
           value: H4sIAAAAAAAC/8RUTWsbMRC976+YW6CgsHbTy95ycHsKlNT3Zbw7lkX11ZlZF5v++KLdtbHT4FIoyUnSm6c3T09IGxRqXUBL0lQAZVlGgIiBGkjsrItm/3Bfn1HJ2JVSpig7t9WxoGibcXe1GZzvW05Ji9Ao3YoyYWgL6UKcyVPZ8XdhmzxGaxb3i7o6mTWw5RTmpgCaGlASNWO9YpI0cDed6u7D3dTXu+BUpjlAl4cGPtX1kxsBph8DyYvyolQVbSuZOrd1HapLsVBeC+jVU+gkagClgTB4daJo6WNV/Cgx+laU8ty384MocZs5bZ2nBvA4MD2MtZxEJ9Yk5rIzPWVOeycuRRMGUWNRd8SnM6QQMPbSwK8ZAbgiTBm6KIren9Gr9E7QdToXCdV1uAADhcSHBpZf3A2rF/MbVs8hmjkW6EmU0+HN3Geml4nP7QxvsLvhXUiHPJLM8h3CPrmcx38Ked4DxkT6+dmjnbkU9ydHBnra4uB1enWQkTHQdEMjfpaf3sl69W3dfn18fnxarVfPb5ZH8XZ5f7SkP5II+J3ARSXL4+O+MhcO84fyf70dj62lSIxKfRtIsUfF8QNmjN2umCo3UQEktg3IkMcFUy7fHKdU1r8DAAD//6N08j28BQAA
         image: quay-proxy.ci.openshift.org/openshift/ci:ci_ci-operator_latest
         imagePullPolicy: Always
         name: ""
+        ports:
+        - containerPort: 8082
+          name: lease-proxy
         resources:
           requests:
             cpu: 10m

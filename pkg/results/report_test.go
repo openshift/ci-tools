@@ -268,7 +268,7 @@ func TestReportMemoryConfigurationWarning(t *testing.T) {
 				},
 				address: testServer.URL,
 			}
-			podScalerReporter.ReportResourceConfigurationWarning(tc.workloadName, tc.workloadType, tc.configuredMemory, tc.determinedMemory, tc.resourceType)
+			podScalerReporter.ReportResourceConfigurationWarning(tc.workloadName, tc.workloadType, tc.configuredMemory, tc.determinedMemory, tc.resourceType, false, "")
 		})
 	}
 }

@@ -561,7 +561,7 @@ func (s *server) prepareCandidate(repoClient git.RepoClient, pullRequest *github
 		}
 	}
 	if !rebased || rebaseErr != nil {
-		return rehearse.RehearsalCandidate{}, fmt.Errorf("couldn't rebase candidate onto %v: %w", baseRef, rebaseErr)
+		return rehearse.RehearsalCandidate{}, fmt.Errorf("couldn't rebase candidate onto %v: %w", baseRef, err)
 	}
 
 	return candidate, nil
@@ -571,10 +571,7 @@ func (s *server) prepareCandidate(repoClient git.RepoClient, pullRequest *github
 // and the total number of affected jobs
 func (s *server) getJobsTableLines(presubmits config.Presubmits, periodics config.Periodics, user string) ([]string, int) {
 	if len(presubmits) == 0 && len(periodics) == 0 {
-		message := fmt.Sprintf("%s \n@%s: no rehearsable tests are affected by this change", rehearsalNotifier, user)
-		message += "\n\n"
-		message += "**Note:** If this PR includes changes to step registry files (`ci-operator/step-registry/`) and you expected jobs to be found, try rebasing your PR onto the base branch. This helps pj-rehearse accurately detect changes when the base branch has moved forward."
-		return []string{message}, 0
+		return []string{fmt.Sprintf("%s \n@%s: no rehearsable tests are affected by this change", rehearsalNotifier, user)}, 0
 	}
 
 	lines := []string{

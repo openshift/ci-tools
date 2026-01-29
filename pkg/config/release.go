@@ -274,18 +274,7 @@ func getRevChanges(root, path, base string, ignoreModified bool) ([]string, erro
 	if ignoreModified {
 		filter = "--diff-filter=ACR"
 	}
-	// Find merge base to handle cases where base branch has moved forward.
-	// This ensures accurate change detection even when the PR was created from
-	// an outdated base branch commit.
-	mergeBase, err := git(root, "merge-base", base, "HEAD")
-	if err != nil {
-		// Fallback to original behavior if merge-base fails (e.g., no common ancestor)
-		// This can happen in edge cases, so we use the provided base directly
-		mergeBase = base
-	} else {
-		mergeBase = strings.TrimSpace(mergeBase)
-	}
-	cmd := []string{"diff-tree", "-r", filter, mergeBase + ":" + path, "HEAD:" + path}
+	cmd := []string{"diff-tree", "-r", filter, base + ":" + path, "HEAD:" + path}
 	diff, err := git(root, cmd...)
 	if err != nil || diff == "" {
 		return nil, err

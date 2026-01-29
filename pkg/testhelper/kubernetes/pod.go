@@ -26,7 +26,9 @@ import (
 type FakePodExecutor struct {
 	loggingclient.LoggingClient
 	Failures    sets.Set[string]
+	Pending     sets.Set[string] // Pods that should stay in Pending state
 	CreatedPods []*coreapi.Pod
+	DeletedPods []*coreapi.Pod
 	lock        sync.Mutex
 }
 
@@ -43,6 +45,17 @@ func (f *FakePodExecutor) Create(ctx context.Context, o ctrlruntimeclient.Object
 		pod.Status.Phase = coreapi.PodPending
 	}
 	return f.LoggingClient.Create(ctx, o, opts...)
+}
+
+func (f *FakePodExecutor) Delete(ctx context.Context, o ctrlruntimeclient.Object, opts ...ctrlruntimeclient.DeleteOption) error {
+	if pod, ok := o.(*coreapi.Pod); ok {
+		func() {
+			f.lock.Lock()
+			defer f.lock.Unlock()
+			f.DeletedPods = append(f.DeletedPods, pod.DeepCopy())
+		}()
+	}
+	return f.LoggingClient.Delete(ctx, o, opts...)
 }
 
 func (f *FakePodExecutor) Get(ctx context.Context, n ctrlruntimeclient.ObjectKey, o ctrlruntimeclient.Object, opts ...ctrlruntimeclient.GetOption) error {
@@ -70,6 +83,12 @@ func (f *FakePodExecutor) Watch(ctx context.Context, list ctrlruntimeclient.Obje
 }
 
 func (f *FakePodExecutor) process(pod *coreapi.Pod) {
+	// If the pod should stay pending, don't transition it
+	if f.Pending != nil && f.Pending.Has(pod.Name) {
+		pod.Status.Phase = coreapi.PodPending
+		return
+	}
+
 	fail := f.Failures.Has(pod.Name)
 	if fail {
 		pod.Status.Phase = coreapi.PodFailed

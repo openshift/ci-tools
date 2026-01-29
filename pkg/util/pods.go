@@ -431,32 +431,54 @@ func checkPending(pod corev1.Pod, timeout time.Duration, now time.Time) (time.Ti
 	default:
 		panic(fmt.Sprintf("unknown pod phase: %s", pod.Status.Phase))
 	}
-	check := func(t0 time.Time) (time.Time, error) {
+
+	check := func(t0 time.Time, msg string) (time.Time, error) {
 		if t := t0.Add(timeout); now.Before(t) {
 			return t, nil
 		}
-		names := strings.Join(pendingContainerNames(pod), ", ")
-		return time.Time{}, results.ForReason(api.ReasonPending).ForError(fmt.Errorf("containers have not started in %s: %s", now.Sub(t0), names))
+
+		var namesSuffix string
+		if names := strings.Join(pendingContainerNames(pod), ", "); names != "" {
+			namesSuffix = fmt.Sprintf(": %s", names)
+		}
+
+		return time.Time{}, results.ForReason(api.ReasonPending).ForError(fmt.Errorf("%s in %s%s", msg, now.Sub(t0), namesSuffix))
 	}
+
 	prev := pod.CreationTimestamp.Time
+
+	// Unscheduled pods do not have container statuses set (populated by kubelet), so we need to check explicitly
+	if pod.Spec.NodeName == "" {
+		return check(prev, "pod has not been scheduled")
+	}
+
+	// defensive check for scheduled pod without populated container statuses, either in a very short
+	// window before kubelet populates it, or kubelet misbehaves
+	if len(pod.Status.InitContainerStatuses) == 0 && len(pod.Status.ContainerStatuses) == 0 {
+		return check(prev, "container statuses have not been set by kubelet")
+	}
+
+	// here we know we have at least one populated container status so we use that
 	for _, s := range pod.Status.InitContainerStatuses {
 		if s.State.Running != nil {
 			return now.Add(timeout), nil
 		} else if w := s.State.Waiting; w != nil {
-			return check(prev)
+			return check(prev, "containers have not started")
 		} else if t := s.State.Terminated; t != nil {
 			prev = t.FinishedAt.Time
 		} else {
 			panic(fmt.Sprintf("invalid container status: %#v", s))
 		}
 	}
+
 	for _, s := range pod.Status.ContainerStatuses {
 		if s.State.Waiting != nil {
-			if ret, err := check(prev); err != nil {
+			if ret, err := check(prev, "containers have not started"); err != nil {
 				return ret, err
 			}
 		}
 	}
+
 	return prev.Add(timeout), nil
 }
 

@@ -29,6 +29,7 @@ func TestReplacer(t *testing.T) {
 		ensureCorrectPromotionDockerfile             bool
 		ensureCorrectPromotionDockerfileIngoredRepos sets.Set[string]
 		ignoreRepos                                  sets.Set[string]
+		ignoreOrgs                                   sets.Set[string]
 		promotionTargetToDockerfileMapping           map[string]dockerfileLocation
 		files                                        map[string][]byte
 		credentials                                  *usernameToken
@@ -518,6 +519,23 @@ func TestReplacer(t *testing.T) {
 			ignoreRepos: sets.New("openshift/cluster-api-operator"),
 			expectWrite: false,
 		},
+		{
+			name: "Org in ignore-orgs list is skipped",
+			config: &api.ReleaseBuildConfiguration{
+				Metadata: api.Metadata{
+					Org:  "openshift",
+					Repo: "cluster-api-operator",
+				},
+				Images: []api.ProjectDirectoryImageBuildStepConfiguration{{
+					ProjectDirectoryImageBuildInputs: api.ProjectDirectoryImageBuildInputs{
+						DockerfilePath: "Dockerfile",
+					},
+				}},
+			},
+			files:       map[string][]byte{"Dockerfile": []byte("FROM registry.ci.openshift.org/ocp/4.19:base")},
+			ignoreOrgs:  sets.New("openshift"),
+			expectWrite: false,
+		},
 	}
 
 	for _, tc := range testCases {
@@ -537,6 +555,7 @@ func TestReplacer(t *testing.T) {
 				tc.ensureCorrectPromotionDockerfile,
 				tc.ensureCorrectPromotionDockerfileIngoredRepos,
 				tc.ignoreRepos,
+				tc.ignoreOrgs,
 				tc.promotionTargetToDockerfileMapping,
 				majorMinor,
 				nil,

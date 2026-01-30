@@ -50,6 +50,7 @@ type options struct {
 	applyReplacements                            bool
 	ensureCorrectPromotionDockerfileIngoredRepos *flagutil.Strings
 	ignoreRepos                                  *flagutil.Strings
+	ignoreOrgs                                   *flagutil.Strings
 	registryPath                                 string
 	flagutil.GitHubOptions
 }
@@ -58,6 +59,7 @@ func gatherOptions() (*options, error) {
 	o := &options{
 		ensureCorrectPromotionDockerfileIngoredRepos: &flagutil.Strings{},
 		ignoreRepos: &flagutil.Strings{},
+		ignoreOrgs:  &flagutil.Strings{},
 	}
 	o.AddFlags(flag.CommandLine)
 	flag.StringVar(&o.configDir, "config-dir", "", "The directory with the ci-operator configs")
@@ -67,6 +69,7 @@ func gatherOptions() (*options, error) {
 	flag.BoolVar(&o.ensureCorrectPromotionDockerfile, "ensure-correct-promotion-dockerfile", false, "If Dockerfiles used for promotion should get updated to match whats in the ocp-build-data repo")
 	flag.Var(o.ensureCorrectPromotionDockerfileIngoredRepos, "ensure-correct-promotion-dockerfile-ignored-repos", "Repos that are being ignored when ensuring the correct promotion dockerfile in org/repo notation. Can be passed multiple times.")
 	flag.Var(o.ignoreRepos, "ignore-repos", "Repos that registry-replacer should completely skip in org/repo notation. Useful for repos using dockerfile-inputs feature. Can be passed multiple times.")
+	flag.Var(o.ignoreOrgs, "ignore-orgs", "Orgs that registry-replacer should completely skip in org notation. Can be passed multiple times.")
 	flag.IntVar(&o.maxConcurrency, "concurrency", 500, "Maximum number of concurrent in-flight goroutines to handle files.")
 	flag.StringVar(&o.ocpBuildDataRepoDir, "ocp-build-data-repo-dir", "../ocp-build-data", "The directory in which the ocp-build-data repository is")
 	flag.StringVar(&o.currentRelease.Major, "current-release-major", "4", "The major version of the current release that is getting forwarded to from the master branch")
@@ -173,6 +176,7 @@ func main() {
 					opts.ensureCorrectPromotionDockerfile,
 					sets.New(opts.ensureCorrectPromotionDockerfileIngoredRepos.Strings()...),
 					sets.New(opts.ignoreRepos.Strings()...),
+					sets.New(opts.ignoreOrgs.Strings()...),
 					promotionTargetToDockerfileMapping,
 					opts.currentRelease,
 					credentials,
@@ -235,6 +239,7 @@ func replacer(
 	ensureCorrectPromotionDockerfile bool,
 	ensureCorrectPromotionDockerfileIgnoredrepos sets.Set[string],
 	ignoreRepos sets.Set[string],
+	ignoreOrgs sets.Set[string],
 	promotionTargetToDockerfileMapping map[string]dockerfileLocation,
 	majorMinor ocpbuilddata.MajorMinor,
 	credentials *usernameToken,
@@ -244,6 +249,12 @@ func replacer(
 		// Skip repos that should use dockerfile-inputs feature
 		if ignoreRepos.Has(info.Org + "/" + info.Repo) {
 			logrus.WithField("org", info.Org).WithField("repo", info.Repo).Debug("Skipping repo (in ignore-repos list)")
+			return nil
+		}
+
+		// Skip orgs that should use dockerfile-inputs feature
+		if ignoreOrgs.Has(info.Org) {
+			logrus.WithField("org", info.Org).Debug("Skipping org (in ignore-orgs list)")
 			return nil
 		}
 
@@ -686,9 +697,11 @@ func pruneUnusedBaseImages(config *api.ReleaseBuildConfiguration, resolvedConfig
 		return nil
 	}
 
-	for sourceImage := range config.BaseImages {
-		if err := pruneImage(&config.BaseImages, sourceImage); err != nil {
-			return err
+	if config.BaseImages != nil {
+		for sourceImage := range config.BaseImages {
+			if err := pruneImage(&config.BaseImages, sourceImage); err != nil {
+				return err
+			}
 		}
 	}
 

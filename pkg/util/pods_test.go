@@ -107,6 +107,7 @@ func TestCheckPending(t *testing.T) {
 	}, {
 		name: "first init container is running",
 		pod: corev1.Pod{
+			Spec: corev1.PodSpec{NodeName: "scheduled"},
 			Status: corev1.PodStatus{
 				Phase:                 corev1.PodPending,
 				InitContainerStatuses: []corev1.ContainerStatus{running},
@@ -117,6 +118,7 @@ func TestCheckPending(t *testing.T) {
 	}, {
 		name: "init container is running",
 		pod: corev1.Pod{
+			Spec: corev1.PodSpec{NodeName: "scheduled"},
 			Status: corev1.PodStatus{
 				Phase: corev1.PodPending,
 				InitContainerStatuses: []corev1.ContainerStatus{
@@ -130,6 +132,7 @@ func TestCheckPending(t *testing.T) {
 		name: "first init container is waiting within limit",
 		pod: corev1.Pod{
 			ObjectMeta: metav1.ObjectMeta{CreationTimestamp: withinLimit},
+			Spec:       corev1.PodSpec{NodeName: "scheduled"},
 			Status: corev1.PodStatus{
 				Phase:                 corev1.PodPending,
 				InitContainerStatuses: []corev1.ContainerStatus{waiting0},
@@ -141,6 +144,7 @@ func TestCheckPending(t *testing.T) {
 		name: "first init container is waiting outside limit",
 		pod: corev1.Pod{
 			ObjectMeta: metav1.ObjectMeta{CreationTimestamp: outsideLimit},
+			Spec:       corev1.PodSpec{NodeName: "scheduled"},
 			Status: corev1.PodStatus{
 				Phase:                 corev1.PodPending,
 				InitContainerStatuses: []corev1.ContainerStatus{waiting0},
@@ -152,6 +156,7 @@ func TestCheckPending(t *testing.T) {
 		name: "init container is waiting within limit",
 		pod: corev1.Pod{
 			ObjectMeta: metav1.ObjectMeta{CreationTimestamp: outsideLimit},
+			Spec:       corev1.PodSpec{NodeName: "scheduled"},
 			Status: corev1.PodStatus{
 				Phase: corev1.PodPending,
 				InitContainerStatuses: []corev1.ContainerStatus{
@@ -165,6 +170,7 @@ func TestCheckPending(t *testing.T) {
 		name: "init container is waiting outside limit",
 		pod: corev1.Pod{
 			ObjectMeta: metav1.ObjectMeta{CreationTimestamp: outsideLimit},
+			Spec:       corev1.PodSpec{NodeName: "scheduled"},
 			Status: corev1.PodStatus{
 				Phase: corev1.PodPending,
 				InitContainerStatuses: []corev1.ContainerStatus{
@@ -178,6 +184,7 @@ func TestCheckPending(t *testing.T) {
 		name: "pod is pending within limit",
 		pod: corev1.Pod{
 			ObjectMeta: metav1.ObjectMeta{CreationTimestamp: withinLimit},
+			Spec:       corev1.PodSpec{NodeName: "scheduled"},
 			Status: corev1.PodStatus{
 				Phase:             corev1.PodPending,
 				ContainerStatuses: []corev1.ContainerStatus{running, waiting0},
@@ -187,6 +194,7 @@ func TestCheckPending(t *testing.T) {
 	}, {
 		name: "pod is pending outside limit",
 		pod: corev1.Pod{
+			Spec: corev1.PodSpec{NodeName: "scheduled"},
 			Status: corev1.PodStatus{
 				Phase: corev1.PodPending,
 				InitContainerStatuses: []corev1.ContainerStatus{
@@ -199,6 +207,7 @@ func TestCheckPending(t *testing.T) {
 	}, {
 		name: "pod with init container is pending within limit",
 		pod: corev1.Pod{
+			Spec: corev1.PodSpec{NodeName: "scheduled"},
 			Status: corev1.PodStatus{
 				Phase: corev1.PodPending,
 				InitContainerStatuses: []corev1.ContainerStatus{
@@ -211,6 +220,7 @@ func TestCheckPending(t *testing.T) {
 	}, {
 		name: "pod with init container is pending outside limit",
 		pod: corev1.Pod{
+			Spec: corev1.PodSpec{NodeName: "scheduled"},
 			Status: corev1.PodStatus{
 				Phase: corev1.PodPending,
 				InitContainerStatuses: []corev1.ContainerStatus{
@@ -221,12 +231,37 @@ func TestCheckPending(t *testing.T) {
 		},
 		err: errors.New("containers have not started in 1h0m0s: waiting0"),
 	}, {
-		name: "pod is pending inside limit without container information",
+		name: "scheduled pod with no container statuses within limit",
 		pod: corev1.Pod{
 			ObjectMeta: metav1.ObjectMeta{CreationTimestamp: withinLimit},
+			Spec:       corev1.PodSpec{NodeName: "scheduled"},
 			Status:     corev1.PodStatus{Phase: corev1.PodPending},
 		},
 		next: withinLimit.Add(timeout),
+	}, {
+		name: "scheduled pod with no container statuses outside limit",
+		pod: corev1.Pod{
+			ObjectMeta: metav1.ObjectMeta{CreationTimestamp: outsideLimit},
+			Spec:       corev1.PodSpec{NodeName: "scheduled"},
+			Status:     corev1.PodStatus{Phase: corev1.PodPending},
+		},
+		err: errors.New("container statuses have not been set by kubelet in 1h0m0s"),
+	}, {
+		name: "unscheduled pod pending within limit",
+		pod: corev1.Pod{
+			ObjectMeta: metav1.ObjectMeta{CreationTimestamp: withinLimit},
+			Spec:       corev1.PodSpec{NodeName: ""}, // Explicitly unscheduled
+			Status:     corev1.PodStatus{Phase: corev1.PodPending},
+		},
+		next: withinLimit.Add(timeout),
+	}, {
+		name: "unscheduled pod pending outside limit",
+		pod: corev1.Pod{
+			ObjectMeta: metav1.ObjectMeta{CreationTimestamp: outsideLimit},
+			Spec:       corev1.PodSpec{NodeName: ""}, // Explicitly unscheduled
+			Status:     corev1.PodStatus{Phase: corev1.PodPending},
+		},
+		err: errors.New("pod has not been scheduled in 1h0m0s"),
 	}} {
 		t.Run(tc.name, func(t *testing.T) {
 			ret, err := checkPending(tc.pod, timeout, now)

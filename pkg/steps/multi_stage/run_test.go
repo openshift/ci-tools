@@ -93,7 +93,8 @@ func TestRun(t *testing.T) {
 						WithIndex(&v1.Pod{}, "metadata.name", fakePodNameIndexer).
 						WithObjects(sa).
 						Build(), nil),
-				Failures: tc.failures,
+				Failures:     tc.failures,
+				AutoSchedule: true,
 			}
 			jobSpec := api.JobSpec{
 				JobSpec: prowdapi.JobSpec{
@@ -234,7 +235,8 @@ func TestJUnit(t *testing.T) {
 						WithIndex(&v1.Pod{}, "metadata.name", fakePodNameIndexer).
 						WithObjects(sa).
 						Build(), nil),
-				Failures: tc.failures,
+				Failures:     tc.failures,
+				AutoSchedule: true,
 			}
 			jobSpec := api.JobSpec{
 				JobSpec: prowdapi.JobSpec{
@@ -253,7 +255,10 @@ func TestJUnit(t *testing.T) {
 				},
 			}
 			jobSpec.SetNamespace("test-namespace")
-			client := &testhelper_kube.FakePodClient{FakePodExecutor: crclient}
+			client := &testhelper_kube.FakePodClient{
+				FakePodExecutor: crclient,
+				PendingTimeout:  30 * time.Minute,
+			}
 			step := MultiStageTestStep(api.TestStepConfiguration{
 				As: "test",
 				MultiStageTestConfigurationLiteral: &api.MultiStageTestConfigurationLiteral{

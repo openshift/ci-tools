@@ -10,6 +10,7 @@ import (
 	"time"
 
 	coreapi "k8s.io/api/core/v1"
+	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/apimachinery/pkg/fields"
 	"k8s.io/apimachinery/pkg/util/sets"
 	"k8s.io/apimachinery/pkg/watch"
@@ -28,6 +29,9 @@ type FakePodExecutor struct {
 	Failures    sets.Set[string]
 	CreatedPods []*coreapi.Pod
 	lock        sync.Mutex
+
+	// AutoSchedule, when true, sets spec.NodeName on created pods if not set, simulating immediate scheduling.
+	AutoSchedule bool
 }
 
 func (f *FakePodExecutor) Create(ctx context.Context, o ctrlruntimeclient.Object, opts ...ctrlruntimeclient.CreateOption) error {
@@ -41,6 +45,13 @@ func (f *FakePodExecutor) Create(ctx context.Context, o ctrlruntimeclient.Object
 			f.CreatedPods = append(f.CreatedPods, pod.DeepCopy())
 		}()
 		pod.Status.Phase = coreapi.PodPending
+		if pod.CreationTimestamp.IsZero() {
+			pod.CreationTimestamp = metav1.Now()
+		}
+
+		if pod.Spec.NodeName == "" && f.AutoSchedule {
+			pod.Spec.NodeName = "fake-node"
+		}
 	}
 	return f.LoggingClient.Create(ctx, o, opts...)
 }

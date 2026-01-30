@@ -1,7 +1,6 @@
 package main
 
 import (
-	"sort"
 	"sync"
 	"time"
 
@@ -25,7 +24,6 @@ type ConfigDataProvider struct {
 	configGetter      config.Getter
 	repoLister        RepoLister
 	updatedPresubmits map[string]presubmitTests
-	previousRepoList  []string // Store previous repo list for comparison
 	logger            *logrus.Entry
 	m                 sync.Mutex
 }
@@ -35,11 +33,10 @@ func NewConfigDataProvider(configGetter config.Getter, repoLister RepoLister, lo
 		configGetter:      configGetter,
 		repoLister:        repoLister,
 		updatedPresubmits: make(map[string]presubmitTests),
-		previousRepoList:  []string{},
 		logger:            logger,
 		m:                 sync.Mutex{},
 	}
-	// Initialize with first load - use direct gatherData() for initial load
+	// Initialize with first load
 	provider.gatherData()
 	return provider
 }
@@ -56,7 +53,8 @@ func (c *ConfigDataProvider) GetPresubmits(orgRepo string) presubmitTests {
 func (c *ConfigDataProvider) Run() {
 	for {
 		time.Sleep(10 * time.Minute)
-		c.gatherDataWithChangeDetection()
+		// Always refresh job data to pick up added/removed tests
+		c.gatherData()
 	}
 }
 
@@ -122,54 +120,4 @@ func (c *ConfigDataProvider) gatherDataForRepos(orgRepos []string) {
 	c.m.Lock()
 	defer c.m.Unlock()
 	c.updatedPresubmits = updatedPresubmits
-}
-
-// gatherDataWithChangeDetection checks if the repository list has changed and only reloads if needed
-func (c *ConfigDataProvider) gatherDataWithChangeDetection() {
-	// Get current repo list
-	currentRepoList := c.repoLister()
-
-	// Compare with previous repo list
-	c.m.Lock()
-	hasChanged := !c.repoListsEqual(c.previousRepoList, currentRepoList)
-
-	// Always load on first run (when previousRepoList is empty)
-	if len(c.previousRepoList) == 0 {
-		hasChanged = true
-	}
-
-	if hasChanged {
-		// Store the new repo list
-		c.previousRepoList = make([]string, len(currentRepoList))
-		copy(c.previousRepoList, currentRepoList)
-	}
-	c.m.Unlock()
-
-	if hasChanged {
-		c.gatherDataForRepos(currentRepoList)
-	}
-}
-
-// repoListsEqual compares two repository lists for equality (order-independent)
-func (c *ConfigDataProvider) repoListsEqual(a, b []string) bool {
-	if len(a) != len(b) {
-		return false
-	}
-
-	// Create sorted copies for comparison
-	sortedA := make([]string, len(a))
-	sortedB := make([]string, len(b))
-	copy(sortedA, a)
-	copy(sortedB, b)
-
-	sort.Strings(sortedA)
-	sort.Strings(sortedB)
-
-	for i := range sortedA {
-		if sortedA[i] != sortedB[i] {
-			return false
-		}
-	}
-
-	return true
 }

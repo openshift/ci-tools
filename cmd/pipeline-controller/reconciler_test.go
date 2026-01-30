@@ -371,8 +371,7 @@ func Test_reconciler_reportSuccessOnPR(t *testing.T) {
 				pjclientset: fakeClient,
 				lister:      tc.fields.lister,
 				configDataProvider: &ConfigDataProvider{
-					previousRepoList: []string{},
-					logger:           testLoggerReconciler(),
+					logger: testLoggerReconciler(),
 				},
 				ghc:            tc.fields.ghc,
 				ids:            sync.Map{},
@@ -548,7 +547,6 @@ func Test_reconciler_reconcile_with_modes(t *testing.T) {
 				}}},
 				configDataProvider: &ConfigDataProvider{
 					updatedPresubmits: tc.fields.presubmits,
-					previousRepoList:  []string{},
 					logger:            testLoggerReconciler(),
 				},
 				ghc:     ghc,

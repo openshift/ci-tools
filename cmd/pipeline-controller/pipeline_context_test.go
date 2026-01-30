@@ -346,8 +346,7 @@ func TestHandlePipelineContextCreation(t *testing.T) {
 				updatedPresubmits: map[string]presubmitTests{
 					"test-org/test-repo": tt.presubmits,
 				},
-				previousRepoList: []string{},
-				logger:           testLoggerPipeline(),
+				logger: testLoggerPipeline(),
 			}
 
 			watcherVar := &watcher{
@@ -629,8 +628,7 @@ func TestHandlePipelineContextCreationEdgeCases(t *testing.T) {
 				updatedPresubmits: map[string]presubmitTests{
 					"test-org/test-repo": tt.presubmits,
 				},
-				previousRepoList: []string{},
-				logger:           testLoggerPipeline(),
+				logger: testLoggerPipeline(),
 			}
 
 			watcherVar := &watcher{

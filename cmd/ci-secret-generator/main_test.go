@@ -193,7 +193,7 @@ func TestVault(t *testing.T) {
 					}
 				}
 			}()
-			if err := updateSecrets(tc.config, client, tc.disabledClusters); err != nil {
+			if err := updateSecrets(tc.config, client, tc.disabledClusters, sets.New[string]()); err != nil {
 				t.Errorf("failed to update secrets: %v", err)
 			}
 			list, err := vault.ListKV("secret")
@@ -431,6 +431,304 @@ func TestValidateConfig(t *testing.T) {
 				if diff := cmp.Diff(tc.expectedConfig, config); diff != "" {
 					t.Errorf("Error differs from expected:\n%s", diff)
 				}
+			}
+		})
+	}
+}
+
+func TestBuildSecretsToUpdate(t *testing.T) {
+	testCases := []struct {
+		name                string
+		config              secretgenerator.Config
+		disabledClusters    sets.Set[string]
+		existingIndexValues []string
+		expectedItems       map[string]ItemUpdateInfo
+		expectedIndexFields []string
+		expectError         bool
+	}{
+		{
+			name: "GSM sync enabled - single item, single field",
+			config: secretgenerator.Config{{
+				ItemName: "test-item",
+				Fields: []secretgenerator.FieldGenerator{
+					{Name: "field1", Cmd: "printf 'value1'"},
+				},
+			}},
+			expectedItems: map[string]ItemUpdateInfo{
+				"test-item": {
+					ItemName: "test-item",
+					Fields: []FieldUpdateInfo{
+						{FieldName: "field1", Payload: []byte("value1")},
+					},
+				},
+			},
+			expectedIndexFields: []string{"test-item__field1"},
+		},
+		{
+			name: "GSM sync enabled - single item, multiple fields",
+			config: secretgenerator.Config{{
+				ItemName: "aws",
+				Fields: []secretgenerator.FieldGenerator{
+					{Name: "field1", Cmd: "printf 'value1'"},
+					{Name: "field2", Cmd: "printf 'value2'"},
+					{Name: "field3", Cmd: "printf 'value3'"},
+				},
+			}},
+			expectedItems: map[string]ItemUpdateInfo{
+				"aws": {
+					ItemName: "aws",
+					Fields: []FieldUpdateInfo{
+						{FieldName: "field1", Payload: []byte("value1")},
+						{FieldName: "field2", Payload: []byte("value2")},
+						{FieldName: "field3", Payload: []byte("value3")},
+					},
+				},
+			},
+			expectedIndexFields: []string{"aws__field1", "aws__field2", "aws__field3"},
+		},
+		{
+			name: "GSM sync enabled - multiple items",
+			config: secretgenerator.Config{
+				{
+					ItemName: "group1",
+					Fields: []secretgenerator.FieldGenerator{
+						{Name: "fieldA", Cmd: "printf 'valueA'"},
+					},
+				},
+				{
+					ItemName: "group2",
+					Fields: []secretgenerator.FieldGenerator{
+						{Name: "fieldA", Cmd: "printf 'valueA'"},
+						{Name: "fieldB", Cmd: "printf 'valueB'"},
+					},
+				},
+			},
+			expectedItems: map[string]ItemUpdateInfo{
+				"group1": {
+					ItemName: "group1",
+					Fields: []FieldUpdateInfo{
+						{FieldName: "fieldA", Payload: []byte("valueA")},
+					},
+				},
+				"group2": {
+					ItemName: "group2",
+					Fields: []FieldUpdateInfo{
+						{FieldName: "fieldA", Payload: []byte("valueA")},
+						{FieldName: "fieldB", Payload: []byte("valueB")},
+					},
+				},
+			},
+			expectedIndexFields: []string{"group1__fieldA", "group2__fieldA", "group2__fieldB"},
+		},
+		{
+			name: "index always populated regardless of client type",
+			config: secretgenerator.Config{{
+				ItemName: "test-item",
+				Fields: []secretgenerator.FieldGenerator{
+					{Name: "field1", Cmd: "printf 'value1'"},
+					{Name: "field2", Cmd: "printf 'value2'"},
+				},
+			}},
+			expectedItems: map[string]ItemUpdateInfo{
+				"test-item": {
+					ItemName: "test-item",
+					Fields: []FieldUpdateInfo{
+						{FieldName: "field1", Payload: []byte("value1")},
+						{FieldName: "field2", Payload: []byte("value2")},
+					},
+				},
+			},
+			expectedIndexFields: []string{"test-item__field1", "test-item__field2"},
+		},
+		{
+			name: "GSM sync enabled - disabled cluster fields are excluded",
+			config: secretgenerator.Config{{
+				ItemName: "cluster-test",
+				Fields: []secretgenerator.FieldGenerator{
+					{Name: "field1", Cmd: "printf 'value1'", Cluster: "enabled-cluster"},
+					{Name: "field2", Cmd: "printf 'value2'", Cluster: "disabled-cluster"},
+					{Name: "field3", Cmd: "printf 'value3'", Cluster: "enabled-cluster"},
+				},
+			}},
+			disabledClusters: sets.New[string]("disabled-cluster"),
+			expectedItems: map[string]ItemUpdateInfo{
+				"cluster-test": {
+					ItemName: "cluster-test",
+					Fields: []FieldUpdateInfo{
+						{FieldName: "field1", Payload: []byte("value1")},
+						{FieldName: "field3", Payload: []byte("value3")},
+					},
+				},
+			},
+			expectedIndexFields: []string{"cluster-test__field1", "cluster-test__field3"},
+		},
+		{
+			name: "GSM sync enabled - names with forbidden characters are normalized in index",
+			config: secretgenerator.Config{{
+				ItemName: "aws/config",
+				Fields: []secretgenerator.FieldGenerator{
+					{Name: "config.json", Cmd: "printf 'value1'"},
+					{Name: "auth_token", Cmd: "printf 'value2'"},
+				},
+			}},
+			expectedItems: map[string]ItemUpdateInfo{
+				"aws/config": {
+					ItemName: "aws/config",
+					Fields: []FieldUpdateInfo{
+						{FieldName: "config.json", Payload: []byte("value1")},
+						{FieldName: "auth_token", Payload: []byte("value2")},
+					},
+				},
+			},
+			expectedIndexFields: []string{"aws--slash--config__config--dot--json", "aws--slash--config__auth--u--token"},
+		},
+		{
+			name: "GSM sync enabled - item with notes",
+			config: secretgenerator.Config{{
+				ItemName: "test-item",
+				Notes:    "test notes content",
+				Fields: []secretgenerator.FieldGenerator{
+					{Name: "field1", Cmd: "printf 'value1'"},
+				},
+			}},
+			expectedItems: map[string]ItemUpdateInfo{
+				"test-item": {
+					ItemName: "test-item",
+					Notes:    "test notes content",
+					Fields: []FieldUpdateInfo{
+						{FieldName: "field1", Payload: []byte("value1")},
+					},
+				},
+			},
+			expectedIndexFields: []string{"test-item__field1"},
+		},
+		{
+			name: "GSM sync enabled - command execution failure",
+			config: secretgenerator.Config{{
+				ItemName: "test-item",
+				Fields: []secretgenerator.FieldGenerator{
+					{Name: "field1", Cmd: "false"},
+				},
+			}},
+			expectedItems: map[string]ItemUpdateInfo{
+				"test-item": {
+					ItemName: "test-item",
+					Fields:   nil,
+				},
+			},
+			expectedIndexFields: nil,
+			expectError:         true,
+		},
+		{
+			name: "existing secret that failed execution is kept in index",
+			config: secretgenerator.Config{{
+				ItemName: "test-item",
+				Fields: []secretgenerator.FieldGenerator{
+					{Name: "field1", Cmd: "false"},
+				},
+			}},
+			existingIndexValues: []string{"test-item__field1"},
+			expectedItems: map[string]ItemUpdateInfo{
+				"test-item": {
+					ItemName: "test-item",
+					Fields:   nil,
+				},
+			},
+			expectedIndexFields: []string{"test-item__field1"},
+			expectError:         true,
+		},
+		{
+			name: "new secret that failed execution is not added to index",
+			config: secretgenerator.Config{{
+				ItemName: "test-item",
+				Fields: []secretgenerator.FieldGenerator{
+					{Name: "field1", Cmd: "false"},
+				},
+			}},
+			existingIndexValues: []string{},
+			expectedItems: map[string]ItemUpdateInfo{
+				"test-item": {
+					ItemName: "test-item",
+					Fields:   nil,
+				},
+			},
+			expectedIndexFields: nil,
+			expectError:         true,
+		},
+		{
+			name: "secret removed from config is removed from index",
+			config: secretgenerator.Config{{
+				ItemName: "item1",
+				Fields: []secretgenerator.FieldGenerator{
+					{Name: "field1", Cmd: "printf 'value1'"},
+				},
+			}},
+			existingIndexValues: []string{"item1__field1", "item2__field2"},
+			expectedItems: map[string]ItemUpdateInfo{
+				"item1": {
+					ItemName: "item1",
+					Fields: []FieldUpdateInfo{
+						{FieldName: "field1", Payload: []byte("value1")},
+					},
+				},
+			},
+			expectedIndexFields: []string{"item1__field1"},
+		},
+		{
+			name: "mixed: existing succeeds, existing fails, new succeeds, new fails",
+			config: secretgenerator.Config{{
+				ItemName: "test",
+				Fields: []secretgenerator.FieldGenerator{
+					{Name: "existing-success", Cmd: "printf 'val'"},
+					{Name: "existing-fail", Cmd: "false"},
+					{Name: "new-success", Cmd: "printf 'val'"},
+					{Name: "new-fail", Cmd: "false"},
+				},
+			}},
+			existingIndexValues: []string{"test__existing-success", "test__existing-fail"},
+			expectedItems: map[string]ItemUpdateInfo{
+				"test": {
+					ItemName: "test",
+					Fields: []FieldUpdateInfo{
+						{FieldName: "existing-success", Payload: []byte("val")},
+						{FieldName: "new-success", Payload: []byte("val")},
+					},
+				},
+			},
+			expectedIndexFields: []string{"test__existing-success", "test__existing-fail", "test__new-success"},
+			expectError:         true,
+		},
+	}
+
+	for _, tc := range testCases {
+		t.Run(tc.name, func(t *testing.T) {
+			itemsToUpdate, indexFields, err := buildSecretsToUpdate(tc.config, tc.disabledClusters, sets.New(tc.existingIndexValues...))
+
+			if tc.expectError && err == nil {
+				t.Errorf("expected error but got nil")
+				return
+			}
+			if !tc.expectError && err != nil {
+				t.Errorf("unexpected error: %v", err)
+				return
+			}
+
+			if len(itemsToUpdate) != len(tc.expectedItems) {
+				t.Errorf("expected %d items, got %d", len(tc.expectedItems), len(itemsToUpdate))
+				return
+			}
+
+			actualItems := make(map[string]ItemUpdateInfo)
+			for _, item := range itemsToUpdate {
+				actualItems[item.ItemName] = item
+			}
+
+			if diff := cmp.Diff(tc.expectedItems, actualItems); diff != "" {
+				t.Errorf("%s: mismatch (-expected, +actual):\n%s", tc.name, diff)
+			}
+
+			if diff := cmp.Diff(tc.expectedIndexFields, indexFields); diff != "" {
+				t.Errorf("%s: mismatch (-expected, +actual):\n%s", tc.name, diff)
 			}
 		})
 	}

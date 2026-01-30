@@ -2,7 +2,10 @@ package gsmsecrets
 
 import (
 	"fmt"
+	"sort"
 	"strings"
+
+	"sigs.k8s.io/yaml"
 
 	validation "github.com/openshift/ci-tools/pkg/gsm-validation"
 )
@@ -79,4 +82,35 @@ func VerifyIndexSecretContent(payload []byte) error {
 	}
 
 	return nil
+}
+
+// ConstructIndexSecretContent constructs the index secret content from the secretsList,
+// with UpdaterSASecretName automatically added in this function.
+func ConstructIndexSecretContent(secretsList []string) []byte {
+	secretsList = append(secretsList, UpdaterSASecretName)
+	sort.Strings(secretsList)
+
+	var formattedSecrets []string
+	for _, secret := range secretsList {
+		formattedSecrets = append(formattedSecrets, fmt.Sprintf("- %s", secret))
+	}
+
+	return []byte(strings.Join(formattedSecrets, "\n"))
+}
+
+// ParseIndexSecretContent parses the index secret YAML content and returns the list of secret names,
+// filtering out the UpdaterSASecretName which is automatically added by ConstructIndexSecretContent.
+func ParseIndexSecretContent(content []byte) []string {
+	var allSecrets []string
+	if err := yaml.Unmarshal(content, &allSecrets); err != nil {
+		return []string{}
+	}
+
+	var secrets []string
+	for _, secret := range allSecrets {
+		if secret != UpdaterSASecretName {
+			secrets = append(secrets, secret)
+		}
+	}
+	return secrets
 }

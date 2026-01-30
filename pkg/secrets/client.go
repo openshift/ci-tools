@@ -18,6 +18,7 @@ type Client interface {
 	ReadOnlyClient
 	SetFieldOnItem(itemName, fieldName string, fieldValue []byte) error
 	UpdateNotesOnItem(itemName string, notes string) error
+	UpdateIndexSecret(itemName string, payload []byte) error
 }
 
 type SecretUsageComparer interface {

@@ -145,7 +145,6 @@ func TestHandleLabelAddition_RealFunctions(t *testing.T) {
 				}}},
 				configDataProvider: &ConfigDataProvider{
 					updatedPresubmits: tc.configData,
-					previousRepoList:  []string{},
 					logger:            testLoggerMain(),
 				},
 				ghc: ghc,
@@ -420,7 +419,6 @@ func TestHandleIssueComment(t *testing.T) {
 			cw := &clientWrapper{
 				configDataProvider: &ConfigDataProvider{
 					updatedPresubmits: tc.configData,
-					previousRepoList:  []string{},
 					logger:            testLoggerMain(),
 				},
 				ghc:         ghc,
@@ -625,7 +623,6 @@ func TestHandlePullRequestCreation(t *testing.T) {
 				configDataProvider: &ConfigDataProvider{
 					updatedPresubmits: tc.configData,
 					configGetter:      configGetter,
-					previousRepoList:  []string{},
 					logger:            testLoggerMain(),
 				},
 				ghc: ghc,

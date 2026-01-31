@@ -145,6 +145,21 @@ func (s *multiStageTestStep) runPod(ctx context.Context, pod *coreapi.Pod, notif
 	if newPod != nil {
 		pod = newPod
 	}
+
+	// If we got an error and the Pod is still pending (failed to schedule or failed to start all containers),
+	// delete it to prevent it from recovering and potentially executing later, potentially simultaneously
+	// with pods we run later (for example, we do not want to leave a Pending unschedulable cluster-testing
+	// step Pod in the cluster, because it may eventually get scheduled and start testing the cluster that
+	// is already being torn down).
+	if err != nil && pod.Status.Phase == coreapi.PodPending {
+		logrus.Infof("Deleting pod %s that failed to start", pod.Name)
+		deleteCtx, cancel := context.WithTimeout(base_steps.CleanupCtx, 30*time.Second)
+		defer cancel()
+		if delErr := client.Delete(deleteCtx, pod); delErr != nil && !kerrors.IsNotFound(delErr) {
+			logrus.WithError(delErr).Warnf("Failed to delete pending pod %s", pod.Name)
+		}
+	}
+
 	finished := time.Now()
 	duration := finished.Sub(start)
 	verb := "succeeded"

@@ -18,4 +18,5 @@ type TestSummaryByPeriodRow struct {
 	PeriodEnd         civil.Date `bigquery:"period_end"`
 	DaysWithData      int64      `bigquery:"days_with_data"`
 	FirstSampleDate   civil.Date `bigquery:"first_sample_date"` // First date this test_name was seen within the sample period across all releases for this suite
+	HighCPUCount      int64      `bigquery:"high_cpu_count"`    // Number of times this test appeared in high_cpu_e2e_tests during the period
 }

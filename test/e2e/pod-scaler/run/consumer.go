@@ -68,7 +68,7 @@ func Admission(t testhelper.TestingTInterface, dataDir, kubeconfig string, paren
 		return []string{"--port", port, "--health-port", healthPort}
 	}, func(port, healthPort string) []string {
 		return []string{port}
-	}, clientcmd.RecommendedConfigPathEnvVar+"="+kubeconfig)
+	}, clientcmd.RecommendedConfigPathEnvVar+"="+kubeconfig, "POD_SCALER_MIN_SAMPLES=1")
 	podScaler.RunFromFrameworkRunner(t, parent, stream)
 	podScalerHost := "https://" + serverHostname + ":" + podScaler.ClientFlags()[0]
 	t.Logf("pod-scaler admission is running at %s", podScalerHost)

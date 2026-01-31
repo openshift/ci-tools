@@ -67,6 +67,8 @@ type consumerOptions struct {
 	cpuCap                int64
 	memoryCap             string
 	cpuPriorityScheduling int64
+	authoritativeCPU      bool
+	authoritativeMemory   bool
 }
 
 func bindOptions(fs *flag.FlagSet) *options {
@@ -89,6 +91,8 @@ func bindOptions(fs *flag.FlagSet) *options {
 	fs.Int64Var(&o.cpuCap, "cpu-cap", 10, "The maximum CPU request value, ex: 10")
 	fs.StringVar(&o.memoryCap, "memory-cap", "20Gi", "The maximum memory request value, ex: '20Gi'")
 	fs.Int64Var(&o.cpuPriorityScheduling, "cpu-priority-scheduling", 8, "Pods with CPU requests at, or above, this value will be admitted with priority scheduling")
+	fs.BoolVar(&o.authoritativeCPU, "authoritative-cpu", false, "Enable authoritative mode for CPU requests (allows decreasing resources based on recent usage). Defaults to false due to CPU measurements being affected by node contention.")
+	fs.BoolVar(&o.authoritativeMemory, "authoritative-memory", true, "Enable authoritative mode for memory requests (allows decreasing resources based on recent usage)")
 	o.resultsOptions.Bind(fs)
 	return &o
 }
@@ -268,7 +272,7 @@ func mainAdmission(opts *options, cache Cache) {
 		logrus.WithError(err).Fatal("Failed to create pod-scaler reporter.")
 	}
 
-	go admit(opts.port, opts.instrumentationOptions.HealthPort, opts.certDir, client, loaders(cache), opts.mutateResourceLimits, opts.cpuCap, opts.memoryCap, opts.cpuPriorityScheduling, reporter)
+	go admit(opts.port, opts.instrumentationOptions.HealthPort, opts.certDir, client, loaders(cache), opts.mutateResourceLimits, opts.cpuCap, opts.memoryCap, opts.cpuPriorityScheduling, opts.authoritativeCPU, opts.authoritativeMemory, reporter)
 }
 
 func loaders(cache Cache) map[string][]*cacheReloader {

@@ -103,6 +103,8 @@ type PodScalerRequest struct {
 	ConfiguredAmount string
 	DeterminedAmount string
 	ResourceType     string
+	Measured         bool   `json:"measured,omitempty"`
+	WorkloadClass    string `json:"workload_class,omitempty"` // From ci-workload label on nodes
 }
 
 const (
@@ -172,7 +174,7 @@ func (r *reporter) report(request Request) {
 }
 
 type PodScalerReporter interface {
-	ReportResourceConfigurationWarning(workloadName, workloadType, configuredAmount, determinedAmount, resourceType string)
+	ReportResourceConfigurationWarning(workloadName, workloadType, configuredAmount, determinedAmount, resourceType string, measured bool, workloadClass string)
 }
 
 type podScalerReporter struct {
@@ -197,13 +199,15 @@ func (o *Options) PodScalerReporter() (PodScalerReporter, error) {
 
 // ReportResourceConfigurationWarning is used to send the information about resource configuration
 // from pod-scaler-admission to result-aggregator.
-func (r *podScalerReporter) ReportResourceConfigurationWarning(workloadName, workloadType, configuredAmount, determinedAmount, resourceType string) {
+func (r *podScalerReporter) ReportResourceConfigurationWarning(workloadName, workloadType, configuredAmount, determinedAmount, resourceType string, measured bool, workloadClass string) {
 	request := PodScalerRequest{
 		WorkloadName:     workloadName,
 		WorkloadType:     workloadType,
 		ConfiguredAmount: configuredAmount,
 		DeterminedAmount: determinedAmount,
 		ResourceType:     resourceType,
+		Measured:         measured,
+		WorkloadClass:    workloadClass,
 	}
 
 	data, err := json.Marshal(request)

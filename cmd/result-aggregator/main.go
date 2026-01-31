@@ -38,7 +38,7 @@ var (
 			Name: "pod_scaler_admission_high_determined_resource",
 			Help: "number of times pod-scaler determined higher resource amount than what was configured, sorted by label/type",
 		},
-		[]string{"workload_name", "workload_type", "configured_amount", "determined_amount", "resource_type"},
+		[]string{"workload_name", "workload_type", "configured_amount", "determined_amount", "resource_type", "measured", "workload_class"},
 	)
 )
 
@@ -132,12 +132,22 @@ func withErrorRate(request *results.Request) {
 }
 
 func recordHighResource(request *results.PodScalerRequest) {
+	measured := "false"
+	if request.Measured {
+		measured = "true"
+	}
+	workloadClass := request.WorkloadClass
+	if workloadClass == "" {
+		workloadClass = "unknown"
+	}
 	labels := prometheus.Labels{
 		"workload_name":     request.WorkloadName,
 		"workload_type":     request.WorkloadType,
 		"configured_amount": request.ConfiguredAmount,
 		"determined_amount": request.DeterminedAmount,
 		"resource_type":     request.ResourceType,
+		"measured":          measured,
+		"workload_class":    workloadClass,
 	}
 	podScalerHighResourceCounter.With(labels).Inc()
 }

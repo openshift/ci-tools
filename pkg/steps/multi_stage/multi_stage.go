@@ -276,9 +276,11 @@ func (s *multiStageTestStep) run(ctx context.Context) error {
 
 	// Always run post steps, even if the job was cancelled during pre or test phases.
 	// This ensures proper cleanup (e.g., deprovisioning resources) to prevent resource leaks.
-	// Use context.Background() for post steps so they run even if the main context is cancelled.
-	postCtx := context.Background()
+	// Use the original context by default to respect job deadlines/cancellation.
+	// Only switch to context.Background() if cancellation occurred during pre/test to ensure cleanup completes.
+	postCtx := ctx
 	if cancelledDuringPreOrTest {
+		postCtx = context.Background()
 		logrus.Infof("Job was cancelled during pre or test phase, running post steps with background context to ensure cleanup completes for test %q", s.name)
 	}
 	if err := s.runSteps(postCtx, "post", s.post, env, secretVolumes, secretVolumeMounts); err != nil {

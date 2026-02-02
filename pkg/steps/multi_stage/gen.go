@@ -53,6 +53,7 @@ func (s *multiStageTestStep) generateObservers(
 type generatePodOptions struct {
 	IsObserver                  bool
 	enableSecretsStoreCSIDriver bool
+	phase                       string
 }
 
 func defaultGeneratePodOptions() *generatePodOptions {
@@ -147,6 +148,9 @@ func (s *multiStageTestStep) generatePods(
 		delete(pod.Labels, base_steps.ProwJobIdLabel)
 		pod.Annotations[base_steps.AnnotationSaveContainerLogs] = "true"
 		pod.Labels[MultiStageTestLabel] = s.name
+		if genPodOpts.phase != "" {
+			pod.Labels[MultiStageTestPhaseLabel] = genPodOpts.phase
+		}
 		needsKubeConfig := isKubeconfigNeeded(&step, genPodOpts)
 		if needsKubeConfig {
 			pod.Spec.ServiceAccountName = s.name

@@ -289,3 +289,82 @@ func fakePodNameIndexer(object ctrlruntimeclient.Object) []string {
 	}
 	return []string{p.Name}
 }
+
+func TestRunPodDeletesPendingPodsOnError(t *testing.T) {
+	sa := &v1.ServiceAccount{
+		ObjectMeta:       metav1.ObjectMeta{Name: "test", Namespace: "ns", Labels: map[string]string{"ci.openshift.io/multi-stage-test": "test"}},
+		ImagePullSecrets: []v1.LocalObjectReference{{Name: "ci-operator-dockercfg-12345"}},
+	}
+	name := "test"
+
+	// Create a pod that will fail while still in Pending state
+	pendingPodName := "test-pre0"
+	crclient := &testhelper_kube.FakePodExecutor{
+		LoggingClient: loggingclient.New(
+			fakectrlruntimeclient.NewClientBuilder().
+				WithIndex(&v1.Pod{}, "metadata.name", fakePodNameIndexer).
+				WithObjects(sa).
+				Build(), nil),
+		Failures: sets.New[string](pendingPodName),
+		Pending:  sets.New[string](pendingPodName), // Keep this pod in Pending state
+	}
+
+	jobSpec := api.JobSpec{
+		JobSpec: prowdapi.JobSpec{
+			Job:       "job",
+			BuildID:   "build_id",
+			ProwJobID: "prow_job_id",
+			Type:      prowapi.PeriodicJob,
+			DecorationConfig: &prowapi.DecorationConfig{
+				Timeout:     &prowapi.Duration{Duration: time.Minute},
+				GracePeriod: &prowapi.Duration{Duration: time.Second},
+				UtilityImages: &prowapi.UtilityImages{
+					Sidecar:    "sidecar",
+					Entrypoint: "entrypoint",
+				},
+			},
+		},
+	}
+	jobSpec.SetNamespace("ns")
+
+	client := &testhelper_kube.FakePodClient{
+		PendingTimeout:  100 * time.Millisecond, // Short timeout to trigger pending timeout
+		FakePodExecutor: crclient,
+	}
+
+	yes := true
+	step := MultiStageTestStep(api.TestStepConfiguration{
+		As: name,
+		MultiStageTestConfigurationLiteral: &api.MultiStageTestConfigurationLiteral{
+			Pre:                []api.LiteralTestStep{{As: "pre0"}},
+			Test:               []api.LiteralTestStep{{As: "test0"}},
+			Post:               []api.LiteralTestStep{{As: "post0"}},
+			AllowSkipOnSuccess: &yes,
+		},
+	}, &api.ReleaseBuildConfiguration{}, nil, client, &jobSpec, nil, "node-name", "", func(cf context.CancelFunc) {}, false)
+
+	// Use a context with timeout to ensure the test doesn't hang
+	ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
+	defer cancel()
+
+	// Run the step - it should fail because pre0 times out while Pending
+	if err := step.Run(ctx); err == nil {
+		t.Error("expected step to fail, but it succeeded")
+	}
+
+	// Verify the pending pod was deleted
+	if len(crclient.DeletedPods) == 0 {
+		t.Error("expected pending pod to be deleted, but no pods were deleted")
+	} else {
+		found := false
+		for _, pod := range crclient.DeletedPods {
+			if pod.Name == pendingPodName {
+				found = true
+				break
+			}
+		}
+		if !found {
+			t.Errorf("expected pod %s to be deleted, but it was not in the deleted pods list", pendingPodName)
+		}
+	}
+}

@@ -1070,12 +1070,14 @@ func (o *options) Run() []error {
 		eventRecorder.Event(runtimeObject, coreapi.EventTypeNormal, "CiJobSucceeded", eventJobDescription(o.jobSpec, o.namespace))
 
 		// Report success to users immediately (post steps are best-effort cleanup)
-		reporter, loadErr := o.resultsOptions.Reporter(o.jobSpec, o.consoleHost)
-		if loadErr != nil {
-			logrus.WithError(loadErr).Warn("Could not load result reporting options, skipping early success report.")
-		} else {
-			reporter.Report(nil)
-			o.successReported = true
+		if shouldReportEarly(o.jobSpec) {
+			reporter, loadErr := o.resultsOptions.Reporter(o.jobSpec, o.consoleHost)
+			if loadErr != nil {
+				logrus.WithError(loadErr).Warn("Could not load result reporting options, skipping early success report.")
+			} else {
+				reporter.Report(nil)
+				o.successReported = true
+			}
 		}
 
 		// Run each of the promotion steps concurrently (best-effort cleanup)
@@ -2137,6 +2139,34 @@ func jobSpecFromGitRef(ref string) (*api.JobSpec, error) {
 			},
 		}}
 	return spec, nil
+}
+
+// shouldReportEarly determines if success should be reported immediately after main graph completes.
+// Returns true for presubmits (except rehearsals) and release controller periodics.
+func shouldReportEarly(jobSpec *api.JobSpec) bool {
+	if jobSpec == nil {
+		return false
+	}
+
+	if jobSpec.Type == prowapi.PresubmitJob {
+		if strings.HasPrefix(jobSpec.Job, "rehearse-") {
+			return false
+		}
+		return true
+	}
+
+	if jobSpec.Type == prowapi.PeriodicJob {
+		jobName := strings.ToLower(jobSpec.Job)
+		if strings.Contains(jobName, "release") {
+			if strings.Contains(jobName, "ocp") || strings.Contains(jobName, "nightly") ||
+				strings.Contains(jobName, "ci-") || strings.Contains(jobName, "release-") {
+				return true
+			}
+		}
+		return false
+	}
+
+	return false
 }
 
 func nodeNames(nodes []*api.StepNode) []string {

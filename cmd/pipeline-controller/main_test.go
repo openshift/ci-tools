@@ -27,9 +27,11 @@ const (
 
 // fakeGhClient is a fake GitHub client for testing
 type fakeGhClientWithComment struct {
-	comment string
-	error   error
-	pr      *github.PullRequest
+	comment        string
+	error          error
+	pr             *github.PullRequest
+	labelsAdded    []string
+	existingLabels []github.Label
 }
 
 func (f *fakeGhClientWithComment) GetPullRequest(org, repo string, number int) (*github.PullRequest, error) {
@@ -53,8 +55,13 @@ func (f *fakeGhClientWithComment) CreateStatus(org, repo, ref string, s github.S
 	return nil
 }
 
-func (f *fakeGhClientWithComment) ListStatuses(org, repo, ref string) ([]github.Status, error) {
-	return []github.Status{}, nil
+func (f *fakeGhClientWithComment) AddLabel(org, repo string, number int, label string) error {
+	f.labelsAdded = append(f.labelsAdded, label)
+	return nil
+}
+
+func (f *fakeGhClientWithComment) GetIssueLabels(org, repo string, number int) ([]github.Label, error) {
+	return f.existingLabels, nil
 }
 
 // Helper function to create repo config for tests
@@ -89,6 +96,7 @@ func TestHandleLabelAddition_RealFunctions(t *testing.T) {
 		name              string
 		event             github.PullRequestEvent
 		configData        map[string]presubmitTests
+		existingLabels    []github.Label
 		expectCommentCall bool
 		expectedComment   string
 	}{
@@ -125,11 +133,40 @@ func TestHandleLabelAddition_RealFunctions(t *testing.T) {
 			expectCommentCall: true,
 			expectedComment:   "dummy-test",
 		},
+		{
+			name: "pipeline-auto label present: skip LGTM trigger",
+			event: github.PullRequestEvent{
+				Action: github.PullRequestActionLabeled,
+				Label:  github.Label{Name: labels.LGTM},
+				Repo: github.Repo{
+					Owner: github.User{Login: org},
+					Name:  repo,
+				},
+				PullRequest: github.PullRequest{
+					Number: prNumber,
+					Base:   github.PullRequestBranch{Ref: baseRef},
+					Labels: []github.Label{{Name: PipelineAutoLabel}}, // PR already has pipeline-auto label
+				},
+			},
+			configData: map[string]presubmitTests{
+				org + "/" + repo: {
+					protected: func() []config.Presubmit {
+						p := config.Presubmit{
+							JobBase:      config.JobBase{Name: "pull-ci-openshift-assisted-installer-master-dummy-test"},
+							RerunCommand: "/test dummy-test",
+						}
+						p.Context = "dummy-test"
+						return []config.Presubmit{p}
+					}(),
+				},
+			},
+			expectCommentCall: false, // Should skip because pipeline-auto is present
+		},
 	}
 
 	for _, tc := range tests {
 		t.Run(tc.name, func(t *testing.T) {
-			ghc := &fakeGhClientWithComment{}
+			ghc := &fakeGhClientWithComment{existingLabels: tc.existingLabels}
 
 			cw := &clientWrapper{
 				lgtmWatcher: &watcher{config: enabledConfig{Orgs: []struct {
@@ -455,6 +492,268 @@ func TestHandleIssueComment(t *testing.T) {
 					if tc.expectedComment != RepoNotConfiguredMessage &&
 						!strings.Contains(ghc.comment, "Scheduling required tests:") {
 						t.Errorf("expected comment to contain 'Scheduling required tests:', got %q", ghc.comment)
+					}
+				}
+			} else {
+				if ghc.comment != "" {
+					t.Errorf("expected CreateComment not to be called, but got comment %q", ghc.comment)
+				}
+			}
+		})
+	}
+}
+
+func TestHandleIssueCommentPipelineAuto(t *testing.T) {
+	org := "openshift"
+	repo := "test-repo"
+	prNumber := 123
+
+	tests := []struct {
+		name               string
+		event              github.IssueCommentEvent
+		configData         map[string]presubmitTests
+		watcherConfig      enabledConfig
+		lgtmWatcherConfig  enabledConfig
+		ghPR               *github.PullRequest
+		expectLabelAdded   bool
+		expectCommentCall  bool
+		expectedComment    string
+		notExpectedComment string
+	}{
+		{
+			name: "/pipeline auto adds label and confirmation comment",
+			event: github.IssueCommentEvent{
+				Action: github.IssueCommentActionCreated,
+				Comment: github.IssueComment{
+					Body: "/pipeline auto",
+				},
+				Repo: github.Repo{
+					Owner: github.User{Login: org},
+					Name:  repo,
+				},
+				Issue: github.Issue{
+					Number:      prNumber,
+					PullRequest: &struct{}{},
+				},
+			},
+			configData: map[string]presubmitTests{
+				org + "/" + repo: {
+					protected: []config.Presubmit{{JobBase: config.JobBase{Name: "pull-ci-openshift-test-repo-master-protected-test"}, RerunCommand: "/test protected-test"}},
+				},
+			},
+			lgtmWatcherConfig: enabledConfig{Orgs: []struct {
+				Org   string     `yaml:"org"`
+				Repos []RepoItem `yaml:"repos"`
+			}{
+				{
+					Org:   org,
+					Repos: []RepoItem{{Name: repo}},
+				},
+			}},
+			ghPR: &github.PullRequest{
+				Base: github.PullRequestBranch{Ref: "master"},
+				Head: github.PullRequestBranch{SHA: "abc123"},
+			},
+			expectLabelAdded:   true,
+			expectCommentCall:  true,
+			expectedComment:    "pipeline-auto",
+			notExpectedComment: "Scheduling required tests",
+		},
+		{
+			name: "/pipeline auto with uppercase",
+			event: github.IssueCommentEvent{
+				Action: github.IssueCommentActionCreated,
+				Comment: github.IssueComment{
+					Body: "/PIPELINE AUTO",
+				},
+				Repo: github.Repo{
+					Owner: github.User{Login: org},
+					Name:  repo,
+				},
+				Issue: github.Issue{
+					Number:      prNumber,
+					PullRequest: &struct{}{},
+				},
+			},
+			configData: map[string]presubmitTests{
+				org + "/" + repo: {
+					protected: []config.Presubmit{{JobBase: config.JobBase{Name: "pull-ci-openshift-test-repo-master-protected-test"}, RerunCommand: "/test protected-test"}},
+				},
+			},
+			lgtmWatcherConfig: enabledConfig{Orgs: []struct {
+				Org   string     `yaml:"org"`
+				Repos []RepoItem `yaml:"repos"`
+			}{
+				{
+					Org:   org,
+					Repos: []RepoItem{{Name: repo}},
+				},
+			}},
+			ghPR: &github.PullRequest{
+				Base: github.PullRequestBranch{Ref: "master"},
+				Head: github.PullRequestBranch{SHA: "abc123"},
+			},
+			expectLabelAdded:  true,
+			expectCommentCall: true,
+			expectedComment:   "pipeline-auto",
+		},
+		{
+			name: "/pipeline auto does not trigger tests immediately",
+			event: github.IssueCommentEvent{
+				Action: github.IssueCommentActionCreated,
+				Comment: github.IssueComment{
+					Body: "/pipeline auto",
+				},
+				Repo: github.Repo{
+					Owner: github.User{Login: org},
+					Name:  repo,
+				},
+				Issue: github.Issue{
+					Number:      prNumber,
+					PullRequest: &struct{}{},
+				},
+			},
+			configData: map[string]presubmitTests{
+				org + "/" + repo: {
+					protected: []config.Presubmit{{JobBase: config.JobBase{Name: "pull-ci-openshift-test-repo-master-protected-test"}, RerunCommand: "/test protected-test"}},
+				},
+			},
+			lgtmWatcherConfig: enabledConfig{Orgs: []struct {
+				Org   string     `yaml:"org"`
+				Repos []RepoItem `yaml:"repos"`
+			}{
+				{
+					Org:   org,
+					Repos: []RepoItem{{Name: repo}},
+				},
+			}},
+			ghPR: &github.PullRequest{
+				Base: github.PullRequestBranch{Ref: "master"},
+				Head: github.PullRequestBranch{SHA: "abc123"},
+			},
+			expectLabelAdded:   true,
+			expectCommentCall:  true,
+			expectedComment:    "will be triggered automatically when all first-stage tests pass",
+			notExpectedComment: "/test protected-test",
+		},
+		{
+			name: "repo not configured: responds with not configured message",
+			event: github.IssueCommentEvent{
+				Action: github.IssueCommentActionCreated,
+				Comment: github.IssueComment{
+					Body: "/pipeline auto",
+				},
+				Repo: github.Repo{
+					Owner: github.User{Login: org},
+					Name:  repo,
+				},
+				Issue: github.Issue{
+					Number:      prNumber,
+					PullRequest: &struct{}{},
+				},
+			},
+			configData: map[string]presubmitTests{
+				org + "/" + repo: {
+					protected: []config.Presubmit{{JobBase: config.JobBase{Name: "pull-ci-openshift-test-repo-master-protected-test"}, RerunCommand: "/test protected-test"}},
+				},
+			},
+			watcherConfig:     enabledConfig{},
+			lgtmWatcherConfig: enabledConfig{},
+			expectLabelAdded:  false,
+			expectCommentCall: true,
+			expectedComment:   RepoNotConfiguredMessage,
+		},
+		{
+			name: "/pipeline auto on auto-mode repo (not LGTM): should be rejected",
+			event: github.IssueCommentEvent{
+				Action: github.IssueCommentActionCreated,
+				Comment: github.IssueComment{
+					Body: "/pipeline auto",
+				},
+				Repo: github.Repo{
+					Owner: github.User{Login: org},
+					Name:  repo,
+				},
+				Issue: github.Issue{
+					Number:      prNumber,
+					PullRequest: &struct{}{},
+				},
+			},
+			configData: map[string]presubmitTests{
+				org + "/" + repo: {
+					protected: []config.Presubmit{{JobBase: config.JobBase{Name: "pull-ci-openshift-test-repo-master-protected-test"}, RerunCommand: "/test protected-test"}},
+				},
+			},
+			watcherConfig: enabledConfig{Orgs: []struct {
+				Org   string     `yaml:"org"`
+				Repos []RepoItem `yaml:"repos"`
+			}{
+				{
+					Org:   org,
+					Repos: []RepoItem{{Name: repo, Mode: struct{ Trigger string }{Trigger: "auto"}}},
+				},
+			}},
+			lgtmWatcherConfig: enabledConfig{}, // Not in LGTM config
+			ghPR: &github.PullRequest{
+				Base: github.PullRequestBranch{Ref: "master"},
+				Head: github.PullRequestBranch{SHA: "abc123"},
+			},
+			expectLabelAdded:  false,
+			expectCommentCall: true,
+			expectedComment:   "only available for LGTM-mode repositories",
+		},
+	}
+
+	for _, tc := range tests {
+		t.Run(tc.name, func(t *testing.T) {
+			ghc := &fakeGhClientWithComment{}
+			if tc.ghPR != nil {
+				ghc = &fakeGhClientWithComment{pr: tc.ghPR}
+			}
+
+			cw := &clientWrapper{
+				configDataProvider: &ConfigDataProvider{
+					updatedPresubmits: tc.configData,
+					logger:            testLoggerMain(),
+				},
+				ghc:         ghc,
+				watcher:     &watcher{config: tc.watcherConfig},
+				lgtmWatcher: &watcher{config: tc.lgtmWatcherConfig},
+			}
+
+			entry := logrus.NewEntry(logrus.New())
+			cw.handleIssueComment(entry, tc.event)
+
+			// Check label was added
+			if tc.expectLabelAdded {
+				found := false
+				for _, label := range ghc.labelsAdded {
+					if label == PipelineAutoLabel {
+						found = true
+						break
+					}
+				}
+				if !found {
+					t.Errorf("expected pipeline-auto label to be added, but it wasn't")
+				}
+			} else {
+				for _, label := range ghc.labelsAdded {
+					if label == PipelineAutoLabel {
+						t.Errorf("expected pipeline-auto label NOT to be added, but it was")
+					}
+				}
+			}
+
+			// Check comment
+			if tc.expectCommentCall {
+				if ghc.comment == "" {
+					t.Errorf("expected CreateComment to be called, but no comment was recorded")
+				} else {
+					if tc.expectedComment != "" && !strings.Contains(ghc.comment, tc.expectedComment) {
+						t.Errorf("expected comment to contain %q, got %q", tc.expectedComment, ghc.comment)
+					}
+					if tc.notExpectedComment != "" && strings.Contains(ghc.comment, tc.notExpectedComment) {
+						t.Errorf("expected comment NOT to contain %q, got %q", tc.notExpectedComment, ghc.comment)
 					}
 				}
 			} else {

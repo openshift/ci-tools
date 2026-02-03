@@ -17,6 +17,8 @@ type minimalGhClient interface {
 	CreateComment(org, repo string, number int, comment string) error
 	GetPullRequestChanges(org string, repo string, number int) ([]github.PullRequestChange, error)
 	CreateStatus(org, repo, ref string, s github.Status) error
+	AddLabel(org, repo string, number int, label string) error
+	GetIssueLabels(org, repo string, number int) ([]github.Label, error)
 }
 
 func sendComment(presubmits presubmitTests, pj *v1.ProwJob, ghc minimalGhClient, deleteIds func(), pjLister ctrlruntimeclient.Reader) error {

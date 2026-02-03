@@ -989,19 +989,7 @@ func runtimeStepConfigsForBuild(
 		if target != nil {
 			istTagRef := &target.InputImage.BaseImage
 			if root.FromRepository {
-				path := "."        // By default, the path will be the working directory
-				if len(refs) > 1 { // If we are getting the build root image for a specific ref we must determine the absolute path
-					var matchingRefs []prowapi.Refs
-					for _, r := range refs {
-						if ref == fmt.Sprintf("%s.%s", r.Org, r.Repo) {
-							matchingRefs = append(matchingRefs, r)
-						}
-					}
-					if len(matchingRefs) == 0 { // If we didn't find anything, use the primary refs
-						matchingRefs = append(matchingRefs, *determinePrimaryRef(jobSpec, injectedTest))
-					}
-					path = decorate.DetermineWorkDir(codeMountPath, matchingRefs)
-				}
+				path := getPath(refs, ref, jobSpec, injectedTest)
 				var err error
 				istTagRef, err = buildRootImageStreamFromRepository(path, readFile)
 				if err != nil {
@@ -1039,11 +1027,33 @@ func runtimeStepConfigsForBuild(
 	buildSteps = append(buildSteps, getSourceStepsForJobSpec(jobSpec, injectedTest)...)
 
 	// Detect Dockerfile inputs for project images and add InputImageTagStepConfiguration entries
-	dockerfileInputSteps, images := detectDockerfileInputs(config.Images, config.BaseImages, readFile)
+	path := getPath(refs, "", jobSpec, injectedTest)
+	dockerfileInputSteps, images := detectDockerfileInputs(config.Images, config.BaseImages, path, readFile)
 	config.Images = images
 	buildSteps = append(buildSteps, dockerfileInputSteps...)
 
 	return buildSteps, nil
+}
+
+func getPath(refs []prowapi.Refs, ref string, jobSpec *api.JobSpec, injectedTest bool) string {
+	path := "."        // By default, the path will be the working directory
+	if len(refs) > 1 { // If we are getting the build root image for a specific ref we must determine the absolute path
+		var matchingRefs []prowapi.Refs
+		for _, r := range refs {
+			if ref == fmt.Sprintf("%s.%s", r.Org, r.Repo) {
+				matchingRefs = append(matchingRefs, r)
+			}
+		}
+		if len(matchingRefs) == 0 { // If we didn't find anything, use the primary refs
+			primaryRef := determinePrimaryRef(jobSpec, injectedTest)
+			if primaryRef == nil {
+				return path
+			}
+			matchingRefs = append(matchingRefs, *primaryRef)
+		}
+		path = decorate.DetermineWorkDir(codeMountPath, matchingRefs)
+	}
+	return path
 }
 
 // dockerfileDetails holds the content and path of a Dockerfile
@@ -1055,10 +1065,10 @@ type dockerfileDetails struct {
 // detectDockerfileInputs reads Dockerfiles for project images and detects registry.ci.openshift.org
 // references that should be added as base images. It returns any required InputImageTagStepConfiguration steps to
 // import the detected base images, as well as an updated list of image configurations with the detected inputs added
-func detectDockerfileInputs(images []api.ProjectDirectoryImageBuildStepConfiguration, baseImages map[string]api.ImageStreamTagReference, readFile readFile) ([]api.StepConfiguration, []api.ProjectDirectoryImageBuildStepConfiguration) {
+func detectDockerfileInputs(images []api.ProjectDirectoryImageBuildStepConfiguration, baseImages map[string]api.ImageStreamTagReference, path string, readFile readFile) ([]api.StepConfiguration, []api.ProjectDirectoryImageBuildStepConfiguration) {
 	var steps []api.StepConfiguration
 	for i, image := range images {
-		dockerfileDetails, err := readDockerfileForImage(image, readFile)
+		dockerfileDetails, err := readDockerfileForImage(image, path, readFile)
 		if err != nil {
 			logrus.WithError(err).WithField("image", image.To).Debug("Failed to read Dockerfile for input detection, skipping")
 			continue
@@ -1073,7 +1083,7 @@ func detectDockerfileInputs(images []api.ProjectDirectoryImageBuildStepConfigura
 
 // readDockerfileForImage reads the Dockerfile content for a given image configuration
 // Returns the dockerfileDetails and any error encountered
-func readDockerfileForImage(image api.ProjectDirectoryImageBuildStepConfiguration, readFile readFile) (dockerfileDetails, error) {
+func readDockerfileForImage(image api.ProjectDirectoryImageBuildStepConfiguration, path string, readFile readFile) (dockerfileDetails, error) {
 	if image.DockerfileLiteral != nil {
 		return dockerfileDetails{content: []byte(*image.DockerfileLiteral), path: "dockerfile_literal"}, nil
 	}
@@ -1081,7 +1091,8 @@ func readDockerfileForImage(image api.ProjectDirectoryImageBuildStepConfiguratio
 	if image.DockerfilePath != "" {
 		details.path = image.DockerfilePath
 	}
-	dockerfilePath := fmt.Sprintf("./%s", details.path)
+
+	dockerfilePath := fmt.Sprintf("%s/%s", path, details.path)
 	if image.ContextDir != "" {
 		dockerfilePath = fmt.Sprintf("%s/%s", image.ContextDir, details.path)
 	}

@@ -2344,7 +2344,7 @@ func TestReadDockerfileForImage(t *testing.T) {
 
 	for _, tc := range testCases {
 		t.Run(tc.name, func(t *testing.T) {
-			details, err := readDockerfileForImage(tc.image, tc.readFile)
+			details, err := readDockerfileForImage(tc.image, ".", tc.readFile)
 
 			if tc.expectError {
 				if err == nil {

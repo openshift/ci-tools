@@ -35,6 +35,9 @@ const RepoNotConfiguredMessage = "This repository is not currently configured fo
 
 const PipelinePendingMessage = "Waiting for pipeline condition to trigger this job"
 
+// PipelineAutoLabel is the label that marks a PR to behave as automatic mode
+const PipelineAutoLabel = "pipeline-auto"
+
 type options struct {
 	client                   prowflagutil.KubernetesOptions
 	github                   prowflagutil.GitHubOptions
@@ -100,6 +103,7 @@ type clientWrapper struct {
 	watcher            *watcher
 	lgtmWatcher        *watcher
 	pjLister           ctrlruntimeclient.Reader
+	pipelineAutoCache  *PipelineAutoCache
 	mu                 sync.RWMutex // Protects against race conditions in event handling
 }
 
@@ -285,6 +289,14 @@ func (cw *clientWrapper) handleLabelAddition(l *logrus.Entry, event github.PullR
 			return
 		}
 
+		// Check if pipeline-auto label is present - if so, skip (reconciler will handle auto triggering)
+		for _, label := range event.PullRequest.Labels {
+			if label.Name == PipelineAutoLabel {
+				logger.Info("PR has pipeline-auto label, skipping LGTM trigger (reconciler will handle automatic triggering)")
+				return
+			}
+		}
+
 		// Check if branch is enabled for this repo
 		baseBranch := event.PullRequest.Base.Ref
 		repoConfig := repos[repo]
@@ -363,12 +375,15 @@ func (cw *clientWrapper) handleIssueComment(l *logrus.Entry, event github.IssueC
 		return
 	}
 
-	// Check if the comment contains "/pipeline required" as a command (at start of line)
+	// Check if the comment contains "/pipeline required" or "/pipeline auto" as a command (at start of line)
 	// Use (?m) for multiline mode so ^ matches start of any line, not just start of string
 	pipelineRequiredRegex := regexp.MustCompile(`(?im)^/pipeline\s+required`)
-	matches := pipelineRequiredRegex.MatchString(event.Comment.Body)
+	pipelineAutoRegex := regexp.MustCompile(`(?im)^/pipeline\s+auto`)
 
-	if !matches {
+	matchesRequired := pipelineRequiredRegex.MatchString(event.Comment.Body)
+	matchesAuto := pipelineAutoRegex.MatchString(event.Comment.Body)
+
+	if !matchesRequired && !matchesAuto {
 		return
 	}
 
@@ -382,7 +397,11 @@ func (cw *clientWrapper) handleIssueComment(l *logrus.Entry, event github.IssueC
 		"pr":   number,
 	})
 
-	logger.Info("Processing /pipeline required comment")
+	if matchesAuto {
+		logger.Info("Processing /pipeline auto comment")
+	} else {
+		logger.Info("Processing /pipeline required comment")
+	}
 
 	// Get presubmits for this repo
 	logger.Debug("Getting presubmits from config data provider")
@@ -434,6 +453,36 @@ func (cw *clientWrapper) handleIssueComment(l *logrus.Entry, event github.IssueC
 		return
 	}
 
+	// If this is a /pipeline auto command, add the pipeline-auto label and return
+	// The reconciler will trigger second-stage tests when first-stage tests pass
+	if matchesAuto {
+		// /pipeline auto is only available for LGTM-configured repos
+		if !lgtmOrgExists || !lgtmRepoExists {
+			comment := "The `/pipeline auto` command is only available for LGTM-mode repositories. " +
+				"For repositories in automatic mode, second-stage tests are already triggered automatically."
+			if err := cw.ghc.CreateComment(org, repo, number, comment); err != nil {
+				logger.WithError(err).Error("failed to create comment")
+			}
+			return
+		}
+
+		if err := cw.ghc.AddLabel(org, repo, number, PipelineAutoLabel); err != nil {
+			logger.WithError(err).Error("failed to add pipeline-auto label")
+			return
+		}
+		logger.Info("Successfully added pipeline-auto label")
+		// Cache that this PR has pipeline-auto label
+		if cw.pipelineAutoCache != nil {
+			cw.pipelineAutoCache.Set(org, repo, number)
+		}
+		comment := "**Pipeline controller notification**\n\nThe `pipeline-auto` label has been added to this PR. Second-stage tests will be triggered automatically when all first-stage tests pass."
+		if err := cw.ghc.CreateComment(org, repo, number, comment); err != nil {
+			logger.WithError(err).Error("failed to create confirmation comment")
+		}
+		return
+	}
+
+	// For /pipeline required, trigger tests immediately
 	// Create a fake ProwJob to reuse existing logic
 	prowJob := &v1.ProwJob{
 		Spec: v1.ProwJobSpec{
@@ -772,7 +821,16 @@ func main() {
 	time.Sleep(2 * time.Second) // Give it time to load initial data
 	logger.Info("Config data provider should be ready")
 
-	reconciler, err := NewReconciler(mgr, configDataProvider, githubClient, logger, watcher)
+	pipelineAutoCache := NewPipelineAutoCache()
+	go func() {
+		ticker := time.NewTicker(1 * time.Hour)
+		defer ticker.Stop()
+		for range ticker.C {
+			pipelineAutoCache.CleanExpired()
+		}
+	}()
+
+	reconciler, err := NewReconciler(mgr, configDataProvider, githubClient, logger, watcher, lgtmWatcher, pipelineAutoCache)
 	if err != nil {
 		logger.WithError(err).Fatal("failed to construct github reporter controller")
 	}
@@ -782,12 +840,14 @@ func main() {
 		logger.WithError(err).Fatal("error starting secrets agent")
 	}
 	webhookTokenGenerator := secret.GetTokenGenerator(o.webhookSecretFile)
+
 	cw := &clientWrapper{
 		ghc:                githubClient,
 		configDataProvider: configDataProvider,
 		watcher:            watcher,
 		lgtmWatcher:        lgtmWatcher,
 		pjLister:           mgr.GetCache(),
+		pipelineAutoCache:  pipelineAutoCache,
 	}
 
 	eventServer := githubeventserver.New(o.githubEventServerOptions, webhookTokenGenerator, logger)

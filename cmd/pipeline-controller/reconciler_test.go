@@ -53,8 +53,12 @@ func (c fakeGhClient) CreateStatus(org, repo, ref string, s github.Status) error
 	return nil
 }
 
-func (c fakeGhClient) ListStatuses(org, repo, ref string) ([]github.Status, error) {
-	return []github.Status{}, nil
+func (c fakeGhClient) AddLabel(org, repo string, number int, label string) error {
+	return nil
+}
+
+func (c fakeGhClient) GetIssueLabels(org, repo string, number int) ([]github.Label, error) {
+	return []github.Label{}, nil
 }
 
 type FakeReader struct {
@@ -77,6 +81,7 @@ func (tr FakeReader) List(ctx context.Context, list ctrlruntimeclient.ObjectList
 type fakeGhClientWithTracking struct {
 	closed      sets.Int
 	commentSent bool
+	labels      []github.Label
 }
 
 func (c *fakeGhClientWithTracking) GetPullRequest(org, repo string, number int) (*github.PullRequest, error) {
@@ -99,8 +104,12 @@ func (c *fakeGhClientWithTracking) CreateStatus(org, repo, ref string, s github.
 	return nil
 }
 
-func (c *fakeGhClientWithTracking) ListStatuses(org, repo, ref string) ([]github.Status, error) {
-	return []github.Status{}, nil
+func (c *fakeGhClientWithTracking) AddLabel(org, repo string, number int, label string) error {
+	return nil
+}
+
+func (c *fakeGhClientWithTracking) GetIssueLabels(org, repo string, number int) ([]github.Label, error) {
+	return c.labels, nil
 }
 
 func composePresubmit(name string, state v1.ProwJobState, sha string) v1.ProwJob {
@@ -373,9 +382,11 @@ func Test_reconciler_reportSuccessOnPR(t *testing.T) {
 				configDataProvider: &ConfigDataProvider{
 					logger: testLoggerReconciler(),
 				},
-				ghc:            tc.fields.ghc,
-				ids:            sync.Map{},
-				closedPRsCache: closedPRsCache{prs: map[string]pullRequest{}, m: sync.Mutex{}, ghc: tc.fields.ghc, clearTime: time.Now()},
+				ghc:               tc.fields.ghc,
+				ids:               sync.Map{},
+				closedPRsCache:    closedPRsCache{prs: map[string]pullRequest{}, m: sync.Mutex{}, ghc: tc.fields.ghc, clearTime: time.Now()},
+				lgtmWatcher:       &watcher{config: enabledConfig{}},
+				pipelineAutoCache: NewPipelineAutoCache(),
 			}
 			got, err := r.reportSuccessOnPR(tc.args.ctx, &dummyPJ, tc.args.presubmits)
 			if (err != nil) != tc.wantErr {
@@ -431,6 +442,8 @@ func Test_reconciler_reconcile_with_modes(t *testing.T) {
 
 	type fields struct {
 		watcherConfig     enabledConfig
+		lgtmWatcherConfig enabledConfig
+		labels            []github.Label
 		presubmits        map[string]presubmitTests
 		expectSendComment bool
 	}
@@ -498,11 +511,61 @@ func Test_reconciler_reconcile_with_modes(t *testing.T) {
 				expectSendComment: false,
 			},
 		},
+		{
+			name: "LGTM mode with pipeline-auto label: should send comment",
+			fields: fields{
+				watcherConfig: enabledConfig{}, // Not in main config
+				lgtmWatcherConfig: enabledConfig{Orgs: []struct {
+					Org   string     `yaml:"org"`
+					Repos []RepoItem `yaml:"repos"`
+				}{
+					{
+						Org: "org",
+						Repos: []RepoItem{
+							{Name: "repo"},
+						},
+					},
+				}},
+				labels: []github.Label{{Name: PipelineAutoLabel}},
+				presubmits: map[string]presubmitTests{
+					"org/repo": {
+						protected:      []config.Presubmit{{JobBase: config.JobBase{Name: "org-repo-master-ps-protected"}}},
+						alwaysRequired: []config.Presubmit{{JobBase: config.JobBase{Name: "org-repo-master-ps2"}}},
+					},
+				},
+				expectSendComment: true,
+			},
+		},
+		{
+			name: "LGTM mode without pipeline-auto label: should not send comment",
+			fields: fields{
+				watcherConfig: enabledConfig{}, // Not in main config
+				lgtmWatcherConfig: enabledConfig{Orgs: []struct {
+					Org   string     `yaml:"org"`
+					Repos []RepoItem `yaml:"repos"`
+				}{
+					{
+						Org: "org",
+						Repos: []RepoItem{
+							{Name: "repo"},
+						},
+					},
+				}},
+				labels: []github.Label{}, // No pipeline-auto label
+				presubmits: map[string]presubmitTests{
+					"org/repo": {
+						protected:      []config.Presubmit{{JobBase: config.JobBase{Name: "org-repo-master-ps-protected"}}},
+						alwaysRequired: []config.Presubmit{{JobBase: config.JobBase{Name: "org-repo-master-ps2"}}},
+					},
+				},
+				expectSendComment: false,
+			},
+		},
 	}
 
 	for _, tc := range tests {
 		t.Run(tc.name, func(t *testing.T) {
-			ghc := &fakeGhClientWithTracking{closed: sets.NewInt()}
+			ghc := &fakeGhClientWithTracking{closed: sets.NewInt(), labels: tc.fields.labels}
 
 			// Create a successful always-required job in the lister
 			successfulJob := v1.ProwJob{
@@ -549,9 +612,11 @@ func Test_reconciler_reconcile_with_modes(t *testing.T) {
 					updatedPresubmits: tc.fields.presubmits,
 					logger:            testLoggerReconciler(),
 				},
-				ghc:     ghc,
-				ids:     sync.Map{},
-				watcher: &watcher{config: tc.fields.watcherConfig},
+				ghc:               ghc,
+				ids:               sync.Map{},
+				watcher:           &watcher{config: tc.fields.watcherConfig},
+				lgtmWatcher:       &watcher{config: tc.fields.lgtmWatcherConfig},
+				pipelineAutoCache: NewPipelineAutoCache(),
 				closedPRsCache: closedPRsCache{
 					prs:       map[string]pullRequest{},
 					m:         sync.Mutex{},

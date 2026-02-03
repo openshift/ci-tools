@@ -84,6 +84,8 @@ type reconciler struct {
 	ids                sync.Map
 	logger             *logrus.Entry
 	watcher            *watcher
+	lgtmWatcher        *watcher
+	pipelineAutoCache  *PipelineAutoCache
 }
 
 func NewReconciler(
@@ -92,6 +94,8 @@ func NewReconciler(
 	ghc github.Client,
 	logger *logrus.Entry,
 	w *watcher,
+	lgtmW *watcher,
+	pipelineAutoCache *PipelineAutoCache,
 ) (*reconciler, error) {
 	reconciler := &reconciler{
 		pjclientset:        mgr.GetClient(),
@@ -101,6 +105,8 @@ func NewReconciler(
 		ids:                sync.Map{},
 		logger:             logger,
 		watcher:            w,
+		lgtmWatcher:        lgtmW,
+		pipelineAutoCache:  pipelineAutoCache,
 		closedPRsCache: closedPRsCache{
 			prs:       map[string]pullRequest{},
 			m:         sync.Mutex{},
@@ -165,12 +171,28 @@ func (r *reconciler) reconcile(ctx context.Context, req reconcile.Request) error
 	currentCfg := r.watcher.getConfig()
 	repos, orgExists := currentCfg[pj.Spec.Refs.Org]
 	repoConfig, repoExists := repos[pj.Spec.Refs.Repo]
-	if !orgExists || !repoExists {
+
+	// Also check LGTM config for pipeline-auto label support
+	lgtmCfg := r.lgtmWatcher.getConfig()
+	lgtmRepos, lgtmOrgExists := lgtmCfg[pj.Spec.Refs.Org]
+	lgtmRepoConfig, lgtmRepoExists := lgtmRepos[pj.Spec.Refs.Repo]
+
+	isInMainConfig := orgExists && repoExists
+	isInLgtmConfig := lgtmOrgExists && lgtmRepoExists
+
+	if !isInMainConfig && !isInLgtmConfig {
 		return nil
 	}
 
 	// Check if branch is enabled for this repo
-	if !isBranchEnabled(repoConfig.Branches, pj.Spec.Refs.BaseRef) {
+	var branchEnabled bool
+	if isInMainConfig {
+		branchEnabled = isBranchEnabled(repoConfig.Branches, pj.Spec.Refs.BaseRef)
+	} else if isInLgtmConfig {
+		branchEnabled = isBranchEnabled(lgtmRepoConfig.Branches, pj.Spec.Refs.BaseRef)
+	}
+
+	if !branchEnabled {
 		if r.logger != nil {
 			log := r.logger.WithFields(logrus.Fields{
 				"org":     pj.Spec.Refs.Org,
@@ -183,8 +205,42 @@ func (r *reconciler) reconcile(ctx context.Context, req reconcile.Request) error
 		return nil
 	}
 
-	// Only proceed with automatic triggering if mode is "auto"
-	if repoConfig.Trigger != "auto" {
+	// Determine if we should proceed with automatic triggering
+	// Case 1: Repo is in main config with trigger mode "auto"
+	// Case 2: Repo is in LGTM config and has the pipeline-auto label
+	shouldProceedAuto := false
+
+	if isInMainConfig && repoConfig.Trigger == "auto" {
+		shouldProceedAuto = true
+	} else if isInLgtmConfig && len(pj.Spec.Refs.Pulls) > 0 {
+		// Check if PR has the pipeline-auto label
+		// First check cache (populated when /pipeline auto is used)
+		prNumber := pj.Spec.Refs.Pulls[0].Number
+		if r.pipelineAutoCache != nil && r.pipelineAutoCache.Has(pj.Spec.Refs.Org, pj.Spec.Refs.Repo, prNumber) {
+			shouldProceedAuto = true
+		} else {
+			// Cache miss - query GitHub API
+			labels, err := r.ghc.GetIssueLabels(pj.Spec.Refs.Org, pj.Spec.Refs.Repo, prNumber)
+			if err != nil {
+				if r.logger != nil {
+					r.logger.WithError(err).WithField("prowjob", pj.Name).Debug("Failed to get PR labels, skipping")
+				}
+				return nil
+			}
+			for _, label := range labels {
+				if label.Name == PipelineAutoLabel {
+					shouldProceedAuto = true
+					// Add to cache for future lookups
+					if r.pipelineAutoCache != nil {
+						r.pipelineAutoCache.Set(pj.Spec.Refs.Org, pj.Spec.Refs.Repo, prNumber)
+					}
+					break
+				}
+			}
+		}
+	}
+
+	if !shouldProceedAuto {
 		return nil
 	}
 

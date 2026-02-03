@@ -122,8 +122,12 @@ func (f *fakeGhClientForContext) CreateStatus(org, repo, ref string, s github.St
 	return nil
 }
 
-func (f *fakeGhClientForContext) ListStatuses(org, repo, ref string) ([]github.Status, error) {
-	return []github.Status{}, nil
+func (f *fakeGhClientForContext) AddLabel(org, repo string, number int, label string) error {
+	return nil
+}
+
+func (f *fakeGhClientForContext) GetIssueLabels(org, repo string, number int) ([]github.Label, error) {
+	return []github.Label{}, nil
 }
 
 func TestHandlePipelineContextCreation(t *testing.T) {

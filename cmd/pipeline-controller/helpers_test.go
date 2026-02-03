@@ -35,8 +35,12 @@ func (f *fakeGhClientWithChanges) CreateStatus(org, repo, ref string, s github.S
 	return nil
 }
 
-func (f *fakeGhClientWithChanges) ListStatuses(org, repo, ref string) ([]github.Status, error) {
-	return []github.Status{}, nil
+func (f *fakeGhClientWithChanges) AddLabel(org, repo string, number int, label string) error {
+	return nil
+}
+
+func (f *fakeGhClientWithChanges) GetIssueLabels(org, repo string, number int) ([]github.Label, error) {
+	return []github.Label{}, nil
 }
 
 type fakeProwJobLister struct {

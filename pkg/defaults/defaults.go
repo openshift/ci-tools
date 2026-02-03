@@ -1027,8 +1027,17 @@ func runtimeStepConfigsForBuild(
 	buildSteps = append(buildSteps, getSourceStepsForJobSpec(jobSpec, injectedTest)...)
 
 	// Detect Dockerfile inputs for project images and add InputImageTagStepConfiguration entries
+	baseImagesWithRoot := config.BaseImages
+	if baseImagesWithRoot == nil {
+		baseImagesWithRoot = make(map[string]api.ImageStreamTagReference)
+	}
+
+	for _, imageConfig := range imageConfigs {
+		alias := string(imageConfig.InputImage.To)
+		baseImagesWithRoot[alias] = imageConfig.InputImage.BaseImage
+	}
 	path := getPath(refs, "", jobSpec, injectedTest)
-	dockerfileInputSteps, images := detectDockerfileInputs(config.Images, config.BaseImages, path, readFile)
+	dockerfileInputSteps, images := detectDockerfileInputs(config.Images, baseImagesWithRoot, path, readFile)
 	config.Images = images
 	buildSteps = append(buildSteps, dockerfileInputSteps...)
 

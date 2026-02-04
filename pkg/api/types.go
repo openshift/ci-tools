@@ -1520,11 +1520,17 @@ const (
 	ClusterProfileMetalRHgs               ClusterProfile = "metal-redhat-gs"
 	ClusterProfileAWSOSC                  ClusterProfile = "aws-sandboxed-containers-operator"
 
-	ClusterProfileAROHCPInt               ClusterProfile = "aro-hcp-int"
-	ClusterProfileAROHCPStg               ClusterProfile = "aro-hcp-stg"
-	ClusterProfileAROHCPProd              ClusterProfile = "aro-hcp-prod"
-	ClusterProfileAROHCPDev               ClusterProfile = "aro-hcp-dev"
 	ClusterProfileRosaRegionalPlatformInt ClusterProfile = "rosa-regional-platform-int"
+
+	ClusterProfileAROHCPInt  ClusterProfile = "aro-hcp-int"
+	ClusterProfileAROHCPStg  ClusterProfile = "aro-hcp-stg"
+	ClusterProfileAROHCPProd ClusterProfile = "aro-hcp-prod"
+	ClusterProfileAROHCPDev  ClusterProfile = "aro-hcp-dev"
+
+	ClusterProfileAROClassicInt  ClusterProfile = "aro-classic-int"
+	ClusterProfileAROClassicStg  ClusterProfile = "aro-classic-stg"
+	ClusterProfileAROClassicProd ClusterProfile = "aro-classic-prod"
+	ClusterProfileAROClassicDev  ClusterProfile = "aro-classic-dev"
 )
 
 // ClusterProfiles are all valid cluster profiles
@@ -1716,11 +1722,17 @@ func ClusterProfiles() []ClusterProfile {
 		ClusterProfileMetalRHgs,
 		ClusterProfileAWSOSC,
 
+		ClusterProfileRosaRegionalPlatformInt,
+
 		ClusterProfileAROHCPInt,
 		ClusterProfileAROHCPStg,
 		ClusterProfileAROHCPProd,
 		ClusterProfileAROHCPDev,
-		ClusterProfileRosaRegionalPlatformInt,
+
+		ClusterProfileAROClassicInt,
+		ClusterProfileAROClassicStg,
+		ClusterProfileAROClassicProd,
+		ClusterProfileAROClassicDev,
 	}
 }
 
@@ -2004,6 +2016,9 @@ func (p ClusterProfile) ClusterType() string {
 	case ClusterProfileEquinixEdgeEnablement:
 		return "equinix-edge-enablement"
 
+	case ClusterProfileRosaRegionalPlatformInt:
+		return "rosa-regional-platform-int"
+
 	case ClusterProfileAROHCPInt:
 		return "aro-hcp-int"
 	case ClusterProfileAROHCPStg:
@@ -2012,8 +2027,16 @@ func (p ClusterProfile) ClusterType() string {
 		return "aro-hcp-prod"
 	case ClusterProfileAROHCPDev:
 		return "aro-hcp-dev"
-	case ClusterProfileRosaRegionalPlatformInt:
-		return "rosa-regional-platform-int"
+
+	case ClusterProfileAROClassicInt:
+		return "aro-classic-int"
+	case ClusterProfileAROClassicStg:
+		return "aro-classic-stg"
+	case ClusterProfileAROClassicProd:
+		return "aro-classic-prod"
+	case ClusterProfileAROClassicDev:
+		return "aro-classic-dev"
+
 	default:
 		return ""
 	}
@@ -2392,6 +2415,9 @@ func (p ClusterProfile) LeaseType() string {
 		return "metal-redhat-gs-quota-slice"
 	case ClusterProfileAWSOSC:
 		return "aws-sandboxed-containers-operator-quota-slice"
+	case ClusterProfileRosaRegionalPlatformInt:
+		return "rosa-regional-platform-int-quota-slice"
+
 	case ClusterProfileAROHCPInt:
 		return "aro-hcp-int-quota-slice"
 	case ClusterProfileAROHCPStg:
@@ -2400,8 +2426,16 @@ func (p ClusterProfile) LeaseType() string {
 		return "aro-hcp-prod-quota-slice"
 	case ClusterProfileAROHCPDev:
 		return "aro-hcp-dev-quota-slice"
-	case ClusterProfileRosaRegionalPlatformInt:
-		return "rosa-regional-platform-int-quota-slice"
+
+	case ClusterProfileAROClassicInt:
+		return "aro-classic-int-quota-slice"
+	case ClusterProfileAROClassicStg:
+		return "aro-classic-stg-quota-slice"
+	case ClusterProfileAROClassicProd:
+		return "aro-classic-prod-quota-slice"
+	case ClusterProfileAROClassicDev:
+		return "aro-classic-dev-quota-slice"
+
 	default:
 		return ""
 	}
@@ -2446,7 +2480,8 @@ func LeaseTypeFromClusterType(t string) (string, error) {
 		"kubevirt", "aws-cpaas", "osd-ephemeral", "gcp-virtualization", "aws-virtualization",
 		"azure-virtualization", "hypershift-aws", "hypershift-aks", "hypershift-powervs", "hypershift-powervs-cb", "hypershift-gcp", "aws-mco-qe",
 		"equinix-edge-enablement", "aws-oadp-qe", "azure-oadp-qe", "gcp-oadp-qe", "aws-lp-chaos",
-		"metal-redhat-gs", "aro-hcp-int", "aro-hcp-stg", "aro-hcp-prod", "aro-hcp-dev", "rosa-regional-platform-int", "hyperfleet-e2e":
+		"metal-redhat-gs", "aro-hcp-int", "aro-hcp-stg", "aro-hcp-prod", "aro-hcp-dev", "rosa-regional-platform-int", "hyperfleet-e2e",
+		"aro-classic-int", "aro-classic-stg", "aro-classic-prod", "aro-classic-dev":
 		return t + "-quota-slice", nil
 	default:
 		return "", fmt.Errorf("invalid cluster type %q", t)

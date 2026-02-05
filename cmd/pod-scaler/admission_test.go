@@ -554,7 +554,7 @@ func TestMutatePodResources(t *testing.T) {
 	for _, testCase := range testCases {
 		t.Run(testCase.name, func(t *testing.T) {
 			original := testCase.pod.DeepCopy()
-			mutatePodResources(testCase.pod, testCase.server, testCase.mutateResourceLimits, 10, "20Gi", &defaultReporter, logrus.WithField("test", testCase.name))
+			mutatePodResources(testCase.pod, testCase.server, testCase.mutateResourceLimits, 10, "20Gi", true, true, &defaultReporter, logrus.WithField("test", testCase.name))
 			diff := cmp.Diff(original, testCase.pod)
 			// In some cases, cmp.Diff decides to use non-breaking spaces, and it's not
 			// particularly deterministic about this. We don't care.
@@ -661,7 +661,7 @@ func TestUseOursIfLarger(t *testing.T) {
 			},
 		},
 		{
-			name: "nothing in ours is larger",
+			name: "ours are smaller with very small values - should reduce resources based on recent usage",
 			ours: corev1.ResourceRequirements{
 				Limits: corev1.ResourceList{
 					corev1.ResourceCPU:    *resource.NewQuantity(10, resource.DecimalSI),
@@ -684,12 +684,16 @@ func TestUseOursIfLarger(t *testing.T) {
 			},
 			expected: corev1.ResourceRequirements{
 				Limits: corev1.ResourceList{
-					corev1.ResourceCPU:    *resource.NewQuantity(200, resource.DecimalSI),
-					corev1.ResourceMemory: *resource.NewQuantity(3e10, resource.BinarySI),
+					// Ours: 10 * 1.2 = 12, Theirs: 200, Reduction: 94% > 25%, so limit to 25%: 200 * 0.75 = 150
+					corev1.ResourceCPU: *resource.NewQuantity(150, resource.DecimalSI),
+					// Ours: 10 * 1.2 = 12, Theirs: 3e10, Reduction: >99% > 25%, so limit to 25%: 3e10 * 0.75 = 2.25e10
+					corev1.ResourceMemory: *resource.NewQuantity(225e8, resource.BinarySI),
 				},
 				Requests: corev1.ResourceList{
-					corev1.ResourceCPU:    *resource.NewQuantity(100, resource.DecimalSI),
-					corev1.ResourceMemory: *resource.NewQuantity(2e10, resource.BinarySI),
+					// Ours: 10 * 1.2 = 12, Theirs: 100, Reduction: 88% > 25%, so limit to 25%: 100 * 0.75 = 75
+					corev1.ResourceCPU: *resource.NewQuantity(75, resource.DecimalSI),
+					// Ours: 10 * 1.2 = 12, Theirs: 2e10, Reduction: >99% > 25%, so limit to 25%: 2e10 * 0.75 = 1.5e10
+					corev1.ResourceMemory: *resource.NewQuantity(15e9, resource.BinarySI),
 				},
 			},
 		},
@@ -717,8 +721,9 @@ func TestUseOursIfLarger(t *testing.T) {
 			},
 			expected: corev1.ResourceRequirements{
 				Limits: corev1.ResourceList{
-					corev1.ResourceCPU:    *resource.NewQuantity(480, resource.DecimalSI),
-					corev1.ResourceMemory: *resource.NewQuantity(3e10, resource.BinarySI),
+					corev1.ResourceCPU: *resource.NewQuantity(480, resource.DecimalSI),
+					// Ours: 10 * 1.2 = 12, Theirs: 3e10, Reduction: >99% > 25%, so limit to 25%: 3e10 * 0.75 = 2.25e10
+					corev1.ResourceMemory: *resource.NewQuantity(225e8, resource.BinarySI),
 				},
 				Requests: corev1.ResourceList{
 					corev1.ResourceCPU:    *resource.NewQuantity(1200, resource.DecimalSI),
@@ -726,10 +731,47 @@ func TestUseOursIfLarger(t *testing.T) {
 				},
 			},
 		},
+		{
+			name: "ours are smaller with medium values - should reduce resources based on recent usage",
+			ours: corev1.ResourceRequirements{
+				Limits: corev1.ResourceList{
+					corev1.ResourceCPU:    *resource.NewQuantity(50, resource.DecimalSI),
+					corev1.ResourceMemory: *resource.NewQuantity(1e9, resource.BinarySI),
+				},
+				Requests: corev1.ResourceList{
+					corev1.ResourceCPU:    *resource.NewQuantity(25, resource.DecimalSI),
+					corev1.ResourceMemory: *resource.NewQuantity(5e9, resource.BinarySI),
+				},
+			},
+			theirs: corev1.ResourceRequirements{
+				Limits: corev1.ResourceList{
+					corev1.ResourceCPU:    *resource.NewQuantity(200, resource.DecimalSI),
+					corev1.ResourceMemory: *resource.NewQuantity(3e10, resource.BinarySI),
+				},
+				Requests: corev1.ResourceList{
+					corev1.ResourceCPU:    *resource.NewQuantity(100, resource.DecimalSI),
+					corev1.ResourceMemory: *resource.NewQuantity(2e10, resource.BinarySI),
+				},
+			},
+			expected: corev1.ResourceRequirements{
+				Limits: corev1.ResourceList{
+					// Ours: 50 * 1.2 = 60, Theirs: 200, Reduction: 70% > 25%, so limit to 25%: 200 * 0.75 = 150
+					corev1.ResourceCPU: *resource.NewQuantity(150, resource.DecimalSI),
+					// Ours: 1e9 * 1.2 = 1.2e9, Theirs: 3e10, Reduction: 96% > 25%, so limit to 25%: 3e10 * 0.75 = 2.25e10
+					corev1.ResourceMemory: *resource.NewQuantity(225e8, resource.BinarySI),
+				},
+				Requests: corev1.ResourceList{
+					// Ours: 25 * 1.2 = 30, Theirs: 100, Reduction: 70% > 25%, so limit to 25%: 100 * 0.75 = 75
+					corev1.ResourceCPU: *resource.NewQuantity(75, resource.DecimalSI),
+					// Ours: 5e9 * 1.2 = 6e9, Theirs: 2e10, Reduction: 70% > 25%, so limit to 25%: 2e10 * 0.75 = 1.5e10
+					corev1.ResourceMemory: *resource.NewQuantity(15e9, resource.BinarySI),
+				},
+			},
+		},
 	}
 	for _, testCase := range testCases {
 		t.Run(testCase.name, func(t *testing.T) {
-			useOursIfLarger(&testCase.ours, &testCase.theirs, "test", "build", &defaultReporter, logrus.WithField("test", testCase.name))
+			applyRecommendationsBasedOnRecentData(&testCase.ours, &testCase.theirs, "test", "build", true, true, &defaultReporter, logrus.WithField("test", testCase.name))
 			if diff := cmp.Diff(testCase.theirs, testCase.expected); diff != "" {
 				t.Errorf("%s: got incorrect resources after mutation: %v", testCase.name, diff)
 			}
@@ -814,7 +856,7 @@ func TestUseOursIsLarger_ReporterReports(t *testing.T) {
 
 	for _, tc := range testCases {
 		t.Run(tc.name, func(t *testing.T) {
-			useOursIfLarger(&tc.ours, &tc.theirs, "test", "build", &tc.reporter, logrus.WithField("test", tc.name))
+			applyRecommendationsBasedOnRecentData(&tc.ours, &tc.theirs, "test", "build", true, true, &tc.reporter, logrus.WithField("test", tc.name))
 
 			if diff := cmp.Diff(tc.reporter.called, tc.expected); diff != "" {
 				t.Errorf("actual and expected reporter states don't match, : %v", diff)

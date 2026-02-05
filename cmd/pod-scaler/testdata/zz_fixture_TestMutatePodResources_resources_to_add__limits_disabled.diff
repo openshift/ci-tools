@@ -12,7 +12,8 @@
   				Resources: v1.ResourceRequirements{
   					Limits: {s"cpu": {i: {value: 16}, Format: "DecimalSI"}, s"memory": {i: {value: 40000000000}, Format: "BinarySI"}},
   					Requests: v1.ResourceList{
-  						s"cpu":    {i: {value: 8}, Format: "DecimalSI"},
+- 						s"cpu":    {i: resource.int64Amount{value: 8}, Format: "DecimalSI"},
++ 						s"cpu":    {i: resource.int64Amount{value: 6}, s: "6", Format: "DecimalSI"},
 - 						s"memory": {i: resource.int64Amount{value: 30000000000}, Format: "BinarySI"},
 + 						s"memory": {i: resource.int64Amount{value: 21474836480}, s: "20Gi", Format: "BinarySI"},
   					},
@@ -29,7 +30,8 @@
   				Resources: v1.ResourceRequirements{
   					Limits: {},
   					Requests: v1.ResourceList{
-  						s"cpu":    {i: {value: 8}, Format: "DecimalSI"},
+- 						s"cpu":    {i: resource.int64Amount{value: 8}, Format: "DecimalSI"},
++ 						s"cpu":    {i: resource.int64Amount{value: 6}, s: "6", Format: "DecimalSI"},
 - 						s"memory": {i: resource.int64Amount{value: 10000000000}, Format: "BinarySI"},
 + 						s"memory": {i: resource.int64Amount{value: 21474836480}, s: "20Gi", Format: "BinarySI"},
   					},

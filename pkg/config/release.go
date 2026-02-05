@@ -185,7 +185,7 @@ func GetAllConfigsFromSHA(releaseRepoPath, sha string) (*ReleaseRepoConfig, erro
 }
 
 func GetChangedTemplates(path, baseRev string) ([]string, error) {
-	changes, err := getRevChanges(path, TemplatesPath, baseRev, false)
+	changes, err := getRevChanges(path, TemplatesPath, baseRev, false, true)
 	if err != nil {
 		return nil, err
 	}
@@ -235,9 +235,10 @@ func loadRegistryStep(filename string, graph registry.NodeByName) (registry.Node
 }
 
 // GetChangedRegistrySteps identifies all registry components that changed.
+// Uses useMergeBase=false to only detect PR changes, not base branch changes.
 func GetChangedRegistrySteps(path, baseRev string, graph registry.NodeByName) ([]registry.Node, error) {
 	var changes []registry.Node
-	revChanges, err := getRevChanges(path, RegistryPath, baseRev, false)
+	revChanges, err := getRevChanges(path, RegistryPath, baseRev, false, false)
 	if err != nil {
 		return changes, err
 	}
@@ -256,25 +257,40 @@ func GetChangedRegistrySteps(path, baseRev string, graph registry.NodeByName) ([
 }
 
 func GetAddedConfigs(path, baseRev string) ([]string, error) {
-	return getRevChanges(path, CiopConfigInRepoPath, baseRev, true)
+	return getRevChanges(path, CiopConfigInRepoPath, baseRev, true, true)
 }
 
 func GetAddedProwConfigs(path, baseRev string) ([]string, error) {
-	return getRevChanges(path, "core-services/prow/02_config", baseRev, true)
+	return getRevChanges(path, "core-services/prow/02_config", baseRev, true, true)
 }
 
 // getRevChanges returns the name and a hash of the contents of files under
 // `path` that were added/modified since revision `base` in the repository at
 // `root`.  Paths are relative to `root`.
 // If 'ignoreModified' is true it will only check for relevant added, moved, or copied files
-func getRevChanges(root, path, base string, ignoreModified bool) ([]string, error) {
+// If 'useMergeBase' is true, uses git merge-base to find common ancestor (includes base branch changes)
+// If 'useMergeBase' is false, compares directly against base (only PR changes)
+func getRevChanges(root, path, base string, ignoreModified, useMergeBase bool) ([]string, error) {
 	// Sample output (with abbreviated hashes) from git-diff-tree(1):
 	// :100644 100644 bcd1234 0123456 M file0
 	filter := "--diff-filter=d"
 	if ignoreModified {
 		filter = "--diff-filter=ACR"
 	}
-	cmd := []string{"diff-tree", "-r", filter, base + ":" + path, "HEAD:" + path}
+	compareBase := base
+	if useMergeBase {
+		// Find merge base to handle cases where base branch has moved forward.
+		// This ensures accurate change detection even when the PR was created from
+		// an outdated base branch commit.
+		mergeBase, err := git(root, "merge-base", base, "HEAD")
+		if err != nil {
+			// Fallback to original behavior if merge-base fails (e.g., no common ancestor)
+			// This can happen in edge cases, so we use the provided base directly
+		} else {
+			compareBase = strings.TrimSpace(mergeBase)
+		}
+	}
+	cmd := []string{"diff-tree", "-r", filter, compareBase + ":" + path, "HEAD:" + path}
 	diff, err := git(root, cmd...)
 	if err != nil || diff == "" {
 		return nil, err

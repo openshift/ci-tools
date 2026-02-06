@@ -238,7 +238,7 @@ func getMirrorCommand(registryConfig string, images []string, loglevel int) stri
 }
 
 func getTagCommand(tagSpecs []string, loglevel int) string {
-	return fmt.Sprintf("oc tag --source=docker --loglevel=%d --reference-policy='source' --import-mode='PreserveOriginal' %s",
+	return fmt.Sprintf("oc tag --source=docker --loglevel=%d --reference-policy='source' --import-mode='PreserveOriginal' --reference %s",
 		loglevel, strings.Join(tagSpecs, " "))
 }
 

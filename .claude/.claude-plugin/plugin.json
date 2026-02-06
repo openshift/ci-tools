@@ -1,0 +1,121 @@
+{
+  "name": "openshift-branching",
+  "version": "1.0.0",
+  "description": "Automates OpenShift release pre-branching tasks",
+  "author": "TestPlatform Team",
+  "commands": [
+    {
+      "name": "pre-branching",
+      "description": "Execute pre-branching tasks for OpenShift release X.Y",
+      "usage": "/pre-branching <x.y>",
+      "settingsFile": "settings.pre-branching.json",
+      "examples": [
+        "/pre-branching 4.21",
+        "/pre-branching 4.22"
+      ]
+    }
+  ],
+  "skills": [
+    {
+      "name": "create-pre-branching-branch",
+      "description": "Create and checkout pre-branching branch in release repository",
+      "script": "skills/create-pre-branching-branch.sh",
+      "permissions": [
+        "Bash(git fetch:*)",
+        "Bash(git pull:*)",
+        "Bash(git checkout:*)",
+        "Bash(git show-ref:*)"
+      ]
+    },
+    {
+      "name": "download-sippy-config",
+      "description": "Download latest Sippy configuration from GitHub",
+      "script": "skills/download-sippy-config.sh",
+      "permissions": [
+        "Bash(curl :*)",
+        "Write(/tmp/**)"
+      ]
+    },
+    {
+      "name": "copy-release-controller-configs",
+      "description": "Copy and update release-controller configurations from old version to new version",
+      "script": "skills/copy-release-controller-configs.sh",
+      "permissions": [
+        "Read(../release/**)",
+        "Edit(../release/**)",
+        "Bash(cp :*)",
+        "Bash(sed :*)",
+        "Bash(find :*)"
+      ]
+    },
+    {
+      "name": "update-release-gating-jobs",
+      "description": "Run generated-release-gating-jobs bumper with Sippy config",
+      "script": "skills/update-release-gating-jobs.sh",
+      "permissions": [
+        "Bash(go build:*)",
+        "Bash(./generated-release-gating-jobs :*)",
+        "Read(../release/**)",
+        "Edit(../release/**)"
+      ]
+    },
+    {
+      "name": "copy-handcrafted-release-gating-jobs",
+      "description": "Populate handcrafted X.Y+1 release-gating jobs from X.Y release",
+      "script": "skills/copy-handcrafted-release-gating-jobs.sh",
+      "permissions": [
+        "Bash(cp :*)",
+        "Bash(sed :*)",
+        "Bash(make release-controllers)",
+        "Bash(make jobs)",
+        "Read(../release/**)",
+        "Edit(../release/**)"
+      ]
+    },
+    {
+      "name": "regenerate-prow-jobs",
+      "description": "Regenerate Prow job configurations from CI operator configs",
+      "script": "skills/regenerate-prow-jobs.sh",
+      "permissions": [
+        "Bash(make jobs)",
+        "Read(../release/**)",
+        "Write(../release/**)"
+      ]
+    },
+    {
+      "name": "validate-release-controller-config",
+      "description": "Validate release-controller configurations",
+      "script": "skills/validate-release-controller-config.sh",
+      "permissions": [
+        "Bash(hack/validate-release-controller-config.sh :*)",
+        "Read(../release/**)"
+      ]
+    },
+    {
+      "name": "bump-analysis-jobs",
+      "description": "Bump analysis jobs (install, upgrade, overall) from old version to new version",
+      "script": "skills/bump-analysis-jobs.sh",
+      "permissions": [
+        "Bash(python3:*)",
+        "Read(../release/**)",
+        "Edit(../release/**)"
+      ]
+    },
+    {
+      "name": "create-pre-branching-commits",
+      "description": "Create the three standard pre-branching commits",
+      "script": "skills/create-pre-branching-commits.sh",
+      "permissions": [
+        "Bash(git add:*)",
+        "Bash(git commit:*)",
+        "Bash(git diff:*)",
+        "Bash(git log:*)",
+        "Bash(git ls-files:*)"
+      ]
+    }
+  ],
+  "config": {
+    "RELEASE_REPO": "/home/prucek/work/release",
+    "CI_TOOLS_REPO": "/home/prucek/work/ci-tools"
+  }
+}

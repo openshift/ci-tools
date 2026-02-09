@@ -47,17 +47,17 @@ func queriesByMetric() map[string]string {
 		{
 			prefix:   ProwjobsCachePrefix,
 			selector: `{` + string(podscaler.ProwLabelNameCreated) + `="true",` + string(podscaler.ProwLabelNameJob) + `!="",` + string(podscaler.LabelNameRehearsal) + `=""}`,
-			labels:   []string{string(podscaler.ProwLabelNameCreated), string(podscaler.ProwLabelNameContext), string(podscaler.ProwLabelNameOrg), string(podscaler.ProwLabelNameRepo), string(podscaler.ProwLabelNameBranch), string(podscaler.ProwLabelNameJob), string(podscaler.ProwLabelNameType)},
+			labels:   []string{string(podscaler.ProwLabelNameCreated), string(podscaler.ProwLabelNameContext), string(podscaler.ProwLabelNameOrg), string(podscaler.ProwLabelNameRepo), string(podscaler.ProwLabelNameBranch), string(podscaler.ProwLabelNameJob), string(podscaler.ProwLabelNameType), string(podscaler.LabelNameMeasured)},
 		},
 		{
 			prefix:   PodsCachePrefix,
 			selector: `{` + string(podscaler.LabelNameCreated) + `="true",` + string(podscaler.LabelNameStep) + `=""}`,
-			labels:   []string{string(podscaler.LabelNameOrg), string(podscaler.LabelNameRepo), string(podscaler.LabelNameBranch), string(podscaler.LabelNameVariant), string(podscaler.LabelNameTarget), string(podscaler.LabelNameBuild), string(podscaler.LabelNameRelease), string(podscaler.LabelNameApp)},
+			labels:   []string{string(podscaler.LabelNameOrg), string(podscaler.LabelNameRepo), string(podscaler.LabelNameBranch), string(podscaler.LabelNameVariant), string(podscaler.LabelNameTarget), string(podscaler.LabelNameBuild), string(podscaler.LabelNameRelease), string(podscaler.LabelNameApp), string(podscaler.LabelNameMeasured)},
 		},
 		{
 			prefix:   StepsCachePrefix,
 			selector: `{` + string(podscaler.LabelNameCreated) + `="true",` + string(podscaler.LabelNameStep) + `!=""}`,
-			labels:   []string{string(podscaler.LabelNameOrg), string(podscaler.LabelNameRepo), string(podscaler.LabelNameBranch), string(podscaler.LabelNameVariant), string(podscaler.LabelNameTarget), string(podscaler.LabelNameStep)},
+			labels:   []string{string(podscaler.LabelNameOrg), string(podscaler.LabelNameRepo), string(podscaler.LabelNameBranch), string(podscaler.LabelNameVariant), string(podscaler.LabelNameTarget), string(podscaler.LabelNameStep), string(podscaler.LabelNameMeasured)},
 		},
 	} {
 		for name, metric := range map[string]string{

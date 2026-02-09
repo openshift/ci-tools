@@ -45,6 +45,13 @@ const (
 	LabelNameBuild     model.LabelName = "label_openshift_io_build_name"
 	LabelNameRelease   model.LabelName = "label_ci_openshift_io_release"
 	LabelNameApp       model.LabelName = "label_app"
+	LabelNameMeasured  model.LabelName = "label_pod_scaler_openshift_io_measured"
+)
+
+const (
+	// PodLabelMeasured is the Kubernetes pod label used by the admission webhook
+	// to mark pods as measured or unmeasured.
+	PodLabelMeasured = "pod-scaler.openshift.io/measured"
 )
 
 // CachedQuery stores digested data for a query across clusters, as well as indices
@@ -127,6 +134,7 @@ func metadataFromMetric(metric model.Metric) FullMetadata {
 		Step:      string(metric[LabelNameStep]),
 		Pod:       string(metric[LabelNamePod]),
 		Container: string(metric[LabelNameContainer]),
+		Measured:  string(metric[LabelNameMeasured]) == "true",
 	}
 	// we know RPM repos, release Pods and Build Pods do not differ by target, so
 	// we can remove those fields when we know we're looking at one of those
@@ -225,6 +233,7 @@ func labelsToMetric(labels map[string]string) model.Metric {
 		buildv1.BuildLabel:         LabelNameBuild,
 		release.Label:              LabelNameRelease,
 		steps.AppLabel:             LabelNameApp,
+		PodLabelMeasured:           LabelNameMeasured,
 	}
 	output := model.Metric{}
 	for key, value := range labels {

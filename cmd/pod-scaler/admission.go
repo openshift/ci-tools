@@ -444,7 +444,7 @@ func (m *podMutator) addPriorityClass(pod *corev1.Pod) {
 }
 
 const (
-	measuredPodLabel = "pod-scaler.openshift.io/measured"
+	measuredPodLabel = podscaler.PodLabelMeasured
 	ciWorkloadLabel  = "ci-workload"
 )
 

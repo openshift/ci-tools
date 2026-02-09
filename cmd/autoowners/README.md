@@ -90,4 +90,4 @@ $ /usr/bin/autoowners --github-token-path=/etc/github/oauth --git-name=openshift
 ```
 
 [openshift/origin]: https://github.com/openshift/origin
-[openshift/origin-jobs]: https://github.com/openshift/release/tree/master/ci-operator/jobs/openshift/origin
+[openshift/origin-jobs]: https://github.com/openshift/release/tree/main/ci-operator/jobs/openshift/origin

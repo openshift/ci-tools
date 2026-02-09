@@ -1,6 +1,6 @@
 # GSM Secret Sync
 
-A tool for synchronizing Google Secret Manager (GSM) resources with OpenShift CI secret collections based on the configuration defined in [_config.yaml](https://github.com/openshift/release/blob/master/core-services/sync-rover-groups/_config.yaml).
+A tool for synchronizing Google Secret Manager (GSM) resources with OpenShift CI secret collections based on the configuration defined in [_config.yaml](https://github.com/openshift/release/blob/main/core-services/sync-rover-groups/_config.yaml).
 
 ## Overview
 
@@ -47,7 +47,7 @@ gsm-secret-sync \
 
 ## Configuration
 
-The configuration file is the **source of truth** that defines groups and their secret collection access. The groups referenced in this configuration are **Rover groups** - Red Hat internal groups managed through the Rover system and synchronized by the [`sync-rover-groups`](../sync-rover-groups) tool. The actual configuration can be found at [_config.yaml](https://github.com/openshift/release/blob/master/core-services/sync-rover-groups/_config.yaml).
+The configuration file is the **source of truth** that defines groups and their secret collection access. The groups referenced in this configuration are **Rover groups** - Red Hat internal groups managed through the Rover system and synchronized by the [`sync-rover-groups`](../sync-rover-groups) tool. The actual configuration can be found at [_config.yaml](https://github.com/openshift/release/blob/main/core-services/sync-rover-groups/_config.yaml).
 
 ```yaml
 groups:

@@ -361,7 +361,7 @@ func TestBuild(t *testing.T) {
 					CIOperatorConfig: prpqv1.CIOperatorMetadata{
 						Org:     "openshift",
 						Repo:    "release",
-						Branch:  "master",
+						Branch:  "main",
 						Variant: "nightly-4.10",
 					},
 					Test:            "e2e-aws-serial",
@@ -371,7 +371,7 @@ func TestBuild(t *testing.T) {
 					CIOperatorConfig: prpqv1.CIOperatorMetadata{
 						Org:     "openshift",
 						Repo:    "release",
-						Branch:  "master",
+						Branch:  "main",
 						Variant: "nightly-4.10",
 					},
 					Test:            "e2e-metal-ipi",
@@ -401,12 +401,12 @@ func TestBuild(t *testing.T) {
 						ReleaseControllerConfig: prpqv1.ReleaseControllerConfig{OCP: "4.10", Release: "nightly", Specifier: "ci"},
 						Jobs: []prpqv1.ReleaseJobSpec{
 							{
-								CIOperatorConfig: prpqv1.CIOperatorMetadata{Org: "openshift", Repo: "release", Branch: "master", Variant: "nightly-4.10"},
+								CIOperatorConfig: prpqv1.CIOperatorMetadata{Org: "openshift", Repo: "release", Branch: "main", Variant: "nightly-4.10"},
 								Test:             "e2e-aws-serial",
 								AggregatedCount:  5,
 							},
 							{
-								CIOperatorConfig: prpqv1.CIOperatorMetadata{Org: "openshift", Repo: "release", Branch: "master", Variant: "nightly-4.10"},
+								CIOperatorConfig: prpqv1.CIOperatorMetadata{Org: "openshift", Repo: "release", Branch: "main", Variant: "nightly-4.10"},
 								Test:             "e2e-metal-ipi",
 								AggregatedCount:  10,
 							},
@@ -423,7 +423,7 @@ func TestBuild(t *testing.T) {
 					CIOperatorConfig: prpqv1.CIOperatorMetadata{
 						Org:     "openshift",
 						Repo:    "release",
-						Branch:  "master",
+						Branch:  "main",
 						Variant: "nightly-4.10",
 					},
 					Test: "e2e-aws-serial",
@@ -432,7 +432,7 @@ func TestBuild(t *testing.T) {
 					CIOperatorConfig: prpqv1.CIOperatorMetadata{
 						Org:     "openshift",
 						Repo:    "release",
-						Branch:  "master",
+						Branch:  "main",
 						Variant: "nightly-4.10",
 					},
 					Test: "e2e-metal-ipi",
@@ -460,11 +460,11 @@ func TestBuild(t *testing.T) {
 					Jobs: prpqv1.PullRequestPayloadJobSpec{
 						Jobs: []prpqv1.ReleaseJobSpec{
 							{
-								CIOperatorConfig: prpqv1.CIOperatorMetadata{Org: "openshift", Repo: "release", Branch: "master", Variant: "nightly-4.10"},
+								CIOperatorConfig: prpqv1.CIOperatorMetadata{Org: "openshift", Repo: "release", Branch: "main", Variant: "nightly-4.10"},
 								Test:             "e2e-aws-serial",
 							},
 							{
-								CIOperatorConfig: prpqv1.CIOperatorMetadata{Org: "openshift", Repo: "release", Branch: "master", Variant: "nightly-4.10"},
+								CIOperatorConfig: prpqv1.CIOperatorMetadata{Org: "openshift", Repo: "release", Branch: "main", Variant: "nightly-4.10"},
 								Test:             "e2e-metal-ipi",
 							},
 						},
@@ -484,7 +484,7 @@ func TestBuild(t *testing.T) {
 					CIOperatorConfig: prpqv1.CIOperatorMetadata{
 						Org:     "openshift",
 						Repo:    "release",
-						Branch:  "master",
+						Branch:  "main",
 						Variant: "nightly-4.10",
 					},
 					Test:            "e2e-aws-serial",
@@ -494,7 +494,7 @@ func TestBuild(t *testing.T) {
 					CIOperatorConfig: prpqv1.CIOperatorMetadata{
 						Org:     "openshift",
 						Repo:    "release",
-						Branch:  "master",
+						Branch:  "main",
 						Variant: "nightly-4.10",
 					},
 					Test:            "e2e-metal-ipi",
@@ -549,12 +549,12 @@ func TestBuild(t *testing.T) {
 						ReleaseControllerConfig: prpqv1.ReleaseControllerConfig{OCP: "4.10", Release: "nightly", Specifier: "ci"},
 						Jobs: []prpqv1.ReleaseJobSpec{
 							{
-								CIOperatorConfig: prpqv1.CIOperatorMetadata{Org: "openshift", Repo: "release", Branch: "master", Variant: "nightly-4.10"},
+								CIOperatorConfig: prpqv1.CIOperatorMetadata{Org: "openshift", Repo: "release", Branch: "main", Variant: "nightly-4.10"},
 								Test:             "e2e-aws-serial",
 								AggregatedCount:  5,
 							},
 							{
-								CIOperatorConfig: prpqv1.CIOperatorMetadata{Org: "openshift", Repo: "release", Branch: "master", Variant: "nightly-4.10"},
+								CIOperatorConfig: prpqv1.CIOperatorMetadata{Org: "openshift", Repo: "release", Branch: "main", Variant: "nightly-4.10"},
 								Test:             "e2e-metal-ipi",
 								AggregatedCount:  10,
 							},

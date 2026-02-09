@@ -387,9 +387,9 @@ func sourceForConfigChangeChannel(registryClient ctrlruntimeclient.Client, chang
 }
 
 func LoadConfigFromReleaseRepo(configPath string) ([]byte, error) {
-	file, err := repoFileGetterWithIgnore(cioperatorapi.Metadata{})("openshift", "release", "master")(configPath)
+	file, err := repoFileGetterWithIgnore(cioperatorapi.Metadata{})("openshift", "release", "main")(configPath)
 	if err != nil {
-		return []byte{}, fmt.Errorf("failed to get the file %s in repo openshift/release for branch master: %w", configPath, err)
+		return []byte{}, fmt.Errorf("failed to get the file %s in repo openshift/release for branch main: %w", configPath, err)
 	}
 	return file, nil
 }

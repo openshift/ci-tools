@@ -54,5 +54,5 @@ new file:   redhat-openshift-...
 Commit the  changes and file a PR in https://github.com/kubernetes/test-infra/ to land them if you cannot wait for the daily run of periodic-prow-auto-testgrid-generator job.
 
 [generic-informing]: https://testgrid.k8s.io/redhat-openshift-informing
-[release-controller-config]: https://github.com/openshift/release/tree/master/core-services/release-controller
+[release-controller-config]: https://github.com/openshift/release/tree/main/core-services/release-controller
 [release-controller]: https://github.com/openshift/release-controller/

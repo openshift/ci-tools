@@ -235,7 +235,7 @@ type OpenshiftMappingConfig struct {
 }
 
 // generateMappings generates the mappings to mirror the images
-// Those mappings will be stored in https://github.com/openshift/release/tree/master/core-services/image-mirroring/openshift
+// Those mappings will be stored in https://github.com/openshift/release/tree/main/core-services/image-mirroring/openshift
 // and then used by the periodic-image-mirroring-openshift job
 func generateMappings(promotedTags []api.ImageStreamTagReference, mappingConfig *OpenshiftMappingConfig, imageStreamRefs []releaseconfig.ImageStreamRef) (map[string]map[string]sets.Set[string], error) {
 	mappings := map[string]map[string]sets.Set[string]{}

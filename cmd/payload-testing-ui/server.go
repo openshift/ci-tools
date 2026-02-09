@@ -315,7 +315,7 @@ func (s *server) runDetails(w http.ResponseWriter, r *http.Request) {
 			<h2>Release controller</h2>
 			<ul>
 				<li><a href="https://amd64.ocp.releases.ci.openshift.org/#%s.0-0.%s">Release status</a></li>
-				<li><a href="https://github.com/openshift/release/blob/master/core-services/release-controller/_releases/release-ocp-%s%s.json">Configuration</a></li>
+				<li><a href="https://github.com/openshift/release/blob/main/core-services/release-controller/_releases/release-ocp-%s%s.json">Configuration</a></li>
 			</ul>`, ocp, release, ocp, suffix)
 			return template.HTML(ret)
 		},

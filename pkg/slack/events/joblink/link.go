@@ -236,7 +236,7 @@ func contextFor(logger *logrus.Entry, infos []jobInfo, config JobGetter, gcsClie
 			text.WriteString("\n- This job is a rehearsal for <https://github.com/openshift/release/pull/" + rehearsalPR + "|PR " + rehearsalPR + ">.")
 		}
 		if generated {
-			text.WriteString("\n - `ci-operator` <https://github.com/openshift/release/tree/master/ci-operator/config/" + job.metadata.RelativePath() + "|config>.")
+			text.WriteString("\n - `ci-operator` <https://github.com/openshift/release/tree/main/ci-operator/config/" + job.metadata.RelativePath() + "|config>.")
 		} else {
 			text.WriteString("\n - This job is not generated from `ci-operator` configuration; DPTP may not be able to support questions for it.")
 		}

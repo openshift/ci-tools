@@ -26,7 +26,8 @@ func TestQueriesByMetric(t *testing.T) {
     label_ci_openshift_io_metadata_target,
     label_openshift_io_build_name,
     label_ci_openshift_io_release,
-    label_app
+    label_app,
+    label_pod_scaler_openshift_io_measured
   ) max by (
     namespace,
     pod,
@@ -37,7 +38,8 @@ func TestQueriesByMetric(t *testing.T) {
     label_ci_openshift_io_metadata_target,
     label_openshift_io_build_name,
     label_ci_openshift_io_release,
-    label_app
+    label_app,
+    label_pod_scaler_openshift_io_measured
   ) (kube_pod_labels{label_created_by_ci="true",label_ci_openshift_io_metadata_step=""})`,
 		"pods/container_memory_working_set_bytes": `sum by (
     namespace,
@@ -53,7 +55,8 @@ func TestQueriesByMetric(t *testing.T) {
     label_ci_openshift_io_metadata_target,
     label_openshift_io_build_name,
     label_ci_openshift_io_release,
-    label_app
+    label_app,
+    label_pod_scaler_openshift_io_measured
   ) max by (
     namespace,
     pod,
@@ -64,7 +67,8 @@ func TestQueriesByMetric(t *testing.T) {
     label_ci_openshift_io_metadata_target,
     label_openshift_io_build_name,
     label_ci_openshift_io_release,
-    label_app
+    label_app,
+    label_pod_scaler_openshift_io_measured
   ) (kube_pod_labels{label_created_by_ci="true",label_ci_openshift_io_metadata_step=""})`,
 		"prowjobs/container_cpu_usage_seconds_total": `sum by (
     namespace,
@@ -79,7 +83,8 @@ func TestQueriesByMetric(t *testing.T) {
     label_prow_k8s_io_refs_repo,
     label_prow_k8s_io_refs_base_ref,
     label_prow_k8s_io_job,
-    label_prow_k8s_io_type
+    label_prow_k8s_io_type,
+    label_pod_scaler_openshift_io_measured
   ) max by (
     namespace,
     pod,
@@ -89,7 +94,8 @@ func TestQueriesByMetric(t *testing.T) {
     label_prow_k8s_io_refs_repo,
     label_prow_k8s_io_refs_base_ref,
     label_prow_k8s_io_job,
-    label_prow_k8s_io_type
+    label_prow_k8s_io_type,
+    label_pod_scaler_openshift_io_measured
   ) (kube_pod_labels{label_created_by_prow="true",label_prow_k8s_io_job!="",label_ci_openshift_org_rehearse=""})`,
 		"prowjobs/container_memory_working_set_bytes": `sum by (
     namespace,
@@ -104,7 +110,8 @@ func TestQueriesByMetric(t *testing.T) {
     label_prow_k8s_io_refs_repo,
     label_prow_k8s_io_refs_base_ref,
     label_prow_k8s_io_job,
-    label_prow_k8s_io_type
+    label_prow_k8s_io_type,
+    label_pod_scaler_openshift_io_measured
   ) max by (
     namespace,
     pod,
@@ -114,7 +121,8 @@ func TestQueriesByMetric(t *testing.T) {
     label_prow_k8s_io_refs_repo,
     label_prow_k8s_io_refs_base_ref,
     label_prow_k8s_io_job,
-    label_prow_k8s_io_type
+    label_prow_k8s_io_type,
+    label_pod_scaler_openshift_io_measured
   ) (kube_pod_labels{label_created_by_prow="true",label_prow_k8s_io_job!="",label_ci_openshift_org_rehearse=""})`,
 		"steps/container_cpu_usage_seconds_total": `sum by (
     namespace,
@@ -128,7 +136,8 @@ func TestQueriesByMetric(t *testing.T) {
     label_ci_openshift_io_metadata_branch,
     label_ci_openshift_io_metadata_variant,
     label_ci_openshift_io_metadata_target,
-    label_ci_openshift_io_metadata_step
+    label_ci_openshift_io_metadata_step,
+    label_pod_scaler_openshift_io_measured
   ) max by (
     namespace,
     pod,
@@ -137,7 +146,8 @@ func TestQueriesByMetric(t *testing.T) {
     label_ci_openshift_io_metadata_branch,
     label_ci_openshift_io_metadata_variant,
     label_ci_openshift_io_metadata_target,
-    label_ci_openshift_io_metadata_step
+    label_ci_openshift_io_metadata_step,
+    label_pod_scaler_openshift_io_measured
   ) (kube_pod_labels{label_created_by_ci="true",label_ci_openshift_io_metadata_step!=""})`,
 		"steps/container_memory_working_set_bytes": `sum by (
     namespace,
@@ -151,7 +161,8 @@ func TestQueriesByMetric(t *testing.T) {
     label_ci_openshift_io_metadata_branch,
     label_ci_openshift_io_metadata_variant,
     label_ci_openshift_io_metadata_target,
-    label_ci_openshift_io_metadata_step
+    label_ci_openshift_io_metadata_step,
+    label_pod_scaler_openshift_io_measured
   ) max by (
     namespace,
     pod,
@@ -160,7 +171,8 @@ func TestQueriesByMetric(t *testing.T) {
     label_ci_openshift_io_metadata_branch,
     label_ci_openshift_io_metadata_variant,
     label_ci_openshift_io_metadata_target,
-    label_ci_openshift_io_metadata_step
+    label_ci_openshift_io_metadata_step,
+    label_pod_scaler_openshift_io_measured
   ) (kube_pod_labels{label_created_by_ci="true",label_ci_openshift_io_metadata_step!=""})`,
 	}
 	if diff := cmp.Diff(expected, queriesByMetric()); diff != "" {

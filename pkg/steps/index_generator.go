@@ -66,7 +66,7 @@ func (s *indexGeneratorStep) Run(ctx context.Context) error {
 }
 
 func (s *indexGeneratorStep) run(ctx context.Context) error {
-	logrus.Warn("DEPRECATION WARNING: Building index images is deprecated and will be removed from ci-operator soon. See https://docs.ci.openshift.org/docs/how-tos/testing-operator-sdk-operators/#moving-to-file-based-catalog for details.")
+	logrus.Warn("DEPRECATION WARNING: Building index images is deprecated and will be removed from ci-operator soon. See https://docs.ci.openshift.org/how-tos/testing-operator-sdk-operators/#moving-to-file-based-catalog for details.")
 	source := fmt.Sprintf("%s:%s", api.PipelineImageStream, api.PipelineImageStreamTagReferenceSource)
 	workingDir, err := getWorkingDir(s.client, source, s.jobSpec.Namespace())
 	if err != nil {

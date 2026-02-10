@@ -1164,7 +1164,7 @@ trigger 0 job(s) of type all for the ci release of OCP 4.8
 					Body: "/payload-something-that-doesnt-exist 4.10 nightly informing",
 				},
 			},
-			expectedMessage: `it appears that you have attempted to use some version of the payload command, but your comment was incorrectly formatted and cannot be acted upon. See the [docs](https://docs.ci.openshift.org/docs/release-oversight/payload-testing/#usage) for usage info.`,
+			expectedMessage: `it appears that you have attempted to use some version of the payload command, but your comment was incorrectly formatted and cannot be acted upon. See the [docs](https://docs.ci.openshift.org/release-oversight/payload-testing/#usage) for usage info.`,
 		},
 	}
 	for _, tc := range testCases {

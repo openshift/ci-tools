@@ -3,7 +3,7 @@
 ## What it does
 
 The `repo-brancher` automatically fast forwards the git content of future release branches (which
-are [closed for merges](https://docs.ci.openshift.org/docs/architecture/branching/), see
+are [closed for merges](https://docs.ci.openshift.org/architecture/branching/), see
 also [`blocker-issue-creator`](../blocking-issue-creator)) to the content of the main development branch.
 
 ## Why it exists
@@ -14,7 +14,7 @@ close to the desired state reduces an opportunity for drift and mistakes, so the
 be continuously updated with code merged to the development branch.
 
 For more information about OCP branching scheme, see
-the [Centralized Branch Management](https://docs.ci.openshift.org/docs/architecture/branching/) document.
+the [Centralized Branch Management](https://docs.ci.openshift.org/architecture/branching/) document.
 
 ## How it works
 

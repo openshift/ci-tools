@@ -218,7 +218,7 @@ const ContainerImages: React.FunctionComponent = () => {
       <TextContent>
         <Text component={TextVariants.p}>Here, you may define additional output container images built using the other
           images defined within the config.
-          See <a href="https://docs.ci.openshift.org/docs/architecture/ci-operator/#building-container-images"
+          See <a href="https://docs.ci.openshift.org/architecture/ci-operator/#building-container-images"
                  target="_blank" rel="noreferrer">Building Container Images</a>.</Text>
       </TextContent>
       <br/>

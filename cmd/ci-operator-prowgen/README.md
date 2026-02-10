@@ -2,7 +2,7 @@ prowgen
 =======
 
 Prowgen is a tool that generates [job configurations](https://docs.prow.k8s.io/docs/jobs/) based on
-[ci-operator configuration](https://docs.ci.openshift.org/docs/architecture/ci-operator/) and its own
+[ci-operator configuration](https://docs.ci.openshift.org/architecture/ci-operator/) and its own
 configuration file named `.config.prowgen`.
 
 The contents of `.config.prowgen` will be appended to every job configuration during Prowgen execution:

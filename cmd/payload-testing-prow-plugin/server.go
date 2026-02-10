@@ -30,7 +30,7 @@ import (
 
 const (
 	prPayloadTestsUIURL    = "https://pr-payload-tests.ci.openshift.org/runs"
-	unknownCommandResponse = "it appears that you have attempted to use some version of the payload command, but your comment was incorrectly formatted and cannot be acted upon. See the [docs](https://docs.ci.openshift.org/docs/release-oversight/payload-testing/#usage) for usage info."
+	unknownCommandResponse = "it appears that you have attempted to use some version of the payload command, but your comment was incorrectly formatted and cannot be acted upon. See the [docs](https://docs.ci.openshift.org/release-oversight/payload-testing/#usage) for usage info."
 )
 
 type githubClient interface {

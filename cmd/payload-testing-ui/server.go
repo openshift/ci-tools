@@ -22,7 +22,7 @@ const (
 	aggregatorPrefix = "aggregator-"
 
 	runsURL   = "/runs/"
-	docURL    = "https://docs.ci.openshift.org/docs/release-oversight/payload-testing/"
+	docURL    = "https://docs.ci.openshift.org/release-oversight/payload-testing/"
 	bodyStart = `
 <nav class="navbar navbar-expand-lg navbar-light bg-light">
 <a class="navbar-brand" href=` + runsURL + `>Pull Request Payload Qualification Runs</a>

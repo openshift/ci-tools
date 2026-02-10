@@ -7,5 +7,5 @@ export const testTypeHelpText = () => {
     'The test script will have \'cluster:admin\' credentials with which it can execute no other tests will share the cluster.<br/><br/>' +
     '<strong><u>Operator:</u></strong> (Only Available to Optional Operators) Similarly to an end-to-end test, an operator test executes against an ephemeral OpenShift cluster. ' +
     'However, an operator test will use canned scorecard enabled workflows that require your operator to be build with the Operator SDK and deployed through OLM. ' +
-    'See <a href="https://docs.ci.openshift.org/docs/how-tos/testing-operator-sdk-operators/" target="_blank">Testing Operators</a> for more info.</div>');
+    'See <a href="https://docs.ci.openshift.org/how-tos/testing-operator-sdk-operators/" target="_blank">Testing Operators</a> for more info.</div>');
 }

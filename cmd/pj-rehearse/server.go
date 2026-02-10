@@ -508,7 +508,7 @@ func (s *server) getAffectedJobs(pullRequest *github.PullRequest, logger *logrus
 func (s *server) reportFailure(message string, err error, org, repo, user string, number int, addContact, addUsageDetails bool, l *logrus.Entry) {
 	comment := fmt.Sprintf("@%s, `pj-rehearse`: %s ERROR: \n ```\n%v\n```\n", user, message, err)
 	if addContact {
-		comment += " If the problem persists, please [contact](https://docs.ci.openshift.org/docs/getting-started/useful-links/#contact) Test Platform."
+		comment += " If the problem persists, please [contact](https://docs.ci.openshift.org/getting-started/useful-links/#contact) Test Platform."
 	}
 	if addUsageDetails {
 		comment += strings.Join(s.getUsageDetailsLines(), "\n")

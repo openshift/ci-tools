@@ -19,11 +19,20 @@ const (
 	IssueTypeBug   = "Bug"
 	IssueTypeStory = "Story"
 	IssueTypeTask  = "Task"
+
+	// Activity Type field ID in Jira - this should match Jira instance's custom field ID
+	// goto https://issues.redhat.com/rest/api/2/field/ to get the field ID
+	ActivityTypeFieldID = "customfield_12320040"
+
+	// Activity Type values
+	ActivityTypeBugFix      = "Bug Fix"
+	ActivityTypeEnhancement = "Enhancement"
 )
 
 // IssueFiler knows how to file an issue in Jira
 type IssueFiler interface {
 	FileIssue(issueType, title, description, reporter string, logger *logrus.Entry) (*jira.Issue, error)
+	FileIssueWithFields(issueType, title, description, reporter string, customFields map[string]interface{}, logger *logrus.Entry) (*jira.Issue, error)
 }
 
 type slackClient interface {
@@ -78,20 +87,39 @@ type filer struct {
 // quirks like how issue types and projects are provided, as well as
 // transforming the Slack reporter ID to a Jira user, when possible.
 func (f *filer) FileIssue(issueType, title, description, reporter string, logger *logrus.Entry) (*jira.Issue, error) {
+	return f.FileIssueWithFields(issueType, title, description, reporter, nil, logger)
+}
+
+// FileIssueWithFields files an issue with custom fields
+func (f *filer) FileIssueWithFields(issueType, title, description, reporter string, customFields map[string]interface{}, logger *logrus.Entry) (*jira.Issue, error) {
 	suffix, requester := f.resolveRequester(reporter, logger)
 	description = fmt.Sprintf("%s\n\nThis issue was filed by %s", description, suffix)
 	logger.WithFields(logrus.Fields{
-		"title":    title,
-		"reporter": requester.Name,
-		"type":     issueType,
+		"title":        title,
+		"reporter":     requester.Name,
+		"type":         issueType,
+		"customFields": len(customFields),
 	}).Debug("Filing Jira issue.")
-	toCreate := &jira.Issue{Fields: &jira.IssueFields{
+
+	issueFields := &jira.IssueFields{
 		Project:     f.project,
 		Reporter:    requester,
 		Type:        f.issueTypesByName[issueType],
 		Summary:     title,
 		Description: description,
-	}}
+	}
+
+	// Add custom fields if provided
+	if len(customFields) > 0 {
+		if issueFields.Unknowns == nil {
+			issueFields.Unknowns = make(map[string]interface{})
+		}
+		for key, value := range customFields {
+			issueFields.Unknowns[key] = value
+		}
+	}
+
+	toCreate := &jira.Issue{Fields: issueFields}
 	issue, response, err := f.jiraClient.CreateIssue(toCreate)
 	return issue, jirautil.HandleJiraError(response, err)
 }

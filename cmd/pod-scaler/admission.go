@@ -483,14 +483,15 @@ func (m *podMutator) setMeasuredLabel(pod *corev1.Pod, measured bool, logger *lo
 	}
 }
 
-// increaseCPUForMeasuredPod increases CPU requests for all containers in a measured pod by the configured percentage,
+// increaseCPUForMeasuredPod increases CPU requests and limits for all containers in a measured pod by the configured percentage,
 // with proper capping at the pod level (sum of all non-init containers)
 func increaseCPUForMeasuredPod(pod *corev1.Pod, nodeCache *nodeAllocatableCache, cpuIncreasePercent float64, logger *logrus.Entry) {
 	// Calculate total CPU request for all non-init containers
 	type containerCPUInfo struct {
-		index        int
-		originalCPU  resource.Quantity
-		originalName string
+		index         int
+		originalCPU   resource.Quantity
+		originalLimit *resource.Quantity
+		originalName  string
 	}
 
 	var containerInfos []containerCPUInfo
@@ -506,10 +507,19 @@ func increaseCPUForMeasuredPod(pod *corev1.Pod, nodeCache *nodeAllocatableCache,
 		}
 		cpuValue := cpuRequest.AsApproximateFloat64()
 		totalCPU += cpuValue
+
+		var cpuLimit *resource.Quantity
+		if pod.Spec.Containers[i].Resources.Limits != nil {
+			if limit, hasLimit := pod.Spec.Containers[i].Resources.Limits[corev1.ResourceCPU]; hasLimit {
+				cpuLimit = &limit
+			}
+		}
+
 		containerInfos = append(containerInfos, containerCPUInfo{
-			index:        i,
-			originalCPU:  cpuRequest,
-			originalName: pod.Spec.Containers[i].Name,
+			index:         i,
+			originalCPU:   cpuRequest,
+			originalLimit: cpuLimit,
+			originalName:  pod.Spec.Containers[i].Name,
 		})
 	}
 
@@ -532,13 +542,30 @@ func increaseCPUForMeasuredPod(pod *corev1.Pod, nodeCache *nodeAllocatableCache,
 		logger.Debugf("Capped increased CPU to %d cores total (workload class: %s), scaling factor: %.2f", maxCPU, workloadClass, scaleFactor)
 	}
 
-	// Apply proportional scaling to all containers
+	// Apply proportional scaling to all containers (both requests and limits)
 	for _, info := range containerInfos {
 		originalValue := info.originalCPU.AsApproximateFloat64()
 		increasedValue := originalValue * multiplier * scaleFactor
 		newCPU := *resource.NewMilliQuantity(int64(increasedValue*1000), resource.DecimalSI)
 		pod.Spec.Containers[info.index].Resources.Requests[corev1.ResourceCPU] = newCPU
-		logger.Debugf("Container %s: increased CPU from %s to %s", info.originalName, info.originalCPU.String(), newCPU.String())
+
+		// Also increase CPU limits proportionally if they exist
+		if info.originalLimit != nil {
+			originalLimitValue := info.originalLimit.AsApproximateFloat64()
+			increasedLimitValue := originalLimitValue * multiplier * scaleFactor
+			newCPULimit := *resource.NewMilliQuantity(int64(increasedLimitValue*1000), resource.DecimalSI)
+			// Ensure limit >= request (Kubernetes requirement)
+			if newCPULimit.Cmp(newCPU) < 0 {
+				newCPULimit = newCPU
+			}
+			if pod.Spec.Containers[info.index].Resources.Limits == nil {
+				pod.Spec.Containers[info.index].Resources.Limits = make(corev1.ResourceList)
+			}
+			pod.Spec.Containers[info.index].Resources.Limits[corev1.ResourceCPU] = newCPULimit
+			logger.Debugf("Container %s: increased CPU request from %s to %s, limit from %s to %s", info.originalName, info.originalCPU.String(), newCPU.String(), info.originalLimit.String(), newCPULimit.String())
+		} else {
+			logger.Debugf("Container %s: increased CPU request from %s to %s", info.originalName, info.originalCPU.String(), newCPU.String())
+		}
 	}
 }
 

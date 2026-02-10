@@ -105,6 +105,20 @@ func produce(clients map[string]prometheusapi.API, dataCache Cache, ignoreLatest
 				logrus.WithError(err).Error("Failed to load data from storage.")
 				continue
 			}
+			if cache.Query != query {
+				logger.WithFields(logrus.Fields{
+					"old_query": cache.Query,
+					"new_query": query,
+				}).Info("Query has changed, updating cached query. Previously collected data will be re-queried over time.")
+				cache.Query = query
+				// Reset the covered ranges so the new query will be executed over the full
+				// retention window. Existing data remains valid but new data will be collected
+				// with the updated query, which may include additional labels.
+				cache.RangesByCluster = map[string][]podscaler.TimeRange{}
+				for cluster := range clients {
+					cache.RangesByCluster[cluster] = []podscaler.TimeRange{}
+				}
+			}
 			until := time.Now().Add(-ignoreLatest)
 			q := querier{
 				lock: &sync.RWMutex{},

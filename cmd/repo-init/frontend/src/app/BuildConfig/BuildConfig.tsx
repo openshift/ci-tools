@@ -173,7 +173,7 @@ const RepoBuildConfig: React.FunctionComponent = () => {
               settings that will allow you to take advantage of some of the Operator SDK scorecard functionality that is
               built-in
               to the CI workflows. See <a
-                href="https://docs.ci.openshift.org/docs/how-tos/testing-operator-sdk-operators/" target="_blank" rel="noreferrer">Testing
+                href="https://docs.ci.openshift.org/how-tos/testing-operator-sdk-operators/" target="_blank" rel="noreferrer">Testing
                 Operators</a> for more information.</Text>
           </TextContent>
           <Checkbox

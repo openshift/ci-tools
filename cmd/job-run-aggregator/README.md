@@ -59,7 +59,7 @@ gofmt -s -w <someFileThatFailsLint>/cmd.go
 
 > Note: We also contain a helper script at the root of this repo that can be used to generate the files run `./hack/run-job-aggregator-analyzer.sh` for a list of options.
 
-You can compare the historical data locally, the documentation on how to download the recent historical data can be found [here](https://docs.ci.openshift.org/docs/release-oversight/disruption-testing/data-architecture/#query).
+You can compare the historical data locally, the documentation on how to download the recent historical data can be found [here](https://docs.ci.openshift.org/release-oversight/disruption-testing/data-architecture/#query).
 
 ```sh
 # Disruptions data

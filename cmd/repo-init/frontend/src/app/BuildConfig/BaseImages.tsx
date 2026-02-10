@@ -128,7 +128,7 @@ const BaseImages: React.FunctionComponent = () => {
       <TextContent>
         <Text component={TextVariants.p}>This provides a mapping of named <i>ImageStreamTags</i> which will be available
           for use in container image builds.
-          See <a href="https://docs.ci.openshift.org/docs/architecture/ci-operator/#configuring-inputs" target="_blank" rel="noreferrer">Configuring
+          See <a href="https://docs.ci.openshift.org/architecture/ci-operator/#configuring-inputs" target="_blank" rel="noreferrer">Configuring
             Inputs</a>.</Text>
       </TextContent>
       <br/>

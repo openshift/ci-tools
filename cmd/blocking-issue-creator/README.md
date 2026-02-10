@@ -9,7 +9,7 @@ that prevent code from being merged into OCP repositories' branches that are not
 ## Why it exists
 
 During
-the [OCP development lifecycle](https://docs.ci.openshift.org/docs/architecture/branching/#normal-development-for-4x-release)
+the [OCP development lifecycle](https://docs.ci.openshift.org/architecture/branching/#normal-development-for-4x-release)
 , some branches are blocked for merges, because their content is automatically fast-forwarded to the content of another
 branch. To prevent mistakes, we use Tide's merge blocker issue feature to block all merges to these branches, and use
 the `blocking-issue-creator` tool to ensure that all affected repositories have a correct merge blocker issue at all

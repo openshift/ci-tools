@@ -193,14 +193,14 @@ const templateDefinitions = `
   <tbody>
   {{ if .Timeout }}
     <tr>
-      <td>Step timeout<sup>[<a href="https://docs.ci.openshift.org/docs/architecture/timeouts/#step-registry-test-process-timeouts">?</a>]</sup></td>
+      <td>Step timeout<sup>[<a href="https://docs.ci.openshift.org/architecture/timeouts/#step-registry-test-process-timeouts">?</a>]</sup></td>
       <td>{{ .Timeout.String }}</td>
       <td>Limits the execution time of the step.</td>
     </tr>
   {{ end }}
   {{ if .GracePeriod }}
     <tr>
-      <td>Termination grace period<sup>[<a href="https://docs.ci.openshift.org/docs/architecture/timeouts/#step-registry-test-process-timeouts">?</a>]</sup></td>
+      <td>Termination grace period<sup>[<a href="https://docs.ci.openshift.org/architecture/timeouts/#step-registry-test-process-timeouts">?</a>]</sup></td>
       <td>{{ .GracePeriod.String }}</td>
       <td>Period of time until SIGKILL signal is sent to the test pod (after SIGTERM signal is sent).</td>
     </tr>
@@ -223,21 +223,21 @@ const templateDefinitions = `
   {{ end }}
   {{ if .OptionalOnSuccess }}
     <tr>
-      <td>Optional on success<sup>[<a href="https://docs.ci.openshift.org/docs/architecture/step-registry/#skipping-post-steps-on-success">?</a>]</sup></td>
+      <td>Optional on success<sup>[<a href="https://docs.ci.openshift.org/architecture/step-registry/#skipping-post-steps-on-success">?</a>]</sup></td>
       <td>{{ .OptionalOnSuccess}}</td>
       <td>Allows the step to be skipped if all steps in <span style="font-family:monospace">pre</span> and <span style="font-family:monospace">test</span> phases succeeded.</td>
     </tr>
   {{ end }}
   {{ if .BestEffort }}
     <tr>
-      <td>Best effort<sup>[<a href="https://docs.ci.openshift.org/docs/architecture/step-registry/#marking-post-steps-best-effort">?</a>]</sup></td>
+      <td>Best effort<sup>[<a href="https://docs.ci.openshift.org/architecture/step-registry/#marking-post-steps-best-effort">?</a>]</sup></td>
       <td>{{ .BestEffort }}</td>
       <td>This step's failure will not cause whole job to fail if the step is run in <span style="font-family:monospace">post</span> phase.</td>
     </tr>
   {{ end }}
   {{ if .Cli }}
     <tr>
-      <td>Inject <span style="font-family:monospace">oc</span> CLI<sup>[<a href="https://docs.ci.openshift.org/docs/architecture/step-registry/#sharing-data-between-steps">?</a>]</sup></td>
+      <td>Inject <span style="font-family:monospace">oc</span> CLI<sup>[<a href="https://docs.ci.openshift.org/architecture/step-registry/#sharing-data-between-steps">?</a>]</sup></td>
       <td>{{ .Cli }}</td>
       <td>The <span style="font-family:monospace">oc</span> CLI sourced from the specified release is injected into this step's' image.</td>
     </tr>
@@ -250,7 +250,7 @@ const templateDefinitions = `
   {{ $data := getDependencies . }}
 
   {{ if eq 0 ( len ($data.Items)) }}
-    No step in this {{ $data.Type }} sets dependencies.<sup>[<a href="https://docs.ci.openshift.org/docs/architecture/ci-operator/#referring-to-images-in-tests">?</a>]</sup>
+    No step in this {{ $data.Type }} sets dependencies.<sup>[<a href="https://docs.ci.openshift.org/architecture/ci-operator/#referring-to-images-in-tests">?</a>]</sup>
   {{ else }}
   <table class="table">
   <thead>
@@ -258,7 +258,7 @@ const templateDefinitions = `
      <th title="Image on which steps in this {{ $data.Type }}">Image</th>
      <th title="Environmental variable exposing the pullspec to steps">Exposed As</th>
      {{ if ne $data.Type "chain" }}
-       <th title="Whether the value is an override in the workflow">Override<sup>[<a href="https://docs.ci.openshift.org/docs/architecture/ci-operator/#dependency-overrides">?</a>]</sup></th>
+       <th title="Whether the value is an override in the workflow">Override<sup>[<a href="https://docs.ci.openshift.org/architecture/ci-operator/#dependency-overrides">?</a>]</sup></th>
      {{ end }}
      <th title="Which steps consume the image exposed by this variable">Required By Steps</th>
     <tr>
@@ -292,9 +292,9 @@ const templateDefinitions = `
 {{ define "refEnvironment" }}
 	{{ $data := getEnvironment . }}
     {{ if eq 0 ( len ($data.Items)) }}
-      <p>This {{ $data.Type }} consumes no environmental variables except the <a href="https://docs.ci.openshift.org/docs/architecture/step-registry/#available-environment-variables">defaults</a>.</p>
+      <p>This {{ $data.Type }} consumes no environmental variables except the <a href="https://docs.ci.openshift.org/architecture/step-registry/#available-environment-variables">defaults</a>.</p>
     {{ else }}
-        <p>In addition to the <a href="https://docs.ci.openshift.org/docs/architecture/step-registry/#available-environment-variables">default</a> environment, the following variables are consumed through this {{ $data.Type }}</p>
+        <p>In addition to the <a href="https://docs.ci.openshift.org/architecture/step-registry/#available-environment-variables">default</a> environment, the following variables are consumed through this {{ $data.Type }}</p>
         <table class="table">
         <thead>
         <tr>
@@ -329,9 +329,9 @@ const templateDefinitions = `
 
 {{ define "stepEnvironment" }}
 {{ if and (eq (len .Dependencies) 0) (eq (len .Environment) 0) (eq (len .Leases) 0) }}
-  <p>Step exposes no environmental variables except the <a href="https://docs.ci.openshift.org/docs/architecture/step-registry/#available-environment-variables">defaults</a>.</p>
+  <p>Step exposes no environmental variables except the <a href="https://docs.ci.openshift.org/architecture/step-registry/#available-environment-variables">defaults</a>.</p>
 {{ else }}
-    <p>In addition to the <a href="https://docs.ci.openshift.org/docs/architecture/step-registry/#available-environment-variables">default</a> environment, the step exposes the following:</p>
+    <p>In addition to the <a href="https://docs.ci.openshift.org/architecture/step-registry/#available-environment-variables">default</a> environment, the step exposes the following:</p>
     <table class="table">
     <thead>
     <tr>
@@ -344,14 +344,14 @@ const templateDefinitions = `
    {{ range $idx, $dep := .Dependencies }}
    <tr>
      <td style="font-family:monospace">{{ $dep.Env }}</td>
-     <td>Dependency<sup>[<a href="https://docs.ci.openshift.org/docs/architecture/ci-operator/#referring-to-images-in-tests">?</a>]</sup></td>
+     <td>Dependency<sup>[<a href="https://docs.ci.openshift.org/architecture/ci-operator/#referring-to-images-in-tests">?</a>]</sup></td>
      <td>Pull specification for <span style="font-family:monospace">{{ $dep.Name }}</span> image</td>
    </tr>
    {{ end  }}
    {{ range $idx, $env := .Environment }}
    <tr>
      <td style="font-family:monospace">{{ $env.Name }}</td>
-     <td>Parameter<sup>[<a href="https://docs.ci.openshift.org/docs/architecture/step-registry/#parameters">?</a>]</sup></td>
+     <td>Parameter<sup>[<a href="https://docs.ci.openshift.org/architecture/step-registry/#parameters">?</a>]</sup></td>
      <td>
        {{ $env.Documentation | markdown}}
        {{ if $env.Default }}
@@ -365,7 +365,7 @@ const templateDefinitions = `
    {{ range $idx, $lease := .Leases }}
    <tr>
      <td style="font-family:monospace">{{ $lease.Env }}</td>
-     <td>Lease<sup>[<a href="https://docs.ci.openshift.org/docs/architecture/step-registry/#explicit-lease-configuration">?</a>]</sup></td>
+     <td>Lease<sup>[<a href="https://docs.ci.openshift.org/architecture/step-registry/#explicit-lease-configuration">?</a>]</sup></td>
      <td>
        {{ if gt $lease.Count 1 }}
          Names of {{ $lease.Count }} acquired leases of type <span style="font-family:monospace">{{ $lease.ResourceType }}</span>, separated by space
@@ -1246,8 +1246,8 @@ func fromImage(name string, reference *api.ImageStreamTagReference) string {
 }
 
 const (
-	fromDocumentation      = "https://docs.ci.openshift.org/docs/architecture/step-registry/#referencing-another-configured-image"
-	fromImageDocumentation = "https://docs.ci.openshift.org/docs/architecture/step-registry/#referencing-a-literal-image"
+	fromDocumentation      = "https://docs.ci.openshift.org/architecture/step-registry/#referencing-another-configured-image"
+	fromImageDocumentation = "https://docs.ci.openshift.org/architecture/step-registry/#referencing-a-literal-image"
 )
 
 func fromImageDescription(name string, reference *api.ImageStreamTagReference) template.HTML {

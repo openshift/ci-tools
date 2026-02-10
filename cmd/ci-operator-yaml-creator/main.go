@@ -90,7 +90,7 @@ in the [openshift/release](https://github.com/openshift/release) repository.
 This is done in preparation for enabling reading the `+"`build_root`"+` from
 your repository rather than the central config in [openshift/release](https://github.com/openshift/release).
 This allows to update the `+"`build_root`"+` in lockstep with code changes. For details, please
-refer to the [docs](https://docs.ci.openshift.org/docs/architecture/ci-operator/#build-root-image).
+refer to the [docs](https://docs.ci.openshift.org/architecture/ci-operator/#build-root-image).
 
 Note that enabling this feature is mandatory for all OCP components that have an ART build config.
 

@@ -4,9 +4,8 @@
     type: mrkdwn
   type: section
 - text:
-    text: In the meantime, check our <https://docs.ci.openshift.org/docs/|documentation>
-      or <https://docs.ci.openshift.org/docs/getting-started/helpdesk-faq/|Helpdesk
-      FAQ>.
+    text: In the meantime, check our <https://docs.ci.openshift.org/|documentation>
+      or <https://docs.ci.openshift.org/getting-started/helpdesk-faq/|Helpdesk FAQ>.
     type: mrkdwn
   type: section
 - text:

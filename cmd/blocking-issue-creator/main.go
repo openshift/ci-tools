@@ -121,7 +121,7 @@ func manageIssues(client githubClient, githubLogin string, repoInfo *config.Info
 		body += fmt.Sprintf(" - `%s`\n", branch)
 		branchTokens = append(branchTokens, fmt.Sprintf("branch:%s", branch))
 	}
-	body += "\nFor more information, see the [branching documentation](https://docs.ci.openshift.org/docs/architecture/branching/)."
+	body += "\nFor more information, see the [branching documentation](https://docs.ci.openshift.org/architecture/branching/)."
 	title := fmt.Sprintf("Future Release Branches Frozen For Merging | %s", strings.Join(branchTokens, " "))
 
 	query := fmt.Sprintf("is:issue state:open label:\"tide/merge-blocker\" repo:%s/%s author:%s", repoInfo.Org, repoInfo.Repo, githubLogin)

@@ -50,7 +50,7 @@ func TestManageIssues(t *testing.T) {
 				1: {
 					ID:     1,
 					Title:  "Future Release Branches Frozen For Merging | branch:release-4.9",
-					Body:   "The following branches are being fast-forwarded from the current development branch (testBranch) as placeholders for future releases. No merging is allowed into these release branches until they are unfrozen for production release.\n\n - `release-4.9`\n\nFor more information, see the [branching documentation](https://docs.ci.openshift.org/docs/architecture/branching/).",
+					Body:   "The following branches are being fast-forwarded from the current development branch (testBranch) as placeholders for future releases. No merging is allowed into these release branches until they are unfrozen for production release.\n\n - `release-4.9`\n\nFor more information, see the [branching documentation](https://docs.ci.openshift.org/architecture/branching/).",
 					Labels: []github.Label{{Name: "tide/merge-blocker"}},
 				},
 			},
@@ -58,7 +58,7 @@ func TestManageIssues(t *testing.T) {
 				{
 					ID:     1,
 					Title:  "Future Release Branches Frozen For Merging | branch:release-4.9",
-					Body:   "The following branches are being fast-forwarded from the current development branch (testBranch) as placeholders for future releases. No merging is allowed into these release branches until they are unfrozen for production release.\n\n - `release-4.9`\n\nFor more information, see the [branching documentation](https://docs.ci.openshift.org/docs/architecture/branching/).",
+					Body:   "The following branches are being fast-forwarded from the current development branch (testBranch) as placeholders for future releases. No merging is allowed into these release branches until they are unfrozen for production release.\n\n - `release-4.9`\n\nFor more information, see the [branching documentation](https://docs.ci.openshift.org/architecture/branching/).",
 					Labels: []github.Label{{Name: "tide/merge-blocker"}},
 				},
 			},
@@ -78,7 +78,7 @@ func TestManageIssues(t *testing.T) {
 				{
 					ID:     1,
 					Title:  "Future Release Branches Frozen For Merging | branch:release-4.9",
-					Body:   "The following branches are being fast-forwarded from the current development branch (testBranch) as placeholders for future releases. No merging is allowed into these release branches until they are unfrozen for production release.\n\n - `release-4.9`\n\nFor more information, see the [branching documentation](https://docs.ci.openshift.org/docs/architecture/branching/).",
+					Body:   "The following branches are being fast-forwarded from the current development branch (testBranch) as placeholders for future releases. No merging is allowed into these release branches until they are unfrozen for production release.\n\n - `release-4.9`\n\nFor more information, see the [branching documentation](https://docs.ci.openshift.org/architecture/branching/).",
 					Labels: []github.Label{{Name: "tide/merge-blocker"}},
 				},
 			},
@@ -104,7 +104,7 @@ func TestManageIssues(t *testing.T) {
 				{
 					Number: 1,
 					Title:  "Future Release Branches Frozen For Merging | branch:release-4.9",
-					Body:   "The following branches are being fast-forwarded from the current development branch (testBranch) as placeholders for future releases. No merging is allowed into these release branches until they are unfrozen for production release.\n\n - `release-4.9`\n\nFor more information, see the [branching documentation](https://docs.ci.openshift.org/docs/architecture/branching/).",
+					Body:   "The following branches are being fast-forwarded from the current development branch (testBranch) as placeholders for future releases. No merging is allowed into these release branches until they are unfrozen for production release.\n\n - `release-4.9`\n\nFor more information, see the [branching documentation](https://docs.ci.openshift.org/architecture/branching/).",
 					Labels: []github.Label{{Name: "tide/merge-blocker"}},
 				},
 			},
@@ -146,7 +146,7 @@ func TestManageIssues(t *testing.T) {
 					ID:     1,
 					Number: 1,
 					Title:  "Future Release Branches Frozen For Merging | branch:release-4.9",
-					Body:   "The following branches are being fast-forwarded from the current development branch (testBranch) as placeholders for future releases. No merging is allowed into these release branches until they are unfrozen for production release.\n\n - `release-4.9`\n\nFor more information, see the [branching documentation](https://docs.ci.openshift.org/docs/architecture/branching/).",
+					Body:   "The following branches are being fast-forwarded from the current development branch (testBranch) as placeholders for future releases. No merging is allowed into these release branches until they are unfrozen for production release.\n\n - `release-4.9`\n\nFor more information, see the [branching documentation](https://docs.ci.openshift.org/architecture/branching/).",
 					Labels: []github.Label{{Name: "tide/merge-blocker"}},
 				},
 				{

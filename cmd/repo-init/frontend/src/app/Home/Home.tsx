@@ -14,7 +14,7 @@ const Home: React.FunctionComponent = () => {
             the CI Platform. Currently, this tool only supports creating new
             repositories and should handle most base cases. In the future, this tool will also support updating existing
             configurations as well ass creating/updating step-registry components (workflows, chains, steps). Please use
-            the <a href="https://docs.ci.openshift.org/docs/" target="_blank" rel="noreferrer">CI Operator</a> documentation as a
+            the <a href="https://docs.ci.openshift.org/" target="_blank" rel="noreferrer">CI Operator</a> documentation as a
             companion guide to this tool, or if you have any more advanced cases that
             are currently not supported.</Text>
           <Text component={TextVariants.h2}>How it works</Text>

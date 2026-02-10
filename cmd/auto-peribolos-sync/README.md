@@ -13,7 +13,7 @@ config and filing a PR to that repository if the underlying tool changes the con
 Together with [private-org-peribolos-sync](../private-org-peribolos-sync) it
 manages [Peribolos](https://github.com/kubernetes/test-infra/tree/master/prow/cmd/peribolos) configuration of the
 GitHub repositories in
-the [openshift-priv](https://docs.ci.openshift.org/docs/architecture/private-repositories/#openshift-priv-organization) organization. 
+the [openshift-priv](https://docs.ci.openshift.org/architecture/private-repositories/#openshift-priv-organization) organization. 
 
 At the time when [private-org-peribolos-sync](../private-org-peribolos-sync) was written, there was no shared bump PR
 package available, so we tended to write `config-changing-tool | auto-config-changing-tool` pairs when we needed to

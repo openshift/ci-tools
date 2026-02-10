@@ -72,7 +72,7 @@ The generated token is a [JWT token](https://jwt.io/) signed by a secret provide
 
 # Authorization for human users
 
-For human users, `qci-app.ci` authorizes the requests with token that can pull images from `ocp` on `app.ci`. [Our document](https://docs.ci.openshift.org/docs/how-tos/use-registries-in-build-farm/#human-users) tells our users to bind their group to the role `qci-image-puller`. In reality, this condition becomes unnecessary as `ocp` allows all authenticaed users to pull its images by the following `RoleBinding`:  
+For human users, `qci-app.ci` authorizes the requests with token that can pull images from `ocp` on `app.ci`. [Our document](https://docs.ci.openshift.org/how-tos/use-registries-in-build-farm/#human-users) tells our users to bind their group to the role `qci-image-puller`. In reality, this condition becomes unnecessary as `ocp` allows all authenticaed users to pull its images by the following `RoleBinding`:  
 
 ```console
 $ oc get rolebinding -n ocp image-puller -o yaml | yq -y '.subjects[0]'

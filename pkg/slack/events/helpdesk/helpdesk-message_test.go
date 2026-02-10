@@ -12,13 +12,13 @@ import (
 func TestGetPresentKeywords(t *testing.T) {
 	retester := KeywordsListItem{
 		Name:     "Retester",
-		Link:     "https://docs.ci.openshift.org/docs/architecture/retester/",
+		Link:     "https://docs.ci.openshift.org/architecture/retester/",
 		Keywords: []string{"retester"},
 	}
 
 	stepExec := KeywordsListItem{
 		Name:     "Step Execution Environment",
-		Link:     "https://docs.ci.openshift.org/docs/architecture/step-registry/#step-execution-environment",
+		Link:     "https://docs.ci.openshift.org/architecture/step-registry/#step-execution-environment",
 		Keywords: []string{"variable"},
 	}
 
@@ -30,7 +30,7 @@ func TestGetPresentKeywords(t *testing.T) {
 
 	testgrid := KeywordsListItem{
 		Name:     "Add a Job to TestGrid",
-		Link:     "https://docs.ci.openshift.org/docs/how-tos/add-jobs-to-testgrid/",
+		Link:     "https://docs.ci.openshift.org/how-tos/add-jobs-to-testgrid/",
 		Keywords: []string{"testgrid"},
 	}
 

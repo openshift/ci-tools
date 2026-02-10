@@ -83,22 +83,22 @@ def append_bumped_jobs(file_path, job_names, old_ver, new_ver):
     return True
 
 # Bump multiarch jobs
-multiarch_file = 'ci-operator/jobs/openshift/multiarch/openshift-multiarch-master-periodics.yaml'
+multiarch_file = 'ci-operator/jobs/openshift/multiarch/openshift-multiarch-main-periodics.yaml'
 multiarch_jobs = [
-    f'periodic-ci-openshift-multiarch-master-nightly-{old_version}-install-analysis-all-multi-p-p',
-    f'periodic-ci-openshift-multiarch-master-nightly-{old_version}-install-analysis-all-ppc64le',
-    f'periodic-ci-openshift-multiarch-master-nightly-{old_version}-install-analysis-all-s390x',
+    f'periodic-ci-openshift-multiarch-main-nightly-{old_version}-install-analysis-all-multi-p-p',
+    f'periodic-ci-openshift-multiarch-main-nightly-{old_version}-install-analysis-all-ppc64le',
+    f'periodic-ci-openshift-multiarch-main-nightly-{old_version}-install-analysis-all-s390x',
 ]
 
 print("\n=== Multiarch Analysis Jobs ===", file=sys.stderr)
 append_bumped_jobs(multiarch_file, multiarch_jobs, old_version, new_version)
 
 # Bump release jobs
-release_file = 'ci-operator/jobs/openshift/release/openshift-release-master-periodics.yaml'
+release_file = 'ci-operator/jobs/openshift/release/openshift-release-main-periodics.yaml'
 release_jobs = [
-    f'periodic-ci-openshift-release-master-nightly-{old_version}-install-analysis-all',
-    f'periodic-ci-openshift-release-master-nightly-{old_version}-upgrade-analysis-all',
-    f'periodic-ci-openshift-release-master-nightly-{old_version}-overall-analysis-all',
+    f'periodic-ci-openshift-release-main-nightly-{old_version}-install-analysis-all',
+    f'periodic-ci-openshift-release-main-nightly-{old_version}-upgrade-analysis-all',
+    f'periodic-ci-openshift-release-main-nightly-{old_version}-overall-analysis-all',
 ]
 
 print("\n=== Release Analysis Jobs ===", file=sys.stderr)

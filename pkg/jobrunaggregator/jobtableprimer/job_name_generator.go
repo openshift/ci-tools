@@ -54,8 +54,8 @@ var (
 func newJobNameGenerator() *jobNameGenerator {
 	generator := &jobNameGenerator{
 		periodicURLs: []string{
-			"https://raw.githubusercontent.com/openshift/release/master/ci-operator/jobs/openshift/release/openshift-release-master-periodics.yaml",
-			"https://raw.githubusercontent.com/openshift/release/master/ci-operator/jobs/openshift/multiarch/openshift-multiarch-master-periodics.yaml",
+			"https://raw.githubusercontent.com/openshift/release/main/ci-operator/jobs/openshift/release/openshift-release-main-periodics.yaml",
+			"https://raw.githubusercontent.com/openshift/release/main/ci-operator/jobs/openshift/multiarch/openshift-multiarch-main-periodics.yaml",
 		},
 		releaseConfigURLs: []string{},
 	}

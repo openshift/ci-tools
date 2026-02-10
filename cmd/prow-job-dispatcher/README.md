@@ -1,4 +1,4 @@
-# prow-job-dispatch
+# prow-job-dispatcher
 
 As designed in [[DPTP-1152] Choose a cluster for prow jobs](https://docs.google.com/document/d/1aiuZ70jtvZiQBo2P8NgacRj0GmqUH6DRxE4KFFph1RM/edit) this tool chooses a cluster in the CI build farm for Prow jobs.
 

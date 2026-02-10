@@ -392,7 +392,6 @@ func fromConfig(
 			return nil, nil, fmt.Errorf("cannot promote images, no promotion configuration defined")
 		}
 
-		promotionSteps = append(promotionSteps, releasesteps.PromotionStep(api.PromotionStepName, config, requiredNames, jobSpec, podClient, pushSecret, registryDomain(config.PromotionConfiguration), api.DefaultMirrorFunc, api.DefaultTargetNameFunc, nodeArchitectures))
 		// Used primarily (only?) by the ci-chat-bot
 		if config.PromotionConfiguration.RegistryOverride != "" {
 			logrus.Info("No images to promote to quay.io if the registry is overridden")

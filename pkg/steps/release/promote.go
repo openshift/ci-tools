@@ -262,11 +262,9 @@ func getPromotionPod(imageMirrorTarget map[string]string, timeStr string, namesp
 		if strings.Contains(k, fmt.Sprintf("%s_prune_", timeStr)) {
 			pruneImages = append(pruneImages, fmt.Sprintf("%s=%s", imageMirrorTarget[k], k))
 		} else {
-			// Detect based on target format: quay-proxy targets should be tagged, others mirrored
-			if strings.Contains(k, "-quay:") || strings.Contains(k, "${component}") {
+			if strings.Contains(k, "${component}") || strings.Contains(imageMirrorTarget[k], "quay-proxy.ci.openshift.org") {
 				tags = append(tags, fmt.Sprintf("%s %s", imageMirrorTarget[k], k))
 			} else {
-				// Default to mirroring for quay.io targets and other registries
 				images = append(images, fmt.Sprintf("%s=%s", imageMirrorTarget[k], k))
 			}
 		}

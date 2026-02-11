@@ -2,9 +2,16 @@
 resources:
 - type: aws-quota-slice
   state: free
-  min-count: 3
-  max-count:  3
+  names:
+  - us-east-1--aws-quota-slice-00
+  - us-east-1--aws-quota-slice-01
+  - us-east-1--aws-quota-slice-02
 - type: gcp-quota-slice
   state: free
   min-count: 5
   max-count:  5
+- max-count: 5
+  min-count: 5
+  state: free
+  type: aws-ip-pools-us-east-1
+

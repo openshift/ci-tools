@@ -153,6 +153,11 @@ func main() {
 			if strings.Contains(p.Name, "-okd") {
 				release = fmt.Sprintf("%s-okd", release)
 			}
+
+			// hack for the switch from master -> main where we still need the master job history to apply in CR
+			// since our GA dates for previous releases will contain the old names we need to keep this around for some time
+			masterJobName := strings.Replace(p.Name, "-main-", "-master-", -1)
+
 			if _, ok := sippyConfig.Releases[release]; !ok {
 				sippyConfig.Releases[release] = v1sippy.ReleaseConfig{
 					Jobs:          make(map[string]bool),
@@ -163,8 +168,10 @@ func main() {
 			}
 			if _, ok := sippyConfig.Releases[release].Jobs[p.Name]; !ok {
 				sippyConfig.Releases[release].Jobs[p.Name] = true
+				sippyConfig.Releases[release].Jobs[masterJobName] = true
 			}
 
+			// I don't think we are concerned about the old master naming for aggregation
 			if aggregates, ok := aggregateJobsMap[p.Name]; ok {
 				for _, aggregate := range aggregates {
 					if _, ok := sippyConfig.Releases[release].Jobs[aggregate]; !ok {
@@ -176,10 +183,12 @@ func main() {
 			if releaseConfig, ok := sippyConfig.Releases[release]; ok {
 				if blockingingJobs.Has(p.Name) {
 					releaseConfig.BlockingJobs = append(releaseConfig.BlockingJobs, p.Name)
+					releaseConfig.BlockingJobs = append(releaseConfig.BlockingJobs, masterJobName)
 				}
 
 				if informingJobs.Has(p.Name) || util.IsSpecialInformingJobOnTestGrid(p.Name) {
 					releaseConfig.InformingJobs = append(releaseConfig.InformingJobs, p.Name)
+					releaseConfig.InformingJobs = append(releaseConfig.InformingJobs, masterJobName)
 				}
 				sippyConfig.Releases[release] = releaseConfig
 			}

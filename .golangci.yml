@@ -39,6 +39,10 @@ linters:
         linters:
           - staticcheck
         text: '.*'
+      - path: "test/e2e/pod-scaler/run/consumer.go"
+        linters:
+          - typecheck
+        text: 'cannot use sets\.NewString.*as sets\.Set\[string\]'
     paths:
       - third_party$
       - builtin$

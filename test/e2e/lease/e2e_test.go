@@ -69,7 +69,7 @@ func TestLeases(t *testing.T) {
 			success: false,
 			output: []string{
 				`Acquiring 1 lease(s) for azure4-quota-slice`,
-				`step invalid-lease failed: failed to acquire lease for \"azure4-quota-slice\": resources not found`,
+				`step invalid-lease failed: failed to acquire lease for \"azure4-quota-slice\": resource type not found`,
 			},
 		},
 		{

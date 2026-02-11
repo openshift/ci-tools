@@ -33,7 +33,7 @@ require (
 	github.com/montanaflynn/stats v0.6.3
 	github.com/openhistogram/circonusllhist v0.3.1-0.20210608220433-1bd1bfa6c998
 	github.com/openshift-eng/openshift-goimports v0.0.0-20220201193023-4f8ea117352c
-	github.com/openshift/api v0.0.0-20240918231400-8f6ded478e8a
+	github.com/openshift/api v0.0.0-20240919193929-2669d1ebc910
 	github.com/openshift/imagebuilder v1.2.15
 	github.com/openshift/openshift-apiserver v0.0.0-alpha.0
 	github.com/pkg/errors v0.9.1
@@ -185,11 +185,12 @@ require (
 	github.com/golang-jwt/jwt v3.2.2+incompatible
 	github.com/jhump/protoreflect v1.17.0
 	github.com/openshift/builder v0.0.0-20240610114444-739f5270219e
-	github.com/openshift/client-go v0.0.0-20240528061634-b054aa794d87
+	github.com/openshift/client-go v0.0.0-20240918182115-6a8ead8397fd
 	github.com/openshift/cloud-credential-operator v0.0.0-20250120201329-db5f2531a5b4
+	github.com/openshift/cluster-autoscaler-operator v0.0.1-0.20241204142113-43631b045675
 	github.com/openshift/hive/apis v0.0.0-20230525214126-ab571664f899
 	github.com/openshift/installer v1.4.17
-	github.com/openshift/library-go v0.0.0-20240207105404-126b47137408
+	github.com/openshift/library-go v0.0.0-20240919205913-c96b82b3762b
 	github.com/ovn-org/ovn-kubernetes/go-controller v0.0.0-20240710195803-425a328cd172
 	github.com/robfig/cron/v3 v3.0.1
 	github.com/stretchr/testify v1.10.0

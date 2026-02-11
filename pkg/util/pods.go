@@ -27,6 +27,7 @@ import (
 
 	"github.com/openshift/ci-tools/pkg/api"
 	"github.com/openshift/ci-tools/pkg/kubernetes"
+	"github.com/openshift/ci-tools/pkg/metrics"
 	"github.com/openshift/ci-tools/pkg/results"
 )
 
@@ -218,10 +219,12 @@ func processPodEvent(
 	if podJobIsOK(pod) {
 		logrus.Debugf("Pod %s succeeded after %s", pod.Name, podDuration(pod).Truncate(time.Second))
 		podClient.MetricsAgent().StorePodLifecycleMetrics(pod.Name, pod.Namespace, corev1.PodSucceeded)
+		podClient.MetricsAgent().StoreMachinesEvent(metrics.PodCompletion, pod)
 		return true, nil
 	}
 	if podJobIsFailed(pod) {
 		podClient.MetricsAgent().StorePodLifecycleMetrics(pod.Name, pod.Namespace, corev1.PodFailed)
+		podClient.MetricsAgent().StoreMachinesEvent(metrics.PodCompletion, pod)
 		return true, AppendLogToError(fmt.Errorf("the pod %s/%s failed after %s (failed containers: %s): %s", pod.Namespace, pod.Name, podDuration(pod).Truncate(time.Second), strings.Join(failedContainerNames(pod), ", "), podReason(pod)), podMessages(pod))
 	}
 	return false, nil

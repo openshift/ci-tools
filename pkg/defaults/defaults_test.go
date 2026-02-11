@@ -1177,6 +1177,190 @@ func TestStepConfigsForBuild(t *testing.T) {
 				}},
 			injectedTest: true,
 		},
+		{
+			name: "test dockerfile inputs",
+			input: &api.ReleaseBuildConfiguration{
+				InputConfiguration: api.InputConfiguration{
+					BuildRootImage: &api.BuildRootImageConfiguration{
+						ImageStreamTagReference: &api.ImageStreamTagReference{
+							Namespace: "ocp",
+							Name:      "builder",
+							Tag:       "rhel-9-golang-1.25-openshift-4.21",
+						},
+					},
+				},
+				Images: []api.ProjectDirectoryImageBuildStepConfiguration{
+					{
+						From: "root",
+						To:   "custom-dockerfile-image",
+					},
+				},
+			},
+			jobSpec: &api.JobSpec{
+				JobSpec: downwardapi.JobSpec{
+					Refs: &prowapi.Refs{
+						Org:  "org",
+						Repo: "repo",
+					},
+				},
+			},
+			readFile: func(filename string) ([]byte, error) {
+				if filename != "./Dockerfile" {
+					return nil, fmt.Errorf("")
+				}
+				return []byte(`FROM registry.ci.openshift.org/ocp/builder:rhel-9-golang-1.25-openshift-4.21 AS builder
+WORKDIR /go/src/github.com/openshift/cert-manager-operator
+
+# build operator
+COPY . .
+RUN make build --warn-undefined-variables
+
+FROM registry.ci.openshift.org/ocp/base:rhel-9-openshift-4.21
+COPY --from=builder /go/src/github.com/openshift/cert-manager-operator/cert-manager-operator /usr/bin/
+
+USER 65532:65532
+
+ENTRYPOINT ["/usr/bin/cert-manager-operator"]`), nil
+			},
+			resolver: noopResolver,
+			output: []api.StepConfiguration{
+				{
+					InputImageTagStepConfiguration: &api.InputImageTagStepConfiguration{
+						InputImage: api.InputImage{
+							BaseImage: api.ImageStreamTagReference{
+								Namespace: "ocp",
+								Name:      "builder",
+								Tag:       "rhel-9-golang-1.25-openshift-4.21",
+							},
+							To: "root",
+						},
+						Sources: []api.ImageStreamSource{{SourceType: "root"}},
+					},
+				},
+				{
+					OutputImageTagStepConfiguration: &api.OutputImageTagStepConfiguration{
+						From: "custom-dockerfile-image",
+						To:   api.ImageStreamTagReference{Name: "stable", Tag: "custom-dockerfile-image"},
+					},
+				},
+				{
+					ProjectDirectoryImageBuildStepConfiguration: &api.ProjectDirectoryImageBuildStepConfiguration{
+						From: "root",
+						To:   "custom-dockerfile-image",
+						ProjectDirectoryImageBuildInputs: api.ProjectDirectoryImageBuildInputs{
+							Inputs: map[string]api.ImageBuildInputs{
+								"root": {
+									As: []string{"registry.ci.openshift.org/ocp/builder:rhel-9-golang-1.25-openshift-4.21"},
+								},
+							},
+						},
+					},
+				},
+				{
+					SourceStepConfiguration: &api.SourceStepConfiguration{
+						From:              "root",
+						To:                "src",
+						ClonerefsPullSpec: "quay-proxy.ci.openshift.org/openshift/ci:ci_clonerefs_latest",
+						ClonerefsPath:     "/ko-app/clonerefs",
+					},
+				},
+			},
+		},
+		{
+			name: "test dockerfile inputs, build_root from repository",
+			input: &api.ReleaseBuildConfiguration{
+				InputConfiguration: api.InputConfiguration{
+					BuildRootImage: &api.BuildRootImageConfiguration{
+						FromRepository: true,
+					},
+				},
+				Images: []api.ProjectDirectoryImageBuildStepConfiguration{
+					{
+						From: "root",
+						To:   "custom-dockerfile-image",
+						ProjectDirectoryImageBuildInputs: api.ProjectDirectoryImageBuildInputs{
+							DockerfilePath: "custom/Dockerfile",
+						},
+					},
+				},
+			},
+			jobSpec: &api.JobSpec{
+				JobSpec: downwardapi.JobSpec{
+					Refs: &prowapi.Refs{
+						Org:  "org",
+						Repo: "repo",
+					},
+				},
+			},
+			readFile: func(filename string) ([]byte, error) {
+				if filename == "./custom/Dockerfile" {
+					return []byte(`FROM registry.ci.openshift.org/ocp/builder:rhel-9-golang-1.25-openshift-4.21 AS builder
+WORKDIR /go/src/github.com/openshift/cert-manager-operator
+
+# build operator
+COPY . .
+RUN make build --warn-undefined-variables
+
+FROM registry.ci.openshift.org/ocp/base:rhel-9-openshift-4.21
+COPY --from=builder /go/src/github.com/openshift/cert-manager-operator/cert-manager-operator /usr/bin/
+
+USER 65532:65532
+
+ENTRYPOINT ["/usr/bin/cert-manager-operator"]`), nil
+				}
+				if filename == "./.ci-operator.yaml" {
+					return []byte(`build_root_image:
+  namespace: ocp
+  name: builder
+  tag: rhel-9-golang-1.25-openshift-4.21`), nil
+				}
+				return nil, fmt.Errorf("")
+			},
+			resolver: noopResolver,
+			output: []api.StepConfiguration{
+				{
+					InputImageTagStepConfiguration: &api.InputImageTagStepConfiguration{
+						InputImage: api.InputImage{
+							BaseImage: api.ImageStreamTagReference{
+								Namespace: "ocp",
+								Name:      "builder",
+								Tag:       "rhel-9-golang-1.25-openshift-4.21",
+							},
+							To: "root",
+						},
+						Sources: []api.ImageStreamSource{{SourceType: "root"}},
+					},
+				},
+				{
+					OutputImageTagStepConfiguration: &api.OutputImageTagStepConfiguration{
+						From: "custom-dockerfile-image",
+						To:   api.ImageStreamTagReference{Name: "stable", Tag: "custom-dockerfile-image"},
+					},
+				},
+				{
+					ProjectDirectoryImageBuildStepConfiguration: &api.ProjectDirectoryImageBuildStepConfiguration{
+						From: "root",
+						To:   "custom-dockerfile-image",
+						ProjectDirectoryImageBuildInputs: api.ProjectDirectoryImageBuildInputs{
+							DockerfilePath: "custom/Dockerfile",
+							Inputs: map[string]api.ImageBuildInputs{
+								"root": {
+									As: []string{"registry.ci.openshift.org/ocp/builder:rhel-9-golang-1.25-openshift-4.21"},
+								},
+							},
+						},
+					},
+				},
+				{
+					SourceStepConfiguration: &api.SourceStepConfiguration{
+						From:              "root",
+						To:                "src",
+						ClonerefsPullSpec: "quay-proxy.ci.openshift.org/openshift/ci:ci_clonerefs_latest",
+						ClonerefsPath:     "/ko-app/clonerefs",
+					},
+				},
+			},
+		},
 	}
 
 	for _, testCase := range testCases {
@@ -2344,7 +2528,7 @@ func TestReadDockerfileForImage(t *testing.T) {
 
 	for _, tc := range testCases {
 		t.Run(tc.name, func(t *testing.T) {
-			details, err := readDockerfileForImage(tc.image, tc.readFile)
+			details, err := readDockerfileForImage(tc.image, ".", tc.readFile)
 
 			if tc.expectError {
 				if err == nil {

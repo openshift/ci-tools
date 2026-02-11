@@ -10,20 +10,30 @@ import (
 
 	corev1 "k8s.io/api/core/v1"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
+	"k8s.io/client-go/kubernetes/scheme"
+	ctrlruntimeclient "sigs.k8s.io/controller-runtime/pkg/client"
 	"sigs.k8s.io/controller-runtime/pkg/client/fake"
+
+	machinev1beta1 "github.com/openshift/api/machine/v1beta1"
+	autoscalingv1beta1 "github.com/openshift/cluster-autoscaler-operator/pkg/apis/autoscaling/v1beta1"
 )
+
+func init() {
+	machinev1beta1.AddToScheme(scheme.Scheme)
+}
 
 func TestPodLifecyclePlugin_Record(t *testing.T) {
 	now := time.Now().Truncate(time.Second)
 	testCases := []struct {
-		name     string
-		pod      *corev1.Pod
-		event    *PodLifecycleMetricsEvent
-		expected []MetricsEvent
+		name        string
+		objects     []ctrlruntimeclient.Object
+		autoscalers []autoscalingv1beta1.MachineAutoscaler
+		event       *PodLifecycleMetricsEvent
+		expected    []MetricsEvent
 	}{
 		{
 			name: "pod ready with all timestamps",
-			pod: &corev1.Pod{
+			objects: []ctrlruntimeclient.Object{&corev1.Pod{
 				ObjectMeta: metav1.ObjectMeta{
 					Name:              "test-pod",
 					Namespace:         "test-ns",
@@ -41,7 +51,7 @@ func TestPodLifecyclePlugin_Record(t *testing.T) {
 						{Type: corev1.PodReadyToStartContainers, Status: corev1.ConditionTrue, LastTransitionTime: metav1.Time{Time: now.Add(2 * time.Second)}},
 					},
 				},
-			},
+			}},
 			event: &PodLifecycleMetricsEvent{PodName: "test-pod", Namespace: "test-ns"},
 			expected: []MetricsEvent{
 				&PodLifecycleMetricsEvent{
@@ -61,12 +71,13 @@ func TestPodLifecyclePlugin_Record(t *testing.T) {
 					SchedulingLatency:     ptrDuration(2 * time.Second),
 					InitializationLatency: ptrDuration(1 * time.Second),
 					ReadyLatency:          ptrDuration(5 * time.Second),
+					WorkloadCapacity:      WorkloadNodeCount{Workload: "test-workload"},
 				},
 			},
 		},
 		{
 			name: "completed pod with all metrics",
-			pod: &corev1.Pod{
+			objects: []ctrlruntimeclient.Object{&corev1.Pod{
 				ObjectMeta: metav1.ObjectMeta{
 					Name:              "completed-pod",
 					Namespace:         "test-ns",
@@ -93,7 +104,7 @@ func TestPodLifecyclePlugin_Record(t *testing.T) {
 						},
 					},
 				},
-			},
+			}},
 			event: &PodLifecycleMetricsEvent{PodName: "completed-pod", Namespace: "test-ns"},
 			expected: []MetricsEvent{
 				&PodLifecycleMetricsEvent{
@@ -114,14 +125,115 @@ func TestPodLifecyclePlugin_Record(t *testing.T) {
 					InitializationLatency: ptrDuration(1 * time.Second),
 					ReadyLatency:          ptrDuration(5 * time.Second),
 					CompletionLatency:     ptrDuration(8 * time.Second),
+					WorkloadCapacity:      WorkloadNodeCount{Workload: "longtests"},
 				},
 			},
 		},
 		{
 			name:     "pod not found",
-			pod:      &corev1.Pod{ObjectMeta: metav1.ObjectMeta{Name: "another", Namespace: "test-ns"}},
+			objects:  []ctrlruntimeclient.Object{&corev1.Pod{ObjectMeta: metav1.ObjectMeta{Name: "another", Namespace: "test-ns"}}},
 			event:    &PodLifecycleMetricsEvent{PodName: "notfound", Namespace: "test-ns"},
 			expected: []MetricsEvent{},
+		},
+		{
+			name: "pod with workload node counts",
+			autoscalers: []autoscalingv1beta1.MachineAutoscaler{
+				{Spec: autoscalingv1beta1.MachineAutoscalerSpec{MaxReplicas: 20, ScaleTargetRef: autoscalingv1beta1.CrossVersionObjectReference{Name: "builds-amd64-us-east-1a"}}},
+				{Spec: autoscalingv1beta1.MachineAutoscalerSpec{MaxReplicas: 20, ScaleTargetRef: autoscalingv1beta1.CrossVersionObjectReference{Name: "builds-amd64-us-east-1b"}}},
+				{Spec: autoscalingv1beta1.MachineAutoscalerSpec{MaxReplicas: 10, ScaleTargetRef: autoscalingv1beta1.CrossVersionObjectReference{Name: "builds-arm64-us-east-1a"}}},
+				{Spec: autoscalingv1beta1.MachineAutoscalerSpec{MaxReplicas: 40, ScaleTargetRef: autoscalingv1beta1.CrossVersionObjectReference{Name: "tests-amd64-us-east-1a"}}},
+			},
+			objects: []ctrlruntimeclient.Object{
+				&corev1.Pod{
+					ObjectMeta: metav1.ObjectMeta{
+						Name:              "test-pod",
+						Namespace:         "test-ns",
+						CreationTimestamp: metav1.Time{Time: now},
+						Labels:            map[string]string{"ci-workload": "tests"},
+					},
+					Status: corev1.PodStatus{
+						Phase:     corev1.PodRunning,
+						StartTime: &metav1.Time{Time: now},
+					},
+				},
+				&machinev1beta1.MachineSet{
+					ObjectMeta: metav1.ObjectMeta{Name: "builds-amd64-us-east-1a"},
+					Spec: machinev1beta1.MachineSetSpec{
+						Replicas: int32Ptr(20),
+						Template: machinev1beta1.MachineTemplateSpec{
+							Spec: machinev1beta1.MachineSpec{
+								ObjectMeta: machinev1beta1.ObjectMeta{
+									Labels: map[string]string{"ci-workload": "builds"},
+								},
+							},
+						},
+					},
+					Status: machinev1beta1.MachineSetStatus{Replicas: 15},
+				},
+				&machinev1beta1.MachineSet{
+					ObjectMeta: metav1.ObjectMeta{Name: "builds-amd64-us-east-1b"},
+					Spec: machinev1beta1.MachineSetSpec{
+						Replicas: int32Ptr(20),
+						Template: machinev1beta1.MachineTemplateSpec{
+							Spec: machinev1beta1.MachineSpec{
+								ObjectMeta: machinev1beta1.ObjectMeta{
+									Labels: map[string]string{"ci-workload": "builds"},
+								},
+							},
+						},
+					},
+					Status: machinev1beta1.MachineSetStatus{Replicas: 20},
+				},
+				&machinev1beta1.MachineSet{
+					ObjectMeta: metav1.ObjectMeta{Name: "builds-arm64-us-east-1a"},
+					Spec: machinev1beta1.MachineSetSpec{
+						Replicas: int32Ptr(10),
+						Template: machinev1beta1.MachineTemplateSpec{
+							Spec: machinev1beta1.MachineSpec{
+								ObjectMeta: machinev1beta1.ObjectMeta{
+									Labels: map[string]string{"ci-workload": "builds"},
+								},
+							},
+						},
+					},
+					Status: machinev1beta1.MachineSetStatus{Replicas: 5},
+				},
+				&machinev1beta1.MachineSet{
+					ObjectMeta: metav1.ObjectMeta{Name: "tests-amd64-us-east-1a"},
+					Spec: machinev1beta1.MachineSetSpec{
+						Replicas: int32Ptr(40),
+						Template: machinev1beta1.MachineTemplateSpec{
+							Spec: machinev1beta1.MachineSpec{
+								ObjectMeta: machinev1beta1.ObjectMeta{
+									Labels: map[string]string{"ci-workload": "tests"},
+								},
+							},
+						},
+					},
+					Status: machinev1beta1.MachineSetStatus{Replicas: 40},
+				},
+			},
+			event: &PodLifecycleMetricsEvent{PodName: "test-pod", Namespace: "test-ns"},
+			expected: []MetricsEvent{
+				&PodLifecycleMetricsEvent{
+					PodName:                  "test-pod",
+					Namespace:                "test-ns",
+					CreationTime:             ptrTime(now),
+					StartTime:                ptrTime(now),
+					CIWorkload:               "tests",
+					PodPhase:                 corev1.PodRunning,
+					ConditionTransitionTimes: map[string]time.Time{},
+					WorkloadCapacity: WorkloadNodeCount{
+						Workload: "tests",
+						Current:  40,
+						Min:      0,
+						Max:      40,
+						MachineSets: []MachineSetCount{
+							{Name: "tests-amd64-us-east-1a", Current: 40, Min: 0, Max: 40},
+						},
+					},
+				},
+			},
 		},
 	}
 
@@ -130,7 +242,8 @@ func TestPodLifecyclePlugin_Record(t *testing.T) {
 			plugin := NewPodLifecyclePlugin(
 				context.Background(),
 				logrus.WithField("test", tc.name),
-				fake.NewClientBuilder().WithObjects(tc.pod).Build(),
+				fake.NewClientBuilder().WithObjects(tc.objects...).Build(),
+				tc.autoscalers,
 			)
 
 			plugin.Record(tc.event)
@@ -143,6 +256,7 @@ func TestPodLifecyclePlugin_Record(t *testing.T) {
 
 func ptrTime(t time.Time) *time.Time             { return &t }
 func ptrDuration(d time.Duration) *time.Duration { return &d }
+func int32Ptr(i int32) *int32                    { return &i }
 
 func TestGetPodCompletionTime(t *testing.T) {
 	now := time.Now().Truncate(time.Second)

@@ -33,7 +33,7 @@ func Admission(t testhelper.TestingTInterface, dataDir, kubeconfig string, paren
 	serverHostname := "127.0.0.1"
 	serverCertFile := path.Join(authDir, "tls.crt")
 	serverKeyFile := path.Join(authDir, "tls.key")
-	if _, _, err := ca.EnsureServerCert(serverCertFile, serverKeyFile, sets.NewString(serverHostname), 10); err != nil {
+	if _, _, err := ca.EnsureServerCert(serverCertFile, serverKeyFile, sets.New[string](serverHostname), 10); err != nil {
 		t.Fatalf("Failed to ensure server cert and key for admission: %v", err)
 	}
 	clientCertFile := path.Join(authDir, "client.crt")

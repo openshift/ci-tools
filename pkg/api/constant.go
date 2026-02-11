@@ -18,6 +18,10 @@ const (
 	ManifestToolLocalPusherSecret          = "manifest-tool-local-pusher"
 	ManifestToolLocalPusherSecretMountPath = "/secrets/manifest-tool"
 
+	GSMConfigConfigMap     = "gsm-config"
+	GSMConfigMountPath     = "/etc/gsm-config"
+	GSMConfigFileParameter = "--gsm-config=/etc/gsm-config/gsm-config.yaml"
+
 	PromotionQuayTaggerKubeconfigSecret = "promotion-quay-tagger-kubeconfig"
 
 	ReleaseAnnotationSoftDelete = "release.openshift.io/soft-delete"

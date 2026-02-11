@@ -514,3 +514,17 @@ func TestInjectTestFrom(t *testing.T) {
 		})
 	}
 }
+
+func TestGSMConfig(t *testing.T) {
+	t.Parallel()
+	t.Run("add gsm-config volume and mount", func(t *testing.T) {
+		t.Parallel()
+		g := NewCiOperatorPodSpecGenerator()
+		g.Add(GSMConfig())
+		podspec, err := g.Build()
+		if err != nil {
+			t.Fatalf("Unexpected error: %v", err)
+		}
+		testhelper.CompareWithFixture(t, podspec)
+	})
+}

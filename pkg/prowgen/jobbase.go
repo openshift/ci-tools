@@ -149,7 +149,10 @@ func NewProwJobBaseBuilderForTest(configSpec *cioperatorapi.ReleaseBuildConfigur
 			p.PodSpec.Add(CIPullSecret())
 		}
 		if info.Config.EnableSecretsStoreCSIDriver {
-			p.PodSpec.Add(Arg("enable-secrets-store-csi-driver", "true"))
+			p.PodSpec.Add(
+				Arg("enable-secrets-store-csi-driver", "true"),
+				GSMConfig(),
+			)
 		}
 	case test.MultiStageTestConfiguration != nil:
 		if clusterProfile := test.MultiStageTestConfiguration.ClusterProfile; clusterProfile != "" {
@@ -161,7 +164,10 @@ func NewProwJobBaseBuilderForTest(configSpec *cioperatorapi.ReleaseBuildConfigur
 			p.PodSpec.Add(CIPullSecret())
 		}
 		if info.Config.EnableSecretsStoreCSIDriver {
-			p.PodSpec.Add(Arg("enable-secrets-store-csi-driver", "true"))
+			p.PodSpec.Add(
+				Arg("enable-secrets-store-csi-driver", "true"),
+				GSMConfig(),
+			)
 		}
 	case test.OpenshiftAnsibleClusterTestConfiguration != nil:
 		p.PodSpec.Add(

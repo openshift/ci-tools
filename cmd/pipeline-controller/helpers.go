@@ -177,8 +177,6 @@ func acquireConditionalContexts(ctx context.Context, pj *v1.ProwJob, pipelineCon
 						pjob.Spec.Refs != nil &&
 						len(pjob.Spec.Refs.Pulls) > 0 &&
 						pjob.Spec.Refs.Pulls[0].SHA == pj.Spec.Refs.Pulls[0].SHA {
-						deleteIds()
-						//add debug log here we are sending manual message
 						return "", "Tests from second stage were triggered manually. Pipeline can be controlled only manually, until HEAD changes. Use command to trigger second stage.", nil
 					}
 				}

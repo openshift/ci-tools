@@ -598,6 +598,33 @@ func (a *weeklyAverageFromTenDays) CheckFailed(ctx context.Context, jobName stri
 		CombinedTestSuiteName: testCaseDetails.TestSuiteName,
 	}
 	averageTestResult, ok := aggregatedTestRunsByName[testKey]
+
+	if !ok {
+		// only if we have no results at all for this job
+		if len(aggregatedTestRunsByName) == 0 {
+			// temporary while we work through master - main release branch rename
+			// check to see if the job name contains 'main' if so updated it to master and attempt the query again
+			if time.Now().Before(time.Date(2026+0, time.February, 19, 0, 1, 0, 0, time.UTC)) {
+				oldJobName := strings.Replace(a.jobName, "main", "master", -1)
+
+				if a.jobName != oldJobName {
+					a.jobName = oldJobName
+					a.queryTestRunsOnce = sync.Once{}
+					fmt.Printf("missing data for 'main' job falling back to 'master': %s\n", oldJobName)
+					aggregatedTestRunsByName, err = a.getAggregatedTestRuns(ctx)
+					if err != nil {
+						fmt.Printf("error getting past reliability data, assume 99%% pass: %v\n", err)
+						missingAllHistoricalData = true
+					}
+
+					// we can not restore the old job name as that will lead to resetting queryTestRunsOnce
+					// over and over so we will only do this one time
+					averageTestResult, ok = aggregatedTestRunsByName[testKey]
+				}
+			}
+		}
+	}
+
 	// the linter requires not setting a default value. This seems strictly worse and more error-prone to me, but
 	// I am a slave to the bot.
 	var workingPercentage int

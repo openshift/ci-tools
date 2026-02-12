@@ -105,9 +105,12 @@ func (s *ipPoolStep) run(ctx context.Context, minute time.Duration) error {
 	start := time.Now()
 	names, err := client.AcquireIfAvailableImmediately(l.ResourceType, l.Count, cancel)
 	if err != nil {
-		if err == lease.ErrNotFound {
-			logrus.Infof("no leases of type: %s available", l.ResourceType)
-		} else {
+		switch {
+		case errors.Is(err, lease.ErrNotFound):
+			logrus.Infof("no leases of type %s available", l.ResourceType)
+		case errors.Is(err, lease.ErrTypeNotFound):
+			logrus.Infof("lease type %s does not exist", l.ResourceType)
+		default:
 			return results.ForReason("acquiring_ip_pool_lease").WithError(err).Errorf("failed to acquire lease for %s: %v", l.ResourceType, err)
 		}
 	} else {

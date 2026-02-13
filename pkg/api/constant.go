@@ -92,6 +92,8 @@ const (
 
 	NestedPodmanSCC         = "nested-podman"
 	NestedPodmanClusterRole = "nested-podman-creater"
+
+	CIOperatorHTTPServerPort = 8080
 )
 
 var (

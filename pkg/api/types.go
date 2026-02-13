@@ -1133,14 +1133,33 @@ type StepParameter struct {
 type CredentialReference struct {
 	// Namespace is where the source secret exists.
 	Namespace string `json:"namespace"`
-	// Collection is the name of the collection the secret belongs to.
-	// In GCP, the secret is named <collection>__<secret-name> -- this represents
-	// the <collection> part.
-	Collection string `json:"collection"`
+	// Bundle is a named bundle reference from the GSM config mapping file.
+	// Mutually exclusive with Collection/Group/Field.
+	Bundle string `json:"bundle,omitempty"`
+	// Collection is the name of the collection the secret belongs to (first level of 3-level <collection>__<group>__<field> hierarchy).
+	Collection string `json:"collection,omitempty"`
+	// Group is the group name within the collection (second level of 3-level <collection>__<group>__<field> hierarchy).
+	// Required when Collection is set, unless Bundle is used.
+	Group string `json:"group,omitempty"`
+	// Field is the specific field name (third level of 3-level <collection>__<group>__<field> hierarchy).
+	// If omitted, all fields in the collection/group are auto-discovered.
+	Field string `json:"field,omitempty"`
 	// Name is the name of the secret, without the collection prefix.
 	Name string `json:"name"`
 	// MountPath is where the secret should be mounted.
 	MountPath string `json:"mount_path"`
+}
+
+func (c *CredentialReference) IsAutoDiscovery() bool {
+	return c.Field == "" && c.Group != "" && c.Collection != ""
+}
+
+func (c *CredentialReference) IsExplicitField() bool {
+	return c.Field != "" && c.Group != "" && c.Collection != ""
+}
+
+func (c *CredentialReference) IsBundleReference() bool {
+	return c.Bundle != ""
 }
 
 // StepDependency defines a dependency on an image and the environment variable

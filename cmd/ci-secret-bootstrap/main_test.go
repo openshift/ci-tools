@@ -18,7 +18,7 @@ import (
 	"github.com/google/go-cmp/cmp"
 	"github.com/google/go-cmp/cmp/cmpopts"
 	"github.com/googleapis/gax-go/v2"
-	"github.com/hashicorp/vault/api"
+	vaultApi "github.com/hashicorp/vault/api"
 
 	coreapi "k8s.io/api/core/v1"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
@@ -28,6 +28,7 @@ import (
 	"k8s.io/client-go/kubernetes/fake"
 	"k8s.io/client-go/rest"
 
+	"github.com/openshift/ci-tools/pkg/api"
 	"github.com/openshift/ci-tools/pkg/api/secretbootstrap"
 	"github.com/openshift/ci-tools/pkg/api/secretgenerator"
 	gsm "github.com/openshift/ci-tools/pkg/gsm-secrets"
@@ -2263,7 +2264,7 @@ func (f *fakeVaultClient) GetKV(path string) (*vaultclient.KVData, error) {
 		return item, nil
 	}
 
-	return nil, &api.ResponseError{
+	return nil, &vaultApi.ResponseError{
 		HTTPMethod: "GET",
 		StatusCode: 404,
 		URL:        "fakeVaultClient.GetKV",
@@ -3690,7 +3691,7 @@ func TestConstructSecretsFromGSM(t *testing.T) {
 
 	testCases := []struct {
 		name               string
-		config             secretbootstrap.GSMConfig
+		config             api.GSMConfig
 		gsmSecretsPayloads map[string][]byte
 		disabledClusters   sets.Set[string]
 		expected           map[string][]*coreapi.Secret
@@ -3698,22 +3699,22 @@ func TestConstructSecretsFromGSM(t *testing.T) {
 	}{
 		{
 			name: "basic case: explicit fields",
-			config: secretbootstrap.GSMConfig{
-				Bundles: []secretbootstrap.Bundle{
+			config: api.GSMConfig{
+				Bundles: []api.GSMBundle{
 					{
 						Name: "test-secret",
-						Targets: []secretbootstrap.TargetSpec{
+						Targets: []api.TargetSpec{
 							{
 								Namespace: "ci",
 								Cluster:   "build01",
 							},
 						},
 						SyncToCluster: true,
-						GSMSecrets: []secretbootstrap.GSMSecretRef{
+						GSMSecrets: []api.GSMSecretRef{
 							{
 								Collection: "test-infra",
 								Group:      "build-farm",
-								Fields: []secretbootstrap.FieldEntry{
+								Fields: []api.FieldEntry{
 									{Name: "username"},
 									{Name: "password"},
 								},
@@ -3745,22 +3746,22 @@ func TestConstructSecretsFromGSM(t *testing.T) {
 		},
 		{
 			name: "multi-level groups",
-			config: secretbootstrap.GSMConfig{
-				Bundles: []secretbootstrap.Bundle{
+			config: api.GSMConfig{
+				Bundles: []api.GSMBundle{
 					{
 						Name: "multilevel-secret",
-						Targets: []secretbootstrap.TargetSpec{
+						Targets: []api.TargetSpec{
 							{
 								Namespace: "test",
 								Cluster:   "app.ci",
 							},
 						},
 						SyncToCluster: true,
-						GSMSecrets: []secretbootstrap.GSMSecretRef{
+						GSMSecrets: []api.GSMSecretRef{
 							{
 								Collection: "vsphere",
 								Group:      "ibmcloud/ci",
-								Fields: []secretbootstrap.FieldEntry{
+								Fields: []api.FieldEntry{
 									{Name: "token"},
 								},
 							},
@@ -3789,22 +3790,22 @@ func TestConstructSecretsFromGSM(t *testing.T) {
 		},
 		{
 			name: "field denormalization",
-			config: secretbootstrap.GSMConfig{
-				Bundles: []secretbootstrap.Bundle{
+			config: api.GSMConfig{
+				Bundles: []api.GSMBundle{
 					{
 						Name: "denorm-secret",
-						Targets: []secretbootstrap.TargetSpec{
+						Targets: []api.TargetSpec{
 							{
 								Namespace: "ci",
 								Cluster:   "build01",
 							},
 						},
 						SyncToCluster: true,
-						GSMSecrets: []secretbootstrap.GSMSecretRef{
+						GSMSecrets: []api.GSMSecretRef{
 							{
 								Collection: "test",
 								Group:      "group1",
-								Fields: []secretbootstrap.FieldEntry{
+								Fields: []api.FieldEntry{
 									{Name: "aws--u--creds"},
 									{Name: "--dot--dockerconfigjson"},
 									{Name: "renamed--u--field", As: "custom-name"},
@@ -3839,11 +3840,11 @@ func TestConstructSecretsFromGSM(t *testing.T) {
 		},
 		{
 			name: "docker config from GSM",
-			config: secretbootstrap.GSMConfig{
-				Bundles: []secretbootstrap.Bundle{
+			config: api.GSMConfig{
+				Bundles: []api.GSMBundle{
 					{
 						Name: "docker-secret",
-						Targets: []secretbootstrap.TargetSpec{
+						Targets: []api.TargetSpec{
 							{
 								Namespace: "ci",
 								Cluster:   "build01",
@@ -3851,9 +3852,9 @@ func TestConstructSecretsFromGSM(t *testing.T) {
 							},
 						},
 						SyncToCluster: true,
-						DockerConfig: &secretbootstrap.DockerConfigSpec{
+						DockerConfig: &api.DockerConfigSpec{
 							As: "pull-secret",
-							Registries: []secretbootstrap.RegistryAuthData{
+							Registries: []api.RegistryAuthData{
 								{
 									Collection:  "test-infra",
 									Group:       "build-farm",
@@ -3895,11 +3896,11 @@ func TestConstructSecretsFromGSM(t *testing.T) {
 		},
 		{
 			name: "secret is not created for disabled cluster",
-			config: secretbootstrap.GSMConfig{
-				Bundles: []secretbootstrap.Bundle{
+			config: api.GSMConfig{
+				Bundles: []api.GSMBundle{
 					{
 						Name: "test-secret",
-						Targets: []secretbootstrap.TargetSpec{
+						Targets: []api.TargetSpec{
 							{
 								Namespace: "ci",
 								Cluster:   "build01",
@@ -3910,11 +3911,11 @@ func TestConstructSecretsFromGSM(t *testing.T) {
 							},
 						},
 						SyncToCluster: true,
-						GSMSecrets: []secretbootstrap.GSMSecretRef{
+						GSMSecrets: []api.GSMSecretRef{
 							{
 								Collection: "test",
 								Group:      "group1",
-								Fields: []secretbootstrap.FieldEntry{
+								Fields: []api.FieldEntry{
 									{Name: "key"},
 								},
 							},
@@ -3944,22 +3945,22 @@ func TestConstructSecretsFromGSM(t *testing.T) {
 		},
 		{
 			name: "error: missing GSM secret",
-			config: secretbootstrap.GSMConfig{
-				Bundles: []secretbootstrap.Bundle{
+			config: api.GSMConfig{
+				Bundles: []api.GSMBundle{
 					{
 						Name: "error-secret",
-						Targets: []secretbootstrap.TargetSpec{
+						Targets: []api.TargetSpec{
 							{
 								Namespace: "ci",
 								Cluster:   "build01",
 							},
 						},
 						SyncToCluster: true,
-						GSMSecrets: []secretbootstrap.GSMSecretRef{
+						GSMSecrets: []api.GSMSecretRef{
 							{
 								Collection: "test",
 								Group:      "group1",
-								Fields: []secretbootstrap.FieldEntry{
+								Fields: []api.FieldEntry{
 									{Name: "missing-field"},
 								},
 							},
@@ -3972,22 +3973,22 @@ func TestConstructSecretsFromGSM(t *testing.T) {
 		},
 		{
 			name: "error: bundle with partial failure",
-			config: secretbootstrap.GSMConfig{
-				Bundles: []secretbootstrap.Bundle{
+			config: api.GSMConfig{
+				Bundles: []api.GSMBundle{
 					{
 						Name: "partial-error-secret",
-						Targets: []secretbootstrap.TargetSpec{
+						Targets: []api.TargetSpec{
 							{
 								Namespace: "ci",
 								Cluster:   "build01",
 							},
 						},
 						SyncToCluster: true,
-						GSMSecrets: []secretbootstrap.GSMSecretRef{
+						GSMSecrets: []api.GSMSecretRef{
 							{
 								Collection: "test",
 								Group:      "group1",
-								Fields: []secretbootstrap.FieldEntry{
+								Fields: []api.FieldEntry{
 									{Name: "field1"},
 									{Name: "field2"},
 								},
@@ -4003,22 +4004,22 @@ func TestConstructSecretsFromGSM(t *testing.T) {
 		},
 		{
 			name: "multiple bundles on different clusters",
-			config: secretbootstrap.GSMConfig{
-				Bundles: []secretbootstrap.Bundle{
+			config: api.GSMConfig{
+				Bundles: []api.GSMBundle{
 					{
 						Name: "secret-1",
-						Targets: []secretbootstrap.TargetSpec{
+						Targets: []api.TargetSpec{
 							{
 								Namespace: "ns1",
 								Cluster:   "build01",
 							},
 						},
 						SyncToCluster: true,
-						GSMSecrets: []secretbootstrap.GSMSecretRef{
+						GSMSecrets: []api.GSMSecretRef{
 							{
 								Collection: "col1",
 								Group:      "grp1",
-								Fields: []secretbootstrap.FieldEntry{
+								Fields: []api.FieldEntry{
 									{Name: "key1"},
 								},
 							},
@@ -4026,18 +4027,18 @@ func TestConstructSecretsFromGSM(t *testing.T) {
 					},
 					{
 						Name: "secret-2",
-						Targets: []secretbootstrap.TargetSpec{
+						Targets: []api.TargetSpec{
 							{
 								Namespace: "ns2",
 								Cluster:   "build02",
 							},
 						},
 						SyncToCluster: true,
-						GSMSecrets: []secretbootstrap.GSMSecretRef{
+						GSMSecrets: []api.GSMSecretRef{
 							{
 								Collection: "col2",
 								Group:      "grp2",
-								Fields: []secretbootstrap.FieldEntry{
+								Fields: []api.FieldEntry{
 									{Name: "key2"},
 								},
 							},
@@ -4080,22 +4081,22 @@ func TestConstructSecretsFromGSM(t *testing.T) {
 		},
 		{
 			name: "bundle with empty group",
-			config: secretbootstrap.GSMConfig{
-				Bundles: []secretbootstrap.Bundle{
+			config: api.GSMConfig{
+				Bundles: []api.GSMBundle{
 					{
 						Name: "no-group-secret",
-						Targets: []secretbootstrap.TargetSpec{
+						Targets: []api.TargetSpec{
 							{
 								Namespace: "ci",
 								Cluster:   "build01",
 							},
 						},
 						SyncToCluster: true,
-						GSMSecrets: []secretbootstrap.GSMSecretRef{
+						GSMSecrets: []api.GSMSecretRef{
 							{
 								Collection: "simple",
 								Group:      "",
-								Fields: []secretbootstrap.FieldEntry{
+								Fields: []api.FieldEntry{
 									{Name: "token"},
 								},
 							},
@@ -4161,7 +4162,7 @@ func TestConstructDockerConfigJSONFromGSM(t *testing.T) {
 	testCases := []struct {
 		name          string
 		secretsCache  map[gsmSecretRef]fetchedSecret
-		registries    []secretbootstrap.RegistryAuthData
+		registries    []api.RegistryAuthData
 		expected      string
 		expectedError string
 	}{
@@ -4170,7 +4171,7 @@ func TestConstructDockerConfigJSONFromGSM(t *testing.T) {
 			secretsCache: map[gsmSecretRef]fetchedSecret{
 				{collection: "test", group: "grp", field: "auth"}: {payload: []byte("dXNlcjpwYXNz")},
 			},
-			registries: []secretbootstrap.RegistryAuthData{
+			registries: []api.RegistryAuthData{
 				{
 					Collection:  "test",
 					Group:       "grp",
@@ -4186,7 +4187,7 @@ func TestConstructDockerConfigJSONFromGSM(t *testing.T) {
 				{collection: "test", group: "grp", field: "auth"}:  {payload: []byte("dXNlcjpwYXNz")},
 				{collection: "test", group: "grp", field: "email"}: {payload: []byte("user@example.com")},
 			},
-			registries: []secretbootstrap.RegistryAuthData{
+			registries: []api.RegistryAuthData{
 				{
 					Collection:  "test",
 					Group:       "grp",
@@ -4204,7 +4205,7 @@ func TestConstructDockerConfigJSONFromGSM(t *testing.T) {
 				{collection: "test", group: "grp", field: "auth2"}:  {payload: []byte("dXNlcjI6cGFzczI=")},
 				{collection: "test", group: "grp", field: "email2"}: {payload: []byte("user@example.com")},
 			},
-			registries: []secretbootstrap.RegistryAuthData{
+			registries: []api.RegistryAuthData{
 				{
 					Collection:  "test",
 					Group:       "grp",
@@ -4226,7 +4227,7 @@ func TestConstructDockerConfigJSONFromGSM(t *testing.T) {
 			secretsCache: map[gsmSecretRef]fetchedSecret{
 				{collection: "test", group: "grp", field: "auth"}: {payload: []byte("  dXNlcjpwYXNz  \n")},
 			},
-			registries: []secretbootstrap.RegistryAuthData{
+			registries: []api.RegistryAuthData{
 				{
 					Collection:  "test",
 					Group:       "grp",
@@ -4239,7 +4240,7 @@ func TestConstructDockerConfigJSONFromGSM(t *testing.T) {
 		{
 			name:         "error: auth field not found",
 			secretsCache: map[gsmSecretRef]fetchedSecret{},
-			registries: []secretbootstrap.RegistryAuthData{
+			registries: []api.RegistryAuthData{
 				{
 					Collection:  "test",
 					Group:       "grp",
@@ -4254,7 +4255,7 @@ func TestConstructDockerConfigJSONFromGSM(t *testing.T) {
 			secretsCache: map[gsmSecretRef]fetchedSecret{
 				{collection: "test", group: "grp", field: "auth"}: {err: fmt.Errorf("fetch failed")},
 			},
-			registries: []secretbootstrap.RegistryAuthData{
+			registries: []api.RegistryAuthData{
 				{
 					Collection:  "test",
 					Group:       "grp",
@@ -4269,7 +4270,7 @@ func TestConstructDockerConfigJSONFromGSM(t *testing.T) {
 			secretsCache: map[gsmSecretRef]fetchedSecret{
 				{collection: "test", group: "grp", field: "auth"}: {payload: []byte("dXNlcjpwYXNz")},
 			},
-			registries: []secretbootstrap.RegistryAuthData{
+			registries: []api.RegistryAuthData{
 				{
 					Collection:  "test",
 					Group:       "grp",
@@ -4286,7 +4287,7 @@ func TestConstructDockerConfigJSONFromGSM(t *testing.T) {
 				{collection: "test", group: "grp", field: "auth"}:  {payload: []byte("dXNlcjpwYXNz")},
 				{collection: "test", group: "grp", field: "email"}: {err: fmt.Errorf("email fetch failed")},
 			},
-			registries: []secretbootstrap.RegistryAuthData{
+			registries: []api.RegistryAuthData{
 				{
 					Collection:  "test",
 					Group:       "grp",
@@ -4302,7 +4303,7 @@ func TestConstructDockerConfigJSONFromGSM(t *testing.T) {
 			secretsCache: map[gsmSecretRef]fetchedSecret{
 				{collection: "test", group: "grp", field: "auth"}: {payload: []byte("not-base64-encoded")},
 			},
-			registries: []secretbootstrap.RegistryAuthData{
+			registries: []api.RegistryAuthData{
 				{
 					Collection:  "test",
 					Group:       "grp",

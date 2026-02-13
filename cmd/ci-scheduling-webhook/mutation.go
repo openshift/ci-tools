@@ -363,8 +363,15 @@ func mutatePod(w http.ResponseWriter, r *http.Request) {
 
 		precludedHostnames := prioritization.findHostnamesToPreclude(podClass)
 
-		affinity := corev1.Affinity{
-			NodeAffinity: &corev1.NodeAffinity{},
+		// Preserve existing affinity rules (e.g. podAntiAffinity from pod-scaler)
+		// by merging our nodeAffinity into the pod's existing affinity rather than
+		// replacing it entirely.
+		affinity := pod.Spec.Affinity
+		if affinity == nil {
+			affinity = &corev1.Affinity{}
+		}
+		if affinity.NodeAffinity == nil {
+			affinity.NodeAffinity = &corev1.NodeAffinity{}
 		}
 		affinityChanged := false
 		if err == nil {
@@ -425,7 +432,7 @@ func mutatePod(w http.ResponseWriter, r *http.Request) {
 		}
 
 		if affinityChanged {
-			unstructuredAffinity, err := runtime.DefaultUnstructuredConverter.ToUnstructured(&affinity)
+			unstructuredAffinity, err := runtime.DefaultUnstructuredConverter.ToUnstructured(affinity)
 			if err != nil {
 				writeHttpError(500, fmt.Errorf("error decoding affinity to unstructured data: %w", err))
 				return

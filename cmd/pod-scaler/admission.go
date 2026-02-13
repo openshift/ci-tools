@@ -35,10 +35,9 @@ import (
 	"github.com/openshift/ci-tools/pkg/rehearse"
 	"github.com/openshift/ci-tools/pkg/results"
 	"github.com/openshift/ci-tools/pkg/steps"
-	"github.com/openshift/ci-tools/pkg/util"
 )
 
-func admit(port, healthPort int, certDir string, client buildclientv1.BuildV1Interface, loaders map[string][]*cacheReloader, mutateResourceLimits bool, cpuCap int64, memoryCap string, cpuPriorityScheduling int64, percentageMeasured float64, measuredPodCPUIncrease float64, reporter results.PodScalerReporter) {
+func admit(port, healthPort int, certDir string, client buildclientv1.BuildV1Interface, kubeClient kubernetes.Interface, loaders map[string][]*cacheReloader, mutateResourceLimits bool, cpuCap int64, memoryCap string, cpuPriorityScheduling int64, percentageMeasured float64, measuredPodCPUIncrease float64, reporter results.PodScalerReporter) {
 	logger := logrus.WithField("component", "pod-scaler admission")
 	logger.Infof("Initializing admission webhook server with %d loaders.", len(loaders))
 	health := pjutil.NewHealthOnPort(healthPort)
@@ -46,14 +45,6 @@ func admit(port, healthPort int, certDir string, client buildclientv1.BuildV1Int
 	decoder := admission.NewDecoder(scheme.Scheme)
 
 	// Initialize node allocatable CPU cache
-	restConfig, err := util.LoadClusterConfig()
-	if err != nil {
-		logrus.WithError(err).Fatal("Failed to load cluster config for node cache.")
-	}
-	kubeClient, err := kubernetes.NewForConfig(restConfig)
-	if err != nil {
-		logrus.WithError(err).Fatal("Failed to create Kubernetes client for node cache.")
-	}
 	nodeCache := newNodeAllocatableCache(kubeClient)
 
 	server := webhook.NewServer(webhook.Options{
@@ -578,19 +569,27 @@ func (m *podMutator) addMeasuredPodAntiaffinity(pod *corev1.Pod, logger *logrus.
 		pod.Spec.Affinity.PodAntiAffinity = &corev1.PodAntiAffinity{}
 	}
 
-	// Measured pods should not run with non-measured pods
-	// But measured pods can run together (no anti-affinity between measured pods)
+	// Measured pods should not run with explicitly unmeasured pods.
+	// We use In ["false"] rather than NotIn ["true"] because the NotIn operator
+	// matches pods where the label is absent, not just pods where it has a different
+	// value. Since DaemonSet pods (node-exporter, dns, csi drivers, etc.) do not
+	// carry the measured label, NotIn ["true"] would match them on every node,
+	// making measured pods unschedulable cluster-wide.
+	// NamespaceSelector is set to an empty selector to match pods across ALL
+	// namespaces, since CI pods from different jobs run in separate ci-op-* namespaces.
+	// Without this, anti-affinity defaults to same-namespace only and is ineffective.
 	antiAffinityTerm := corev1.PodAffinityTerm{
 		LabelSelector: &metav1.LabelSelector{
 			MatchExpressions: []metav1.LabelSelectorRequirement{
 				{
 					Key:      measuredPodLabel,
-					Operator: metav1.LabelSelectorOpNotIn,
-					Values:   []string{"true"},
+					Operator: metav1.LabelSelectorOpIn,
+					Values:   []string{"false"},
 				},
 			},
 		},
-		TopologyKey: "kubernetes.io/hostname",
+		NamespaceSelector: &metav1.LabelSelector{},
+		TopologyKey:       "kubernetes.io/hostname",
 	}
 
 	// Use required anti-affinity to force node scaling if no viable node exists

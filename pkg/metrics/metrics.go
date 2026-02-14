@@ -11,19 +11,32 @@ import (
 	"github.com/sirupsen/logrus"
 
 	corev1 "k8s.io/api/core/v1"
+	"k8s.io/client-go/kubernetes/scheme"
 	"k8s.io/client-go/rest"
 	metricsclient "k8s.io/metrics/pkg/client/clientset/versioned"
 	ctrlruntimeclient "sigs.k8s.io/controller-runtime/pkg/client"
 
 	configv1 "github.com/openshift/api/config/v1"
+	machinev1beta1 "github.com/openshift/api/machine/v1beta1"
+	autoscalingv1beta1 "github.com/openshift/cluster-autoscaler-operator/pkg/apis/autoscaling/v1beta1"
 
 	"github.com/openshift/ci-tools/pkg/api"
 	"github.com/openshift/ci-tools/pkg/lease"
 	"github.com/openshift/ci-tools/pkg/secrets"
 )
 
+func init() {
+	if err := machinev1beta1.AddToScheme(scheme.Scheme); err != nil {
+		logrus.WithError(err).Error("failed to add machinev1beta1 scheme")
+	}
+	if err := autoscalingv1beta1.SchemeBuilder.AddToScheme(scheme.Scheme); err != nil {
+		logrus.WithError(err).Error("failed to add autoscalingv1beta1 scheme")
+	}
+}
+
 const (
 	CIOperatorMetricsJSON = "ci-operator-metrics.json"
+	CIWorkloadLabel       = "ci-workload"
 )
 
 // MetricsEvent is the interface that every metric event must implement.
@@ -65,6 +78,12 @@ func NewMetricsAgent(ctx context.Context, clusterConfig *rest.Config, censor *se
 	}
 
 	logger := logrus.WithField("component", "metricsAgent")
+
+	autoscalerList := &autoscalingv1beta1.MachineAutoscalerList{}
+	if err := client.List(ctx, autoscalerList); err != nil {
+		logger.WithError(err).Warn("Failed to list MachineAutoscalers at initialization")
+	}
+
 	return &MetricsAgent{
 		ctx:            ctx,
 		events:         make(chan MetricsEvent, 100),
@@ -76,7 +95,7 @@ func NewMetricsAgent(ctx context.Context, clusterConfig *rest.Config, censor *se
 		buildPlugin:    newBuildPlugin(ctx, logger, client),
 		nodesPlugin:    newNodesMetricsPlugin(ctx, logger, client, metricsClient, nodesCh),
 		leasePlugin:    newLeasesPlugin(logger),
-		podPlugin:      NewPodLifecyclePlugin(ctx, logger, client),
+		podPlugin:      NewPodLifecyclePlugin(ctx, logger, client, autoscalerList.Items),
 		imagesPlugin:   newImagesPlugin(ctx, logger, client),
 	}, nil
 }

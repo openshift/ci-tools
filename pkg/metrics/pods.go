@@ -10,7 +10,25 @@ import (
 	corev1 "k8s.io/api/core/v1"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	ctrlruntimeclient "sigs.k8s.io/controller-runtime/pkg/client"
+
+	machinev1beta1 "github.com/openshift/api/machine/v1beta1"
+	autoscalingv1beta1 "github.com/openshift/cluster-autoscaler-operator/pkg/apis/autoscaling/v1beta1"
 )
+
+type MachineSetCount struct {
+	Name    string `json:"name"`
+	Current int    `json:"current"`
+	Min     int    `json:"min"`
+	Max     int    `json:"max"`
+}
+
+type WorkloadNodeCount struct {
+	Workload    string            `json:"workload"`
+	Current     int               `json:"current"`
+	Min         int               `json:"min"`
+	Max         int               `json:"max"`
+	MachineSets []MachineSetCount `json:"machine_sets"`
+}
 
 type PodLifecycleMetricsEvent struct {
 	PodName        string     `json:"pod_name,omitempty"`
@@ -31,6 +49,8 @@ type PodLifecycleMetricsEvent struct {
 	InitContainerRestarts  int             `json:"init_container_restarts,omitempty"`
 	InitContainerLastError string          `json:"init_container_last_error,omitempty"`
 	Timestamp              time.Time       `json:"timestamp,omitempty"`
+
+	WorkloadCapacity WorkloadNodeCount `json:"workload_capacity,omitempty"`
 }
 
 func (e *PodLifecycleMetricsEvent) SetTimestamp(ts time.Time) {
@@ -38,15 +58,21 @@ func (e *PodLifecycleMetricsEvent) SetTimestamp(ts time.Time) {
 }
 
 type PodLifecyclePlugin struct {
-	ctx    context.Context
-	logger *logrus.Entry
-	mu     sync.Mutex
-	events []PodLifecycleMetricsEvent
-	client ctrlruntimeclient.Client
+	ctx         context.Context
+	logger      *logrus.Entry
+	mu          sync.Mutex
+	events      []PodLifecycleMetricsEvent
+	client      ctrlruntimeclient.Client
+	autoscalers []autoscalingv1beta1.MachineAutoscaler
 }
 
-func NewPodLifecyclePlugin(ctx context.Context, logger *logrus.Entry, client ctrlruntimeclient.Client) *PodLifecyclePlugin {
-	return &PodLifecyclePlugin{ctx: ctx, logger: logger.WithField("plugin", "pods"), client: client}
+func NewPodLifecyclePlugin(ctx context.Context, logger *logrus.Entry, client ctrlruntimeclient.Client, autoscalers []autoscalingv1beta1.MachineAutoscaler) *PodLifecyclePlugin {
+	return &PodLifecyclePlugin{
+		ctx:         ctx,
+		logger:      logger.WithField("plugin", "pods"),
+		client:      client,
+		autoscalers: autoscalers,
+	}
 }
 
 func (p *PodLifecyclePlugin) Name() string {
@@ -70,7 +96,10 @@ func (p *PodLifecyclePlugin) Record(ev MetricsEvent) {
 	e.CreationTime = &pod.CreationTimestamp.Time
 	e.StartTime = &pod.Status.StartTime.Time
 	e.CompletionTime = getPodCompletionTime(pod)
-	e.CIWorkload = pod.Labels["ci-workload"]
+	e.CIWorkload = pod.Labels[CIWorkloadLabel]
+	if e.CIWorkload != "" {
+		e.WorkloadCapacity = p.getWorkloadCounts(e.CIWorkload)
+	}
 
 	// Only set pod phase if not already set by caller (preserves success/failure determination)
 	if e.PodPhase == "" {
@@ -123,6 +152,41 @@ func (p *PodLifecyclePlugin) Events() []MetricsEvent {
 		out[i] = &p.events[i]
 	}
 	return out
+}
+
+func (p *PodLifecyclePlugin) getMinMax(machineSetName string) (int, int) {
+	for _, autoscaler := range p.autoscalers {
+		if autoscaler.Spec.ScaleTargetRef.Name == machineSetName {
+			return int(autoscaler.Spec.MinReplicas), int(autoscaler.Spec.MaxReplicas)
+		}
+	}
+	return 0, 0
+}
+
+func (p *PodLifecyclePlugin) getWorkloadCounts(workload string) WorkloadNodeCount {
+	ret := WorkloadNodeCount{Workload: workload}
+	machineSetList := &machinev1beta1.MachineSetList{}
+	if err := p.client.List(p.ctx, machineSetList); err != nil {
+		p.logger.WithError(err).Warn("Failed to list MachineSets")
+		return WorkloadNodeCount{}
+	}
+
+	for _, ms := range machineSetList.Items {
+		msWorkload := ms.Spec.Template.Spec.ObjectMeta.Labels[CIWorkloadLabel]
+		if msWorkload != workload {
+			continue
+		}
+
+		current := int(ms.Status.Replicas)
+		min, max := p.getMinMax(ms.Name)
+
+		ret.Current += current
+		ret.Min += min
+		ret.Max += max
+		ret.MachineSets = append(ret.MachineSets, MachineSetCount{Name: ms.Name, Current: current, Min: min, Max: max})
+	}
+
+	return ret
 }
 
 func getPodCompletionTime(pod *corev1.Pod) *time.Time {

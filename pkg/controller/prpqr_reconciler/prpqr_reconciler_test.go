@@ -10,6 +10,7 @@ import (
 
 	"github.com/sirupsen/logrus"
 
+	corev1 "k8s.io/api/core/v1"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/apimachinery/pkg/types"
 	ctrlruntimeclient "sigs.k8s.io/controller-runtime/pkg/client"
@@ -498,12 +499,27 @@ func prunePRPQRForTests(items []v1.PullRequestPayloadQualificationRun) {
 }
 
 func pruneProwjobsForTests(t *testing.T, items []prowv1.ProwJob) {
+	findUnresolvedConfigEnv := func(envs []corev1.EnvVar) *corev1.EnvVar {
+		for i := range envs {
+			if e := &envs[i]; e.Name == "UNRESOLVED_CONFIG" {
+				return e
+			}
+		}
+		return nil
+	}
+
 	for i, pj := range items {
 		if strings.HasPrefix(pj.Spec.Job, "aggregator") {
-			unResolvedConfig := items[i].Spec.PodSpec.Containers[0].Env[0].Value
+			unresolvedConfigEnv := findUnresolvedConfigEnv(items[i].Spec.PodSpec.Containers[0].Env)
+			if unresolvedConfigEnv == nil {
+				t.Errorf("UNRESOLVED_CONFIG not set on prowjob %s", pj.Spec.Job)
+				continue
+			}
+
+			unresolvedConfig := unresolvedConfigEnv.Value
 
 			c := &api.ReleaseBuildConfiguration{}
-			if err := yaml.Unmarshal([]byte(unResolvedConfig), c); err != nil {
+			if err := yaml.Unmarshal([]byte(unresolvedConfig), c); err != nil {
 				t.Fatal(err)
 			}
 
@@ -516,7 +532,7 @@ func pruneProwjobsForTests(t *testing.T, items []prowv1.ProwJob) {
 				t.Fatal(err)
 			}
 
-			items[i].Spec.PodSpec.Containers[0].Env[0].Value = string(unresolvedConfigRaw)
+			unresolvedConfigEnv.Value = string(unresolvedConfigRaw)
 		}
 
 		items[i].Status.StartTime = zeroTime

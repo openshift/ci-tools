@@ -507,11 +507,18 @@
         command:
         - ci-operator
         env:
+        - name: HTTP_SERVER_IP
+          valueFrom:
+            fieldRef:
+              fieldPath: status.podIP
         - name: CONFIG_SPEC
           value: H4sIAAAAAAAC/8RUTWvbQBC961cMuRgKG5TQXvbUHNKeAiX1XYyl8XphvzozcnDojy8rycYOwaWX9LS7b96+efOQdoNCnY/oSGwDUI91BUgYyUJm73wy+8+37QmVgn0tFUqy81udCorOTrebzejD0HHOWoUm6U6UCWNXSWfiTIHqjb8LuxwwOXN3e9c2R7MGtpzj0hRAswUlUTPVGybJI/fzVKtPq7lv8NGrzHuAvowWvrTtk58Apl8jyZvyXa0quk4K9X7re1SfU6W8F9C7U+gsagDFQr/D5GgwhdjnwfcNQM85WVh9PRByOKyaalOJMXSiVBY7fRhFibvCeesDWbi5mfCSRWfGrO+LNwMVznsvPicTR1HjUHfEx7FyjJgGsfB7QQAuCHOsPoliCCf0ItAjdBnYWWhtG8/ASDHzwcL9d3/F6tn+itVTrmaJBAYS5Xz4MPeF6W3iSzvDG+yveBfSsUwkc/8fwj66XNZ/Cnm5A8YkevkW0C1cSvujIwMDbXEMakF3Xl5Qlo/9JDv/MuvHn+vux8Pzw9Pj+vH5Q3J4fe0cJWJUGrpIigMqTu8dY+p3FiLWKRuAzM6CjGU6MJX6qnDO9fwnAAD//8MYT3wrBQAA
         image: quay-proxy.ci.openshift.org/openshift/ci:ci_ci-operator_latest
         imagePullPolicy: Always
         name: ""
+        ports:
+        - containerPort: 8080
+          name: http
         resources:
           requests:
             cpu: 10m
@@ -1105,11 +1112,18 @@
         command:
         - ci-operator
         env:
+        - name: HTTP_SERVER_IP
+          valueFrom:
+            fieldRef:
+              fieldPath: status.podIP
         - name: CONFIG_SPEC
           value: H4sIAAAAAAAC/8SUT2sbPRDG7/4UQy6BFxTW5u1lbzm4PQVK6vsy3h3LovrXmVkXh374Iu3a2GlwKZT0JOmZ0cxPj5C2KNS5gJakXQCUZRkBIgZqIbGzLprD/w/NWZWMfQllirJ3O60BRdvW3Yvt6PzQcUpaCtXSnSgThq4kXRRn8lR2/L6wTR6jNcuHZbM4wRrYcQpzUwBNLSiJmhpfMEkauZ9Odf/f/dTXu+BUpjlAn8cWPjTNk6sC07eR5FV4WaKKtpNMvdu5HtWlWFLeMujNU+hU1ABKC2H06kQLYsFRYvSdKOW5be9HUeIuc9o5Ty3c3VU9J9EpY6rjsjMDZU4HJy5FE0ZRY1H3xCf8FALGQVr4MSsAVwmTfS6Kovdn9cq4k3RtzIU5TRMuxEAh8bGF1Sd3A/VifgP17J+ZLYGBRDkd340+M712fG5neIv9DXYhHXNNMqt/YPaJch7/yOR5DxgT6ftHj3bOpXg4ERkYaIej1+nBQUbGQNMNVf1cfnoim/WXTff58fnxab1ZP7+bH4Xt8v5oRb84EfArgYtKluu7voILx/kv+btsLy+dpUiMSkMXSHFAxfr3MsZ+X6DKTSwAEtsWZMx1wZTLD8cplfXPAAAA//+y/2KitwUAAA==
         image: quay-proxy.ci.openshift.org/openshift/ci:ci_ci-operator_latest
         imagePullPolicy: Always
         name: ""
+        ports:
+        - containerPort: 8080
+          name: http
         resources:
           requests:
             cpu: 10m
@@ -1215,11 +1229,18 @@
         command:
         - ci-operator
         env:
+        - name: HTTP_SERVER_IP
+          valueFrom:
+            fieldRef:
+              fieldPath: status.podIP
         - name: CONFIG_SPEC
           value: H4sIAAAAAAAC/8SUT2sbPRDG7/sphlwCLyhszNvL3nJIewqU1PdlvDuWRfWvM7MuDv3wRdq1sdPgUijpSdIzo5mfHiFtUKh3AS1J1wCUZRkBIgbqILGzLpr9/3ftSZWMQwllirJzW60BRdvV3c1mcn7sOSUthWrpXpQJQ1+SzoozeSo7fl/YJo/Rmvu7+7Y5whrYcgpLUwBNHSiJmhpvmCRNPMynuv3vdu7rXXAq8xxgyFMHH9r2yVWB6dtE8ip8X6KKtpdMg9u6AdWlWFLeMujNU+hc1ABKB2Hy6kTR0qopPEqMvhelvPQd/CRK3GdOW+epg5ubquckOmfMhVx2ZqTMae/EpWjCJGos6o74yJ9CwDhKBz8WBeAiYfbPRVH0/qReOHeULp05c6dtw5kYKCQ+dLD65K6gns2voJ4MNIslMJIop8O70Wem144v7QxvcLjCLqRTrklm9Q/MPlIu4x+ZvOwBYyJ9/+jRLrkU90ciAyNtcfI6vzjIyBhovqGqn8rPb2T9+GXdf354fnh6XD8+v5sfhe38/mhFvzgR8CuBi0qW68O+gAuH5TP5u2wvL72lSIxKYx9IcUTF+vkyxmFXoMpNNACJbQcy5bpgyuWL45TK+mcAAAD///ilu7C4BQAA
         image: quay-proxy.ci.openshift.org/openshift/ci:ci_ci-operator_latest
         imagePullPolicy: Always
         name: ""
+        ports:
+        - containerPort: 8080
+          name: http
         resources:
           requests:
             cpu: 10m
@@ -1328,11 +1349,18 @@
         command:
         - ci-operator
         env:
+        - name: HTTP_SERVER_IP
+          valueFrom:
+            fieldRef:
+              fieldPath: status.podIP
         - name: CONFIG_SPEC
           value: H4sIAAAAAAAC/8RUTWsbMRC976+YW6CgsHbTy95ycHsKlNT3Zbw7lkX11ZlZF5v++KLdtbHT4FIoyUnSm6c3T09IGxRqXUBL0lQAZVlGgIiBGkjsrItm/3Bfn1HJ2JVSpig7t9WxoGibcXe1GZzvW05Ji9Ao3YoyYWgL6UKcyVPZ8XdhmzxGaxb3i7o6mTWw5RTmpgCaGlASNWO9YpI0cDed6u7D3dTXu+BUpjlAl4cGPtX1kxsBph8DyYvyolQVbSuZOrd1HapLsVBeC+jVU+gkagClgTB4daJo6WNV/Cgx+laU8ty384MocZs5bZ2nBvA4MD2MtZxEJ9Yk5rIzPWVOeycuRRMGUWNRd8SnM6QQMPbSwK8ZAbgiTBm6KIren9Gr9E7QdToXCdV1uAADhcSHBpZf3A2rF/MbVs8hmjkW6EmU0+HN3Geml4nP7QxvsLvhXUiHPJLM8h3CPrmcx38Ked4DxkT6+dmjnbkU9ydHBnra4uB1enWQkTHQdEMjfpaf3sl69W3dfn18fnxarVfPb5ZH8XZ5f7SkP5II+J3ARSXL4+O+MhcO84fyf70dj62lSIxKfRtIsUfF8QNmjN2umCo3UQEktg3IkMcFUy7fHKdU1r8DAAD//6N08j28BQAA
         image: quay-proxy.ci.openshift.org/openshift/ci:ci_ci-operator_latest
         imagePullPolicy: Always
         name: ""
+        ports:
+        - containerPort: 8080
+          name: http
         resources:
           requests:
             cpu: 10m
@@ -1447,11 +1475,18 @@
         command:
         - ci-operator
         env:
+        - name: HTTP_SERVER_IP
+          valueFrom:
+            fieldRef:
+              fieldPath: status.podIP
         - name: CONFIG_SPEC
           value: H4sIAAAAAAAC/4RSzcrbQAy8+ynEd/mg4OCE5rIv0FOfYVFsebN0/yrJheTpy+46JSmB72RrRhqNxr6gkPURHYkZAGpZnwAJIxnI7J1P45/vh+kfKgXnShVKcvWrNkLRmTY9XDYfFss5axVq0laUCaOtTU/iTIHqxNfCLgdMbjwejtPwMDvCyjnuSwE0G1ASHRs/MEneeO5XfX777HuDj16lvwPMZTNwnqafvgFMvzeS/+hjZRWdlUKzX/2M6nOqLe8CenuFdtERUAzELagXRUfnofpRYgxWlMq+dw6bKLEtnFcfyMDHR8+BRHtHF6ITPXzmGDEtVRx/Efik5LjZ3Bt6TvG2R9PBl4Ae0GsATyFMU3wCI8XMNwOnH364362jRIxKi42kuKBi+5UY03ytpuo9A0BmZ0C20gqmUj8Y51zrvwEAAP//gGLavoYCAAA=
         image: quay-proxy.ci.openshift.org/openshift/ci:ci_ci-operator_latest
         imagePullPolicy: Always
         name: ""
+        ports:
+        - containerPort: 8080
+          name: http
         resources:
           requests:
             cpu: 10m
@@ -1557,11 +1592,18 @@
         command:
         - ci-operator
         env:
+        - name: HTTP_SERVER_IP
+          valueFrom:
+            fieldRef:
+              fieldPath: status.podIP
         - name: CONFIG_SPEC
           value: H4sIAAAAAAAC/4SRwUo0MQzH7/MUuS18MMssfF56ExW96CuUbCfbDU7bMcl42KeXtioiC55mkn/yS/7pEZU8J4ykbgCoYf0CZEzkoAhHzuP7//30ndUVQ5VWynrmkzXBMLrWPRw3XmYvpVgFNbRXE8Lka9EPuNBCteNvcCwL5jge9odp+Fp2hJOU9DkUwIoDI7Wx6YOQlk1Cd7X7t+tzF05s2v8Bwro5uJmmZ24JobeN9Jd8qKph9LpS4BMHNC65llw70FUX1qEjoDrYMldfoaSEeVYHCV+pZeHu6fbl8eG+qdmQM0lfpftUCcPl4iNlEjSafSLDGQ3buwnmcK40NZIBoEh0oNvaAqG1XkdKqfFHAAAA//8+ibzv8wEAAA==
         image: quay-proxy.ci.openshift.org/openshift/ci:ci_ci-operator_latest
         imagePullPolicy: Always
         name: ""
+        ports:
+        - containerPort: 8080
+          name: http
         resources:
           requests:
             cpu: 10m
@@ -1667,11 +1709,18 @@
         command:
         - ci-operator
         env:
+        - name: HTTP_SERVER_IP
+          valueFrom:
+            fieldRef:
+              fieldPath: status.podIP
         - name: CONFIG_SPEC
           value: H4sIAAAAAAAC/1SPwW7DIBBE7/6KkS+RKnHolZ+xNnhiWzLg7kIrRf34ioYk8gntYxnmKS1XDTQ/AJePSzsA5VelFXtMQDiqx/g5DuVBHcQ82uB+trK6sEpaOLt8Neo3dQD2rVBln6zw6Dlhr1ao06H5tu30GMd//nzV1xxCjlHSbB6/vQBerIOb5ujR/+0sSaR/pbnz5Un0ic6WJ9P7fVqYqFI4T5FFZinSNq8qKaweUZrMAGRdPKqxVVMe+V1h+AsAAP//A9TIeF4BAAA=
         image: quay-proxy.ci.openshift.org/openshift/ci:ci_ci-operator_latest
         imagePullPolicy: Always
         name: ""
+        ports:
+        - containerPort: 8080
+          name: http
         resources:
           requests:
             cpu: 10m
@@ -1777,11 +1826,18 @@
         command:
         - ci-operator
         env:
+        - name: HTTP_SERVER_IP
+          valueFrom:
+            fieldRef:
+              fieldPath: status.podIP
         - name: CONFIG_SPEC
           value: H4sIAAAAAAAC/1SPQYrDMAxF9z7FJ5vCgBez9WWC6qhJILYzkjwDZQ5f3Di03ST8jyy9J6ylSmQNDrh8XdoPEP6prKZHAuJeA4bvwdnRepAGtOD/Vlt8XCjPPPlyVZZfFh9LSpQndcC2GgttoxrvfWHcqhrLuEu5rRsHDMOzP5/3MY9zTcB/JwH6rZ5vUlJ4fnuRKXHAC6STvQEdgm/aZ/Xp/OF9v48zZxYynsbERhMZtcmrUI5LQKJm5IAic0BVbpeE9/JicY8AAAD//+Q4OnZsAQAA
         image: quay-proxy.ci.openshift.org/openshift/ci:ci_ci-operator_latest
         imagePullPolicy: Always
         name: ""
+        ports:
+        - containerPort: 8080
+          name: http
         resources:
           requests:
             cpu: 10m
@@ -1887,11 +1943,18 @@
         command:
         - ci-operator
         env:
+        - name: HTTP_SERVER_IP
+          valueFrom:
+            fieldRef:
+              fieldPath: status.podIP
         - name: CONFIG_SPEC
           value: H4sIAAAAAAAC/1SPy2rEMAxF9/6KSzYDBS+69c8EjaM8qB+pZDcw9OOLO54MWRkdS5d7hDVX8azOALePW3sA4e/KWvQ5AX6vDsPnYMqTWpA6tMEeW1mtXyktPNl8V5YfFntk+ZpDPgwQtsJCYdTCew/0oWphGXfJ8xbYYRj++eu8r1n4HCOlSR1+exOcrINZcnToBTpLFNmdafb6eTF+oavuRfnxGBdOLFR4GiMXmqhQ27wLJb86RGoyBsiyOFTlVk14z+8K5i8AAP//LFybvWcBAAA=
         image: quay-proxy.ci.openshift.org/openshift/ci:ci_ci-operator_latest
         imagePullPolicy: Always
         name: ""
+        ports:
+        - containerPort: 8080
+          name: http
         resources:
           requests:
             cpu: 10m

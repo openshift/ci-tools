@@ -17,6 +17,10 @@ spec:
     env:
     - name: CLUSTER_TYPE
       value: alibabacloud
+    - name: HTTP_SERVER_IP
+      valueFrom:
+        fieldRef:
+          fieldPath: status.podIP
     - name: JOB_NAME_SAFE
       value: template1
     - name: TEST_COMMAND
@@ -25,6 +29,9 @@ spec:
     image: quay-proxy.ci.openshift.org/openshift/ci:ci_ci-operator_latest
     imagePullPolicy: Always
     name: ""
+    ports:
+    - containerPort: 8080
+      name: http
     resources:
       requests:
         cpu: 10m

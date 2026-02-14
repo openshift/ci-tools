@@ -181,6 +181,19 @@ func addVolumeMount(container *corev1.Container, wantMount corev1.VolumeMount) e
 	return nil
 }
 
+func addPort(c *corev1.Container, name string, port int32) {
+	for i := range c.Ports {
+		p := &c.Ports[i]
+		if p.Name == name || p.ContainerPort == port {
+			return
+		}
+	}
+	c.Ports = append(c.Ports, corev1.ContainerPort{
+		Name:          name,
+		ContainerPort: port,
+	})
+}
+
 func makeSecretAddingMutator(secretName string) PodSpecMutator {
 	return func(spec *corev1.PodSpec) error {
 		safeName := strings.ReplaceAll(secretName, ".", "-")
@@ -460,6 +473,15 @@ var (
 		MountPath: "/etc/boskos",
 		ReadOnly:  true,
 	}
+
+	smallHTTPServerEnv = corev1.EnvVar{
+		Name: "HTTP_SERVER_IP",
+		ValueFrom: &corev1.EnvVarSource{
+			FieldRef: &corev1.ObjectFieldSelector{
+				FieldPath: "status.podIP",
+			},
+		},
+	}
 )
 
 // LeaseClient configures ci-operator to be able to interact with Boskos (lease
@@ -477,6 +499,14 @@ func LeaseClient() PodSpecMutator {
 		return nil
 	}
 
+}
+
+func HTTPServer() PodSpecMutator {
+	return func(spec *corev1.PodSpec) error {
+		container := &spec.Containers[0]
+		addPort(container, "http", cioperatorapi.CIOperatorHTTPServerPort)
+		return addEnvVar(container, smallHTTPServerEnv)
+	}
 }
 
 var (

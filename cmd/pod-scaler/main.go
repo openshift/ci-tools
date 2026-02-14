@@ -16,6 +16,7 @@ import (
 
 	"k8s.io/apimachinery/pkg/api/resource"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
+	"k8s.io/client-go/kubernetes"
 	"k8s.io/client-go/transport"
 	controllerruntime "sigs.k8s.io/controller-runtime"
 	prowConfig "sigs.k8s.io/prow/pkg/config"
@@ -273,12 +274,16 @@ func mainAdmission(opts *options, cache Cache) {
 	if err != nil {
 		logrus.WithError(err).Fatal("Failed to construct client.")
 	}
+	kubeClient, err := kubernetes.NewForConfig(restConfig)
+	if err != nil {
+		logrus.WithError(err).Fatal("Failed to create Kubernetes client.")
+	}
 	reporter, err := opts.resultsOptions.PodScalerReporter()
 	if err != nil {
 		logrus.WithError(err).Fatal("Failed to create pod-scaler reporter.")
 	}
 
-	go admit(opts.port, opts.instrumentationOptions.HealthPort, opts.certDir, client, loaders(cache), opts.mutateResourceLimits, opts.cpuCap, opts.memoryCap, opts.cpuPriorityScheduling, opts.percentageMeasured, opts.measuredPodCPUIncrease, reporter)
+	go admit(opts.port, opts.instrumentationOptions.HealthPort, opts.certDir, client, kubeClient, loaders(cache), opts.mutateResourceLimits, opts.cpuCap, opts.memoryCap, opts.cpuPriorityScheduling, opts.percentageMeasured, opts.measuredPodCPUIncrease, reporter)
 }
 
 func loaders(cache Cache) map[string][]*cacheReloader {

@@ -1876,7 +1876,38 @@ func TestFromConfig(t *testing.T) {
 				params.Add(k, func() (string, error) { return v, nil })
 			}
 			graphConf := FromConfigStatic(&tc.config)
-			configSteps, post, err := fromConfig(context.Background(), &tc.config, &graphConf, &jobSpec, tc.templates, tc.paramFiles, tc.promote, client, buildClient, templateClient, podClient, leaseClient, hiveClient, httpClient, tc.requiredTargets, cloneAuthConfig, pullSecret, pushSecret, params, &secrets.DynamicCensor{}, api.ServiceDomainAPPCI, "", nil, map[string]*configresolver.IntegratedStream{}, tc.injectedTest, false, nil, tc.skippedImages)
+			cfg := &Config{
+				Clients: Clients{
+					kubeClient:     client,
+					buildClient:    buildClient,
+					templateClient: templateClient,
+					podClient:      podClient,
+					LeaseClient:    leaseClient,
+					hiveClient:     hiveClient,
+					httpClient:     httpClient,
+				},
+				CIConfig:                    &tc.config,
+				GraphConf:                   &graphConf,
+				JobSpec:                     &jobSpec,
+				Templates:                   tc.templates,
+				ParamFile:                   tc.paramFiles,
+				Promote:                     tc.promote,
+				RequiredTargets:             tc.requiredTargets,
+				CloneAuthConfig:             cloneAuthConfig,
+				PullSecret:                  pullSecret,
+				PushSecret:                  pushSecret,
+				params:                      params,
+				Censor:                      &secrets.DynamicCensor{},
+				NodeName:                    api.ServiceDomainAPPCI,
+				TargetAdditionalSuffix:      "",
+				NodeArchitectures:           nil,
+				IntegratedStreams:           map[string]*configresolver.IntegratedStream{},
+				InjectedTest:                tc.injectedTest,
+				EnableSecretsStoreCSIDriver: false,
+				MetricsAgent:                nil,
+				SkippedImages:               tc.skippedImages,
+			}
+			configSteps, post, err := fromConfig(context.Background(), cfg)
 			if diff := cmp.Diff(tc.expectedErr, err); diff != "" {
 				t.Errorf("unexpected error: %v", diff)
 			}

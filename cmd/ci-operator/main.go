@@ -756,6 +756,32 @@ func (o *options) Complete() error {
 	return overrideTestStepDependencyParams(o)
 }
 
+func (o *options) ToGraphConfig() *defaults.Config {
+	return &defaults.Config{
+		CIConfig:                    o.configSpec,
+		GraphConf:                   &o.graphConfig,
+		JobSpec:                     o.jobSpec,
+		Templates:                   o.templates,
+		ParamFile:                   o.writeParams,
+		Promote:                     o.promote,
+		ClusterConfig:               o.clusterConfig,
+		PodPendingTimeout:           o.podPendingTimeout,
+		RequiredTargets:             o.targets.values,
+		CloneAuthConfig:             o.cloneAuthConfig,
+		PullSecret:                  o.pullSecret,
+		PushSecret:                  o.pushSecret,
+		Censor:                      o.censor,
+		HiveKubeconfig:              o.hiveKubeconfig,
+		NodeName:                    o.nodeName,
+		TargetAdditionalSuffix:      o.targetAdditionalSuffix,
+		ManifestToolDockerCfg:       o.manifestToolDockerCfg,
+		LocalRegistryDNS:            o.localRegistryDNS,
+		EnableSecretsStoreCSIDriver: o.enableSecretsStoreCSIDriver,
+		MetricsAgent:                o.metricsAgent,
+		SkippedImages:               o.skippedImages,
+	}
+}
+
 func parseKeyValParams(input []string, paramType string) (map[string]string, error) {
 	var validationErrors []error
 	params := make(map[string]string)
@@ -956,11 +982,13 @@ func (o *options) Run() []error {
 		return []error{fmt.Errorf("could not resolve the node architectures: %w", err)}
 	}
 
-	injectedTest := o.injectTest != ""
+	cfg := o.ToGraphConfig()
+	cfg.LeaseClient = leaseClient
+	cfg.NodeArchitectures = nodeArchitectures
+	cfg.IntegratedStreams = streams
+	cfg.InjectedTest = o.injectTest != ""
 	// load the graph from the configuration
-	buildSteps, promotionSteps, err := defaults.FromConfig(ctx, o.configSpec, &o.graphConfig, o.jobSpec, o.templates, o.writeParams, o.promote, o.clusterConfig,
-		o.podPendingTimeout, leaseClient, o.targets.values, o.cloneAuthConfig, o.pullSecret, o.pushSecret, o.censor, o.hiveKubeconfig,
-		o.nodeName, nodeArchitectures, o.targetAdditionalSuffix, o.manifestToolDockerCfg, o.localRegistryDNS, streams, injectedTest, o.enableSecretsStoreCSIDriver, o.metricsAgent, o.skippedImages)
+	buildSteps, promotionSteps, err := defaults.FromConfig(ctx, cfg)
 	if err != nil {
 		return []error{results.ForReason("defaulting_config").WithError(err).Errorf("failed to generate steps from config: %v", err)}
 	}

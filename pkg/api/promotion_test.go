@@ -199,7 +199,7 @@ func TestQuayCombinedMirrorFunc(t *testing.T) {
 			expected: map[string]string{
 				"quay.io/openshift/ci:ocp_4.22_ovn-kubernetes":                      "registry.build02.ci.openshift.org/ci-op-abc/pipeline@sha256:abc123",
 				"quay.io/openshift/ci:20241024102030_prune_ocp_4.22_ovn-kubernetes": "quay.io/openshift/ci:ocp_4.22_ovn-kubernetes",
-				"ocp/4.22-quay:ovn-kubernetes":                                      "quay-proxy.ci.openshift.org/openshift/ci:ocp_4.22_ovn-kubernetes",
+				"ocp/4.22:ovn-kubernetes":                                           "quay-proxy.ci.openshift.org/openshift/ci:ocp_4.22_ovn-kubernetes",
 			},
 		},
 		{
@@ -215,7 +215,7 @@ func TestQuayCombinedMirrorFunc(t *testing.T) {
 			expected: map[string]string{
 				"quay.io/openshift/ci:ocp__ovn-kubernetes":                      "registry.build02.ci.openshift.org/ci-op-abc/pipeline@sha256:def456",
 				"quay.io/openshift/ci:20241024103000_prune_ocp__ovn-kubernetes": "quay.io/openshift/ci:ocp__ovn-kubernetes",
-				"ocp/ovn-kubernetes-quay:ovn-kubernetes":                        "quay-proxy.ci.openshift.org/openshift/ci:ocp__ovn-kubernetes",
+				"ocp/ovn-kubernetes:ovn-kubernetes":                             "quay-proxy.ci.openshift.org/openshift/ci:ocp__ovn-kubernetes",
 			},
 		},
 		{
@@ -229,7 +229,7 @@ func TestQuayCombinedMirrorFunc(t *testing.T) {
 			},
 			time: "",
 			expected: map[string]string{
-				"ocp/4.22-quay:installer": "quay-proxy.ci.openshift.org/openshift/ci:ocp_4.22_installer",
+				"ocp/4.22:installer": "quay-proxy.ci.openshift.org/openshift/ci:ocp_4.22_installer",
 			},
 		},
 		{
@@ -245,7 +245,7 @@ func TestQuayCombinedMirrorFunc(t *testing.T) {
 			expected: map[string]string{
 				"quay.io/openshift/ci:ocp_4.20_cluster-api":                      "registry.build02.ci.openshift.org/ci-op-abc/pipeline@sha256:111222",
 				"quay.io/openshift/ci:20241024104500_prune_ocp_4.20_cluster-api": "quay.io/openshift/ci:ocp_4.20_cluster-api",
-				"ocp/4.20-quay:cluster-api":                                      "quay-proxy.ci.openshift.org/openshift/ci:ocp_4.20_cluster-api",
+				"ocp/4.20:cluster-api":                                           "quay-proxy.ci.openshift.org/openshift/ci:ocp_4.20_cluster-api",
 			},
 		},
 		{
@@ -261,7 +261,7 @@ func TestQuayCombinedMirrorFunc(t *testing.T) {
 			expected: map[string]string{
 				"quay.io/openshift/ci:ocp_release_payload_images":                      "registry.build02.ci.openshift.org/ci-op-abc/pipeline@sha256:abc123",
 				"quay.io/openshift/ci:20241024102030_prune_ocp_release_payload_images": "quay.io/openshift/ci:ocp_release_payload_images",
-				"ocp/release-quay:payload_images":                                      "quay-proxy.ci.openshift.org/openshift/ci:ocp_release_payload_images",
+				"ocp/release:payload_images":                                           "quay-proxy.ci.openshift.org/openshift/ci:ocp_release_payload_images",
 			},
 		},
 		{
@@ -277,7 +277,7 @@ func TestQuayCombinedMirrorFunc(t *testing.T) {
 			expected: map[string]string{
 				"quay.io/openshift/ci:ocp__ci_a_latest":                      "registry.build02.ci.openshift.org/ci-op-abc/pipeline@sha256:def456",
 				"quay.io/openshift/ci:20241024103000_prune_ocp__ci_a_latest": "quay.io/openshift/ci:ocp__ci_a_latest",
-				"ocp/ovn-kubernetes-quay:ci_a_latest":                        "quay-proxy.ci.openshift.org/openshift/ci:ocp__ci_a_latest",
+				"ocp/ovn-kubernetes:ci_a_latest":                             "quay-proxy.ci.openshift.org/openshift/ci:ocp__ci_a_latest",
 			},
 		},
 	}

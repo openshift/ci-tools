@@ -743,8 +743,8 @@ func TestGetPromotionPod(t *testing.T) {
 				"quay.io/openshift/ci:20240603235401_prune_ci_c_latest": "quay.io/openshift/ci:ci_c_latest",
 				"quay.io/openshift/ci:ci_a_latest":                      "registry.build02.ci.openshift.org/ci-op-y2n8rsh3/pipeline@sha256:bbb",
 				"quay.io/openshift/ci:ci_c_latest":                      "registry.build02.ci.openshift.org/ci-op-y2n8rsh3/pipeline@sha256:ddd",
-				"ci/ci-quay:${component}":                               "quay-proxy.ci.openshift.org/openshift/ci:ci_a_latest",
-				"ci/${component}-quay:c":                                "quay-proxy.ci.openshift.org/openshift/ci:ci_c_latest",
+				"ci/ci:${component}":                                    "quay-proxy.ci.openshift.org/openshift/ci:ci_a_latest",
+				"ci/${component}:c":                                     "quay-proxy.ci.openshift.org/openshift/ci:ci_c_latest",
 			},
 			namespace: "ci-op-9bdij1f6",
 		},
@@ -759,9 +759,9 @@ func TestGetPromotionPod(t *testing.T) {
 				"quay.io/openshift/ci:ocp_4.21_ovn-kubernetes":                        "registry.build02.ci.openshift.org/ci-op-y2n8rsh3/pipeline@sha256:aaa",
 				"quay.io/openshift/ci:ocp_4.21_ovn-kubernetes-base":                   "registry.build02.ci.openshift.org/ci-op-y2n8rsh3/pipeline@sha256:bbb",
 				"quay.io/openshift/ci:ocp_4.21_ovn-kubernetes-microshift":             "registry.build02.ci.openshift.org/ci-op-y2n8rsh3/pipeline@sha256:ccc",
-				"ocp/4.21-quay:ovn-kubernetes":                                        "quay-proxy.ci.openshift.org/openshift/ci:ocp_4.21_ovn-kubernetes",
-				"ocp/4.21-quay:ovn-kubernetes-base":                                   "quay-proxy.ci.openshift.org/openshift/ci:ocp_4.21_ovn-kubernetes-base",
-				"ocp/4.21-quay:ovn-kubernetes-microshift":                             "quay-proxy.ci.openshift.org/openshift/ci:ocp_4.21_ovn-kubernetes-microshift",
+				"ocp/4.21:ovn-kubernetes":                                             "quay-proxy.ci.openshift.org/openshift/ci:ocp_4.21_ovn-kubernetes",
+				"ocp/4.21:ovn-kubernetes-base":                                        "quay-proxy.ci.openshift.org/openshift/ci:ocp_4.21_ovn-kubernetes-base",
+				"ocp/4.21:ovn-kubernetes-microshift":                                  "quay-proxy.ci.openshift.org/openshift/ci:ocp_4.21_ovn-kubernetes-microshift",
 			},
 			namespace: "ci-op-9bdij1f6",
 		},
@@ -1008,10 +1008,10 @@ func TestGetImageMirror(t *testing.T) {
 				imageMirror[target] = proxyTarget
 			},
 			targetNameFunc: func(registry string, config api.PromotionTarget) string {
-				return fmt.Sprintf("%s/%s/%s-quay:${component}", registry, config.Namespace, config.Name)
+				return fmt.Sprintf("%s/%s/%s:${component}", registry, config.Namespace, config.Name)
 			},
 			expected: map[string]string{
-				"registry.ci.openshift.org/ocp/4.22-quay:vertical-pod-autoscaler": "quay-proxy.ci.openshift.org/openshift/ci:ocp_4.22_vertical-pod-autoscaler",
+				"registry.ci.openshift.org/ocp/4.22:vertical-pod-autoscaler": "quay-proxy.ci.openshift.org/openshift/ci:ocp_4.22_vertical-pod-autoscaler",
 			},
 		},
 	}

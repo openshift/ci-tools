@@ -526,6 +526,7 @@ func TestDetermineJobRuns(t *testing.T) {
 					AdditionalPRs: []github.PullRequest{
 						{
 							Base: github.PullRequestBranch{
+								Ref: "",
 								Repo: github.Repo{
 									Owner: github.User{Login: "openshift"},
 									Name:  "ci-tools",
@@ -556,6 +557,7 @@ func TestDetermineJobRuns(t *testing.T) {
 					AdditionalPRs: []github.PullRequest{
 						{
 							Base: github.PullRequestBranch{
+								Ref: "",
 								Repo: github.Repo{
 									Owner: github.User{Login: "openshift"},
 									Name:  "ci-tools",

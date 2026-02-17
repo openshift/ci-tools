@@ -26,7 +26,6 @@ import (
 	"github.com/openshift/api/image/docker10"
 	imagev1 "github.com/openshift/api/image/v1"
 	buildclientset "github.com/openshift/client-go/build/clientset/versioned/typed/build/v1"
-	templateclientset "github.com/openshift/client-go/template/clientset/versioned/typed/template/v1"
 
 	"github.com/openshift/ci-tools/pkg/api"
 	"github.com/openshift/ci-tools/pkg/dockerfile"
@@ -35,7 +34,6 @@ import (
 	"github.com/openshift/ci-tools/pkg/release/official"
 	"github.com/openshift/ci-tools/pkg/results"
 	"github.com/openshift/ci-tools/pkg/steps"
-	"github.com/openshift/ci-tools/pkg/steps/clusterinstall"
 	"github.com/openshift/ci-tools/pkg/steps/loggingclient"
 	"github.com/openshift/ci-tools/pkg/steps/multi_stage"
 	releasesteps "github.com/openshift/ci-tools/pkg/steps/release"
@@ -64,12 +62,6 @@ func FromConfig(ctx context.Context, cfg *Config) ([]api.Step, []api.Step, error
 	}
 	buildClient := steps.NewBuildClient(client, buildGetter.RESTClient(), cfg.NodeArchitectures, cfg.ManifestToolDockerCfg, cfg.LocalRegistryDNS, cfg.MetricsAgent)
 
-	templateGetter, err := templateclientset.NewForConfig(cfg.ClusterConfig)
-	if err != nil {
-		return nil, nil, fmt.Errorf("could not get template client for cluster config: %w", err)
-	}
-	templateClient := steps.NewTemplateClient(client, templateGetter.RESTClient())
-
 	coreGetter, err := coreclientset.NewForConfig(cfg.ClusterConfig)
 	if err != nil {
 		return nil, nil, fmt.Errorf("could not get core client for cluster config: %w", err)
@@ -89,7 +81,6 @@ func FromConfig(ctx context.Context, cfg *Config) ([]api.Step, []api.Step, error
 
 	cfg.kubeClient = client
 	cfg.buildClient = buildClient
-	cfg.templateClient = templateClient
 	cfg.podClient = podClient
 	cfg.hiveClient = hiveClient
 	cfg.httpClient = httpClient.StandardClient()
@@ -291,34 +282,6 @@ func fromConfig(ctx context.Context, cfg *Config) ([]api.Step, []api.Step, error
 		overridableSteps = append(overridableSteps, step)
 	}
 
-	for _, template := range cfg.Templates {
-		step := steps.TemplateExecutionStep(template, cfg.params, cfg.podClient, cfg.templateClient, cfg.JobSpec, cfg.CIConfig.Resources)
-		var hasClusterType, hasUseLease bool
-		for _, p := range template.Parameters {
-			hasClusterType = hasClusterType || p.Name == "CLUSTER_TYPE"
-			hasUseLease = hasUseLease || p.Name == "USE_LEASE_CLIENT"
-			if hasClusterType && hasUseLease {
-				clusterType, err := cfg.params.Get("CLUSTER_TYPE")
-				if err != nil {
-					return nil, nil, fmt.Errorf("failed to get \"CLUSTER_TYPE\" parameter: %w", err)
-				}
-				lease, err := api.LeaseTypeFromClusterType(clusterType)
-				if err != nil {
-					return nil, nil, fmt.Errorf("cannot resolve lease type from cluster type: %w", err)
-				}
-				leases := []api.StepLease{{
-					ResourceType: lease,
-					Env:          api.DefaultLeaseEnv,
-					Count:        1,
-				}}
-				step = steps.LeaseStep(cfg.LeaseClient, leases, step, cfg.JobSpec.Namespace, cfg.MetricsAgent, cfg.kubeClient, cfg.ClusterProfileGetter)
-				break
-			}
-		}
-		buildSteps = append(buildSteps, step)
-		addProvidesForStep(step, cfg.params)
-	}
-
 	if len(cfg.ParamFile) > 0 {
 		step := steps.WriteParametersStep(cfg.params, cfg.ParamFile)
 		buildSteps = append(buildSteps, step)
@@ -422,23 +385,6 @@ func stepForTest(cfg *Config, inputImages inputImageSet, c *api.TestStepConfigur
 		ret = append(ret, step)
 		ret = append(ret, stepsForStepImages(cfg.kubeClient, cfg.JobSpec, inputImages, test, imageConfigs)...)
 		return ret, nil
-	}
-	if test := c.OpenshiftInstallerClusterTestConfiguration; test != nil {
-		if !test.Upgrade {
-			return nil, nil
-		}
-		params := api.NewDeferredParameters(cfg.params)
-		step, err := clusterinstall.E2ETestStep(*c.OpenshiftInstallerClusterTestConfiguration, *c, params, cfg.podClient, cfg.templateClient, cfg.JobSpec, cfg.CIConfig.Resources)
-		if err != nil {
-			return nil, fmt.Errorf("unable to create end to end test step: %w", err)
-		}
-		step = steps.LeaseStep(cfg.LeaseClient, []api.StepLease{{
-			ResourceType: test.ClusterProfile.LeaseType(),
-			Env:          api.DefaultLeaseEnv,
-			Count:        1,
-		}}, step, cfg.JobSpec.Namespace, cfg.MetricsAgent, cfg.kubeClient, cfg.ClusterProfileGetter)
-		addProvidesForStep(step, params)
-		return []api.Step{step}, nil
 	}
 	step := steps.TestStep(*c, cfg.CIConfig.Resources, cfg.podClient, cfg.JobSpec, cfg.NodeName)
 	if c.ClusterClaim != nil {
@@ -861,7 +807,7 @@ func FromConfigStatic(config *api.ReleaseBuildConfiguration) api.GraphConfigurat
 
 	for i := range config.Tests {
 		test := &config.Tests[i]
-		if test.ContainerTestConfiguration != nil || test.MultiStageTestConfigurationLiteral != nil || (test.OpenshiftInstallerClusterTestConfiguration != nil && test.OpenshiftInstallerClusterTestConfiguration.Upgrade) {
+		if test.ContainerTestConfiguration != nil || test.MultiStageTestConfigurationLiteral != nil {
 			if test.Secret != nil {
 				test.Secrets = append(test.Secrets, test.Secret)
 			}

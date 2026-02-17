@@ -201,42 +201,6 @@ tests:
     verify -k
   container:
     from: bin
-- as: e2e-aws
-  commands: TEST_SUITE=openshift/conformance/parallel run-tests
-  openshift_installer:
-    cluster_profile: aws
-- as: e2e-aws-all
-  commands: TEST_SUITE=openshift/conformance run-tests
-  openshift_installer:
-    cluster_profile: aws
-- as: e2e-aws-builds
-  commands: TEST_SUITE=openshift/build run-tests
-  openshift_installer:
-    cluster_profile: aws
-- as: e2e-aws-image-ecosystem
-  commands: TEST_SUITE=openshift/image-ecosystem run-tests
-  openshift_installer:
-    cluster_profile: aws
-- as: e2e-aws-image-registry
-  commands: TEST_SUITE=openshift/image-registry run-tests
-  openshift_installer:
-    cluster_profile: aws
-- as: e2e-aws-serial
-  commands: TEST_SUITE=openshift/conformance/serial run-tests
-  openshift_installer:
-    cluster_profile: aws
-- as: launch-aws
-  commands: sleep 7200 & wait
-  openshift_installer:
-    cluster_profile: aws
-- as: e2e-upi-aws
-  commands: TEST_SUITE=openshift/conformance/serial run-tests
-  openshift_installer_upi:
-    cluster_profile: aws
-- as: e2e-upi-src-vsphere
-  commands: make tests
-  openshift_installer_upi_src:
-    cluster_profile: vsphere
 zz_generated_metadata:
   branch: ""
   org: ""

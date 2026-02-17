@@ -24,7 +24,6 @@ import (
 	"sigs.k8s.io/prow/pkg/pod-utils/downwardapi"
 
 	imageapi "github.com/openshift/api/image/v1"
-	templateapi "github.com/openshift/api/template/v1"
 	hivev1 "github.com/openshift/hive/apis/hive/v1"
 
 	"github.com/openshift/ci-tools/pkg/api"
@@ -1286,7 +1285,6 @@ func TestFromConfig(t *testing.T) {
 		}
 	}
 	buildClient := steps.NewBuildClient(client, nil, nil, "", "", nil)
-	var templateClient steps.TemplateClient
 	podClient := kubernetes.NewPodClient(client, nil, nil, 0, nil)
 
 	clusterPool := hivev1.ClusterPool{
@@ -1330,7 +1328,6 @@ func TestFromConfig(t *testing.T) {
 		refs                *prowapi.Refs
 		paramFiles          string
 		promote             bool
-		templates           []*templateapi.Template
 		env                 api.Parameters
 		params              map[string]string
 		overriddenImagesEnv map[string]string
@@ -1627,19 +1624,8 @@ func TestFromConfig(t *testing.T) {
 		name: "openshift-installer test",
 		config: api.ReleaseBuildConfiguration{
 			Tests: []api.TestStepConfiguration{{
-				As: "test",
-				OpenshiftInstallerClusterTestConfiguration: &api.OpenshiftInstallerClusterTestConfiguration{},
-			}},
-		},
-		expectedSteps: []string{"[output-images]", "[images]"},
-	}, {
-		name: "openshift-installer upgrade test",
-		config: api.ReleaseBuildConfiguration{
-			Tests: []api.TestStepConfiguration{{
-				As: "test",
-				OpenshiftInstallerClusterTestConfiguration: &api.OpenshiftInstallerClusterTestConfiguration{
-					Upgrade: true,
-				},
+				As:                                 "test",
+				MultiStageTestConfigurationLiteral: &api.MultiStageTestConfigurationLiteral{},
 			}},
 		},
 		expectedSteps: []string{"test", "[output-images]", "[images]"},
@@ -1694,29 +1680,6 @@ func TestFromConfig(t *testing.T) {
 			}},
 		},
 		expectedSteps: []string{"test", "[output-images]", "[images]"},
-	}, {
-		name: "template test",
-		templates: []*templateapi.Template{
-			{ObjectMeta: meta.ObjectMeta{Name: "template"}},
-		},
-		expectedSteps: []string{"template", "[output-images]", "[images]"},
-	}, {
-		name: "template test with lease",
-		templates: []*templateapi.Template{{
-			ObjectMeta: meta.ObjectMeta{Name: "template"},
-			Parameters: []templateapi.Parameter{
-				{Name: "USE_LEASE_CLIENT"},
-				{Name: "CLUSTER_TYPE", Required: true},
-			},
-		}},
-		params:        map[string]string{"CLUSTER_TYPE": "aws"},
-		expectedSteps: []string{"template", "[output-images]", "[images]"},
-		expectedParams: map[string]string{
-			"CLUSTER_PROFILE":          "",
-			"CLUSTER_PROFILE_SET_NAME": "",
-			"CLUSTER_TYPE":             "aws",
-			api.DefaultLeaseEnv:        "",
-		},
 	}, {
 		name:       "param files",
 		paramFiles: "param_files",
@@ -1892,32 +1855,31 @@ func TestFromConfig(t *testing.T) {
 					LeaseClient:        leaseClient,
 					kubeClient:         client,
 					buildClient:        buildClient,
-					templateClient:     templateClient,
 					podClient:          podClient,
 					hiveClient:         hiveClient,
 					httpClient:         httpClient,
 				},
-				CIConfig:               &tc.config,
-				GraphConf:              &graphConf,
-				JobSpec:                &jobSpec,
-				Templates:              tc.templates,
-				ParamFile:              tc.paramFiles,
-				Promote:                tc.promote,
-				RequiredTargets:        tc.requiredTargets,
-				CloneAuthConfig:        cloneAuthConfig,
-				PullSecret:             pullSecret,
-				PushSecret:             pushSecret,
-				params:                 params,
-				Censor:                 &secrets.DynamicCensor{},
-				NodeName:               api.ServiceDomainAPPCI,
-				TargetAdditionalSuffix: "",
-				NodeArchitectures:      nil,
-				IntegratedStreams:      map[string]*configresolver.IntegratedStream{},
-				InjectedTest:           tc.injectedTest,
-				MetricsAgent:           nil,
-				SkippedImages:          tc.skippedImages,
-				HTTPServerAddr:         "http://10.0.0.1:8080",
-				HTTPServerMux:          &http.ServeMux{},
+				CIConfig:                    &tc.config,
+				GraphConf:                   &graphConf,
+				JobSpec:                     &jobSpec,
+				ParamFile:                   tc.paramFiles,
+				Promote:                     tc.promote,
+				RequiredTargets:             tc.requiredTargets,
+				CloneAuthConfig:             cloneAuthConfig,
+				PullSecret:                  pullSecret,
+				PushSecret:                  pushSecret,
+				params:                      params,
+				Censor:                      &secrets.DynamicCensor{},
+				NodeName:                    api.ServiceDomainAPPCI,
+				TargetAdditionalSuffix:      "",
+				NodeArchitectures:           nil,
+				IntegratedStreams:           map[string]*configresolver.IntegratedStream{},
+				InjectedTest:                tc.injectedTest,
+				EnableSecretsStoreCSIDriver: false,
+				MetricsAgent:                nil,
+				SkippedImages:               tc.skippedImages,
+				HTTPServerAddr:              "http://10.0.0.1:8080",
+				HTTPServerMux:               &http.ServeMux{},
 			}
 			configSteps, post, err := fromConfig(context.Background(), cfg)
 			if diff := cmp.Diff(tc.expectedErr, err); diff != "" {

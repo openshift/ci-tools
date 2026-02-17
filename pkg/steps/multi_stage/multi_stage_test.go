@@ -23,11 +23,12 @@ var _ steps.SubStepReporter = &multiStageTestStep{}
 
 func TestRequires(t *testing.T) {
 	for _, tc := range []struct {
-		name         string
-		config       api.ReleaseBuildConfiguration
-		steps        api.MultiStageTestConfigurationLiteral
-		clusterClaim *api.ClusterClaim
-		req          []api.StepLink
+		name                      string
+		config                    api.ReleaseBuildConfiguration
+		steps                     api.MultiStageTestConfigurationLiteral
+		clusterClaim              *api.ClusterClaim
+		leaseProxyServerAvailable bool
+		req                       []api.StepLink
 	}{{
 		name: "step has a cluster profile and requires a release image, should not have ReleaseImagesLink",
 		steps: api.MultiStageTestConfigurationLiteral{
@@ -56,15 +57,16 @@ func TestRequires(t *testing.T) {
 		steps: api.MultiStageTestConfigurationLiteral{
 			Test: []api.LiteralTestStep{{From: "from-images"}},
 		},
-		req: []api.StepLink{api.InternalImageLink("from-images")},
+		req: []api.StepLink{
+			api.InternalImageLink("from-images"),
+		},
 	}, {
 		name: "step needs pipeline image, should have InternalImageLink",
 		steps: api.MultiStageTestConfigurationLiteral{
 			Test: []api.LiteralTestStep{{From: "src"}},
 		},
 		req: []api.StepLink{
-			api.InternalImageLink(
-				api.PipelineImageStreamTagReferenceSource),
+			api.InternalImageLink(api.PipelineImageStreamTagReferenceSource),
 		},
 	}, {
 		name: "step needs pipeline image explicitly, should have InternalImageLink",
@@ -72,16 +74,19 @@ func TestRequires(t *testing.T) {
 			Test: []api.LiteralTestStep{{From: "pipeline:src"}},
 		},
 		req: []api.StepLink{
-			api.InternalImageLink(
-				api.PipelineImageStreamTagReferenceSource),
+			api.InternalImageLink(api.PipelineImageStreamTagReferenceSource),
 		},
+	}, {
+		name:                      "step needs the lease proxy server",
+		leaseProxyServerAvailable: true,
+		req:                       []api.StepLink{api.LeaseProxyServerLink()},
 	}} {
 		t.Run(tc.name, func(t *testing.T) {
 			step := MultiStageTestStep(api.TestStepConfiguration{
 				As:                                 "some-e2e",
 				ClusterClaim:                       tc.clusterClaim,
 				MultiStageTestConfigurationLiteral: &tc.steps,
-			}, &tc.config, api.NewDeferredParameters(nil), nil, nil, nil, "node-name", "", nil, false)
+			}, &tc.config, api.NewDeferredParameters(nil), nil, nil, nil, "node-name", "", nil, false, tc.leaseProxyServerAvailable)
 			ret := step.Requires()
 			if len(ret) == len(tc.req) {
 				matches := true

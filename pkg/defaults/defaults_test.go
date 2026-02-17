@@ -1337,6 +1337,7 @@ func TestFromConfig(t *testing.T) {
 		injectedTest        bool
 		requiredTargets     []string
 		skippedImages       sets.Set[string]
+		enableLeaseClient   bool
 		expectedSteps       []string
 		expectedPost        []string
 		expectedParams      map[string]string
@@ -1858,6 +1859,10 @@ func TestFromConfig(t *testing.T) {
 		expectedParams: map[string]string{
 			"LOCAL_IMAGE_TOOL1": "public_docker_image_repository:tool1",
 		},
+	}, {
+		name:              "enable lease proxy server",
+		enableLeaseClient: true,
+		expectedSteps:     []string{"[output-images]", "[images]", "lease-proxy-server"},
 	}} {
 		t.Run(tc.name, func(t *testing.T) {
 			jobSpec := api.JobSpec{
@@ -1878,13 +1883,14 @@ func TestFromConfig(t *testing.T) {
 			graphConf := FromConfigStatic(&tc.config)
 			cfg := &Config{
 				Clients: Clients{
-					kubeClient:     client,
-					buildClient:    buildClient,
-					templateClient: templateClient,
-					podClient:      podClient,
-					LeaseClient:    leaseClient,
-					hiveClient:     hiveClient,
-					httpClient:     httpClient,
+					LeaseClientEnabled: tc.enableLeaseClient,
+					LeaseClient:        leaseClient,
+					kubeClient:         client,
+					buildClient:        buildClient,
+					templateClient:     templateClient,
+					podClient:          podClient,
+					hiveClient:         hiveClient,
+					httpClient:         httpClient,
 				},
 				CIConfig:                    &tc.config,
 				GraphConf:                   &graphConf,

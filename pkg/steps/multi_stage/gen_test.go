@@ -137,7 +137,7 @@ func TestGeneratePods(t *testing.T) {
 			t.Parallel()
 
 			js := jobSpec()
-			step := newMultiStageTestStep(tc.config.Tests[0], tc.config, nil, nil, &js, nil, "node-name", "", nil, false)
+			step := newMultiStageTestStep(tc.config.Tests[0], tc.config, nil, nil, &js, nil, "node-name", "", nil, false, false)
 			step.test[0].Resources = resourceRequirements
 
 			ret, _, err := step.generatePods(tc.config.Tests[0].MultiStageTestConfigurationLiteral.Test, tc.env, tc.secretVolumes, tc.secretVolumeMounts, nil)
@@ -204,7 +204,7 @@ func TestGenerateObservers(t *testing.T) {
 		},
 	}
 	jobSpec.SetNamespace("namespace")
-	step := newMultiStageTestStep(config.Tests[0], &config, nil, nil, &jobSpec, nil, "node-name", "", nil, false)
+	step := newMultiStageTestStep(config.Tests[0], &config, nil, nil, &jobSpec, nil, "node-name", "", nil, false, false)
 	ret, err := step.generateObservers(observers, nil, nil, nil)
 	if err != nil {
 		t.Fatal(err)
@@ -278,7 +278,7 @@ func TestGeneratePodsEnvironment(t *testing.T) {
 					Test:        test,
 					Environment: tc.env,
 				},
-			}, &api.ReleaseBuildConfiguration{}, nil, nil, &jobSpec, nil, "node-name", "", nil, false)
+			}, &api.ReleaseBuildConfiguration{}, nil, nil, &jobSpec, nil, "node-name", "", nil, false, false)
 			pods, _, err := step.(*multiStageTestStep).generatePods(test, nil, nil, nil, nil)
 			if err != nil {
 				t.Fatal(err)
@@ -346,7 +346,7 @@ func TestGeneratePodBestEffort(t *testing.T) {
 		},
 	}
 	jobSpec.SetNamespace("namespace")
-	step := newMultiStageTestStep(config.Tests[0], &config, nil, nil, &jobSpec, nil, "node-name", "", nil, false)
+	step := newMultiStageTestStep(config.Tests[0], &config, nil, nil, &jobSpec, nil, "node-name", "", nil, false, false)
 	_, bestEffortSteps, err := step.generatePods(config.Tests[0].MultiStageTestConfigurationLiteral.Post, nil, nil, nil, nil)
 	if err != nil {
 		t.Fatal(err)

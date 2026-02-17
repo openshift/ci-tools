@@ -756,8 +756,15 @@ func (o *options) Complete() error {
 	return overrideTestStepDependencyParams(o)
 }
 
+func (o *options) isLeaseClientAvailable() bool {
+	return o.leaseServer != "" && o.leaseServerCredentialsFile != ""
+}
+
 func (o *options) ToGraphConfig() *defaults.Config {
 	return &defaults.Config{
+		Clients: defaults.Clients{
+			LeaseClientEnabled: o.isLeaseClientAvailable(),
+		},
 		CIConfig:                    o.configSpec,
 		GraphConf:                   &o.graphConfig,
 		JobSpec:                     o.jobSpec,
@@ -961,7 +968,7 @@ func (o *options) Run() []error {
 		cancel()
 	}
 	var leaseClient *lease.Client
-	if o.leaseServer != "" && o.leaseServerCredentialsFile != "" {
+	if o.isLeaseClientAvailable() {
 		leaseClient = &o.leaseClient
 	}
 

@@ -52,11 +52,12 @@ type Config struct {
 }
 
 type Clients struct {
-	LeaseClient    *lease.Client
-	kubeClient     loggingclient.LoggingClient
-	buildClient    steps.BuildClient
-	templateClient steps.TemplateClient
-	podClient      kubernetes.PodClient
-	hiveClient     ctrlruntimeclient.WithWatch
-	httpClient     release.HTTPClient
+	LeaseClientEnabled bool
+	LeaseClient        *lease.Client
+	kubeClient         loggingclient.LoggingClient
+	buildClient        steps.BuildClient
+	templateClient     steps.TemplateClient
+	podClient          kubernetes.PodClient
+	hiveClient         ctrlruntimeclient.WithWatch
+	httpClient         release.HTTPClient
 }

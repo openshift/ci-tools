@@ -107,6 +107,7 @@ type multiStageTestStep struct {
 	nodeArchitecture            api.NodeArchitecture
 	enableSecretsStoreCSIDriver bool
 	requireNestedPodman         bool
+	leaseProxyServerAvailable   bool
 }
 
 func MultiStageTestStep(
@@ -120,8 +121,9 @@ func MultiStageTestStep(
 	targetAdditionalSuffix string,
 	cancelObservers func(context.CancelFunc),
 	enableSecretsStoreCSIDriver bool,
+	leaseProxyServerAvailable bool,
 ) api.Step {
-	return newMultiStageTestStep(testConfig, config, params, client, jobSpec, leases, nodeName, targetAdditionalSuffix, cancelObservers, enableSecretsStoreCSIDriver)
+	return newMultiStageTestStep(testConfig, config, params, client, jobSpec, leases, nodeName, targetAdditionalSuffix, cancelObservers, enableSecretsStoreCSIDriver, leaseProxyServerAvailable)
 }
 
 func newMultiStageTestStep(
@@ -135,6 +137,7 @@ func newMultiStageTestStep(
 	targetAdditionalSuffix string,
 	cancelObservers func(context.CancelFunc),
 	enableSecretsStoreCSIDriver bool,
+	leaseProxyServerAvailable bool,
 ) *multiStageTestStep {
 	ms := testConfig.MultiStageTestConfigurationLiteral
 	var flags stepFlag
@@ -165,6 +168,7 @@ func newMultiStageTestStep(
 		cancelObservers:             cancelObservers,
 		nodeArchitecture:            testConfig.NodeArchitecture,
 		enableSecretsStoreCSIDriver: enableSecretsStoreCSIDriver,
+		leaseProxyServerAvailable:   leaseProxyServerAvailable,
 	}
 	s.requireNestedPodman = stepRequiresNestedPodman(s)
 
@@ -325,6 +329,11 @@ func (s *multiStageTestStep) Requires() (ret []api.StepLink) {
 		}
 		ret = append(ret, api.ReleaseImagesLink(releaseName))
 	}
+
+	if s.leaseProxyServerAvailable {
+		ret = append(ret, api.LeaseProxyServerLink())
+	}
+
 	return
 }
 

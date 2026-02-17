@@ -31,11 +31,8 @@ import (
 	"github.com/openshift/ci-tools/pkg/dockerfile"
 	"github.com/openshift/ci-tools/pkg/kubernetes"
 	"github.com/openshift/ci-tools/pkg/labeledclient"
-	"github.com/openshift/ci-tools/pkg/lease"
-	"github.com/openshift/ci-tools/pkg/metrics"
 	"github.com/openshift/ci-tools/pkg/release/official"
 	"github.com/openshift/ci-tools/pkg/results"
-	"github.com/openshift/ci-tools/pkg/secrets"
 	"github.com/openshift/ci-tools/pkg/steps"
 	"github.com/openshift/ci-tools/pkg/steps/clusterinstall"
 	"github.com/openshift/ci-tools/pkg/steps/loggingclient"
@@ -124,9 +121,11 @@ func fromConfig(ctx context.Context, cfg *Config) ([]api.Step, []api.Step, error
 	rawSteps = append(cfg.GraphConf.Steps, rawSteps...)
 	rawSteps = append(rawSteps, stepsForImageOverrides(utils.GetOverriddenImages())...)
 
+	buildSteps = append(buildSteps, leaseProxyServerStep(cfg)...)
+
 	for _, rawStep := range rawSteps {
 		if testStep := rawStep.TestStepConfiguration; testStep != nil {
-			steps, err := stepForTest(cfg.CIConfig, cfg.params, cfg.podClient, cfg.LeaseClient, cfg.templateClient, cfg.kubeClient, cfg.hiveClient, cfg.JobSpec, inputImages, testStep, &imageConfigs, cfg.PullSecret, cfg.Censor, cfg.NodeName, cfg.TargetAdditionalSuffix, cfg.EnableSecretsStoreCSIDriver, cfg.MetricsAgent)
+			steps, err := stepForTest(cfg, inputImages, testStep, &imageConfigs)
 			if err != nil {
 				return nil, nil, err
 			}
@@ -390,72 +389,55 @@ func registryDomain(configuration *api.PromotionConfiguration) string {
 // Test steps are always leaves and often pruned.  Each one is given its own
 // copy of `params` and their values from `Provides` only affect themselves,
 // thus avoiding conflicts with other tests pre-pruning.
-func stepForTest(
-	config *api.ReleaseBuildConfiguration,
-	params *api.DeferredParameters,
-	podClient kubernetes.PodClient,
-	leaseClient *lease.Client,
-	templateClient steps.TemplateClient,
-	client loggingclient.LoggingClient,
-	hiveClient ctrlruntimeclient.WithWatch,
-	jobSpec *api.JobSpec,
-	inputImages inputImageSet,
-	c *api.TestStepConfiguration,
-	imageConfigs *[]*api.InputImageTagStepConfiguration,
-	pullSecret *coreapi.Secret,
-	censor *secrets.DynamicCensor,
-	nodeName string,
-	targetAdditionalSuffix string,
-	enableSecretsStoreCSIDriver bool,
-	metricsAgent *metrics.MetricsAgent,
+func stepForTest(cfg *Config, inputImages inputImageSet, c *api.TestStepConfiguration, imageConfigs *[]*api.InputImageTagStepConfiguration,
 ) ([]api.Step, error) {
 	if test := c.MultiStageTestConfigurationLiteral; test != nil {
 		leases := api.LeasesForTest(test)
-		ipPoolLease := api.IPPoolLeaseForTest(test, config.Metadata)
+		ipPoolLease := api.IPPoolLeaseForTest(test, cfg.CIConfig.Metadata)
 		if len(leases) != 0 || ipPoolLease.ResourceType != "" {
-			params = api.NewDeferredParameters(params)
+			cfg.params = api.NewDeferredParameters(cfg.params)
 		}
 		var ret []api.Step
-		step := multi_stage.MultiStageTestStep(*c, config, params, podClient, jobSpec, leases, nodeName, targetAdditionalSuffix, nil, enableSecretsStoreCSIDriver)
+		step := multi_stage.MultiStageTestStep(*c, cfg.CIConfig, cfg.params, cfg.podClient, cfg.JobSpec, leases, cfg.NodeName, cfg.TargetAdditionalSuffix, nil, cfg.EnableSecretsStoreCSIDriver, isLeaseProxyServerAvailable(cfg))
 		if ipPoolLease.ResourceType != "" {
-			step = steps.IPPoolStep(leaseClient, podClient, ipPoolLease, step, params, jobSpec.Namespace, metricsAgent)
+			step = steps.IPPoolStep(cfg.LeaseClient, cfg.podClient, ipPoolLease, step, cfg.params, cfg.JobSpec.Namespace, cfg.MetricsAgent)
 		}
 		if len(leases) != 0 {
-			step = steps.LeaseStep(leaseClient, leases, step, jobSpec.Namespace, metricsAgent)
+			step = steps.LeaseStep(cfg.LeaseClient, leases, step, cfg.JobSpec.Namespace, cfg.MetricsAgent)
 		}
 		if c.ClusterClaim != nil {
-			step = steps.ClusterClaimStep(c.As, c.ClusterClaim, hiveClient, client, jobSpec, step, censor)
+			step = steps.ClusterClaimStep(c.As, c.ClusterClaim, cfg.hiveClient, cfg.kubeClient, cfg.JobSpec, step, cfg.Censor)
 			name := c.ClusterClaim.ClaimRelease(c.As).ReleaseName
 			target := api.ReleaseConfiguration{Name: name}.TargetName()
 			referencePolicy := imagev1.SourceTagReferencePolicy
-			source := releasesteps.NewReleaseSourceFromClusterClaim(c.As, c.ClusterClaim, hiveClient)
-			ret = append(ret, releasesteps.ImportReleaseStep(name, nodeName, target, referencePolicy, source, false, config.Resources, podClient, jobSpec, pullSecret, nil))
+			source := releasesteps.NewReleaseSourceFromClusterClaim(c.As, c.ClusterClaim, cfg.hiveClient)
+			ret = append(ret, releasesteps.ImportReleaseStep(name, cfg.NodeName, target, referencePolicy, source, false, cfg.CIConfig.Resources, cfg.podClient, cfg.JobSpec, cfg.PullSecret, nil))
 		}
-		addProvidesForStep(step, params)
+		addProvidesForStep(step, cfg.params)
 		ret = append(ret, step)
-		ret = append(ret, stepsForStepImages(client, jobSpec, inputImages, test, imageConfigs)...)
+		ret = append(ret, stepsForStepImages(cfg.kubeClient, cfg.JobSpec, inputImages, test, imageConfigs)...)
 		return ret, nil
 	}
 	if test := c.OpenshiftInstallerClusterTestConfiguration; test != nil {
 		if !test.Upgrade {
 			return nil, nil
 		}
-		params = api.NewDeferredParameters(params)
-		step, err := clusterinstall.E2ETestStep(*c.OpenshiftInstallerClusterTestConfiguration, *c, params, podClient, templateClient, jobSpec, config.Resources)
+		cfg.params = api.NewDeferredParameters(cfg.params)
+		step, err := clusterinstall.E2ETestStep(*c.OpenshiftInstallerClusterTestConfiguration, *c, cfg.params, cfg.podClient, cfg.templateClient, cfg.JobSpec, cfg.CIConfig.Resources)
 		if err != nil {
 			return nil, fmt.Errorf("unable to create end to end test step: %w", err)
 		}
-		step = steps.LeaseStep(leaseClient, []api.StepLease{{
+		step = steps.LeaseStep(cfg.LeaseClient, []api.StepLease{{
 			ResourceType: test.ClusterProfile.LeaseType(),
 			Env:          api.DefaultLeaseEnv,
 			Count:        1,
-		}}, step, jobSpec.Namespace, metricsAgent)
-		addProvidesForStep(step, params)
+		}}, step, cfg.JobSpec.Namespace, cfg.MetricsAgent)
+		addProvidesForStep(step, cfg.params)
 		return []api.Step{step}, nil
 	}
-	step := steps.TestStep(*c, config.Resources, podClient, jobSpec, nodeName)
+	step := steps.TestStep(*c, cfg.CIConfig.Resources, cfg.podClient, cfg.JobSpec, cfg.NodeName)
 	if c.ClusterClaim != nil {
-		step = steps.ClusterClaimStep(c.As, c.ClusterClaim, hiveClient, client, jobSpec, step, censor)
+		step = steps.ClusterClaimStep(c.As, c.ClusterClaim, cfg.hiveClient, cfg.kubeClient, cfg.JobSpec, step, cfg.Censor)
 	}
 	return []api.Step{step}, nil
 }
@@ -1253,4 +1235,18 @@ func filterRequiredBinariesFromSkipped(images []api.ProjectDirectoryImageBuildSt
 		}
 	}
 	return skippedBinaries
+}
+
+func isLeaseProxyServerAvailable(cfg *Config) bool {
+	return cfg.LeaseClientEnabled
+}
+
+func leaseProxyServerStep(cfg *Config) []api.Step {
+	ret := make([]api.Step, 0, 1)
+	if !isLeaseProxyServerAvailable(cfg) {
+		return ret
+	}
+
+	logger := logrus.NewEntry(logrus.StandardLogger()).WithField("step", "lease-proxy-server")
+	return append(ret, steps.LeaseProxyStep(logger))
 }

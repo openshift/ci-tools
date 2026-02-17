@@ -282,6 +282,25 @@ func (l *rpmRepoLink) UnsatisfiableError() string {
 	return ""
 }
 
+func LeaseProxyServerLink() StepLink {
+	return &leaseProxyServerLink{}
+}
+
+type leaseProxyServerLink struct{}
+
+func (*leaseProxyServerLink) SatisfiedBy(other StepLink) bool {
+	switch other.(type) {
+	case *leaseProxyServerLink:
+		return true
+	default:
+		return false
+	}
+}
+
+func (*leaseProxyServerLink) UnsatisfiableError() string {
+	return ""
+}
+
 // ReleaseImagesLink describes the content of a stable(-foo)?
 // ImageStream in the test namespace.
 func ReleaseImagesLink(name string) StepLink {

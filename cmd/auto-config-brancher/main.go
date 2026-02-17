@@ -156,23 +156,6 @@ func main() {
 
 	steps := []step{
 		{
-			command: "/usr/bin/registry-replacer",
-			arguments: []string{
-				"--github-token-path", "/etc/github/oauth",
-				"--github-endpoint", "http://ghproxy",
-				"--config-dir", "./ci-operator/config",
-				"--registry", "./ci-operator/step-registry",
-				"--prune-unused-replacements",
-				"--prune-ocp-builder-replacements",
-				"--prune-unused-base-images",
-				"--current-release-minor=" + versionSplit[1],
-				"--ensure-correct-promotion-dockerfile-ignored-repos", "openshift/origin-aggregated-logging",
-				"--ensure-correct-promotion-dockerfile-ignored-repos", "openshift/console",
-				"--ensure-correct-promotion-dockerfile-ignored-repos", "openshift/linuxptp-daemon",
-				"--ignore-orgs", "openshift",
-			},
-		},
-		{
 			command: "/usr/bin/config-brancher",
 			arguments: func() []string {
 				args := []string{"--config-dir", "./ci-operator/config", "--current-release", o.CurrentRelease, "--skip-periodics"}

@@ -24,7 +24,6 @@ import (
 	"sigs.k8s.io/prow/pkg/pod-utils/downwardapi"
 
 	imageapi "github.com/openshift/api/image/v1"
-	templateapi "github.com/openshift/api/template/v1"
 	hivev1 "github.com/openshift/hive/apis/hive/v1"
 
 	"github.com/openshift/ci-tools/pkg/api"
@@ -1286,7 +1285,6 @@ func TestFromConfig(t *testing.T) {
 		}
 	}
 	buildClient := steps.NewBuildClient(client, nil, nil, "", "", nil)
-	var templateClient steps.TemplateClient
 	podClient := kubernetes.NewPodClient(client, nil, nil, 0, nil)
 
 	clusterPool := hivev1.ClusterPool{
@@ -1330,7 +1328,6 @@ func TestFromConfig(t *testing.T) {
 		refs                *prowapi.Refs
 		paramFiles          string
 		promote             bool
-		templates           []*templateapi.Template
 		env                 api.Parameters
 		params              map[string]string
 		overriddenImagesEnv map[string]string
@@ -1626,19 +1623,8 @@ func TestFromConfig(t *testing.T) {
 		name: "openshift-installer test",
 		config: api.ReleaseBuildConfiguration{
 			Tests: []api.TestStepConfiguration{{
-				As: "test",
-				OpenshiftInstallerClusterTestConfiguration: &api.OpenshiftInstallerClusterTestConfiguration{},
-			}},
-		},
-		expectedSteps: []string{"[output-images]", "[images]"},
-	}, {
-		name: "openshift-installer upgrade test",
-		config: api.ReleaseBuildConfiguration{
-			Tests: []api.TestStepConfiguration{{
-				As: "test",
-				OpenshiftInstallerClusterTestConfiguration: &api.OpenshiftInstallerClusterTestConfiguration{
-					Upgrade: true,
-				},
+				As:                                 "test",
+				MultiStageTestConfigurationLiteral: &api.MultiStageTestConfigurationLiteral{},
 			}},
 		},
 		expectedSteps: []string{"test", "[output-images]", "[images]"},
@@ -1693,27 +1679,6 @@ func TestFromConfig(t *testing.T) {
 			}},
 		},
 		expectedSteps: []string{"test", "[output-images]", "[images]"},
-	}, {
-		name: "template test",
-		templates: []*templateapi.Template{
-			{ObjectMeta: meta.ObjectMeta{Name: "template"}},
-		},
-		expectedSteps: []string{"template", "[output-images]", "[images]"},
-	}, {
-		name: "template test with lease",
-		templates: []*templateapi.Template{{
-			ObjectMeta: meta.ObjectMeta{Name: "template"},
-			Parameters: []templateapi.Parameter{
-				{Name: "USE_LEASE_CLIENT"},
-				{Name: "CLUSTER_TYPE", Required: true},
-			},
-		}},
-		params:        map[string]string{"CLUSTER_TYPE": "aws"},
-		expectedSteps: []string{"template", "[output-images]", "[images]"},
-		expectedParams: map[string]string{
-			"CLUSTER_TYPE":      "aws",
-			api.DefaultLeaseEnv: "",
-		},
 	}, {
 		name:       "param files",
 		paramFiles: "param_files",
@@ -1878,18 +1843,16 @@ func TestFromConfig(t *testing.T) {
 			graphConf := FromConfigStatic(&tc.config)
 			cfg := &Config{
 				Clients: Clients{
-					kubeClient:     client,
-					buildClient:    buildClient,
-					templateClient: templateClient,
-					podClient:      podClient,
-					LeaseClient:    leaseClient,
-					hiveClient:     hiveClient,
-					httpClient:     httpClient,
+					kubeClient:  client,
+					buildClient: buildClient,
+					podClient:   podClient,
+					LeaseClient: leaseClient,
+					hiveClient:  hiveClient,
+					httpClient:  httpClient,
 				},
 				CIConfig:                    &tc.config,
 				GraphConf:                   &graphConf,
 				JobSpec:                     &jobSpec,
-				Templates:                   tc.templates,
 				ParamFile:                   tc.paramFiles,
 				Promote:                     tc.promote,
 				RequiredTargets:             tc.requiredTargets,

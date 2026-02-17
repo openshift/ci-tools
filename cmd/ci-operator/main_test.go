@@ -623,42 +623,6 @@ tests:
     verify -k
   container:
     from: bin
-- as: e2e-aws
-  commands: TEST_SUITE=openshift/conformance/parallel run-tests
-  openshift_installer:
-    cluster_profile: aws
-- as: e2e-aws-all
-  commands: TEST_SUITE=openshift/conformance run-tests
-  openshift_installer:
-    cluster_profile: aws
-- as: e2e-aws-builds
-  commands: TEST_SUITE=openshift/build run-tests
-  openshift_installer:
-    cluster_profile: aws
-- as: e2e-aws-image-ecosystem
-  commands: TEST_SUITE=openshift/image-ecosystem run-tests
-  openshift_installer:
-    cluster_profile: aws
-- as: e2e-aws-image-registry
-  commands: TEST_SUITE=openshift/image-registry run-tests
-  openshift_installer:
-    cluster_profile: aws
-- as: e2e-aws-serial
-  commands: TEST_SUITE=openshift/conformance/serial run-tests
-  openshift_installer:
-    cluster_profile: aws
-- as: launch-aws
-  commands: sleep 7200 & wait
-  openshift_installer:
-    cluster_profile: aws
-- as: e2e-upi-aws
-  commands: TEST_SUITE=openshift/conformance/serial run-tests
-  openshift_installer_upi:
-    cluster_profile: aws
-- as: e2e-upi-src-vsphere
-  commands: make tests
-  openshift_installer_upi_src:
-    cluster_profile: vsphere-2
 `
 
 var parsedConfig = &api.ReleaseBuildConfiguration{
@@ -847,60 +811,6 @@ var parsedConfig = &api.ReleaseBuildConfiguration{
 		Commands: `ARTIFACT_DIR=/tmp/artifacts JUNIT_REPORT=1 KUBERNETES_SERVICE_HOST= make verify -k`,
 		ContainerTestConfiguration: &api.ContainerTestConfiguration{
 			From: "bin",
-		},
-	}, {
-		As:       "e2e-aws",
-		Commands: `TEST_SUITE=openshift/conformance/parallel run-tests`,
-		OpenshiftInstallerClusterTestConfiguration: &api.OpenshiftInstallerClusterTestConfiguration{
-			ClusterTestConfiguration: api.ClusterTestConfiguration{ClusterProfile: "aws"},
-		},
-	}, {
-		As:       "e2e-aws-all",
-		Commands: `TEST_SUITE=openshift/conformance run-tests`,
-		OpenshiftInstallerClusterTestConfiguration: &api.OpenshiftInstallerClusterTestConfiguration{
-			ClusterTestConfiguration: api.ClusterTestConfiguration{ClusterProfile: "aws"},
-		},
-	}, {
-		As:       "e2e-aws-builds",
-		Commands: `TEST_SUITE=openshift/build run-tests`,
-		OpenshiftInstallerClusterTestConfiguration: &api.OpenshiftInstallerClusterTestConfiguration{
-			ClusterTestConfiguration: api.ClusterTestConfiguration{ClusterProfile: "aws"},
-		},
-	}, {
-		As:       "e2e-aws-image-ecosystem",
-		Commands: `TEST_SUITE=openshift/image-ecosystem run-tests`,
-		OpenshiftInstallerClusterTestConfiguration: &api.OpenshiftInstallerClusterTestConfiguration{
-			ClusterTestConfiguration: api.ClusterTestConfiguration{ClusterProfile: "aws"},
-		},
-	}, {
-		As:       "e2e-aws-image-registry",
-		Commands: `TEST_SUITE=openshift/image-registry run-tests`,
-		OpenshiftInstallerClusterTestConfiguration: &api.OpenshiftInstallerClusterTestConfiguration{
-			ClusterTestConfiguration: api.ClusterTestConfiguration{ClusterProfile: "aws"},
-		},
-	}, {
-		As:       "e2e-aws-serial",
-		Commands: `TEST_SUITE=openshift/conformance/serial run-tests`,
-		OpenshiftInstallerClusterTestConfiguration: &api.OpenshiftInstallerClusterTestConfiguration{
-			ClusterTestConfiguration: api.ClusterTestConfiguration{ClusterProfile: "aws"},
-		},
-	}, {
-		As:       "launch-aws",
-		Commands: `sleep 7200 & wait`,
-		OpenshiftInstallerClusterTestConfiguration: &api.OpenshiftInstallerClusterTestConfiguration{
-			ClusterTestConfiguration: api.ClusterTestConfiguration{ClusterProfile: "aws"},
-		},
-	}, {
-		As:       "e2e-upi-aws",
-		Commands: `TEST_SUITE=openshift/conformance/serial run-tests`,
-		OpenshiftInstallerUPIClusterTestConfiguration: &api.OpenshiftInstallerUPIClusterTestConfiguration{
-			ClusterTestConfiguration: api.ClusterTestConfiguration{ClusterProfile: "aws"},
-		},
-	}, {
-		As:       "e2e-upi-src-vsphere",
-		Commands: `make tests`,
-		OpenshiftInstallerUPISrcClusterTestConfiguration: &api.OpenshiftInstallerUPISrcClusterTestConfiguration{
-			ClusterTestConfiguration: api.ClusterTestConfiguration{ClusterProfile: "vsphere-2"},
 		},
 	}},
 }

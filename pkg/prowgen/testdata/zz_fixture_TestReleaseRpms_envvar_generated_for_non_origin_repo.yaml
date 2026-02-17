@@ -3,16 +3,12 @@ containers:
   - --gcs-upload-secret=/secrets/gcs/service-account.json
   - --image-import-pull-secret=/etc/pull-secret/.dockerconfigjson
   - --report-credentials-file=/etc/report/credentials
-  - --template=/usr/local/t
+  - --target=tgt
   command:
   - ci-operator
   env:
-  - name: CLUSTER_TYPE
-    value: aws
-  - name: JOB_NAME_SAFE
-    value: t
-  - name: TEST_COMMAND
-    value: make things
+  - name: RPM_REPO_OPENSHIFT_ORIGIN
+    value: https://artifacts-rpms-openshift-origin-ci-rpms.apps.ci.l2s4.p1.openshiftapps.com/openshift-origin-v3.11/
   image: quay-proxy.ci.openshift.org/openshift/ci:ci_ci-operator_latest
   imagePullPolicy: Always
   name: ""
@@ -23,9 +19,6 @@ containers:
   - mountPath: /secrets/gcs
     name: gcs-credentials
     readOnly: true
-  - mountPath: /usr/local/t
-    name: job-definition
-    subPath: cluster-launch-installer-libvirt-e2e.yaml
   - mountPath: /secrets/manifest-tool
     name: manifest-tool-local-pusher
     readOnly: true
@@ -37,9 +30,6 @@ containers:
     readOnly: true
 serviceAccountName: ci-operator
 volumes:
-- configMap:
-    name: prow-job-cluster-launch-installer-libvirt-e2e
-  name: job-definition
 - name: manifest-tool-local-pusher
   secret:
     secretName: manifest-tool-local-pusher

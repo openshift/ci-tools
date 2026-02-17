@@ -8,8 +8,6 @@ import (
 	"k8s.io/client-go/rest"
 	ctrlruntimeclient "sigs.k8s.io/controller-runtime/pkg/client"
 
-	templateapi "github.com/openshift/api/template/v1"
-
 	"github.com/openshift/ci-tools/pkg/api"
 	"github.com/openshift/ci-tools/pkg/api/configresolver"
 	"github.com/openshift/ci-tools/pkg/kubernetes"
@@ -27,7 +25,6 @@ type Config struct {
 	CIConfig                    *api.ReleaseBuildConfiguration
 	GraphConf                   *api.GraphConfiguration
 	JobSpec                     *api.JobSpec
-	Templates                   []*templateapi.Template
 	ParamFile                   string
 	Promote                     bool
 	ClusterConfig               *rest.Config
@@ -52,11 +49,10 @@ type Config struct {
 }
 
 type Clients struct {
-	LeaseClient    *lease.Client
-	kubeClient     loggingclient.LoggingClient
-	buildClient    steps.BuildClient
-	templateClient steps.TemplateClient
-	podClient      kubernetes.PodClient
-	hiveClient     ctrlruntimeclient.WithWatch
-	httpClient     release.HTTPClient
+	LeaseClient *lease.Client
+	kubeClient  loggingclient.LoggingClient
+	buildClient steps.BuildClient
+	podClient   kubernetes.PodClient
+	hiveClient  ctrlruntimeclient.WithWatch
+	httpClient  release.HTTPClient
 }

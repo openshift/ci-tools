@@ -1001,28 +1001,6 @@ const ciOperatorReferenceYaml = "# The list of base images describe\n" +
 	"        # NodeArchitecture is the architecture for the node where the test will run.\n" +
 	"        # If set, the generated test pod will include a nodeSelector for this architecture.\n" +
 	"        node_architecture: ' '\n" +
-	"        openshift_ansible:\n" +
-	"            cluster_profile: ' '\n" +
-	"        openshift_ansible_custom:\n" +
-	"            cluster_profile: ' '\n" +
-	"        openshift_ansible_src:\n" +
-	"            cluster_profile: ' '\n" +
-	"        openshift_installer:\n" +
-	"            cluster_profile: ' '\n" +
-	"            # If upgrade is true, RELEASE_IMAGE_INITIAL will be used as\n" +
-	"            # the initial payload and the installer image from that\n" +
-	"            # will be upgraded. The `run-upgrade-tests` function will be\n" +
-	"            # available for the commands.\n" +
-	"            upgrade: true\n" +
-	"        openshift_installer_custom_test_image:\n" +
-	"            cluster_profile: ' '\n" +
-	"            # From defines the imagestreamtag that will be used to run the\n" +
-	"            # provided test command. e.g. stable:console-test\n" +
-	"            from: ' '\n" +
-	"        openshift_installer_upi:\n" +
-	"            cluster_profile: ' '\n" +
-	"        openshift_installer_upi_src:\n" +
-	"            cluster_profile: ' '\n" +
 	"        # Optional indicates that the job's status context, that is generated from the corresponding test, should not be required for merge.\n" +
 	"        optional: true\n" +
 	"        # PipelineRunIfChanged is a regex that will result in the test only running in second\n" +
@@ -1902,28 +1880,6 @@ const ciOperatorReferenceYaml = "# The list of base images describe\n" +
 	"      # NodeArchitecture is the architecture for the node where the test will run.\n" +
 	"      # If set, the generated test pod will include a nodeSelector for this architecture.\n" +
 	"      node_architecture: ' '\n" +
-	"      openshift_ansible:\n" +
-	"        cluster_profile: ' '\n" +
-	"      openshift_ansible_custom:\n" +
-	"        cluster_profile: ' '\n" +
-	"      openshift_ansible_src:\n" +
-	"        cluster_profile: ' '\n" +
-	"      openshift_installer:\n" +
-	"        cluster_profile: ' '\n" +
-	"        # If upgrade is true, RELEASE_IMAGE_INITIAL will be used as\n" +
-	"        # the initial payload and the installer image from that\n" +
-	"        # will be upgraded. The `run-upgrade-tests` function will be\n" +
-	"        # available for the commands.\n" +
-	"        upgrade: true\n" +
-	"      openshift_installer_custom_test_image:\n" +
-	"        cluster_profile: ' '\n" +
-	"        # From defines the imagestreamtag that will be used to run the\n" +
-	"        # provided test command. e.g. stable:console-test\n" +
-	"        from: ' '\n" +
-	"      openshift_installer_upi:\n" +
-	"        cluster_profile: ' '\n" +
-	"      openshift_installer_upi_src:\n" +
-	"        cluster_profile: ' '\n" +
 	"      # Optional indicates that the job's status context, that is generated from the corresponding test, should not be required for merge.\n" +
 	"      optional: true\n" +
 	"      # PipelineRunIfChanged is a regex that will result in the test only running in second\n" +

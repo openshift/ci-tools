@@ -452,25 +452,6 @@ func TestGenerateJobs(t *testing.T) {
 				Branch: "branch",
 			}},
 		}, {
-			id: "template test",
-			config: &ciop.ReleaseBuildConfiguration{
-				InputConfiguration: ciop.InputConfiguration{
-					ReleaseTagConfiguration: &ciop.ReleaseTagConfiguration{Name: "origin-v4.0"}},
-				Tests: []ciop.TestStepConfiguration{
-					{
-						As: "oTeste",
-						OpenshiftAnsibleClusterTestConfiguration: &ciop.OpenshiftAnsibleClusterTestConfiguration{
-							ClusterTestConfiguration: ciop.ClusterTestConfiguration{ClusterProfile: "gcp"},
-						},
-					},
-				},
-			},
-			repoInfo: &ProwgenInfo{Metadata: ciop.Metadata{
-				Org:    "organization",
-				Repo:   "repository",
-				Branch: "branch",
-			}},
-		}, {
 			id: "Promotion configuration causes --promote job",
 			config: &ciop.ReleaseBuildConfiguration{
 				Tests:                  []ciop.TestStepConfiguration{},

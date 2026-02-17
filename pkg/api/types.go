@@ -866,16 +866,9 @@ type TestStepConfiguration struct {
 	ShardCount *int `json:"shard_count,omitempty"`
 
 	// Only one of the following can be not-null.
-	ContainerTestConfiguration                                *ContainerTestConfiguration                                `json:"container,omitempty"`
-	MultiStageTestConfiguration                               *MultiStageTestConfiguration                               `json:"steps,omitempty"`
-	MultiStageTestConfigurationLiteral                        *MultiStageTestConfigurationLiteral                        `json:"literal_steps,omitempty"`
-	OpenshiftAnsibleClusterTestConfiguration                  *OpenshiftAnsibleClusterTestConfiguration                  `json:"openshift_ansible,omitempty"`
-	OpenshiftAnsibleSrcClusterTestConfiguration               *OpenshiftAnsibleSrcClusterTestConfiguration               `json:"openshift_ansible_src,omitempty"`
-	OpenshiftAnsibleCustomClusterTestConfiguration            *OpenshiftAnsibleCustomClusterTestConfiguration            `json:"openshift_ansible_custom,omitempty"`
-	OpenshiftInstallerClusterTestConfiguration                *OpenshiftInstallerClusterTestConfiguration                `json:"openshift_installer,omitempty"`
-	OpenshiftInstallerUPIClusterTestConfiguration             *OpenshiftInstallerUPIClusterTestConfiguration             `json:"openshift_installer_upi,omitempty"`
-	OpenshiftInstallerUPISrcClusterTestConfiguration          *OpenshiftInstallerUPISrcClusterTestConfiguration          `json:"openshift_installer_upi_src,omitempty"`
-	OpenshiftInstallerCustomTestImageClusterTestConfiguration *OpenshiftInstallerCustomTestImageClusterTestConfiguration `json:"openshift_installer_custom_test_image,omitempty"`
+	ContainerTestConfiguration         *ContainerTestConfiguration         `json:"container,omitempty"`
+	MultiStageTestConfiguration        *MultiStageTestConfiguration        `json:"steps,omitempty"`
+	MultiStageTestConfigurationLiteral *MultiStageTestConfigurationLiteral `json:"literal_steps,omitempty"`
 }
 
 func (config TestStepConfiguration) TargetName() string {
@@ -893,8 +886,6 @@ func (config TestStepConfiguration) GetClusterProfileName() string {
 		return config.MultiStageTestConfigurationLiteral.ClusterProfile.Name()
 	case config.MultiStageTestConfiguration != nil:
 		return config.MultiStageTestConfiguration.ClusterProfile.Name()
-	case config.OpenshiftInstallerClusterTestConfiguration != nil:
-		return config.OpenshiftInstallerClusterTestConfiguration.ClusterProfile.Name()
 	default:
 		return ""
 	}
@@ -2497,99 +2488,6 @@ func LeaseTypeFromClusterType(t string) (string, error) {
 // a cluster and runs a command in it.
 type ClusterTestConfiguration struct {
 	ClusterProfile ClusterProfile `json:"cluster_profile"`
-}
-
-// OpenshiftAnsibleClusterTestConfiguration describes a test
-// that provisions a cluster using openshift-ansible and runs
-// conformance tests.
-type OpenshiftAnsibleClusterTestConfiguration struct {
-	ClusterTestConfiguration `json:",inline"`
-}
-
-// OpenshiftAnsibleSrcClusterTestConfiguration describes a
-// test that provisions a cluster using openshift-ansible and
-// executes a command in the `src` image.
-type OpenshiftAnsibleSrcClusterTestConfiguration struct {
-	ClusterTestConfiguration `json:",inline"`
-}
-
-// OpenshiftAnsibleCustomClusterTestConfiguration describes a
-// test that provisions a cluster using openshift-ansible's
-// custom provisioner, and runs conformance tests.
-type OpenshiftAnsibleCustomClusterTestConfiguration struct {
-	ClusterTestConfiguration `json:",inline"`
-}
-
-// OpenshiftAnsible40ClusterTestConfiguration describes a
-// test that provisions a cluster using new installer and openshift-ansible
-type OpenshiftAnsible40ClusterTestConfiguration struct {
-	ClusterTestConfiguration `json:",inline"`
-}
-
-// OpenshiftInstallerClusterTestConfiguration describes a test
-// that provisions a cluster using openshift-installer and runs
-// conformance tests.
-type OpenshiftInstallerClusterTestConfiguration struct {
-	ClusterTestConfiguration `json:",inline"`
-	// If upgrade is true, RELEASE_IMAGE_INITIAL will be used as
-	// the initial payload and the installer image from that
-	// will be upgraded. The `run-upgrade-tests` function will be
-	// available for the commands.
-	Upgrade bool `json:"upgrade,omitempty"`
-}
-
-// OpenshiftInstallerSrcClusterTestConfiguration describes a
-// test that provisions a cluster using openshift-installer and
-// executes a command in the `src` image.
-type OpenshiftInstallerSrcClusterTestConfiguration struct {
-	ClusterTestConfiguration `json:",inline"`
-}
-
-// OpenshiftInstallerConsoleClusterTestConfiguration describes a
-// test that provisions a cluster using openshift-installer and
-// executes a command in the `console-test` image.
-type OpenshiftInstallerConsoleClusterTestConfiguration struct {
-	ClusterTestConfiguration `json:",inline"`
-}
-
-// OpenshiftInstallerUPIClusterTestConfiguration describes a
-// test that provisions machines using installer-upi image and
-// installs the cluster using UPI flow.
-type OpenshiftInstallerUPIClusterTestConfiguration struct {
-	ClusterTestConfiguration `json:",inline"`
-}
-
-// OpenshiftInstallerUPISrcClusterTestConfiguration describes a
-// test that provisions machines using installer-upi image and
-// installs the cluster using UPI flow. Tests will be run
-// akin to the OpenshiftInstallerSrcClusterTestConfiguration.
-type OpenshiftInstallerUPISrcClusterTestConfiguration struct {
-	ClusterTestConfiguration `json:",inline"`
-}
-
-// OpenshiftInstallerRandomClusterTestConfiguration describes a
-// that provisions a cluster using openshift-installer in a provider
-// chosen randomly and runs conformance tests.
-type OpenshiftInstallerRandomClusterTestConfiguration struct{}
-
-// OpenshiftInstallerCustomTestImageClusterTestConfiguration describes a
-// test that provisions a cluster using openshift-installer and
-// executes a command in the image specified by the job configuration.
-type OpenshiftInstallerCustomTestImageClusterTestConfiguration struct {
-	ClusterTestConfiguration `json:",inline"`
-	// From defines the imagestreamtag that will be used to run the
-	// provided test command.  e.g. stable:console-test
-	From string `json:"from"`
-}
-
-// OpenshiftInstallerGCPNestedVirtCustomTestImageClusterTestConfiguration describes a
-// test that provisions a gcp cluster using openshift-installer with nested virt enabled
-// and executes a command in the image specified by the job configuration.
-type OpenshiftInstallerGCPNestedVirtCustomTestImageClusterTestConfiguration struct {
-	ClusterTestConfiguration `json:",inline"`
-	// From defines the imagestreamtag that will be used to run the
-	// provided test command.  e.g. stable:console-test
-	From string `json:"from"`
 }
 
 // PipelineImageStreamTagReference is a tag on the

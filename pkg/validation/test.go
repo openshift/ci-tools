@@ -553,37 +553,6 @@ func (v *Validator) validateTestConfigurationType(
 		}
 	}
 	var needsReleaseRpms bool
-	if testConfig := test.OpenshiftAnsibleClusterTestConfiguration; testConfig != nil {
-		typeCount++
-		needsReleaseRpms = true
-		validationErrors = append(validationErrors, v.validateClusterProfile(fieldRoot, testConfig.ClusterProfile, metadata)...)
-	}
-	if testConfig := test.OpenshiftAnsibleSrcClusterTestConfiguration; testConfig != nil {
-		typeCount++
-		needsReleaseRpms = true
-		validationErrors = append(validationErrors, v.validateClusterProfile(fieldRoot, testConfig.ClusterProfile, metadata)...)
-	}
-	if testConfig := test.OpenshiftAnsibleCustomClusterTestConfiguration; testConfig != nil {
-		typeCount++
-		needsReleaseRpms = true
-		validationErrors = append(validationErrors, v.validateClusterProfile(fieldRoot, testConfig.ClusterProfile, metadata)...)
-	}
-	if testConfig := test.OpenshiftInstallerClusterTestConfiguration; testConfig != nil {
-		typeCount++
-		validationErrors = append(validationErrors, v.validateClusterProfile(fieldRoot, testConfig.ClusterProfile, metadata)...)
-	}
-	if testConfig := test.OpenshiftInstallerUPIClusterTestConfiguration; testConfig != nil {
-		typeCount++
-		validationErrors = append(validationErrors, v.validateClusterProfile(fieldRoot, testConfig.ClusterProfile, metadata)...)
-	}
-	if testConfig := test.OpenshiftInstallerUPISrcClusterTestConfiguration; testConfig != nil {
-		typeCount++
-		validationErrors = append(validationErrors, v.validateClusterProfile(fieldRoot, testConfig.ClusterProfile, metadata)...)
-	}
-	if testConfig := test.OpenshiftInstallerCustomTestImageClusterTestConfiguration; testConfig != nil {
-		typeCount++
-		validationErrors = append(validationErrors, v.validateClusterProfile(fieldRoot, testConfig.ClusterProfile, metadata)...)
-	}
 	var claimRelease *api.ClaimRelease
 	if test.ClusterClaim != nil {
 		claimRelease = test.ClusterClaim.ClaimRelease(test.As)

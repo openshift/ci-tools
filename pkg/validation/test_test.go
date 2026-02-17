@@ -87,14 +87,10 @@ func TestValidateTests(t *testing.T) {
 			id: "Multiple test types",
 			tests: []api.TestStepConfiguration{
 				{
-					As:                         "test",
-					Commands:                   "commands",
-					ContainerTestConfiguration: &api.ContainerTestConfiguration{},
-					OpenshiftAnsibleClusterTestConfiguration: &api.OpenshiftAnsibleClusterTestConfiguration{
-						ClusterTestConfiguration: api.ClusterTestConfiguration{
-							ClusterProfile: api.ClusterProfileAWS,
-						},
-					},
+					As:                          "test",
+					Commands:                    "commands",
+					ContainerTestConfiguration:  &api.ContainerTestConfiguration{},
+					MultiStageTestConfiguration: &api.MultiStageTestConfiguration{},
 				},
 			},
 			expectedError: errors.New(`tests[0] has more than one type`),
@@ -189,66 +185,16 @@ func TestValidateTests(t *testing.T) {
 			expectedError: errors.New("tests[0].as: is required"),
 		},
 		{
-			id: "invalid cluster profile",
-			tests: []api.TestStepConfiguration{
-				{
-					As:                                       "test",
-					OpenshiftAnsibleClusterTestConfiguration: &api.OpenshiftAnsibleClusterTestConfiguration{},
-				},
-			},
-			expectedError: errors.New("tests[0]: invalid cluster profile \"\""),
-		},
-		{
-			id: "release missing",
-			tests: []api.TestStepConfiguration{
-				{
-					As:       "test",
-					Commands: "commands",
-					OpenshiftAnsibleClusterTestConfiguration: &api.OpenshiftAnsibleClusterTestConfiguration{
-						ClusterTestConfiguration: api.ClusterTestConfiguration{ClusterProfile: api.ClusterProfileGCP},
-					},
-				},
-			},
-			expectedError: errors.New("tests[0] requires a release in 'tag_specification' or 'releases'"),
-		},
-		{
-			id: "release provided in releases",
-			tests: []api.TestStepConfiguration{
-				{
-					As:       "test",
-					Commands: "commands",
-					OpenshiftAnsibleClusterTestConfiguration: &api.OpenshiftAnsibleClusterTestConfiguration{
-						ClusterTestConfiguration: api.ClusterTestConfiguration{ClusterProfile: api.ClusterProfileGCP},
-					},
-				},
-			},
-			releases: sets.New[string](api.InitialReleaseName, api.LatestReleaseName),
-		},
-		{
-			id: "release must be origin",
-			tests: []api.TestStepConfiguration{
-				{
-					As:       "test",
-					Commands: "commands",
-					OpenshiftAnsibleClusterTestConfiguration: &api.OpenshiftAnsibleClusterTestConfiguration{
-						ClusterTestConfiguration: api.ClusterTestConfiguration{ClusterProfile: api.ClusterProfileGCP},
-					},
-				},
-			},
-			release: &api.ReleaseTagConfiguration{},
-		},
-		{
 			id: "with release",
 			tests: []api.TestStepConfiguration{
 				{
-					As:       "test",
-					Commands: "commands",
-					OpenshiftAnsibleClusterTestConfiguration: &api.OpenshiftAnsibleClusterTestConfiguration{
-						ClusterTestConfiguration: api.ClusterTestConfiguration{ClusterProfile: api.ClusterProfileGCP},
+					As: "test",
+					MultiStageTestConfigurationLiteral: &api.MultiStageTestConfigurationLiteral{
+						ClusterProfile: api.ClusterProfileGCP,
 					},
 				},
 			},
-			release: &api.ReleaseTagConfiguration{Name: "origin-v3.11"},
+			release: &api.ReleaseTagConfiguration{Name: "origin-v4.0"},
 		},
 		{
 			id: "invalid secret name",
@@ -632,16 +578,6 @@ func TestValidateTests(t *testing.T) {
 				As:                          "unit",
 				Secrets:                     []*api.Secret{{Name: "secret"}},
 				MultiStageTestConfiguration: &api.MultiStageTestConfiguration{},
-			}},
-			expectedError: errors.New("tests[0]: secret/secrets can be only used with container-based tests (use credentials in multi-stage tests)"),
-		},
-		{
-			id: "secrets used on template tests",
-			tests: []api.TestStepConfiguration{{
-				As:       "unit",
-				Commands: "commands",
-				Secrets:  []*api.Secret{{Name: "secret"}},
-				OpenshiftInstallerClusterTestConfiguration: &api.OpenshiftInstallerClusterTestConfiguration{},
 			}},
 			expectedError: errors.New("tests[0]: secret/secrets can be only used with container-based tests (use credentials in multi-stage tests)"),
 		},
@@ -1668,25 +1604,6 @@ func TestValidateTestConfigurationType(t *testing.T) {
 				},
 			},
 			expected: []error{errors.New("test.cluster_claim cannot be set on a test which is not a multi-stage test")},
-		},
-		{
-			name: "claim on a template test -> error",
-			test: api.TestStepConfiguration{
-				OpenshiftInstallerClusterTestConfiguration: &api.OpenshiftInstallerClusterTestConfiguration{
-					ClusterTestConfiguration: api.ClusterTestConfiguration{ClusterProfile: api.ClusterProfileAWS},
-				},
-				ClusterClaim: &api.ClusterClaim{
-					Product:      api.ReleaseProductOCP,
-					Version:      "4.6.0",
-					Architecture: api.ReleaseArchitectureAMD64,
-					Cloud:        api.CloudAWS,
-					Owner:        "dpp",
-					Timeout:      &prowv1.Duration{Duration: time.Hour},
-				},
-			},
-			expected: []error{
-				errors.New("test.cluster_claim cannot be set on a test which is not a multi-stage test"),
-			},
 		},
 		{
 			name: "claim with a built-in key -> error",

@@ -36,9 +36,6 @@ import (
 )
 
 const (
-	// A comma-delimited list of containers to wait for artifacts from within a pod. If not
-	// specify, only 'artifacts' is waited for.
-	annotationWaitForContainerArtifacts = "ci-operator.openshift.io/wait-for-container-artifacts"
 	// A comma-delimited list of container names that will be returned as individual JUnit
 	// test results.
 	annotationContainersForSubTestResults = "ci-operator.openshift.io/container-sub-tests"
@@ -563,30 +560,6 @@ func (w *ArtifactWorker) Done(podName string) <-chan struct{} {
 	w.lock.Lock()
 	defer w.lock.Unlock()
 	return w.remaining[podName].done
-}
-
-func addArtifactContainersFromPod(pod *coreapi.Pod, worker *ArtifactWorker) {
-	var containers []string
-	for _, container := range append(append([]coreapi.Container{}, pod.Spec.InitContainers...), pod.Spec.Containers...) {
-		if !containerHasVolumeName(container, "artifacts") {
-			continue
-		}
-		containers = append(containers, container.Name)
-	}
-	var waitForContainers []string
-	if names := pod.Annotations[annotationWaitForContainerArtifacts]; len(names) > 0 {
-		waitForContainers = strings.Split(names, ",")
-	}
-	worker.CollectFromPod(pod.Name, containers, waitForContainers)
-}
-
-func containerHasVolumeName(container coreapi.Container, name string) bool {
-	for _, v := range container.VolumeMounts {
-		if v.Name == name {
-			return true
-		}
-	}
-	return false
 }
 
 func addArtifactsToPod(pod *coreapi.Pod) {

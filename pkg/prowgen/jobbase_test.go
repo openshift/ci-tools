@@ -409,67 +409,6 @@ func TestNewProwJobBaseBuilderForTest(t *testing.T) {
 			info: defaultInfo,
 		},
 		{
-			name: "OpenshiftAnsibleClusterTestConfiguration",
-			cfg: &ciop.ReleaseBuildConfiguration{
-				InputConfiguration: ciop.InputConfiguration{
-					ReleaseTagConfiguration: &ciop.ReleaseTagConfiguration{Namespace: "ocp", Name: "3.11"},
-				},
-			},
-			test: ciop.TestStepConfiguration{
-				As: "template1",
-				OpenshiftAnsibleClusterTestConfiguration: &ciop.OpenshiftAnsibleClusterTestConfiguration{
-					ClusterTestConfiguration: ciop.ClusterTestConfiguration{ClusterProfile: ciop.ClusterProfileAlibabaCloud},
-				},
-			},
-			info: defaultInfo,
-		},
-		{
-			name: "OpenshiftAnsibleCustomClusterTestConfiguration",
-			cfg: &ciop.ReleaseBuildConfiguration{
-				InputConfiguration: ciop.InputConfiguration{
-					ReleaseTagConfiguration: &ciop.ReleaseTagConfiguration{Namespace: "ocp", Name: "3.11"},
-				},
-			},
-			test: ciop.TestStepConfiguration{
-				As: "template1",
-				OpenshiftAnsibleCustomClusterTestConfiguration: &ciop.OpenshiftAnsibleCustomClusterTestConfiguration{
-					ClusterTestConfiguration: ciop.ClusterTestConfiguration{ClusterProfile: ciop.ClusterProfileAlibabaCloud},
-				},
-			},
-			info: defaultInfo,
-		},
-		{
-			name: "OpenshiftInstallerClusterTestConfiguration",
-			test: ciop.TestStepConfiguration{
-				As: "template1",
-				OpenshiftInstallerClusterTestConfiguration: &ciop.OpenshiftInstallerClusterTestConfiguration{
-					ClusterTestConfiguration: ciop.ClusterTestConfiguration{ClusterProfile: ciop.ClusterProfileAlibabaCloud},
-				},
-			},
-			info: defaultInfo,
-		},
-		{
-			name: "OpenshiftInstallerUPIClusterTestConfiguration",
-			test: ciop.TestStepConfiguration{
-				As: "template1",
-				OpenshiftInstallerUPIClusterTestConfiguration: &ciop.OpenshiftInstallerUPIClusterTestConfiguration{
-					ClusterTestConfiguration: ciop.ClusterTestConfiguration{ClusterProfile: ciop.ClusterProfileAlibabaCloud},
-				},
-			},
-			info: defaultInfo,
-		},
-		{
-			name: "OpenshiftInstallerCustomTestImageClusterTestConfiguration",
-			test: ciop.TestStepConfiguration{
-				As: "template1",
-				OpenshiftInstallerCustomTestImageClusterTestConfiguration: &ciop.OpenshiftInstallerCustomTestImageClusterTestConfiguration{
-					ClusterTestConfiguration: ciop.ClusterTestConfiguration{ClusterProfile: ciop.ClusterProfileAlibabaCloud},
-					From:                     "yada",
-				},
-			},
-			info: defaultInfo,
-		},
-		{
 			name: "simple container-based test with cluster",
 			test: ciop.TestStepConfiguration{
 				As:                         "simple",

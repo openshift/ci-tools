@@ -31,13 +31,13 @@ tests:
     from: src
 - as: e2e
   commands: make e2e
-  openshift_ansible:
-    cluster_profile: gcp
+  container:
+    from: src
 - as: e2e-nightly
   commands: make e2e
+  container:
+    from: src
   cron: '@yearly'
-  openshift_ansible:
-    cluster_profile: gcp
 zz_generated_metadata:
   branch: master
   org: private

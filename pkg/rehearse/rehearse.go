@@ -112,6 +112,12 @@ type ref struct {
 	ref string
 }
 
+type TargetPR struct {
+	Org  string
+	Repo string
+	Pull prowapi.Pull
+}
+
 func (r RehearsalConfig) DetermineAffectedJobs(candidate RehearsalCandidate, candidatePath string, networkAccessRehearsalsAllowed bool, logger *logrus.Entry) (config.Presubmits, config.Periodics, []string, error) {
 	start := time.Now()
 	defer func() {
@@ -162,7 +168,7 @@ func (r RehearsalConfig) DetermineAffectedJobs(candidate RehearsalCandidate, can
 	return filterPresubmits(presubmits, restrictNetworkAccessFalseJobs, logger), filterPeriodics(periodics, restrictNetworkAccessFalseJobs, logger), restrictNetworkAccessFalseJobs, nil
 }
 
-func (r RehearsalConfig) SetupJobs(candidate RehearsalCandidate, candidatePath string, presubmits config.Presubmits, periodics config.Periodics, limit int, logger *logrus.Entry) (*config.ReleaseRepoConfig, *prowapi.Refs, []*prowconfig.Presubmit, error) {
+func (r RehearsalConfig) SetupJobs(candidate RehearsalCandidate, candidatePath string, presubmits config.Presubmits, periodics config.Periodics, limit int, targetPR *TargetPR, logger *logrus.Entry) (*config.ReleaseRepoConfig, *prowapi.Refs, []*prowconfig.Presubmit, error) {
 	resolver, err := r.createResolver(candidatePath)
 	if err != nil {
 		return nil, nil, nil, err
@@ -176,7 +182,7 @@ func (r RehearsalConfig) SetupJobs(candidate RehearsalCandidate, candidatePath s
 	prRefs := candidate.createRefs()
 
 	uploader := config.NewGCSUploader(r.GCSBucket, r.GCSCredentialsFile)
-	jobConfigurer := NewJobConfigurer(r.DryRun, prConfig.CiOperator, prConfig.Prow, resolver, logger, prRefs, uploader)
+	jobConfigurer := NewJobConfigurer(r.DryRun, prConfig.CiOperator, prConfig.Prow, resolver, logger, prRefs, uploader, targetPR)
 	imageStreamTags, presubmitsToRehearse, err := jobConfigurer.ConfigurePresubmitRehearsals(presubmits)
 	if err != nil {
 		return nil, nil, nil, err

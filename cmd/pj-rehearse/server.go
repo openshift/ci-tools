@@ -10,6 +10,7 @@ import (
 
 	"github.com/sirupsen/logrus"
 
+	prowapi "sigs.k8s.io/prow/pkg/apis/prowjobs/v1"
 	prowconfig "sigs.k8s.io/prow/pkg/config"
 	"sigs.k8s.io/prow/pkg/git/v2"
 	"sigs.k8s.io/prow/pkg/github"
@@ -309,6 +310,62 @@ func (s *server) handleIssueComment(l *logrus.Entry, event github.IssueCommentEv
 	s.handlePotentialCommands(pullRequest, comment, event.Comment.User.Login, logger)
 }
 
+// parseTargetPR extracts the --pr flag from a command and returns the PR spec and cleaned command.
+// The PR spec can be a number (e.g., "1234") or org/repo#number (e.g., "Azure/ARO-HCP#1234").
+// Returns empty string for prSpec if --pr is not found.
+func parseTargetPR(command string) (prSpec string, cleanedCommand string) {
+	prRegex := regexp.MustCompile(`--pr\s+(\S+)`)
+	matches := prRegex.FindStringSubmatch(command)
+	if len(matches) > 1 {
+		prSpec = matches[1]
+		// Remove --pr <spec> from command
+		cleanedCommand = prRegex.ReplaceAllString(command, "")
+		// Normalize whitespace (collapse multiple spaces)
+		cleanedCommand = strings.Join(strings.Fields(cleanedCommand), " ")
+		return prSpec, cleanedCommand
+	}
+	return "", command
+}
+
+// parsePRSpec parses a PR spec into org, repo, and number.
+// Returns empty org/repo if the spec is just a number (short form).
+func parsePRSpec(spec string) (org, repo string, number int, err error) {
+	// Check for long form: org/repo#number
+	longFormRegex := regexp.MustCompile(`^([^/]+)/([^#]+)#(\d+)$`)
+	if matches := longFormRegex.FindStringSubmatch(spec); len(matches) == 4 {
+		org = matches[1]
+		repo = matches[2]
+		_, err = fmt.Sscanf(matches[3], "%d", &number)
+		return
+	}
+
+	// Short form: just a number
+	if _, err = fmt.Sscanf(spec, "%d", &number); err == nil {
+		return "", "", number, nil
+	}
+
+	return "", "", 0, fmt.Errorf("invalid PR spec format: %s (expected '1234' or 'org/repo#1234')", spec)
+}
+
+// extractTargetRepos returns unique org/repo pairs from presubmits and periodics.
+func extractTargetRepos(presubmits config.Presubmits, periodics config.Periodics) map[string]bool {
+	repos := make(map[string]bool)
+
+	// Extract from presubmits (keys are org/repo)
+	for repo := range presubmits {
+		repos[repo] = true
+	}
+
+	// Extract from periodics ExtraRefs
+	for _, job := range periodics {
+		for _, ref := range job.ExtraRefs {
+			repos[ref.Org+"/"+ref.Repo] = true
+		}
+	}
+
+	return repos
+}
+
 func (s *server) handlePotentialCommands(pullRequest *github.PullRequest, comment, user string, logger *logrus.Entry) {
 	pjRehearseComments := commentRegex.FindAllString(comment, -1)
 	if len(pjRehearseComments) > 0 {
@@ -336,6 +393,11 @@ func (s *server) handlePotentialCommands(pullRequest *github.PullRequest, commen
 		for _, command := range pjRehearseComments {
 			command = strings.TrimSpace(command)
 			logger.Debugf("handling command: %s", command)
+
+			// Parse and remove --pr flag if present
+			prSpec, cleanedCommand := parseTargetPR(command)
+			command = cleanedCommand
+
 			switch command {
 			case rehearseAck, rehearseSkip:
 				s.acknowledgeRehearsals(org, repo, number, logger)
@@ -419,6 +481,72 @@ func (s *server) handlePotentialCommands(pullRequest *github.PullRequest, commen
 					s.reportFailure("unable to determine affected jobs", err, org, repo, user, number, true, false, logger)
 					continue
 				}
+
+				// Resolve target PR if --pr flag was specified
+				var targetPR *rehearse.TargetPR
+				if prSpec != "" {
+					targetOrg, targetRepo, prNumber, err := parsePRSpec(prSpec)
+					if err != nil {
+						message := fmt.Sprintf("@%s: invalid --pr format: %v. Expected `--pr 1234` or `--pr org/repo#1234`", user, err)
+						if err := s.ghc.CreateComment(org, repo, number, message); err != nil {
+							logger.WithError(err).Error("failed to create comment")
+						}
+						continue
+					}
+
+					// If short form (no org/repo specified), auto-resolve from affected jobs
+					if targetOrg == "" && targetRepo == "" {
+						targetRepos := extractTargetRepos(presubmits, periodics)
+						if len(targetRepos) == 0 {
+							message := fmt.Sprintf("@%s: --pr specified but no affected jobs found to determine target repo", user)
+							if err := s.ghc.CreateComment(org, repo, number, message); err != nil {
+								logger.WithError(err).Error("failed to create comment")
+							}
+							continue
+						}
+						if len(targetRepos) > 1 {
+							var repoList []string
+							for r := range targetRepos {
+								repoList = append(repoList, r)
+							}
+							message := fmt.Sprintf("@%s: --pr short form is ambiguous. Multiple target repos found: %s. Please use explicit form like `--pr org/repo#%d`", user, strings.Join(repoList, ", "), prNumber)
+							if err := s.ghc.CreateComment(org, repo, number, message); err != nil {
+								logger.WithError(err).Error("failed to create comment")
+							}
+							continue
+						}
+						// Extract the single repo
+						for r := range targetRepos {
+							parts := strings.Split(r, "/")
+							targetOrg = parts[0]
+							targetRepo = parts[1]
+						}
+					}
+
+					// Fetch the target PR
+					pr, err := s.ghc.GetPullRequest(targetOrg, targetRepo, prNumber)
+					if err != nil {
+						message := fmt.Sprintf("@%s: failed to fetch PR %s/%s#%d: %v", user, targetOrg, targetRepo, prNumber, err)
+						if err := s.ghc.CreateComment(org, repo, number, message); err != nil {
+							logger.WithError(err).Error("failed to create comment")
+						}
+						continue
+					}
+
+					targetPR = &rehearse.TargetPR{
+						Org:  targetOrg,
+						Repo: targetRepo,
+						Pull: prowapi.Pull{
+							Number: prNumber,
+							SHA:    pr.Head.SHA,
+							Author: pr.User.Login,
+							Title:  pr.Title,
+							Link:   pr.HTMLURL,
+						},
+					}
+					logger.Infof("Target PR resolved: %s/%s#%d (SHA: %s)", targetOrg, targetRepo, prNumber, pr.Head.SHA)
+				}
+
 				requestedOnly := command != rehearseNormal && command != rehearseMore && command != rehearseMax && command != rehearseAutoAck
 
 				if requestedOnly {
@@ -443,7 +571,7 @@ func (s *server) handlePotentialCommands(pullRequest *github.PullRequest, commen
 						limit = rc.MaxLimit
 					}
 
-					prConfig, prRefs, presubmitsToRehearse, err := rc.SetupJobs(candidate, candidatePath, presubmits, periodics, limit, logger)
+					prConfig, prRefs, presubmitsToRehearse, err := rc.SetupJobs(candidate, candidatePath, presubmits, periodics, limit, targetPR, logger)
 					if err != nil {
 						logger.WithError(err).Error("couldn't set up jobs")
 						s.reportFailure("unable to set up jobs", err, org, repo, user, number, true, false, logger)

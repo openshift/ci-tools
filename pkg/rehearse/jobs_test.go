@@ -319,7 +319,7 @@ func TestInlineCiopConfig(t *testing.T) {
 			expectedJob := makePresubmit(tc.command, tc.expectedEnv, args)
 
 			uploader := &fakeConfigUploader{baseDir: uploadDir}
-			jc := NewJobConfigurer(false, configs, &prowconfig.Config{}, resolver, logger, makeBaseRefs(), uploader)
+			jc := NewJobConfigurer(false, configs, &prowconfig.Config{}, resolver, logger, makeBaseRefs(), uploader, nil)
 			imageStreamTags, err := jc.inlineCiOpConfig(&job.Spec.Containers[0], configs, resolver, tc.metadata, tc.testname, jobName, logger)
 
 			if tc.expectedError && err == nil {
@@ -436,42 +436,69 @@ func TestMakeRehearsalPresubmit(t *testing.T) {
 		testID   string
 		refs     *pjapi.Refs
 		original *prowconfig.Presubmit
+		targetPR *TargetPR
 	}{
 		{
 			testID:   "job that belong to different org/repo than refs",
 			refs:     &pjapi.Refs{Org: "anotherOrg", Repo: "anotherRepo", Pulls: []pjapi.Pull{{Number: 123}}},
 			original: sourcePresubmit,
+			targetPR: nil,
 		},
 		{
 			testID:   "job that belong to different org/repo than refs with custom config",
 			refs:     &pjapi.Refs{Org: "anotherOrg", Repo: "anotherRepo", Pulls: []pjapi.Pull{{Number: 123}}},
 			original: otherPresubmit,
+			targetPR: nil,
 		},
 		{
 			testID:   "job that belong to the same org/repo with refs",
 			refs:     &pjapi.Refs{Org: "org", Repo: "repo", Pulls: []pjapi.Pull{{Number: 123}}},
 			original: sourcePresubmit,
+			targetPR: nil,
 		},
 		{
 			testID:   "hidden job that belong to the same org/repo with refs",
 			refs:     &pjapi.Refs{Org: "org", Repo: "repo", Pulls: []pjapi.Pull{{Number: 123}}},
 			original: hiddenPresubmit,
+			targetPR: nil,
 		},
 		{
 			testID:   "job that belong to the same org but different repo than refs",
 			refs:     &pjapi.Refs{Org: "org", Repo: "anotherRepo", Pulls: []pjapi.Pull{{Number: 123}}},
 			original: sourcePresubmit,
+			targetPR: nil,
 		},
 		{
 			testID:   "reporting configuration is stripped from rehearsals to avoid polluting",
 			refs:     &pjapi.Refs{Org: "anotherOrg", Repo: "anotherRepo", Pulls: []pjapi.Pull{{Number: 123}}},
 			original: reportingPresubmit,
+			targetPR: nil,
+		},
+		{
+			testID:   "cross-repo job with targetPR matching job org/repo",
+			refs:     &pjapi.Refs{Org: "anotherOrg", Repo: "anotherRepo", Pulls: []pjapi.Pull{{Number: 123}}},
+			original: sourcePresubmit,
+			targetPR: &TargetPR{
+				Org:  "org",
+				Repo: "repo",
+				Pull: pjapi.Pull{Number: 456, SHA: "targetsha", Author: "targetauthor", Title: "Target PR", Link: "https://github.com/org/repo/pull/456"},
+			},
+		},
+		{
+			testID:   "cross-repo job with targetPR for different org/repo",
+			refs:     &pjapi.Refs{Org: "anotherOrg", Repo: "anotherRepo", Pulls: []pjapi.Pull{{Number: 123}}},
+			original: sourcePresubmit,
+			targetPR: &TargetPR{
+				Org:  "differentOrg",
+				Repo: "differentRepo",
+				Pull: pjapi.Pull{Number: 456, SHA: "targetsha", Author: "targetauthor", Title: "Target PR", Link: "https://github.com/differentOrg/differentRepo/pull/456"},
+			},
 		},
 	}
 
 	for _, tc := range testCases {
 		t.Run(tc.testID, func(t *testing.T) {
-			rehearsal, err := makeRehearsalPresubmit(tc.original, testRepo, tc.refs)
+			rehearsal, err := makeRehearsalPresubmit(tc.original, testRepo, tc.refs, tc.targetPR)
 			if err != nil {
 				t.Fatalf("failed to make rehearsal presubmit: %v", err)
 			}
@@ -600,7 +627,7 @@ func TestExecuteJobsErrors(t *testing.T) {
 			)
 
 			uploader := &fakeConfigUploader{baseDir: t.TempDir()}
-			jc := NewJobConfigurer(false, testCiopConfigs, &prowconfig.Config{}, resolver, logger, makeBaseRefs(), uploader)
+			jc := NewJobConfigurer(false, testCiopConfigs, &prowconfig.Config{}, resolver, logger, makeBaseRefs(), uploader, nil)
 
 			_, presubmits, err := jc.ConfigurePresubmitRehearsals(tc.jobs)
 			if err != nil {
@@ -668,7 +695,7 @@ func TestExecuteJobsUnsuccessful(t *testing.T) {
 			)
 
 			uploader := &fakeConfigUploader{baseDir: t.TempDir()}
-			jc := NewJobConfigurer(false, testCiopConfigs, &prowconfig.Config{}, resolver, logger, makeBaseRefs(), uploader)
+			jc := NewJobConfigurer(false, testCiopConfigs, &prowconfig.Config{}, resolver, logger, makeBaseRefs(), uploader, nil)
 			_, presubmits, err := jc.ConfigurePresubmitRehearsals(tc.jobs)
 			if err != nil {
 				t.Errorf("Expected to get no error, but got one: %v", err)
@@ -783,7 +810,7 @@ func TestExecuteJobsPositive(t *testing.T) {
 						}},
 				}}
 			uploader := &fakeConfigUploader{baseDir: baseDir}
-			jc := NewJobConfigurer(false, testCiopConfigs, &pc, resolver, logger, makeBaseRefs(), uploader)
+			jc := NewJobConfigurer(false, testCiopConfigs, &pc, resolver, logger, makeBaseRefs(), uploader, nil)
 			imageStreamTags, presubmits, err := jc.ConfigurePresubmitRehearsals(tc.jobs)
 			if err != nil {
 				t.Errorf("Expected to get no error, but got one: %v", err)

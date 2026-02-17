@@ -173,7 +173,7 @@ func dryRun(o options, logger *logrus.Entry) error {
 		return fmt.Errorf("error determining affected jobs: %w: %s", err, "ERROR: pj-rehearse: misconfiguration")
 	}
 
-	prConfig, prRefs, presubmitsToRehearse, err := rc.SetupJobs(candidate, candidatePath, presubmits, periodics, dro.limit, logger)
+	prConfig, prRefs, presubmitsToRehearse, err := rc.SetupJobs(candidate, candidatePath, presubmits, periodics, dro.limit, nil, logger)
 	if err != nil {
 		return fmt.Errorf("error setting up jobs: %w: %s", err, "ERROR: pj-rehearse: setup failure")
 	}

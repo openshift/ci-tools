@@ -128,7 +128,7 @@ func BranchFromRegexes(branches []string) string {
 	return ""
 }
 
-func makeRehearsalPresubmit(source *prowconfig.Presubmit, repo string, refs *pjapi.Refs) (*prowconfig.Presubmit, error) {
+func makeRehearsalPresubmit(source *prowconfig.Presubmit, repo string, refs *pjapi.Refs, targetPR *TargetPR) (*prowconfig.Presubmit, error) {
 	var rehearsal prowconfig.Presubmit
 	if err := deepcopy.Copy(&rehearsal, source); err != nil {
 		return nil, fmt.Errorf("deepCopy failed: %w", err)
@@ -152,7 +152,7 @@ func makeRehearsalPresubmit(source *prowconfig.Presubmit, repo string, refs *pja
 				// from the target repo with all the "extra" fields from the job
 				// config, like path_alias, then remove them from the config so we
 				// don't use them in the future for any other refs
-				rehearsal.ExtraRefs = append(rehearsal.ExtraRefs, *pjutil.CompletePrimaryRefs(pjapi.Refs{
+				extraRef := pjapi.Refs{
 					Org:            jobOrg,
 					Repo:           jobRepo,
 					BaseRef:        branch,
@@ -161,7 +161,12 @@ func makeRehearsalPresubmit(source *prowconfig.Presubmit, repo string, refs *pja
 					CloneURI:       rehearsal.CloneURI,
 					SkipSubmodules: rehearsal.SkipSubmodules,
 					CloneDepth:     rehearsal.CloneDepth,
-				}, source.JobBase))
+				}
+				// If targetPR matches this job's org/repo, inject the PR into Pulls
+				if targetPR != nil && targetPR.Org == jobOrg && targetPR.Repo == jobRepo {
+					extraRef.Pulls = []pjapi.Pull{targetPR.Pull}
+				}
+				rehearsal.ExtraRefs = append(rehearsal.ExtraRefs, *pjutil.CompletePrimaryRefs(extraRef, source.JobBase))
 				rehearsal.PathAlias = ""
 				rehearsal.CloneURI = ""
 				rehearsal.SkipSubmodules = false
@@ -420,6 +425,7 @@ type JobConfigurer struct {
 	refs                  *pjapi.Refs
 	uploader              configSpecUploader
 	logger                *logrus.Entry
+	targetPR              *TargetPR
 }
 
 // NewJobConfigurer filters the jobs and returns a new JobConfigurer.
@@ -430,7 +436,8 @@ func NewJobConfigurer(
 	resolver registry.Resolver,
 	logger *logrus.Entry,
 	refs *pjapi.Refs,
-	uploader configSpecUploader) *JobConfigurer {
+	uploader configSpecUploader,
+	targetPR *TargetPR) *JobConfigurer {
 	return &JobConfigurer{
 		dryRun:           dryRun,
 		ciopConfigs:      ciopConfigs,
@@ -439,6 +446,7 @@ func NewJobConfigurer(
 		refs:             refs,
 		uploader:         uploader,
 		logger:           logger,
+		targetPR:         targetPR,
 	}
 }
 
@@ -508,7 +516,7 @@ func (jc *JobConfigurer) ConfigurePresubmitRehearsals(presubmits config.Presubmi
 			}
 			jc.configureDecorationConfig(&job.JobBase, metadata)
 
-			rehearsal, err := makeRehearsalPresubmit(&job, orgrepo, jc.refs)
+			rehearsal, err := makeRehearsalPresubmit(&job, orgrepo, jc.refs, jc.targetPR)
 			if err != nil {
 				return nil, nil, fmt.Errorf("failed to make rehearsal presubmit: %w", err)
 			}
@@ -569,7 +577,7 @@ func (jc *JobConfigurer) ConvertPeriodicsToPresubmits(periodics []prowconfig.Per
 	var presubmits []*prowconfig.Presubmit
 
 	for _, periodic := range periodics {
-		p, err := makeRehearsalPresubmit(&prowconfig.Presubmit{JobBase: periodic.JobBase}, "", jc.refs)
+		p, err := makeRehearsalPresubmit(&prowconfig.Presubmit{JobBase: periodic.JobBase}, "", jc.refs, jc.targetPR)
 		if err != nil {
 			return nil, fmt.Errorf("makeRehearsalPresubmit failed: %w", err)
 		}
@@ -581,6 +589,15 @@ func (jc *JobConfigurer) ConvertPeriodicsToPresubmits(periodics []prowconfig.Per
 			// converted periodics already have a ref that should be removed to
 			// avoid conflicts with clonerefs
 			p.ExtraRefs = p.ExtraRefs[1:]
+		}
+
+		// For periodics, inject targetPR into any ExtraRef matching the org/repo
+		if jc.targetPR != nil {
+			for i := range p.ExtraRefs {
+				if p.ExtraRefs[i].Org == jc.targetPR.Org && p.ExtraRefs[i].Repo == jc.targetPR.Repo {
+					p.ExtraRefs[i].Pulls = []pjapi.Pull{jc.targetPR.Pull}
+				}
+			}
 		}
 
 		presubmits = append(presubmits, p)

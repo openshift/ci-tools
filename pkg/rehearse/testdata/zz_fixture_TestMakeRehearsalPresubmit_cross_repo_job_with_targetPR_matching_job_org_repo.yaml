@@ -1,0 +1,32 @@
+agent: kubernetes
+always_run: false
+branches:
+- ^branch$
+context: ci/rehearse/org/repo/branch/test
+extra_refs:
+- base_ref: branch
+  org: org
+  pulls:
+  - author: targetauthor
+    link: https://github.com/org/repo/pull/456
+    number: 456
+    sha: targetsha
+    title: Target PR
+  repo: repo
+  workdir: true
+labels:
+  ci.openshift.io/rehearse: "123"
+  ci.openshift.io/rehearse.context: test
+name: rehearse-123-pull-ci-org-repo-branch-test
+optional: true
+rerun_command: /pj-rehearse pull-ci-org-repo-branch-test
+spec:
+  containers:
+  - args:
+    - arg1
+    - arg2
+    command:
+    - ci-operator
+    name: ""
+    resources: {}
+trigger: /pj-rehearse pull-ci-org-repo-branch-test

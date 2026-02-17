@@ -1475,7 +1475,6 @@ const (
 	ClusterProfileAWSCPaaS                ClusterProfile = "aws-cpaas"
 	ClusterProfileOSDEphemeral            ClusterProfile = "osd-ephemeral"
 	ClusterProfileAWS2                    ClusterProfile = "aws-2"
-	ClusterProfileHyperShift              ClusterProfile = "hypershift"
 	ClusterProfileAWS3                    ClusterProfile = "aws-3"
 	ClusterProfileAWS4                    ClusterProfile = "aws-4"
 	ClusterProfileAWS5                    ClusterProfile = "aws-5"
@@ -1623,7 +1622,6 @@ func ClusterProfiles() []ClusterProfile {
 		ClusterProfileGCPObservability,
 		ClusterProfileAWSVirtualization,
 		ClusterProfileAzureVirtualization,
-		ClusterProfileHyperShift,
 		ClusterProfileIBMCloud,
 		ClusterProfileIBMCloudCSPIQE,
 		ClusterProfileIBMCloudRHOAIQE,
@@ -1994,8 +1992,6 @@ func (p ClusterProfile) ClusterType() string {
 		return "kubevirt"
 	case ClusterProfileOSDEphemeral:
 		return "osd-ephemeral"
-	case ClusterProfileHyperShift:
-		return "hypershift"
 	case ClusterProfileHyperfleetE2E:
 		return "hyperfleet-e2e"
 	case ClusterProfileOCIAgent:
@@ -2342,8 +2338,6 @@ func (p ClusterProfile) LeaseType() string {
 		return "aws-4-quota-slice"
 	case ClusterProfileAWS5:
 		return "aws-5-quota-slice"
-	case ClusterProfileHyperShift:
-		return "hypershift-quota-slice"
 	case ClusterProfileOCIAgent:
 		return "oci-agent-qe-quota-slice"
 	case ClusterProfileOCIAssisted:

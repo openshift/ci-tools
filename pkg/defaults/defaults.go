@@ -392,15 +392,16 @@ func registryDomain(configuration *api.PromotionConfiguration) string {
 func stepForTest(cfg *Config, inputImages inputImageSet, c *api.TestStepConfiguration, imageConfigs *[]*api.InputImageTagStepConfiguration,
 ) ([]api.Step, error) {
 	if test := c.MultiStageTestConfigurationLiteral; test != nil {
+		params := cfg.params
 		leases := api.LeasesForTest(test)
 		ipPoolLease := api.IPPoolLeaseForTest(test, cfg.CIConfig.Metadata)
 		if len(leases) != 0 || ipPoolLease.ResourceType != "" {
-			cfg.params = api.NewDeferredParameters(cfg.params)
+			params = api.NewDeferredParameters(params)
 		}
 		var ret []api.Step
-		step := multi_stage.MultiStageTestStep(*c, cfg.CIConfig, cfg.params, cfg.podClient, cfg.JobSpec, leases, cfg.NodeName, cfg.TargetAdditionalSuffix, nil, cfg.EnableSecretsStoreCSIDriver, isLeaseProxyServerAvailable(cfg))
+		step := multi_stage.MultiStageTestStep(*c, cfg.CIConfig, params, cfg.podClient, cfg.JobSpec, leases, cfg.NodeName, cfg.TargetAdditionalSuffix, nil, cfg.EnableSecretsStoreCSIDriver, isLeaseProxyServerAvailable(cfg))
 		if ipPoolLease.ResourceType != "" {
-			step = steps.IPPoolStep(cfg.LeaseClient, cfg.podClient, ipPoolLease, step, cfg.params, cfg.JobSpec.Namespace, cfg.MetricsAgent)
+			step = steps.IPPoolStep(cfg.LeaseClient, cfg.podClient, ipPoolLease, step, params, cfg.JobSpec.Namespace, cfg.MetricsAgent)
 		}
 		if len(leases) != 0 {
 			step = steps.LeaseStep(cfg.LeaseClient, leases, step, cfg.JobSpec.Namespace, cfg.MetricsAgent)
@@ -413,7 +414,7 @@ func stepForTest(cfg *Config, inputImages inputImageSet, c *api.TestStepConfigur
 			source := releasesteps.NewReleaseSourceFromClusterClaim(c.As, c.ClusterClaim, cfg.hiveClient)
 			ret = append(ret, releasesteps.ImportReleaseStep(name, cfg.NodeName, target, referencePolicy, source, false, cfg.CIConfig.Resources, cfg.podClient, cfg.JobSpec, cfg.PullSecret, nil))
 		}
-		addProvidesForStep(step, cfg.params)
+		addProvidesForStep(step, params)
 		ret = append(ret, step)
 		ret = append(ret, stepsForStepImages(cfg.kubeClient, cfg.JobSpec, inputImages, test, imageConfigs)...)
 		return ret, nil
@@ -422,8 +423,8 @@ func stepForTest(cfg *Config, inputImages inputImageSet, c *api.TestStepConfigur
 		if !test.Upgrade {
 			return nil, nil
 		}
-		cfg.params = api.NewDeferredParameters(cfg.params)
-		step, err := clusterinstall.E2ETestStep(*c.OpenshiftInstallerClusterTestConfiguration, *c, cfg.params, cfg.podClient, cfg.templateClient, cfg.JobSpec, cfg.CIConfig.Resources)
+		params := api.NewDeferredParameters(cfg.params)
+		step, err := clusterinstall.E2ETestStep(*c.OpenshiftInstallerClusterTestConfiguration, *c, params, cfg.podClient, cfg.templateClient, cfg.JobSpec, cfg.CIConfig.Resources)
 		if err != nil {
 			return nil, fmt.Errorf("unable to create end to end test step: %w", err)
 		}
@@ -432,7 +433,7 @@ func stepForTest(cfg *Config, inputImages inputImageSet, c *api.TestStepConfigur
 			Env:          api.DefaultLeaseEnv,
 			Count:        1,
 		}}, step, cfg.JobSpec.Namespace, cfg.MetricsAgent)
-		addProvidesForStep(step, cfg.params)
+		addProvidesForStep(step, params)
 		return []api.Step{step}, nil
 	}
 	step := steps.TestStep(*c, cfg.CIConfig.Resources, cfg.podClient, cfg.JobSpec, cfg.NodeName)

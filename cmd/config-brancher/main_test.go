@@ -244,8 +244,6 @@ func TestGenerateBranchedConfigs(t *testing.T) {
 				{
 					Configuration: api.ReleaseBuildConfiguration{
 						Tests: []api.TestStepConfiguration{
-							{As: "periodic-interval", Interval: &interval},
-							{As: "periodic-cron", Cron: &cron},
 							{As: "periodic-cron-portable", Cron: &cron, Portable: true},
 						},
 						PromotionConfiguration: &api.PromotionConfiguration{

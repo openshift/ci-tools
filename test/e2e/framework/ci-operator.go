@@ -8,6 +8,7 @@ import (
 	"context"
 	"fmt"
 	"io"
+	"io/fs"
 	"math/rand"
 	"os"
 	"os/exec"
@@ -16,10 +17,6 @@ import (
 	"strings"
 	"time"
 )
-
-func init() {
-	rand.Seed(time.Now().Unix())
-}
 
 // CiOperatorCommand exposes a ci-operator invocation to a test and
 // ensures the following semantics:
@@ -67,7 +64,10 @@ func newCiOperatorCommand(t *T) CiOperatorCommand {
 	}
 	artifactDir := ArtifactDir(t)
 	t.Cleanup(func() {
-		if walkErr := filepath.Walk(artifactDir, func(path string, info os.FileInfo, err error) error {
+		if walkErr := filepath.WalkDir(artifactDir, func(path string, info fs.DirEntry, err error) error {
+			if err != nil {
+				return err
+			}
 			if info.IsDir() {
 				return nil
 			}

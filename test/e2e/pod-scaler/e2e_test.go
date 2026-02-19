@@ -240,7 +240,7 @@ func TestBuildPodAdmission(t *testing.T) {
 func TestAdmission(t *testing.T) {
 	t.Parallel()
 	T := testhelper.NewT(interrupts.Context(), t)
-	prometheusAddr, _ := prometheus.Initialize(T, t.TempDir(), rand.New(rand.NewSource(4641280330504625122)), false)
+	prometheusAddr, _ := prometheus.Initialize(T, T.TempDir(), rand.New(rand.NewSource(4641280330504625122)), false)
 
 	kubeconfigFile := kubernetes.Fake(T, T.TempDir(), kubernetes.Prometheus(prometheusAddr), kubernetes.Builds(map[string]map[string]map[string]string{
 		"namespace": {

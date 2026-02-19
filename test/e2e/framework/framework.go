@@ -5,6 +5,7 @@ package framework
 
 import (
 	"fmt"
+	"io/fs"
 	"os"
 	"path/filepath"
 	"strconv"
@@ -16,7 +17,7 @@ import (
 
 // CompareWithFixtureDir will compare all files in a directory with a corresponding test fixture directory.
 func CompareWithFixtureDir(t *T, golden, output string) {
-	if walkErr := filepath.Walk(golden, func(path string, info os.FileInfo, err error) error {
+	if walkErr := filepath.WalkDir(golden, func(path string, info fs.DirEntry, err error) error {
 		if err != nil {
 			return err
 		}

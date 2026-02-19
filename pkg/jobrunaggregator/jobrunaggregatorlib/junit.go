@@ -8,6 +8,9 @@ type TestCaseDetails struct {
 	TestSuiteName string
 	// Summary is filled in during the pass/fail calculation
 	Summary string
+	// Lifecycle indicates whether the test is blocking or informing.
+	// Informing tests do not impact aggregation.
+	Lifecycle string
 
 	Passes   []TestCasePass
 	Failures []TestCaseFailure

@@ -2015,7 +2015,7 @@ func TestGetSourceStepsForJobSpec(t *testing.T) {
 			jobSpec: api.JobSpec{
 				JobSpec: downwardapi.JobSpec{
 					Type: "presubmit",
-					Refs: &prowapi.Refs{Org: "openshift", Repo: "release", BaseRef: "master", BaseSHA: "ABCD",
+					Refs: &prowapi.Refs{Org: "openshift", Repo: "release", BaseRef: "main", BaseSHA: "ABCD",
 						Pulls: []prowapi.Pull{{Number: 1234, Author: "developer", SHA: "ABCDEFG", Ref: "some-branch"}},
 					},
 					ExtraRefs: []prowapi.Refs{{WorkDir: true, Org: "openshift", Repo: "other-repo", BaseRef: "main", BaseSHA: "ABCDEFG"}},
@@ -2170,7 +2170,7 @@ func TestDeterminePrimaryRef(t *testing.T) {
 			jobSpec: api.JobSpec{
 				JobSpec: downwardapi.JobSpec{
 					Type: "presubmit",
-					Refs: &prowapi.Refs{Org: "openshift", Repo: "release", BaseRef: "master", BaseSHA: "ABCD",
+					Refs: &prowapi.Refs{Org: "openshift", Repo: "release", BaseRef: "main", BaseSHA: "ABCD",
 						Pulls: []prowapi.Pull{{Number: 1234, Author: "developer", SHA: "ABCDEFG", Ref: "some-branch"}},
 					},
 					ExtraRefs: []prowapi.Refs{{WorkDir: true, Org: "openshift", Repo: "other-repo", BaseRef: "main", BaseSHA: "ABCDEFG"}},

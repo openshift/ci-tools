@@ -41,7 +41,7 @@ spec:
       - --input-hash=multi-pr-openshift-ci-tools-999-openshift-ci-tools-123-openshift-installer-456-e2e
       - --report-credentials-file=/etc/report/credentials
       - --target=e2e
-      - --with-test-from=openshift/ci-tools@master:e2e
+      - --with-test-from=openshift/ci-tools@main:e2e
       command:
       - ci-operator
       env:
@@ -83,8 +83,8 @@ spec:
       secret:
         secretName: result-aggregator
   refs:
-    base_ref: master
-    base_sha: heads/master
+    base_ref: main
+    base_sha: heads/main
     org: openshift
     pulls:
     - author: other-dev

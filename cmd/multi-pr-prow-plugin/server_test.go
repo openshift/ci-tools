@@ -90,7 +90,7 @@ func TestHandle(t *testing.T) {
 					PullRequest: &struct{}{},
 				},
 				Comment: github.IssueComment{
-					Body: "/testwith openshift/ci-tools/master/unit openshift/ci-tools#123",
+					Body: "/testwith openshift/ci-tools/main/unit openshift/ci-tools#123",
 					User: github.User{Login: "developer"},
 				},
 			},
@@ -101,7 +101,7 @@ func TestHandle(t *testing.T) {
 						Owner: github.User{Login: "openshift"},
 						Name:  "ci-tools",
 					},
-					Ref: "master",
+					Ref: "main",
 				},
 			},
 			kubeClient: fakectrlruntimeclient.NewFakeClient(),
@@ -116,7 +116,7 @@ func TestHandle(t *testing.T) {
 					PullRequest: &struct{}{},
 				},
 				Comment: github.IssueComment{
-					Body: "/testwith openshift/ci-tools/master/unit openshift/release#876",
+					Body: "/testwith openshift/ci-tools/main/unit openshift/release#876",
 					User: github.User{Login: "developer"},
 				},
 			},
@@ -127,7 +127,7 @@ func TestHandle(t *testing.T) {
 						Owner: github.User{Login: "openshift"},
 						Name:  "ci-tools",
 					},
-					Ref: "master",
+					Ref: "main",
 				},
 			},
 			kubeClient: fakectrlruntimeclient.NewFakeClient(),
@@ -142,9 +142,9 @@ func TestHandle(t *testing.T) {
 					PullRequest: &struct{}{},
 				},
 				Comment: github.IssueComment{
-					Body: `/testwith openshift/ci-tools/master/unit openshift/ci-tools#123
-/testwith openshift/ci-tools/master/e2e openshift/release#876
-/testwith openshift/ci-tools/master/unit https://github.com/openshift/release/pull/876`,
+					Body: `/testwith openshift/ci-tools/main/unit openshift/ci-tools#123
+/testwith openshift/ci-tools/main/e2e openshift/release#876
+/testwith openshift/ci-tools/main/unit https://github.com/openshift/release/pull/876`,
 					User: github.User{Login: "developer"},
 				},
 			},
@@ -155,7 +155,7 @@ func TestHandle(t *testing.T) {
 						Owner: github.User{Login: "openshift"},
 						Name:  "ci-tools",
 					},
-					Ref: "master",
+					Ref: "main",
 				},
 			},
 			kubeClient: fakectrlruntimeclient.NewFakeClient(),
@@ -170,7 +170,7 @@ func TestHandle(t *testing.T) {
 					PullRequest: &struct{}{},
 				},
 				Comment: github.IssueComment{
-					Body: "/testwith openshift/ci-tools/master/unit openshift/release#876 openshift/release#876 openshift/release#876 openshift/release#876 openshift/release#876 openshift/release#876 openshift/release#876 openshift/release#876 openshift/release#876 openshift/release#876 openshift/release#876 openshift/release#876 openshift/release#876 openshift/release#876 openshift/release#876 openshift/release#876 openshift/release#876 openshift/release#876 openshift/release#876 openshift/release#876 openshift/release#876 openshift/release#876 openshift/release#876 openshift/release#876",
+					Body: "/testwith openshift/ci-tools/main/unit openshift/release#876 openshift/release#876 openshift/release#876 openshift/release#876 openshift/release#876 openshift/release#876 openshift/release#876 openshift/release#876 openshift/release#876 openshift/release#876 openshift/release#876 openshift/release#876 openshift/release#876 openshift/release#876 openshift/release#876 openshift/release#876 openshift/release#876 openshift/release#876 openshift/release#876 openshift/release#876 openshift/release#876 openshift/release#876 openshift/release#876 openshift/release#876",
 					User: github.User{Login: "developer"},
 				},
 			},
@@ -181,7 +181,7 @@ func TestHandle(t *testing.T) {
 						Owner: github.User{Login: "openshift"},
 						Name:  "ci-tools",
 					},
-					Ref: "master",
+					Ref: "main",
 				},
 			},
 			kubeClient:  fakectrlruntimeclient.NewFakeClient(),
@@ -197,7 +197,7 @@ func TestHandle(t *testing.T) {
 					PullRequest: &struct{}{},
 				},
 				Comment: github.IssueComment{
-					Body: "/testwith openshift/ci-tools/master/unit openshift/release#876",
+					Body: "/testwith openshift/ci-tools/main/unit openshift/release#876",
 					User: github.User{Login: "not-trusted"},
 				},
 			},
@@ -208,7 +208,7 @@ func TestHandle(t *testing.T) {
 						Owner: github.User{Login: "openshift"},
 						Name:  "ci-tools",
 					},
-					Ref: "master",
+					Ref: "main",
 				},
 			},
 			kubeClient:  fakectrlruntimeclient.NewFakeClient(),
@@ -235,7 +235,7 @@ func TestHandle(t *testing.T) {
 						Owner: github.User{Login: "openshift"},
 						Name:  "ci-tools",
 					},
-					Ref: "master",
+					Ref: "main",
 				},
 			},
 			kubeClient: fakectrlruntimeclient.NewClientBuilder().WithRuntimeObjects(
@@ -322,7 +322,7 @@ func TestHandle(t *testing.T) {
 							Owner: github.User{Login: "openshift"},
 							Name:  "ci-tools",
 						},
-						Ref: "master",
+						Ref: "main",
 					},
 					Number: 123,
 				},
@@ -332,7 +332,7 @@ func TestHandle(t *testing.T) {
 							Owner: github.User{Login: "openshift"},
 							Name:  "release",
 						},
-						Ref: "master",
+						Ref: "main",
 					},
 					Number: 876,
 				},
@@ -355,7 +355,7 @@ func TestHandle(t *testing.T) {
 								},
 							},
 						},
-						{Org: "openshift", Repo: "release", Branch: "master"}: {},
+						{Org: "openshift", Repo: "release", Branch: "main"}: {},
 					},
 				},
 				prowConfigGetter: &fakeProwConfigGetter{
@@ -369,8 +369,8 @@ func TestHandle(t *testing.T) {
 				dispatcherClient: &fakeDispatcherClient{},
 				jobClusterCache: jobClusterCache{
 					clusterForJob: map[string]string{
-						"pull-ci-openshift-ci-tools-master-unit": "build01",
-						"pull-ci-openshift-ci-tools-master-e2e":  "build02",
+						"pull-ci-openshift-ci-tools-main-unit": "build01",
+						"pull-ci-openshift-ci-tools-main-e2e":  "build02",
 					},
 					lastCleared: time.Now(),
 				},
@@ -406,13 +406,14 @@ func TestDetermineJobRuns(t *testing.T) {
 	}{
 		{
 			name:    "trigger a single job with an additional PR from the same repo",
-			comment: "/testwith openshift/ci-tools/master/unit openshift/ci-tools#123",
+			comment: "/testwith openshift/ci-tools/main/unit openshift/ci-tools#123",
 			originPR: github.PullRequest{
 				Base: github.PullRequestBranch{
 					Repo: github.Repo{
 						Owner: github.User{Login: "openshift"},
 						Name:  "ci-tools",
 					},
+					Ref: "main",
 				},
 				Number: 999,
 			},
@@ -421,7 +422,7 @@ func TestDetermineJobRuns(t *testing.T) {
 					Metadata: api.Metadata{
 						Org:    "openshift",
 						Repo:   "ci-tools",
-						Branch: "master",
+						Branch: "main",
 					},
 					Test: "unit",
 				},
@@ -441,6 +442,7 @@ func TestDetermineJobRuns(t *testing.T) {
 								Owner: github.User{Login: "openshift"},
 								Name:  "ci-tools",
 							},
+							Ref: "main",
 						},
 						Number: 123,
 					},
@@ -449,13 +451,14 @@ func TestDetermineJobRuns(t *testing.T) {
 		},
 		{
 			name:    "trigger a single job including a variant",
-			comment: "/testwith openshift/ci-tools/master/variant/unit openshift/ci-tools#123",
+			comment: "/testwith openshift/ci-tools/main/variant/unit openshift/ci-tools#123",
 			originPR: github.PullRequest{
 				Base: github.PullRequestBranch{
 					Repo: github.Repo{
 						Owner: github.User{Login: "openshift"},
 						Name:  "ci-tools",
 					},
+					Ref: "main",
 				},
 				Number: 999,
 			},
@@ -464,7 +467,7 @@ func TestDetermineJobRuns(t *testing.T) {
 					Metadata: api.Metadata{
 						Org:     "openshift",
 						Repo:    "ci-tools",
-						Branch:  "master",
+						Branch:  "main",
 						Variant: "variant",
 					},
 					Test: "unit",
@@ -485,6 +488,7 @@ func TestDetermineJobRuns(t *testing.T) {
 								Owner: github.User{Login: "openshift"},
 								Name:  "ci-tools",
 							},
+							Ref: "main",
 						},
 						Number: 123,
 					},
@@ -493,14 +497,15 @@ func TestDetermineJobRuns(t *testing.T) {
 		},
 		{
 			name: "trigger multiple jobs with an additional PR from the same repo",
-			comment: `/testwith openshift/ci-tools/master/unit openshift/ci-tools#123
-/testwith openshift/ci-tools/master/e2e https://github.com/openshift/ci-tools/pull/123`,
+			comment: `/testwith openshift/ci-tools/main/unit openshift/ci-tools#123
+/testwith openshift/ci-tools/main/e2e https://github.com/openshift/ci-tools/pull/123`,
 			originPR: github.PullRequest{
 				Base: github.PullRequestBranch{
 					Repo: github.Repo{
 						Owner: github.User{Login: "openshift"},
 						Name:  "ci-tools",
 					},
+					Ref: "main",
 				},
 				Number: 999,
 			},
@@ -510,7 +515,7 @@ func TestDetermineJobRuns(t *testing.T) {
 						Metadata: api.Metadata{
 							Org:    "openshift",
 							Repo:   "ci-tools",
-							Branch: "master",
+							Branch: "main",
 						},
 						Test: "unit",
 					},
@@ -523,59 +528,62 @@ func TestDetermineJobRuns(t *testing.T) {
 						},
 						Number: 999,
 					},
-					AdditionalPRs: []github.PullRequest{
-						{
-							Base: github.PullRequestBranch{
-								Repo: github.Repo{
-									Owner: github.User{Login: "openshift"},
-									Name:  "ci-tools",
-								},
-							},
-							Number: 123,
-						},
-					},
-				},
-				{
-					JobMetadata: api.MetadataWithTest{
-						Metadata: api.Metadata{
-							Org:    "openshift",
-							Repo:   "ci-tools",
-							Branch: "master",
-						},
-						Test: "e2e",
-					},
-					OriginPR: github.PullRequest{
+				AdditionalPRs: []github.PullRequest{
+					{
 						Base: github.PullRequestBranch{
 							Repo: github.Repo{
 								Owner: github.User{Login: "openshift"},
 								Name:  "ci-tools",
 							},
+							Ref: "main",
 						},
-						Number: 999,
+						Number: 123,
 					},
-					AdditionalPRs: []github.PullRequest{
-						{
-							Base: github.PullRequestBranch{
-								Repo: github.Repo{
-									Owner: github.User{Login: "openshift"},
-									Name:  "ci-tools",
-								},
-							},
-							Number: 123,
+				},
+			},
+			{
+				JobMetadata: api.MetadataWithTest{
+					Metadata: api.Metadata{
+						Org:    "openshift",
+						Repo:   "ci-tools",
+						Branch: "main",
+					},
+					Test: "e2e",
+				},
+				OriginPR: github.PullRequest{
+					Base: github.PullRequestBranch{
+						Repo: github.Repo{
+							Owner: github.User{Login: "openshift"},
+							Name:  "ci-tools",
 						},
+					},
+					Number: 999,
+				},
+				AdditionalPRs: []github.PullRequest{
+					{
+						Base: github.PullRequestBranch{
+							Repo: github.Repo{
+								Owner: github.User{Login: "openshift"},
+								Name:  "ci-tools",
+							},
+							Ref: "main",
+						},
+						Number: 123,
 					},
 				},
 			},
 		},
-		{
-			name:    "trigger a single job with multiple additional PRs",
-			comment: "/testwith openshift/ci-tools/master/unit openshift/ci-tools#123 openshift/release#876",
+	},
+	{
+		name:    "trigger a single job with multiple additional PRs",
+			comment: "/testwith openshift/ci-tools/main/unit openshift/ci-tools#123 openshift/release#876",
 			originPR: github.PullRequest{
 				Base: github.PullRequestBranch{
 					Repo: github.Repo{
 						Owner: github.User{Login: "openshift"},
 						Name:  "ci-tools",
 					},
+					Ref: "main",
 				},
 				Number: 999,
 			},
@@ -584,7 +592,7 @@ func TestDetermineJobRuns(t *testing.T) {
 					Metadata: api.Metadata{
 						Org:    "openshift",
 						Repo:   "ci-tools",
-						Branch: "master",
+						Branch: "main",
 					},
 					Test: "unit",
 				},
@@ -604,6 +612,7 @@ func TestDetermineJobRuns(t *testing.T) {
 								Owner: github.User{Login: "openshift"},
 								Name:  "ci-tools",
 							},
+							Ref: "main",
 						},
 						Number: 123,
 					},
@@ -621,13 +630,14 @@ func TestDetermineJobRuns(t *testing.T) {
 		},
 		{
 			name:    "invalid format for additional PR",
-			comment: "/testwith openshift/ci-tools/master/unit openshift/ci-tools/123",
+			comment: "/testwith openshift/ci-tools/main/unit openshift/ci-tools/123",
 			originPR: github.PullRequest{
 				Base: github.PullRequestBranch{
 					Repo: github.Repo{
 						Owner: github.User{Login: "openshift"},
 						Name:  "ci-tools",
 					},
+					Ref: "main",
 				},
 				Number: 999,
 			},
@@ -635,27 +645,29 @@ func TestDetermineJobRuns(t *testing.T) {
 		},
 		{
 			name:    "invalid format for job",
-			comment: "/testwith openshift/ci-tools/master/blaster/faster/unit openshift/ci-tools#123",
+			comment: "/testwith openshift/ci-tools/main/blaster/faster/unit openshift/ci-tools#123",
 			originPR: github.PullRequest{
 				Base: github.PullRequestBranch{
 					Repo: github.Repo{
 						Owner: github.User{Login: "openshift"},
 						Name:  "ci-tools",
 					},
+					Ref: "main",
 				},
 				Number: 999,
 			},
-			expectedError: errors.New("requested job is invalid. needs to be formatted like: <org>/<repo>/<branch>/<variant?>/<job>. instead it was: openshift/ci-tools/master/blaster/faster/unit"),
+			expectedError: errors.New("requested job is invalid. needs to be formatted like: <org>/<repo>/<branch>/<variant?>/<job>. instead it was: openshift/ci-tools/main/blaster/faster/unit"),
 		},
 		{
 			name:    "trigger a single job with an additional PR in the github url format",
-			comment: "/testwith openshift/ci-tools/master/unit https://github.com/openshift/ci-tools/pull/123",
+			comment: "/testwith openshift/ci-tools/main/unit https://github.com/openshift/ci-tools/pull/123",
 			originPR: github.PullRequest{
 				Base: github.PullRequestBranch{
 					Repo: github.Repo{
 						Owner: github.User{Login: "openshift"},
 						Name:  "ci-tools",
 					},
+					Ref: "main",
 				},
 				Number: 999,
 			},
@@ -664,7 +676,7 @@ func TestDetermineJobRuns(t *testing.T) {
 					Metadata: api.Metadata{
 						Org:    "openshift",
 						Repo:   "ci-tools",
-						Branch: "master",
+						Branch: "main",
 					},
 					Test: "unit",
 				},
@@ -684,6 +696,7 @@ func TestDetermineJobRuns(t *testing.T) {
 								Owner: github.User{Login: "openshift"},
 								Name:  "ci-tools",
 							},
+							Ref: "main",
 						},
 						Number: 123,
 					},
@@ -765,7 +778,7 @@ func (f *fakePeriodicDefaulter) DefaultPeriodic(periodic *prowconfig.Periodic) e
 type fakeDispatcherClient struct{}
 
 func (f *fakeDispatcherClient) ClusterForJob(jobName string) (string, error) {
-	if jobName == "pull-ci-openshift-ci-tools-master-missing" {
+	if jobName == "pull-ci-openshift-ci-tools-main-missing" {
 		return "", fmt.Errorf("job: %s not found", jobName)
 	} else {
 		return "build02", nil
@@ -785,7 +798,7 @@ func TestGenerateProwJob(t *testing.T) {
 					Metadata: api.Metadata{
 						Org:    "openshift",
 						Repo:   "ci-tools",
-						Branch: "master",
+						Branch: "main",
 					},
 					Test: "unit",
 				},
@@ -808,7 +821,7 @@ func TestGenerateProwJob(t *testing.T) {
 								Owner: github.User{Login: "openshift"},
 								Name:  "ci-tools",
 							},
-							Ref: "master",
+							Ref: "main",
 						},
 						Number: 123,
 						User:   github.User{Login: "other-dev"},
@@ -824,7 +837,7 @@ func TestGenerateProwJob(t *testing.T) {
 					Metadata: api.Metadata{
 						Org:    "openshift",
 						Repo:   "ci-tools",
-						Branch: "master",
+						Branch: "main",
 					},
 					Test: "e2e",
 				},
@@ -847,7 +860,7 @@ func TestGenerateProwJob(t *testing.T) {
 								Owner: github.User{Login: "openshift"},
 								Name:  "ci-tools",
 							},
-							Ref: "master",
+							Ref: "main",
 						},
 						Number: 123,
 						User:   github.User{Login: "other-dev"},
@@ -875,7 +888,7 @@ func TestGenerateProwJob(t *testing.T) {
 					Metadata: api.Metadata{
 						Org:    "openshift",
 						Repo:   "ci-tools",
-						Branch: "master",
+						Branch: "main",
 					},
 					Test: "missing",
 				},
@@ -898,7 +911,7 @@ func TestGenerateProwJob(t *testing.T) {
 								Owner: github.User{Login: "openshift"},
 								Name:  "ci-tools",
 							},
-							Ref: "master",
+							Ref: "main",
 						},
 						Number: 123,
 						User:   github.User{Login: "other-dev"},
@@ -906,7 +919,7 @@ func TestGenerateProwJob(t *testing.T) {
 					},
 				},
 			},
-			expectedError: errors.New("could not determine cluster for job pull-ci-openshift-ci-tools-master-missing: job: pull-ci-openshift-ci-tools-master-missing not found"),
+			expectedError: errors.New("could not determine cluster for job pull-ci-openshift-ci-tools-main-missing: job: pull-ci-openshift-ci-tools-main-missing not found"),
 		},
 		{
 			name: "no ref for requested test included",
@@ -915,7 +928,7 @@ func TestGenerateProwJob(t *testing.T) {
 					Metadata: api.Metadata{
 						Org:    "openshift",
 						Repo:   "release",
-						Branch: "master",
+						Branch: "main",
 					},
 					Test: "check-something",
 				},
@@ -938,7 +951,7 @@ func TestGenerateProwJob(t *testing.T) {
 								Owner: github.User{Login: "openshift"},
 								Name:  "ci-tools",
 							},
-							Ref: "master",
+							Ref: "main",
 						},
 						Number: 123,
 						User:   github.User{Login: "other-dev"},
@@ -975,7 +988,7 @@ func TestGenerateProwJob(t *testing.T) {
 				dispatcherClient: &fakeDispatcherClient{},
 				jobClusterCache: jobClusterCache{
 					clusterForJob: map[string]string{
-						"pull-ci-openshift-ci-tools-master-unit": "build01",
+						"pull-ci-openshift-ci-tools-main-unit": "build01",
 					},
 					lastCleared: time.Now(),
 				},

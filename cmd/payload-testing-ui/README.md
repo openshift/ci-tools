@@ -49,4 +49,4 @@ credentials, do:
 $ KUBECONFIG=kubeconfig.yaml payload-testing-ui --port 8000
 ```
 
-[deployment]: https://github.com/openshift/release/tree/master/clusters/app.ci/payload-testing-ui
+[deployment]: https://github.com/openshift/release/tree/main/clusters/app.ci/payload-testing-ui

@@ -307,7 +307,7 @@ func validateBuildRootImageStreamTag(ctx *configContext, buildRoot api.ImageStre
 func ValidateImages(ctx *configContext, images []api.ProjectDirectoryImageBuildStepConfiguration) []error {
 	var validationErrors []error
 
-	var validArchitectures = sets.New[string](
+	var validArchitectures = sets.New(
 		"amd64",   // x86-64
 		"arm64",   // AArch64
 		"ppc64le", // PowerPC 64-bit Little Endian

@@ -1429,7 +1429,7 @@ func TestValidateNodeArchitecture(t *testing.T) {
 	}{
 		{
 			name:   "empty Node Architecture",
-			output: errors.New("root.nodeArchitecture: invalid node architecture , expected one of amd64 or arm64"),
+			output: errors.New("root.nodeArchitecture: invalid node architecture , expected one of amd64, arm64, s390x or ppc64le"),
 		},
 		{
 			name:  "valid AMD64 Node Architecture",
@@ -1440,9 +1440,17 @@ func TestValidateNodeArchitecture(t *testing.T) {
 			input: api.NodeArchitectureARM64,
 		},
 		{
+			name:  "valid S390x Node Architecture",
+			input: api.NodeArchitectureS390x,
+		},
+		{
+			name:  "valid PPC64le Node Architecture",
+			input: api.NodeArchitecturePPC64le,
+		},
+		{
 			name:   "invalid Node Architecture",
-			input:  api.NodeArchitecture("s390x"),
-			output: errors.New("root.nodeArchitecture: invalid node architecture s390x, expected one of amd64 or arm64"),
+			input:  api.NodeArchitecture("riscv64"),
+			output: errors.New("root.nodeArchitecture: invalid node architecture riscv64, expected one of amd64, arm64, s390x or ppc64le"),
 		},
 	}
 	for _, testCase := range testCases {

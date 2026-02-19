@@ -426,16 +426,18 @@ type NodeArchitecture string
 
 func (na NodeArchitecture) Validate() error {
 	switch na {
-	case NodeArchitectureAMD64, NodeArchitectureARM64:
+	case NodeArchitectureAMD64, NodeArchitectureARM64, NodeArchitectureS390x, NodeArchitecturePPC64le:
 		return nil
 	}
 
-	return fmt.Errorf("invalid node architecture %s, expected one of %v or %v", na, NodeArchitectureAMD64, NodeArchitectureARM64)
+	return fmt.Errorf("invalid node architecture %s, expected one of %v, %v, %v or %v", na, NodeArchitectureAMD64, NodeArchitectureARM64, NodeArchitectureS390x, NodeArchitecturePPC64le)
 }
 
 const (
-	NodeArchitectureAMD64 NodeArchitecture = "amd64"
-	NodeArchitectureARM64 NodeArchitecture = "arm64"
+	NodeArchitectureAMD64   NodeArchitecture = "amd64"
+	NodeArchitectureARM64   NodeArchitecture = "arm64"
+	NodeArchitectureS390x   NodeArchitecture = "s390x"
+	NodeArchitecturePPC64le NodeArchitecture = "ppc64le"
 )
 
 type ReleaseStream string

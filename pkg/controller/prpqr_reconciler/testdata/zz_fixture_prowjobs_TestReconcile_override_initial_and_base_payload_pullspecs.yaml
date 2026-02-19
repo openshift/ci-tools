@@ -49,6 +49,10 @@
         command:
         - ci-operator
         env:
+        - name: HTTP_SERVER_IP
+          valueFrom:
+            fieldRef:
+              fieldPath: status.podIP
         - name: RELEASE_IMAGE_INITIAL
           value: quay.io/openshift-release-dev/ocp-release:4.15.12-x86_64
         - name: RELEASE_IMAGE_LATEST
@@ -56,6 +60,9 @@
         image: quay-proxy.ci.openshift.org/openshift/ci:ci_ci-operator_latest
         imagePullPolicy: Always
         name: ""
+        ports:
+        - containerPort: 8080
+          name: http
         resources:
           requests:
             cpu: 10m

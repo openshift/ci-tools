@@ -135,9 +135,11 @@ func NewProwJobBaseBuilderForTest(configSpec *cioperatorapi.ReleaseBuildConfigur
 	if testContainsLease(&test) {
 		p.PodSpec.Add(LeaseClient())
 	}
+
+	p.PodSpec.Add(HTTPServer())
+
 	// Note: Slack reporter config is now set in individual job generation functions
 	// to support full job name matching in excluded_job_patterns
-
 	switch {
 	case test.MultiStageTestConfigurationLiteral != nil:
 		if clusterProfile := test.MultiStageTestConfigurationLiteral.ClusterProfile; clusterProfile != "" {

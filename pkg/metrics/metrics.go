@@ -11,19 +11,34 @@ import (
 	"github.com/sirupsen/logrus"
 
 	corev1 "k8s.io/api/core/v1"
+	"k8s.io/client-go/kubernetes/scheme"
 	"k8s.io/client-go/rest"
 	metricsclient "k8s.io/metrics/pkg/client/clientset/versioned"
 	ctrlruntimeclient "sigs.k8s.io/controller-runtime/pkg/client"
 
 	configv1 "github.com/openshift/api/config/v1"
+	machinev1beta1 "github.com/openshift/api/machine/v1beta1"
+	autoscalingv1beta1 "github.com/openshift/cluster-autoscaler-operator/pkg/apis/autoscaling/v1beta1"
 
 	"github.com/openshift/ci-tools/pkg/api"
 	"github.com/openshift/ci-tools/pkg/lease"
 	"github.com/openshift/ci-tools/pkg/secrets"
 )
 
+func init() {
+	if err := machinev1beta1.AddToScheme(scheme.Scheme); err != nil {
+		logrus.WithError(err).Error("failed to add machinev1beta1 scheme")
+	}
+	if err := autoscalingv1beta1.SchemeBuilder.AddToScheme(scheme.Scheme); err != nil {
+		logrus.WithError(err).Error("failed to add autoscalingv1beta1 scheme")
+	}
+}
+
 const (
 	CIOperatorMetricsJSON = "ci-operator-metrics.json"
+	CIWorkloadLabel       = "ci-workload"
+	MachineAPINamespace   = "openshift-machine-api"
+	MachineSetLabel       = "machine.openshift.io/cluster-api-machineset"
 )
 
 // MetricsEvent is the interface that every metric event must implement.
@@ -45,6 +60,7 @@ type MetricsAgent struct {
 	nodesPlugin    *nodesMetricsPlugin
 	leasePlugin    *leasesPlugin
 	podPlugin      *PodLifecyclePlugin
+	machinesPlugin *MachinesPlugin
 	imagesPlugin   *imagesPlugin
 
 	wg sync.WaitGroup
@@ -65,6 +81,12 @@ func NewMetricsAgent(ctx context.Context, clusterConfig *rest.Config, censor *se
 	}
 
 	logger := logrus.WithField("component", "metricsAgent")
+
+	autoscalerList := &autoscalingv1beta1.MachineAutoscalerList{}
+	if err := client.List(ctx, autoscalerList, ctrlruntimeclient.InNamespace(MachineAPINamespace)); err != nil {
+		logger.WithError(err).Warn("Failed to list MachineAutoscalers at initialization")
+	}
+
 	return &MetricsAgent{
 		ctx:            ctx,
 		events:         make(chan MetricsEvent, 100),
@@ -77,6 +99,7 @@ func NewMetricsAgent(ctx context.Context, clusterConfig *rest.Config, censor *se
 		nodesPlugin:    newNodesMetricsPlugin(ctx, logger, client, metricsClient, nodesCh),
 		leasePlugin:    newLeasesPlugin(logger),
 		podPlugin:      NewPodLifecyclePlugin(ctx, logger, client),
+		machinesPlugin: NewMachinesPlugin(ctx, logger, client, autoscalerList.Items),
 		imagesPlugin:   newImagesPlugin(ctx, logger, client),
 	}, nil
 }
@@ -109,6 +132,7 @@ func (ma *MetricsAgent) Run() {
 			ma.nodesPlugin.Record(ev)
 			ma.leasePlugin.Record(ev)
 			ma.podPlugin.Record(ev)
+			ma.machinesPlugin.Record(ev)
 			ma.imagesPlugin.Record(ev)
 			ma.logger.WithField("event_type", fmt.Sprintf("%T", ev)).Debug("Recorded metrics event")
 		}
@@ -146,6 +170,7 @@ func (ma *MetricsAgent) flush() {
 		ma.leasePlugin.Name():    ma.leasePlugin.Events(),
 		ma.imagesPlugin.Name():   ma.imagesPlugin.Events(),
 		ma.podPlugin.Name():      ma.podPlugin.Events(),
+		ma.machinesPlugin.Name(): ma.machinesPlugin.Events(),
 	}
 
 	data, err := json.MarshalIndent(output, "", "  ")
@@ -191,6 +216,19 @@ func (ma *MetricsAgent) StorePodLifecycleMetrics(name, namespace string, phase c
 		PodName:   name,
 		Namespace: namespace,
 		PodPhase:  phase,
+	}
+	ma.Record(&event)
+}
+
+func (ma *MetricsAgent) StoreMachinesEvent(eventType MachinesEventType, obj ctrlruntimeclient.Object) {
+	if ma == nil || ma.machinesPlugin == nil || obj == nil {
+		return
+	}
+	event := MachinesEvent{
+		Type:      eventType,
+		PodName:   obj.GetName(),
+		Namespace: obj.GetNamespace(),
+		Workload:  obj.GetLabels()[CIWorkloadLabel],
 	}
 	ma.Record(&event)
 }

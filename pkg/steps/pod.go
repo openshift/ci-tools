@@ -23,6 +23,7 @@ import (
 	"github.com/openshift/ci-tools/pkg/api"
 	"github.com/openshift/ci-tools/pkg/junit"
 	"github.com/openshift/ci-tools/pkg/kubernetes"
+	"github.com/openshift/ci-tools/pkg/metrics"
 	"github.com/openshift/ci-tools/pkg/results"
 	"github.com/openshift/ci-tools/pkg/util"
 	podsutils "github.com/openshift/ci-tools/pkg/util"
@@ -128,6 +129,8 @@ func (s *podStep) run(ctx context.Context) error {
 			logrus.WithError(err).Warnf("Could not delete %s pod.", s.name)
 		}
 	}()
+
+	s.client.MetricsAgent().StoreMachinesEvent(metrics.PodCreation, pod)
 
 	pod, err = util.CreateOrRestartPod(ctx, s.client, pod)
 	if err != nil {
@@ -433,6 +436,8 @@ func getSecretVolumeMountFromSecret(secretMountPath string, secretIndex int) []c
 // This pod will not be able to gather artifacts, nor will it report log messages
 // unless it fails.
 func RunPod(ctx context.Context, podClient kubernetes.PodClient, pod *coreapi.Pod, skipLogs bool) (*coreapi.Pod, error) {
+	podClient.MetricsAgent().StoreMachinesEvent(metrics.PodCreation, pod)
+
 	pod, err := util.CreateOrRestartPod(ctx, podClient, pod)
 	if err != nil {
 		return pod, err

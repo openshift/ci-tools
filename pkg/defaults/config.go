@@ -1,6 +1,7 @@
 package defaults
 
 import (
+	"net/http"
 	"time"
 
 	coreapi "k8s.io/api/core/v1"
@@ -49,6 +50,8 @@ type Config struct {
 	MetricsAgent                *metrics.MetricsAgent
 	SkippedImages               sets.Set[string]
 	params                      *api.DeferredParameters
+
+	HTTPServerMux *http.ServeMux
 }
 
 type Clients struct {

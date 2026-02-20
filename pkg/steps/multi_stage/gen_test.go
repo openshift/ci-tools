@@ -137,7 +137,7 @@ func TestGeneratePods(t *testing.T) {
 			t.Parallel()
 
 			js := jobSpec()
-			step := newMultiStageTestStep(tc.config.Tests[0], tc.config, nil, nil, &js, nil, "node-name", "", nil, false, false)
+			step := newMultiStageTestStep(tc.config.Tests[0], tc.config, nil, nil, &js, nil, "node-name", "", nil, false, nil, false)
 			step.test[0].Resources = resourceRequirements
 
 			ret, _, err := step.generatePods(tc.config.Tests[0].MultiStageTestConfigurationLiteral.Test, tc.env, tc.secretVolumes, tc.secretVolumeMounts, nil)
@@ -204,7 +204,7 @@ func TestGenerateObservers(t *testing.T) {
 		},
 	}
 	jobSpec.SetNamespace("namespace")
-	step := newMultiStageTestStep(config.Tests[0], &config, nil, nil, &jobSpec, nil, "node-name", "", nil, false, false)
+	step := newMultiStageTestStep(config.Tests[0], &config, nil, nil, &jobSpec, nil, "node-name", "", nil, false, nil, false)
 	ret, err := step.generateObservers(observers, nil, nil, nil)
 	if err != nil {
 		t.Fatal(err)
@@ -278,7 +278,7 @@ func TestGeneratePodsEnvironment(t *testing.T) {
 					Test:        test,
 					Environment: tc.env,
 				},
-			}, &api.ReleaseBuildConfiguration{}, nil, nil, &jobSpec, nil, "node-name", "", nil, false, false)
+			}, &api.ReleaseBuildConfiguration{}, nil, nil, &jobSpec, nil, "node-name", "", nil, false, nil, false)
 			pods, _, err := step.(*multiStageTestStep).generatePods(test, nil, nil, nil, nil)
 			if err != nil {
 				t.Fatal(err)
@@ -346,7 +346,7 @@ func TestGeneratePodBestEffort(t *testing.T) {
 		},
 	}
 	jobSpec.SetNamespace("namespace")
-	step := newMultiStageTestStep(config.Tests[0], &config, nil, nil, &jobSpec, nil, "node-name", "", nil, false, false)
+	step := newMultiStageTestStep(config.Tests[0], &config, nil, nil, &jobSpec, nil, "node-name", "", nil, false, nil, false)
 	_, bestEffortSteps, err := step.generatePods(config.Tests[0].MultiStageTestConfigurationLiteral.Post, nil, nil, nil, nil)
 	if err != nil {
 		t.Fatal(err)
@@ -469,7 +469,7 @@ func TestAddCSICredentials(t *testing.T) {
 		},
 		{
 			name:        "one to add",
-			credentials: []api.CredentialReference{{Collection: "ns", Name: "name", MountPath: "/tmp"}},
+			credentials: []api.CredentialReference{{Collection: "ns", Group: "default", Name: "name", MountPath: "/tmp"}},
 			pod: coreapi.Pod{
 				ObjectMeta: metav1.ObjectMeta{
 					Namespace: "pod-ns",
@@ -488,20 +488,20 @@ func TestAddCSICredentials(t *testing.T) {
 						{
 							VolumeMounts: []coreapi.VolumeMount{
 								{
-									Name: getCSIVolumeName("pod-ns", "ns", "/tmp"), MountPath: "/tmp",
+									Name: getCSIVolumeName("pod-ns", []api.CredentialReference{{Collection: "ns", Group: "default", Name: "name", MountPath: "/tmp"}}), MountPath: "/tmp",
 								},
 							},
 						},
 					},
 					Volumes: []coreapi.Volume{
 						{
-							Name: getCSIVolumeName("pod-ns", "ns", "/tmp"),
+							Name: getCSIVolumeName("pod-ns", []api.CredentialReference{{Collection: "ns", Group: "default", Name: "name", MountPath: "/tmp"}}),
 							VolumeSource: coreapi.VolumeSource{
 								CSI: &coreapi.CSIVolumeSource{
 									Driver:   "secrets-store.csi.k8s.io",
 									ReadOnly: &readOnly,
 									VolumeAttributes: map[string]string{
-										"secretProviderClass": getSPCName("pod-ns", "ns", "/tmp", []api.CredentialReference{{Collection: "ns", Name: "name", MountPath: "/tmp"}}),
+										"secretProviderClass": getSPCName("pod-ns", []api.CredentialReference{{Collection: "ns", Group: "default", Name: "name", MountPath: "/tmp"}}),
 									},
 								},
 							},
@@ -512,8 +512,8 @@ func TestAddCSICredentials(t *testing.T) {
 		{
 			name: "many to add and disambiguate",
 			credentials: []api.CredentialReference{
-				{Collection: "ns", Name: "name1", MountPath: "/tmp"},
-				{Collection: "other", Name: "name2", MountPath: "/tamp"},
+				{Collection: "ns", Group: "default", Name: "name1", MountPath: "/tmp"},
+				{Collection: "other", Group: "default", Name: "name2", MountPath: "/tamp"},
 			},
 			pod: coreapi.Pod{
 				ObjectMeta: metav1.ObjectMeta{
@@ -533,33 +533,33 @@ func TestAddCSICredentials(t *testing.T) {
 						{
 							VolumeMounts: []coreapi.VolumeMount{
 								{
-									Name: getCSIVolumeName("pod-ns", "ns", "/tmp"), MountPath: "/tmp"},
+									Name: getCSIVolumeName("pod-ns", []api.CredentialReference{{Collection: "ns", Group: "default", Name: "name1", MountPath: "/tmp"}}), MountPath: "/tmp"},
 								{
-									Name: getCSIVolumeName("pod-ns", "other", "/tamp"), MountPath: "/tamp"},
+									Name: getCSIVolumeName("pod-ns", []api.CredentialReference{{Collection: "other", Group: "default", Name: "name2", MountPath: "/tamp"}}), MountPath: "/tamp"},
 							},
 						},
 					},
 					Volumes: []coreapi.Volume{
 						{
-							Name: getCSIVolumeName("pod-ns", "ns", "/tmp"),
+							Name: getCSIVolumeName("pod-ns", []api.CredentialReference{{Collection: "ns", Group: "default", Name: "name1", MountPath: "/tmp"}}),
 							VolumeSource: coreapi.VolumeSource{
 								CSI: &coreapi.CSIVolumeSource{
 									Driver:   "secrets-store.csi.k8s.io",
 									ReadOnly: &readOnly,
 									VolumeAttributes: map[string]string{
-										"secretProviderClass": getSPCName("pod-ns", "ns", "/tmp", []api.CredentialReference{{Collection: "ns", Name: "name1", MountPath: "/tmp"}}),
+										"secretProviderClass": getSPCName("pod-ns", []api.CredentialReference{{Collection: "ns", Group: "default", Name: "name1", MountPath: "/tmp"}}),
 									},
 								},
 							},
 						},
 						{
-							Name: getCSIVolumeName("pod-ns", "other", "/tamp"),
+							Name: getCSIVolumeName("pod-ns", []api.CredentialReference{{Collection: "other", Group: "default", Name: "name2", MountPath: "/tamp"}}),
 							VolumeSource: coreapi.VolumeSource{
 								CSI: &coreapi.CSIVolumeSource{
 									Driver:   "secrets-store.csi.k8s.io",
 									ReadOnly: &readOnly,
 									VolumeAttributes: map[string]string{
-										"secretProviderClass": getSPCName("pod-ns", "other", "/tamp", []api.CredentialReference{{Collection: "other", Name: "name2", MountPath: "/tamp"}}),
+										"secretProviderClass": getSPCName("pod-ns", []api.CredentialReference{{Collection: "other", Group: "default", Name: "name2", MountPath: "/tamp"}}),
 									},
 								},
 							},
@@ -570,7 +570,7 @@ func TestAddCSICredentials(t *testing.T) {
 		{
 			name: "dots in volume name are replaced",
 			credentials: []api.CredentialReference{
-				{Collection: "test-ns", Name: "hive-hive-credentials", MountPath: "/tmp"},
+				{Collection: "test-ns", Group: "default", Name: "hive-hive-credentials", MountPath: "/tmp"},
 			},
 			pod: coreapi.Pod{
 				ObjectMeta: metav1.ObjectMeta{
@@ -587,17 +587,17 @@ func TestAddCSICredentials(t *testing.T) {
 				},
 				Spec: coreapi.PodSpec{
 					Containers: []coreapi.Container{{VolumeMounts: []coreapi.VolumeMount{
-						{Name: getCSIVolumeName("pod-ns", "test-ns", "/tmp"), MountPath: "/tmp"},
+						{Name: getCSIVolumeName("pod-ns", []api.CredentialReference{{Collection: "test-ns", Group: "default", Name: "hive-hive-credentials", MountPath: "/tmp"}}), MountPath: "/tmp"},
 					}}},
 					Volumes: []coreapi.Volume{
 						{
-							Name: getCSIVolumeName("pod-ns", "test-ns", "/tmp"),
+							Name: getCSIVolumeName("pod-ns", []api.CredentialReference{{Collection: "test-ns", Group: "default", Name: "hive-hive-credentials", MountPath: "/tmp"}}),
 							VolumeSource: coreapi.VolumeSource{
 								CSI: &coreapi.CSIVolumeSource{
 									Driver:   "secrets-store.csi.k8s.io",
 									ReadOnly: &readOnly,
 									VolumeAttributes: map[string]string{
-										"secretProviderClass": getSPCName("pod-ns", "test-ns", "/tmp", []api.CredentialReference{{Collection: "test-ns", Name: "hive-hive-credentials", MountPath: "/tmp"}}),
+										"secretProviderClass": getSPCName("pod-ns", []api.CredentialReference{{Collection: "test-ns", Group: "default", Name: "hive-hive-credentials", MountPath: "/tmp"}}),
 									},
 								},
 							},

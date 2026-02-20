@@ -399,7 +399,7 @@ func stepForTest(cfg *Config, inputImages inputImageSet, c *api.TestStepConfigur
 			params = api.NewDeferredParameters(params)
 		}
 		var ret []api.Step
-		step := multi_stage.MultiStageTestStep(*c, cfg.CIConfig, params, cfg.podClient, cfg.JobSpec, leases, cfg.NodeName, cfg.TargetAdditionalSuffix, nil, cfg.EnableSecretsStoreCSIDriver, isLeaseProxyServerAvailable(cfg))
+		step := multi_stage.MultiStageTestStep(*c, cfg.CIConfig, params, cfg.podClient, cfg.JobSpec, leases, cfg.NodeName, cfg.TargetAdditionalSuffix, nil, cfg.GSMConfig != nil, cfg.GSMConfig, isLeaseProxyServerAvailable(cfg))
 		if ipPoolLease.ResourceType != "" {
 			step = steps.IPPoolStep(cfg.LeaseClient, cfg.podClient, ipPoolLease, step, params, cfg.JobSpec.Namespace, cfg.MetricsAgent)
 		}

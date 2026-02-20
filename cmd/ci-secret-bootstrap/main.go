@@ -80,7 +80,7 @@ type options struct {
 	vaultConfig     secretbootstrap.Config
 	generatorConfig secretgenerator.Config
 
-	gsmConfig        secretbootstrap.GSMConfig
+	gsmConfig        api.GSMConfig
 	gsmProjectConfig gsm.Config
 
 	allowUnused flagutil.Strings
@@ -151,7 +151,7 @@ func (o *options) completeOptions(censor *secrets.DynamicCensor, kubeConfigs map
 	}
 
 	if o.enableGsm {
-		if err := secretbootstrap.LoadGSMConfigFromFile(o.gsmConfigPath, &o.gsmConfig); err != nil {
+		if err := api.LoadGSMConfigFromFile(o.gsmConfigPath, &o.gsmConfig); err != nil {
 			return err
 		}
 		gsmProjectConfig, err := gsm.GetConfigFromEnv()
@@ -227,7 +227,7 @@ func (o *options) completeOptions(censor *secrets.DynamicCensor, kubeConfigs map
 	// This mirrors the Vault filtering above and ensures we only process bundles
 	// for clusters that are available and match any user-specified cluster filter.
 	if o.enableGsm && len(o.gsmConfig.Bundles) > 0 {
-		var filteredBundles []secretbootstrap.Bundle
+		var filteredBundles []api.GSMBundle
 		for i := range o.gsmConfig.Bundles {
 			bundle := &o.gsmConfig.Bundles[i]
 			// Preserve bundles with SyncToCluster=false regardless of targets
@@ -235,7 +235,7 @@ func (o *options) completeOptions(censor *secrets.DynamicCensor, kubeConfigs map
 				filteredBundles = append(filteredBundles, *bundle)
 				continue
 			}
-			var filteredTargets []secretbootstrap.TargetSpec
+			var filteredTargets []api.TargetSpec
 			for _, target := range bundle.Targets {
 				if disabledClusters.Has(target.Cluster) {
 					logrus.WithFields(logrus.Fields{
@@ -377,7 +377,7 @@ func (o *options) validateVaultGSMConflicts() error {
 // clear ownership of secrets during the migration from Vault to GSM.
 //
 // Returns an aggregate error containing all detected conflicts, or nil if no conflicts exist.
-func validateGSMVaultConflicts(gsmConfig *secretbootstrap.GSMConfig, vaultConfig *secretbootstrap.Config) error {
+func validateGSMVaultConflicts(gsmConfig *api.GSMConfig, vaultConfig *secretbootstrap.Config) error {
 	var errs []error
 
 	// Build index of Vault secrets
@@ -446,7 +446,7 @@ func constructDockerConfigJSONFromVault(client secrets.ReadOnlyClient, dockerCon
 }
 
 // constructDockerConfigJSONFromGSM constructs a .dockerconfigjson from GSM secrets cache
-func constructDockerConfigJSONFromGSM(secretsCache map[gsmSecretRef]fetchedSecret, registries []secretbootstrap.RegistryAuthData) ([]byte, error) {
+func constructDockerConfigJSONFromGSM(secretsCache map[gsmSecretRef]fetchedSecret, registries []api.RegistryAuthData) ([]byte, error) {
 	auths := make(map[string]secretbootstrap.DockerAuth)
 
 	for _, reg := range registries {
@@ -1174,8 +1174,8 @@ func reconcileSecrets(o options, vaultClient secrets.ReadOnlyClient, gsmClient *
 		logrus.Infof("the config file %s has been validated", o.vaultConfigPath)
 
 		if o.enableGsm {
-			var gsmConfig secretbootstrap.GSMConfig
-			if err := secretbootstrap.LoadGSMConfigFromFile(o.gsmConfigPath, &gsmConfig); err != nil {
+			var gsmConfig api.GSMConfig
+			if err := api.LoadGSMConfigFromFile(o.gsmConfigPath, &gsmConfig); err != nil {
 				return append(errs, fmt.Errorf("failed to load GSM config from file: %s", o.gsmConfigPath))
 			}
 			if err := gsmConfig.Validate(); err != nil {
@@ -1295,7 +1295,7 @@ type collectionGroupKey struct {
 // Returns a map of cluster name to list of Kubernetes Secret objects, and any fetch/build errors.
 func constructSecretsFromGSM(
 	ctx context.Context,
-	gsmConfig secretbootstrap.GSMConfig,
+	gsmConfig api.GSMConfig,
 	gsmClient gsm.SecretManagerClient,
 	gsmProjectConfig gsm.Config,
 	prowDisabledClusters sets.Set[string]) (map[string][]*coreapi.Secret, error) {
@@ -1410,7 +1410,7 @@ func constructSecretsFromGSM(
 		bundleHasError := false
 
 		for _, gsmSecretEntry := range bundle.GSMSecrets {
-			var fieldsToProcess []secretbootstrap.FieldEntry
+			var fieldsToProcess []api.FieldEntry
 			if len(gsmSecretEntry.Fields) == 0 {
 				key := collectionGroupKey{
 					collection: gsmSecretEntry.Collection,
@@ -1423,7 +1423,7 @@ func constructSecretsFromGSM(
 					break
 				}
 				for _, fieldName := range fieldNames {
-					fieldsToProcess = append(fieldsToProcess, secretbootstrap.FieldEntry{
+					fieldsToProcess = append(fieldsToProcess, api.FieldEntry{
 						Name: fieldName,
 						As:   "",
 					})

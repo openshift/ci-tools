@@ -1133,16 +1133,37 @@ type StepParameter struct {
 
 // CredentialReference defines a secret to mount into a step and where to mount it.
 type CredentialReference struct {
-	// Namespace is where the source secret exists.
-	Namespace string `json:"namespace"`
-	// Collection is the name of the collection the secret belongs to.
-	// In GCP, the secret is named <collection>__<secret-name> -- this represents
-	// the <collection> part.
-	Collection string `json:"collection"`
-	// Name is the name of the secret, without the collection prefix.
-	Name string `json:"name"`
+	// As is an optional string under which the secret will be stored on the file system.
+	As string `json:"as,omitempty"`
+	// Bundle is a named bundle reference from the GSM config mapping file.
+	// Mutually exclusive with Collection/Group/Field.
+	Bundle string `json:"bundle,omitempty"`
+	// Collection is the name of the collection the secret belongs to (first level of 3-level <collection>__<group>__<field> hierarchy).
+	Collection string `json:"collection,omitempty"`
+	// Field is the specific field name (third level of 3-level <collection>__<group>__<field> hierarchy).
+	// If omitted, all fields in the collection/group are auto-discovered.
+	Field string `json:"field,omitempty"`
+	// Group is the group name within the collection (second level of 3-level <collection>__<group>__<field> hierarchy).
+	// Required when Collection is set, unless Bundle is used.
+	Group string `json:"group,omitempty"`
 	// MountPath is where the secret should be mounted.
 	MountPath string `json:"mount_path"`
+	// Namespace is where the source secret exists.
+	Namespace string `json:"namespace"`
+	// Name is the name of the secret.
+	Name string `json:"name,omitempty"`
+}
+
+func (c *CredentialReference) IsAutoDiscovery() bool {
+	return c.Field == "" && c.Group != "" && c.Collection != ""
+}
+
+func (c *CredentialReference) IsExplicitField() bool {
+	return c.Field != "" && c.Group != "" && c.Collection != ""
+}
+
+func (c *CredentialReference) IsBundleReference() bool {
+	return c.Bundle != ""
 }
 
 // StepDependency defines a dependency on an image and the environment variable

@@ -19,6 +19,7 @@ import (
 	csiapi "sigs.k8s.io/secrets-store-csi-driver/apis/v1"
 
 	"github.com/openshift/ci-tools/pkg/api"
+	gsm "github.com/openshift/ci-tools/pkg/gsm-secrets"
 	"github.com/openshift/ci-tools/pkg/steps/loggingclient"
 	"github.com/openshift/ci-tools/pkg/testhelper"
 	testhelper_kube "github.com/openshift/ci-tools/pkg/testhelper/kubernetes"
@@ -60,24 +61,25 @@ func TestCreateSPCs(t *testing.T) {
 	scheme := runtime.NewScheme()
 	_ = csiapi.AddToScheme(scheme)
 
-	credential1 := api.CredentialReference{Name: "credential1", Collection: "test", MountPath: "/tmp/path1"}
-	credential2 := api.CredentialReference{Name: "credential2", Collection: "test-2", MountPath: "/tmp/path2"}
+	credential1 := api.CredentialReference{Collection: "test", Group: "group1", Field: "credential1", MountPath: "/tmp/path1"}
+	credential2 := api.CredentialReference{Collection: "test-2", Group: "group2", Field: "credential2", MountPath: "/tmp/path2"}
 
-	newGroupedSPC := func(collection, mountPath, ns string, credentials []api.CredentialReference) csiapi.SecretProviderClass {
+	newGroupedSPC := func(ns string, credentials []api.CredentialReference) csiapi.SecretProviderClass {
 		secret, _ := buildGCPSecretsParameter(credentials)
-		spc := buildSecretProviderClass(getSPCName(ns, collection, mountPath, credentials), ns, secret)
+		spc := buildSecretProviderClass(getSPCName(ns, credentials), ns, secret)
 		// Set ResourceVersion for fake client compatibility
 		spc.ResourceVersion = "1"
 		return *spc
 	}
 
-	newCensoringSPC := func(collection, credName, ns string) csiapi.SecretProviderClass {
-		credential := api.CredentialReference{Name: credName, Collection: collection}
+	newCensoringSPC := func(collection, group, field, ns string) csiapi.SecretProviderClass {
+		fullSecretName := gsm.GetGSMSecretName(collection, group, field)
+		censorMountPath := fmt.Sprintf("/censor/%s", fullSecretName)
+		credential := api.CredentialReference{Collection: collection, Group: group, Field: field, MountPath: censorMountPath}
 		credentials := []api.CredentialReference{credential}
 		secret, _ := buildGCPSecretsParameter(credentials)
-		censorMountPath := fmt.Sprintf("/censor/%s", credName)
 
-		spc := buildSecretProviderClass(getSPCName(ns, collection, censorMountPath, credentials), ns, secret)
+		spc := buildSecretProviderClass(getSPCName(ns, credentials), ns, secret)
 		// Set ResourceVersion for fake client compatibility
 		spc.ResourceVersion = "1"
 		return *spc
@@ -99,9 +101,9 @@ func TestCreateSPCs(t *testing.T) {
 			expectedSPCs: csiapi.SecretProviderClassList{
 				Items: []csiapi.SecretProviderClass{
 					// Grouped SPC for the credential at its mount path
-					newGroupedSPC(credential1.Collection, credential1.MountPath, "test-ns", []api.CredentialReference{credential1}),
+					newGroupedSPC("test-ns", []api.CredentialReference{credential1}),
 					// Individual SPC for censoring
-					newCensoringSPC(credential1.Collection, credential1.Name, "test-ns"),
+					newCensoringSPC(credential1.Collection, credential1.Group, credential1.Field, "test-ns"),
 				},
 			},
 		},
@@ -112,27 +114,31 @@ func TestCreateSPCs(t *testing.T) {
 			expectedSPCs: csiapi.SecretProviderClassList{
 				Items: []csiapi.SecretProviderClass{
 					// Grouped SPCs
-					newGroupedSPC(credential1.Collection, credential1.MountPath, "test-ns", []api.CredentialReference{credential1}),
-					newGroupedSPC(credential2.Collection, credential2.MountPath, "test-ns", []api.CredentialReference{credential2}),
+					newGroupedSPC("test-ns", []api.CredentialReference{credential1}),
+					newGroupedSPC("test-ns", []api.CredentialReference{credential2}),
 					// Individual censoring SPCs
-					newCensoringSPC(credential1.Collection, credential1.Name, "test-ns"),
-					newCensoringSPC(credential2.Collection, credential2.Name, "test-ns"),
+					newCensoringSPC(credential1.Collection, credential1.Group, credential1.Field, "test-ns"),
+					newCensoringSPC(credential2.Collection, credential2.Group, credential2.Field, "test-ns"),
 				},
 			},
 		},
 		{
 			name: "credentials with same collection and path grouped",
-			pre:  []api.LiteralTestStep{{Credentials: []api.CredentialReference{credential1, {Name: "credential3", Collection: "test", MountPath: "/tmp/path1"}}}},
+			pre: []api.LiteralTestStep{{
+				Credentials: []api.CredentialReference{
+					credential1,
+					{Collection: "test", Group: "group1", Field: "credential3", MountPath: "/tmp/path1"},
+				}}},
 			expectedSPCs: csiapi.SecretProviderClassList{
 				Items: []csiapi.SecretProviderClass{
 					// Grouped SPC with both credentials at same path
-					newGroupedSPC("test", "/tmp/path1", "test-ns", []api.CredentialReference{
+					newGroupedSPC("test-ns", []api.CredentialReference{
 						credential1,
-						{Name: "credential3", Collection: "test", MountPath: "/tmp/path1"},
+						{Collection: "test", Group: "group1", Field: "credential3", MountPath: "/tmp/path1"},
 					}),
 					// Individual censoring SPCs
-					newCensoringSPC(credential1.Collection, credential1.Name, "test-ns"),
-					newCensoringSPC("test", "credential3", "test-ns"),
+					newCensoringSPC(credential1.Collection, credential1.Group, credential1.Field, "test-ns"),
+					newCensoringSPC("test", "group1", "credential3", "test-ns"),
 				},
 			},
 		},
@@ -148,11 +154,19 @@ func TestCreateSPCs(t *testing.T) {
 				FakePodExecutor: crclient,
 			}
 			step := &multiStageTestStep{
-				pre:     tc.pre,
-				test:    tc.test,
-				post:    tc.post,
-				jobSpec: &api.JobSpec{},
-				client:  fakeClient,
+				pre:                         tc.pre,
+				test:                        tc.test,
+				post:                        tc.post,
+				jobSpec:                     &api.JobSpec{},
+				client:                      fakeClient,
+				enableSecretsStoreCSIDriver: true,
+				gsm: &GSMConfiguration{
+					Config: &api.GSMConfig{},
+					ProjectConfig: gsm.Config{
+						ProjectIdString: "test-project",
+						ProjectIdNumber: "123456",
+					},
+				},
 			}
 			step.jobSpec.SetNamespace("test-ns")
 			err := step.createSPCs(context.TODO())

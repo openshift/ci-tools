@@ -423,6 +423,14 @@ func (s *multiStageTestStep) environment() ([]coreapi.EnvVar, error) {
 		ret = append(ret, coreapi.EnvVar{Name: l.Env, Value: val})
 	}
 
+	val, err := s.params.Get(api.LeaseProxyServerURLEnvVarName)
+	if err != nil {
+		return nil, err
+	}
+	if val != "" {
+		ret = append(ret, coreapi.EnvVar{Name: api.LeaseProxyServerURLEnvVarName, Value: val})
+	}
+
 	for _, name := range []string{api.InitialReleaseName, api.LatestReleaseName} {
 		envVar := fmt.Sprintf("ORIGINAL_%s", utils.ReleaseImageEnv(name))
 		pullspec, err := s.params.Get(envVar)
@@ -449,6 +457,7 @@ func (s *multiStageTestStep) environment() ([]coreapi.EnvVar, error) {
 			ret = append(ret, coreapi.EnvVar{Name: api.DefaultIPPoolLeaseEnv, Value: val})
 		}
 	}
+
 	return ret, nil
 }
 

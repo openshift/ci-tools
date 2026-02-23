@@ -121,7 +121,10 @@ func fromConfig(ctx context.Context, cfg *Config) ([]api.Step, []api.Step, error
 	rawSteps = append(cfg.GraphConf.Steps, rawSteps...)
 	rawSteps = append(rawSteps, stepsForImageOverrides(utils.GetOverriddenImages())...)
 
-	buildSteps = append(buildSteps, leaseProxyServerStep(cfg)...)
+	for _, leaseProxyServerStep := range leaseProxyServerStep(cfg) {
+		buildSteps = append(buildSteps, leaseProxyServerStep)
+		addProvidesForStep(leaseProxyServerStep, cfg.params)
+	}
 
 	for _, rawStep := range rawSteps {
 		if testStep := rawStep.TestStepConfiguration; testStep != nil {

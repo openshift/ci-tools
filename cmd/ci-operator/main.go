@@ -977,16 +977,18 @@ func (o *options) Report(errs ...error) {
 	}
 }
 
-func (o *options) startHTTPServer(cancel func(), srv *http.Server) error {
+// startHTTPServer start the HTTP server asynchronously and returns the address it
+// is listening to.
+func (o *options) startHTTPServer(cancel func(), srv *http.Server) (string, error) {
 	srvIP := os.Getenv(api.CIOperatorHTTPServerIPEnvVarName)
 	if srvIP == "" {
-		return nil
+		return "", nil
 	}
 
 	ipAndPort := srvIP + ":" + strconv.Itoa(api.CIOperatorHTTPServerPort)
 	ln, err := net.Listen("tcp", ipAndPort)
 	if err != nil {
-		return fmt.Errorf("listen tcp on %s: %w", ipAndPort, err)
+		return "", fmt.Errorf("listen tcp on %s: %w", ipAndPort, err)
 	}
 
 	go func() {
@@ -997,18 +999,19 @@ func (o *options) startHTTPServer(cancel func(), srv *http.Server) error {
 		}
 	}()
 
-	return nil
+	addr := "http://" + ipAndPort
+	return addr, nil
 }
 
 func (o *options) Run() (errs []error) {
 	start := time.Now()
-	var srv *http.Server
+	var httpSrv *http.Server
 
 	defer func() {
 		logrus.Infof("Ran for %s", time.Since(start).Truncate(time.Second))
 		o.metricsAgent.Stop()
-		if srv != nil {
-			if err := srv.Close(); err != nil {
+		if httpSrv != nil {
+			if err := httpSrv.Close(); err != nil {
 				errs = append(errs, fmt.Errorf("close http server: %w", err))
 			}
 		}
@@ -1020,13 +1023,14 @@ func (o *options) Run() (errs []error) {
 		cancel()
 	}
 
-	srvMux := http.NewServeMux()
-	srv = &http.Server{
-		Handler:     srvMux,
+	httpSrvMux := http.NewServeMux()
+	httpSrv = &http.Server{
+		Handler:     httpSrvMux,
 		BaseContext: func(net.Listener) context.Context { return ctx },
 	}
 
-	if err := o.startHTTPServer(cancel, srv); err != nil {
+	httpSrvAddr, err := o.startHTTPServer(cancel, httpSrv)
+	if err != nil {
 		errs = append(errs, fmt.Errorf("run http server: %w", err))
 		return
 	}
@@ -1089,7 +1093,8 @@ func (o *options) Run() (errs []error) {
 	cfg.IntegratedStreams = streams
 	cfg.InjectedTest = o.injectTest != ""
 	cfg.GSMConfig = gsmConfig
-	cfg.HTTPServerMux = srvMux
+	cfg.HTTPServerAddr = httpSrvAddr
+	cfg.HTTPServerMux = httpSrvMux
 	// load the graph from the configuration
 	buildSteps, promotionSteps, err := defaults.FromConfig(ctx, cfg)
 	if err != nil {

@@ -1249,5 +1249,5 @@ func leaseProxyServerStep(cfg *Config) []api.Step {
 	}
 
 	logger := logrus.NewEntry(logrus.StandardLogger()).WithField("step", "lease-proxy-server")
-	return append(ret, steps.LeaseProxyStep(logger))
+	return append(ret, steps.LeaseProxyStep(logger, cfg.HTTPServerAddr, cfg.HTTPServerMux, cfg.LeaseClient))
 }

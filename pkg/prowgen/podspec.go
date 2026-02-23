@@ -11,6 +11,7 @@ import (
 	"k8s.io/apimachinery/pkg/api/resource"
 	kerrors "k8s.io/apimachinery/pkg/util/errors"
 
+	"github.com/openshift/ci-tools/pkg/api"
 	cioperatorapi "github.com/openshift/ci-tools/pkg/api"
 	"github.com/openshift/ci-tools/pkg/steps/utils"
 )
@@ -475,7 +476,7 @@ var (
 	}
 
 	smallHTTPServerEnv = corev1.EnvVar{
-		Name: "HTTP_SERVER_IP",
+		Name: api.CIOperatorHTTPServerIPEnvVarName,
 		ValueFrom: &corev1.EnvVarSource{
 			FieldRef: &corev1.ObjectFieldSelector{
 				FieldPath: "status.podIP",

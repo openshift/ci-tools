@@ -24,7 +24,8 @@ type collectionGroupKey struct {
 //   - collection: my-creds, group: aws, field: access-key, mount_path: /tmp/secrets
 //   - collection: my-creds, group: gcp, field: access-key, mount_path: /tmp/secrets
 //
-// Both would try to create /tmp/secrets/access-key
+// Both would try to create /tmp/secrets/access-key.
+// Expects the credentials to already have been resolved into concrete (collection, group, field) tuples.
 func ValidateNoGroupCollisionsOnMountPath(credentials []api.CredentialReference) error {
 	type collectionMountKey struct {
 		collection string
@@ -91,7 +92,7 @@ func ResolveCredentialReferences(
 	for _, cred := range credentials {
 		if cred.IsBundleReference() {
 			if gsmConfig == nil {
-				errs = append(errs, fmt.Errorf("bundle reference %q requires gsm-config file, but config is not loaded", cred.Bundle))
+				errs = append(errs, fmt.Errorf("bundle reference %q requires gsm-config file, but it is not loaded", cred.Bundle))
 				break
 			}
 			bundle := getBundle(gsmConfig, cred.Bundle)

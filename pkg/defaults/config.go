@@ -26,31 +26,31 @@ import (
 type Config struct {
 	Clients
 
-	CIConfig                    *api.ReleaseBuildConfiguration
-	GraphConf                   *api.GraphConfiguration
-	JobSpec                     *api.JobSpec
-	Templates                   []*templateapi.Template
-	ParamFile                   string
-	Promote                     bool
-	ClusterConfig               *rest.Config
-	PodPendingTimeout           time.Duration
-	RequiredTargets             []string
-	CloneAuthConfig             *steps.CloneAuthConfig
-	PullSecret                  *coreapi.Secret
-	PushSecret                  *coreapi.Secret
-	Censor                      *secrets.DynamicCensor
-	HiveKubeconfig              *rest.Config
-	NodeName                    string
-	NodeArchitectures           []string
-	TargetAdditionalSuffix      string
-	ManifestToolDockerCfg       string
-	LocalRegistryDNS            string
-	IntegratedStreams           map[string]*configresolver.IntegratedStream
-	InjectedTest                bool
+	CIConfig               *api.ReleaseBuildConfiguration
+	GraphConf              *api.GraphConfiguration
+	JobSpec                *api.JobSpec
+	Templates              []*templateapi.Template
+	ParamFile              string
+	Promote                bool
+	ClusterConfig          *rest.Config
+	PodPendingTimeout      time.Duration
+	RequiredTargets        []string
+	CloneAuthConfig        *steps.CloneAuthConfig
+	PullSecret             *coreapi.Secret
+	PushSecret             *coreapi.Secret
+	Censor                 *secrets.DynamicCensor
+	HiveKubeconfig         *rest.Config
+	NodeName               string
+	NodeArchitectures      []string
+	TargetAdditionalSuffix string
+	ManifestToolDockerCfg  string
+	LocalRegistryDNS       string
+	IntegratedStreams      map[string]*configresolver.IntegratedStream
+	InjectedTest           bool
 	GSMConfig              *multi_stage.GSMConfiguration
-	MetricsAgent                *metrics.MetricsAgent
-	SkippedImages               sets.Set[string]
-	params                      *api.DeferredParameters
+	MetricsAgent           *metrics.MetricsAgent
+	SkippedImages          sets.Set[string]
+	params                 *api.DeferredParameters
 
 	HTTPServerMux *http.ServeMux
 }

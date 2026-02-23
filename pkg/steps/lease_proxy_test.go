@@ -5,8 +5,9 @@ import (
 	"testing"
 
 	"github.com/google/go-cmp/cmp"
-	"github.com/openshift/ci-tools/pkg/api"
 	"github.com/sirupsen/logrus"
+
+	"github.com/openshift/ci-tools/pkg/api"
 )
 
 func TestLeaseProxyProvides(t *testing.T) {

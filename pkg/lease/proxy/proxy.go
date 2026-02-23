@@ -7,8 +7,9 @@ import (
 	"net/http"
 	"strconv"
 
-	"github.com/openshift/ci-tools/pkg/lease"
 	"github.com/sirupsen/logrus"
+
+	"github.com/openshift/ci-tools/pkg/lease"
 )
 
 const (

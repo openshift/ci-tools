@@ -18,6 +18,7 @@ import (
 
 type PRCreationOptions struct {
 	SelfApprove bool
+	GitHubApp   GitHubAppOptions
 	flagutil.GitHubOptions
 	GithubClient github.Client
 }
@@ -25,9 +26,13 @@ type PRCreationOptions struct {
 func (o *PRCreationOptions) AddFlags(fs *flag.FlagSet) {
 	fs.BoolVar(&o.SelfApprove, "self-approve", false, "If the created PR should be self-approved by adding the lgtm+approved labels")
 	o.GitHubOptions.AddFlags(fs)
+	o.GitHubApp.AddFlags(fs)
 }
 
 func (o *PRCreationOptions) Finalize() error {
+	if err := o.GitHubApp.Validate(); err != nil {
+		return fmt.Errorf("failed to validate GitHub App options: %w", err)
+	}
 	if err := o.GitHubOptions.Validate(false); err != nil {
 		return err
 	}
@@ -39,7 +44,9 @@ func (o *PRCreationOptions) Finalize() error {
 	if err != nil {
 		return fmt.Errorf("failed to construct github client: %w", err)
 	}
-
+	if err := o.GitHubApp.Finalize(); err != nil {
+		return fmt.Errorf("failed to initialize GitHub App client: %w", err)
+	}
 	return nil
 }
 
@@ -99,6 +106,25 @@ func SkipPRCreation() PrOption {
 	}
 }
 
+// formatAssigneeCC builds a /cc mention string from a comma-separated assignee list.
+// Returns empty string when there are no assignees.
+func formatAssigneeCC(assigneeCSV string) string {
+	if assigneeCSV == "" {
+		return ""
+	}
+	var mentions []string
+	for _, a := range strings.Split(assigneeCSV, ",") {
+		a = strings.TrimSpace(a)
+		if a != "" {
+			mentions = append(mentions, "@"+a)
+		}
+	}
+	if len(mentions) == 0 {
+		return ""
+	}
+	return "\n/cc " + strings.Join(mentions, ", ")
+}
+
 // UpsertPR upserts a PR. The PRTitle must be alphanumeric except for spaces, as it will be used as the
 // branchname on the bots fork.
 func (o *PRCreationOptions) UpsertPR(localSourceDir, org, repo, branch, prTitle string, setters ...PrOption) error {
@@ -137,6 +163,7 @@ func (o *PRCreationOptions) UpsertPR(localSourceDir, org, repo, branch, prTitle 
 	sourceBranchName := strings.ReplaceAll(strings.ToLower(prArgs.matchTitle), " ", "-")
 	// Fix for NO-ISSUE: title
 	sourceBranchName = strings.ReplaceAll(strings.ToLower(sourceBranchName), ":", "-")
+	origRepo := repo
 	o.GithubClient.SetMax404Retries(0)
 	if _, err := o.GithubClient.GetRepo(username, repo); err != nil {
 		// Somehow github.IsNotFound doesn't recognize this?
@@ -192,24 +219,29 @@ func (o *PRCreationOptions) UpsertPR(localSourceDir, org, repo, branch, prTitle 
 		return nil
 	}
 
+	prBodyText := prArgs.prBody + formatAssigneeCC(prArgs.prAssignee)
+
 	labelsToAdd := prArgs.additionalLabels
 	if o.SelfApprove {
 		l.Infof("Self-aproving PR by adding the %q and %q labels", labels.Approved, labels.LGTM)
 		labelsToAdd = append(labelsToAdd, labels.Approved, labels.LGTM)
 	}
 
-	assignees := strings.Split(prArgs.prAssignee, ",")
-	for i, assignee := range assignees {
-		assignees[i] = "@" + assignee
+	if o.GitHubApp.Enabled() {
+		l.Info("Using GitHub App for PR creation")
+		head := username + ":" + sourceBranchName
+		if err := o.GitHubApp.UpsertPR(org, origRepo, branch, head, prTitle, prBodyText, labelsToAdd); err != nil {
+			return fmt.Errorf("failed to create PR via GitHub App: %w", err)
+		}
+		return nil
 	}
-	assigneeList := strings.Join(assignees, ", ")
 
 	if err := bumper.UpdatePullRequestWithLabels(
 		o.GithubClient,
 		org,
 		repo,
 		prTitle,
-		prArgs.prBody+"\n/cc "+assigneeList,
+		prBodyText,
 		username+":"+sourceBranchName,
 		branch,
 		sourceBranchName,

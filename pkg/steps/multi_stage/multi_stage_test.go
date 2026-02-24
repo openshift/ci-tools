@@ -86,7 +86,7 @@ func TestRequires(t *testing.T) {
 				As:                                 "some-e2e",
 				ClusterClaim:                       tc.clusterClaim,
 				MultiStageTestConfigurationLiteral: &tc.steps,
-			}, &tc.config, api.NewDeferredParameters(nil), nil, nil, nil, "node-name", "", nil, false, tc.leaseProxyServerAvailable)
+			}, &tc.config, api.NewDeferredParameters(nil), nil, nil, nil, "node-name", "", nil, false, nil, tc.leaseProxyServerAvailable)
 			ret := step.Requires()
 			if len(ret) == len(tc.req) {
 				matches := true
@@ -216,7 +216,7 @@ func TestAddCredentialsToCensoring(t *testing.T) {
 	newVolume := func(index int, credName, collection string) coreapi.Volume {
 		readOnly := true
 		censorMountPath := getCensorMountPath(credName)
-		individualCredentials := []api.CredentialReference{{Name: credName, Collection: collection}}
+		individualCredentials := []api.CredentialReference{{Name: credName, Collection: collection, MountPath: censorMountPath}}
 
 		return coreapi.Volume{
 			Name: fmt.Sprintf("censor-cred-%d", index),
@@ -225,7 +225,7 @@ func TestAddCredentialsToCensoring(t *testing.T) {
 					Driver:   "secrets-store.csi.k8s.io",
 					ReadOnly: &readOnly,
 					VolumeAttributes: map[string]string{
-						"secretProviderClass": getSPCName("test", collection, censorMountPath, individualCredentials),
+						"secretProviderClass": getSPCName("test", individualCredentials),
 					},
 				},
 			},

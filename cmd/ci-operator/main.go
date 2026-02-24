@@ -27,10 +27,12 @@ import (
 	"strings"
 	"time"
 
+	secretmanager "cloud.google.com/go/secretmanager/apiv1"
 	"github.com/bombsimon/logrusr/v3"
 	"github.com/go-logr/logr"
 	egressfirewallv1 "github.com/ovn-org/ovn-kubernetes/go-controller/pkg/crd/egressfirewall/v1"
 	"github.com/sirupsen/logrus"
+	"google.golang.org/api/option"
 
 	appsv1 "k8s.io/api/apps/v1"
 	authapi "k8s.io/api/authorization/v1"
@@ -82,6 +84,7 @@ import (
 	"github.com/openshift/ci-tools/pkg/api/configresolver"
 	"github.com/openshift/ci-tools/pkg/api/nsttl"
 	"github.com/openshift/ci-tools/pkg/defaults"
+	gsm "github.com/openshift/ci-tools/pkg/gsm-secrets"
 	"github.com/openshift/ci-tools/pkg/interrupt"
 	"github.com/openshift/ci-tools/pkg/junit"
 	"github.com/openshift/ci-tools/pkg/labeledclient"
@@ -93,6 +96,7 @@ import (
 	"github.com/openshift/ci-tools/pkg/results"
 	"github.com/openshift/ci-tools/pkg/secrets"
 	"github.com/openshift/ci-tools/pkg/steps"
+	"github.com/openshift/ci-tools/pkg/steps/multi_stage"
 	tooldetector "github.com/openshift/ci-tools/pkg/tool-detector"
 	"github.com/openshift/ci-tools/pkg/util"
 	"github.com/openshift/ci-tools/pkg/util/gzip"
@@ -452,6 +456,9 @@ type options struct {
 
 	restrictNetworkAccess       bool
 	enableSecretsStoreCSIDriver bool
+	gsmConfigPath               string
+	gsmConfig                   api.GSMConfig
+	gsmCredentialsFile          string
 
 	metricsAgent *metrics.MetricsAgent
 
@@ -507,6 +514,8 @@ func bindOptions(flag *flag.FlagSet) *options {
 	flag.StringVar(&opt.impersonateUser, "as", "", "Username to impersonate")
 	flag.BoolVar(&opt.restrictNetworkAccess, "restrict-network-access", false, "Restrict network access to 10.0.0.0/8 (RedHat intranet).")
 	flag.BoolVar(&opt.enableSecretsStoreCSIDriver, "enable-secrets-store-csi-driver", false, "Use Secrets Store CSI driver for accessing multi-stage credentials.")
+	flag.StringVar(&opt.gsmConfigPath, "gsm-config", "", "Path to the gsm config file.")
+	flag.StringVar(&opt.gsmCredentialsFile, "gsm-credentials-file", "", "Path to GCP service account credentials.")
 
 	// flags needed for the configresolver
 	flag.StringVar(&opt.resolverAddress, "resolver-address", configResolverAddress, "Address of configresolver")
@@ -571,6 +580,10 @@ func (o *options) Complete() error {
 	}
 	if o.unresolvedConfigPath != "" && o.resolverAddress == "" {
 		return errors.New("cannot request resolved config with --unresolved-config unless providing --resolver-address")
+	}
+
+	if o.enableSecretsStoreCSIDriver && o.gsmConfigPath == "" {
+		return fmt.Errorf("--gsm-config is required when --enable-secrets-store-csi-driver is enabled")
 	}
 
 	injectTest, err := o.getInjectTest()
@@ -755,6 +768,13 @@ func (o *options) Complete() error {
 
 	handleTargetAdditionalSuffix(o)
 
+	if o.enableSecretsStoreCSIDriver {
+		err := api.LoadGSMConfigFromFile(o.gsmConfigPath, &o.gsmConfig)
+		if err != nil {
+			return err
+		}
+	}
+
 	return overrideTestStepDependencyParams(o)
 }
 
@@ -767,27 +787,26 @@ func (o *options) ToGraphConfig() *defaults.Config {
 		Clients: defaults.Clients{
 			LeaseClientEnabled: o.isLeaseClientAvailable(),
 		},
-		CIConfig:                    o.configSpec,
-		GraphConf:                   &o.graphConfig,
-		JobSpec:                     o.jobSpec,
-		Templates:                   o.templates,
-		ParamFile:                   o.writeParams,
-		Promote:                     o.promote,
-		ClusterConfig:               o.clusterConfig,
-		PodPendingTimeout:           o.podPendingTimeout,
-		RequiredTargets:             o.targets.values,
-		CloneAuthConfig:             o.cloneAuthConfig,
-		PullSecret:                  o.pullSecret,
-		PushSecret:                  o.pushSecret,
-		Censor:                      o.censor,
-		HiveKubeconfig:              o.hiveKubeconfig,
-		NodeName:                    o.nodeName,
-		TargetAdditionalSuffix:      o.targetAdditionalSuffix,
-		ManifestToolDockerCfg:       o.manifestToolDockerCfg,
-		LocalRegistryDNS:            o.localRegistryDNS,
-		EnableSecretsStoreCSIDriver: o.enableSecretsStoreCSIDriver,
-		MetricsAgent:                o.metricsAgent,
-		SkippedImages:               o.skippedImages,
+		CIConfig:               o.configSpec,
+		GraphConf:              &o.graphConfig,
+		JobSpec:                o.jobSpec,
+		Templates:              o.templates,
+		ParamFile:              o.writeParams,
+		Promote:                o.promote,
+		ClusterConfig:          o.clusterConfig,
+		PodPendingTimeout:      o.podPendingTimeout,
+		RequiredTargets:        o.targets.values,
+		CloneAuthConfig:        o.cloneAuthConfig,
+		PullSecret:             o.pullSecret,
+		PushSecret:             o.pushSecret,
+		Censor:                 o.censor,
+		HiveKubeconfig:         o.hiveKubeconfig,
+		NodeName:               o.nodeName,
+		TargetAdditionalSuffix: o.targetAdditionalSuffix,
+		ManifestToolDockerCfg:  o.manifestToolDockerCfg,
+		LocalRegistryDNS:       o.localRegistryDNS,
+		MetricsAgent:           o.metricsAgent,
+		SkippedImages:          o.skippedImages,
 	}
 }
 
@@ -1037,11 +1056,39 @@ func (o *options) Run() (errs []error) {
 		return
 	}
 
+	var gsmConfig *multi_stage.GSMConfiguration
+	if o.enableSecretsStoreCSIDriver {
+		gsmProjectConfig, err := gsm.GetConfigFromEnv()
+		if err != nil {
+			return []error{results.ForReason("gsm_config").WithError(err).Errorf("failed to get GSM project config from environment: %v", err)}
+		}
+		var opts []option.ClientOption
+		if o.gsmCredentialsFile != "" {
+			opts = append(opts, option.WithCredentialsFile(o.gsmCredentialsFile))
+		}
+		gsmClient, err := secretmanager.NewClient(ctx, opts...)
+		if err != nil {
+			return []error{results.ForReason("gsm_client").WithError(err).Errorf("failed to initialize GSM client: %v", err)}
+		}
+		defer func() {
+			if err := gsmClient.Close(); err != nil {
+				logrus.WithError(err).Warn("Failed to close GSM client")
+			}
+		}()
+		gsmConfig = &multi_stage.GSMConfiguration{
+			Config:          &o.gsmConfig,
+			CredentialsFile: o.gsmCredentialsFile,
+			ProjectConfig:   gsmProjectConfig,
+			Client:          gsmClient,
+		}
+	}
+
 	cfg := o.ToGraphConfig()
 	cfg.LeaseClient = leaseClient
 	cfg.NodeArchitectures = nodeArchitectures
 	cfg.IntegratedStreams = streams
 	cfg.InjectedTest = o.injectTest != ""
+	cfg.GSMConfig = gsmConfig
 	cfg.HTTPServerMux = srvMux
 	// load the graph from the configuration
 	buildSteps, promotionSteps, err := defaults.FromConfig(ctx, cfg)

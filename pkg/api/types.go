@@ -1521,6 +1521,7 @@ const (
 	ClusterProfileGCPOADPQE               ClusterProfile = "gcp-oadp-qe"
 	ClusterProfileAWSlpChaos              ClusterProfile = "aws-lp-chaos"
 	ClusterProfileMetalRHgs               ClusterProfile = "metal-redhat-gs"
+	ClusterProfileAWSOSPQE                ClusterProfile = "aws-osp-qe"
 	ClusterProfileAWSOSC                  ClusterProfile = "aws-sandboxed-containers-operator"
 
 	ClusterProfileRosaRegionalPlatformInt ClusterProfile = "rosa-regional-platform-int"
@@ -1724,6 +1725,7 @@ func ClusterProfiles() []ClusterProfile {
 		ClusterProfileGCPOADPQE,
 		ClusterProfileAWSlpChaos,
 		ClusterProfileMetalRHgs,
+		ClusterProfileAWSOSPQE,
 		ClusterProfileAWSOSC,
 
 		ClusterProfileRosaRegionalPlatformInt,
@@ -1805,6 +1807,7 @@ func (p ClusterProfile) ClusterType() string {
 		ClusterProfileAWSOADPQE,
 		ClusterProfileAWSConfidentialQE,
 		ClusterProfileAWSlpChaos,
+		ClusterProfileAWSOSPQE,
 		ClusterProfileAWSOSC:
 		return string(CloudAWS)
 	case
@@ -2420,6 +2423,8 @@ func (p ClusterProfile) LeaseType() string {
 		return "aws-lp-chaos-quota-slice"
 	case ClusterProfileMetalRHgs:
 		return "metal-redhat-gs-quota-slice"
+	case ClusterProfileAWSOSPQE:
+		return "aws-osp-qe-quota-slice"
 	case ClusterProfileAWSOSC:
 		return "aws-sandboxed-containers-operator-quota-slice"
 	case ClusterProfileRosaRegionalPlatformInt:
@@ -2487,7 +2492,7 @@ func LeaseTypeFromClusterType(t string) (string, error) {
 		"kubevirt", "aws-cpaas", "osd-ephemeral", "gcp-virtualization", "aws-virtualization",
 		"azure-virtualization", "hypershift-aws", "hypershift-aks", "hypershift-azure",
 		"hypershift-powervs", "hypershift-powervs-cb", "hypershift-gcp", "aws-mco-qe",
-		"equinix-edge-enablement", "aws-oadp-qe", "azure-oadp-qe", "gcp-oadp-qe", "aws-lp-chaos",
+		"equinix-edge-enablement", "aws-oadp-qe", "azure-oadp-qe", "gcp-oadp-qe", "aws-lp-chaos", "aws-osp-qe",
 		"metal-redhat-gs", "aro-hcp-int", "aro-hcp-stg", "aro-hcp-prod", "aro-hcp-dev", "rosa-regional-platform-int", "hyperfleet-e2e",
 		"aro-classic-int", "aro-classic-stg", "aro-classic-prod", "aro-classic-dev":
 		return t + "-quota-slice", nil

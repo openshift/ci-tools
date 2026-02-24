@@ -29,7 +29,7 @@
         - --input-hash=multi-pr-openshift-ci-tools-999-openshift-ci-tools-123-unit
         - --report-credentials-file=/etc/report/credentials
         - --target=unit
-        - --with-test-from=openshift/ci-tools@master:unit
+        - --with-test-from=openshift/ci-tools@main:unit
         command:
         - ci-operator
         env:
@@ -71,8 +71,8 @@
         secret:
           secretName: result-aggregator
     refs:
-      base_ref: master
-      base_sha: heads/master
+      base_ref: main
+      base_sha: heads/main
       org: openshift
       pulls:
       - author: ""
@@ -99,7 +99,7 @@
       created-by-prow: "true"
       prow.k8s.io/context: ""
       prow.k8s.io/job: multi-pr-openshift-ci-tools-999-openshift-release-876-e2e
-      prow.k8s.io/refs.base_ref: master
+      prow.k8s.io/refs.base_ref: main
       prow.k8s.io/refs.org: openshift
       prow.k8s.io/refs.pull: "876"
       prow.k8s.io/refs.repo: release
@@ -114,8 +114,8 @@
       skip_cloning: true
       timeout: 8h0m0s
     extra_refs:
-    - base_ref: master
-      base_sha: heads/master
+    - base_ref: main
+      base_sha: heads/main
       org: openshift
       pulls:
       - author: ""
@@ -131,7 +131,7 @@
         - --input-hash=multi-pr-openshift-ci-tools-999-openshift-release-876-e2e
         - --report-credentials-file=/etc/report/credentials
         - --target=e2e
-        - --with-test-from=openshift/ci-tools@master:e2e
+        - --with-test-from=openshift/ci-tools@main:e2e
         command:
         - ci-operator
         env:
@@ -173,8 +173,8 @@
         secret:
           secretName: result-aggregator
     refs:
-      base_ref: master
-      base_sha: heads/master
+      base_ref: main
+      base_sha: heads/main
       org: openshift
       pulls:
       - author: ""
@@ -198,7 +198,7 @@
       created-by-prow: "true"
       prow.k8s.io/context: ""
       prow.k8s.io/job: multi-pr-openshift-ci-tools-999-openshift-release-876-unit
-      prow.k8s.io/refs.base_ref: master
+      prow.k8s.io/refs.base_ref: main
       prow.k8s.io/refs.org: openshift
       prow.k8s.io/refs.pull: "876"
       prow.k8s.io/refs.repo: release
@@ -213,8 +213,8 @@
       skip_cloning: true
       timeout: 8h0m0s
     extra_refs:
-    - base_ref: master
-      base_sha: heads/master
+    - base_ref: main
+      base_sha: heads/main
       org: openshift
       pulls:
       - author: ""
@@ -230,7 +230,7 @@
         - --input-hash=multi-pr-openshift-ci-tools-999-openshift-release-876-unit
         - --report-credentials-file=/etc/report/credentials
         - --target=unit
-        - --with-test-from=openshift/ci-tools@master:unit
+        - --with-test-from=openshift/ci-tools@main:unit
         command:
         - ci-operator
         env:
@@ -272,8 +272,8 @@
         secret:
           secretName: result-aggregator
     refs:
-      base_ref: master
-      base_sha: heads/master
+      base_ref: main
+      base_sha: heads/main
       org: openshift
       pulls:
       - author: ""

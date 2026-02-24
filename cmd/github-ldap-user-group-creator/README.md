@@ -9,7 +9,7 @@
 
 The groups are used
 - by `ci-operator` which promotes the group to the admins of the namespace created for the test.
-- in [the manifests](https://github.com/openshift/release/tree/master/clusters) of CI clusters
+- in [the manifests](https://github.com/openshift/release/tree/main/clusters) of CI clusters
   in the release repo.
 
 ## How it works
@@ -31,6 +31,6 @@ This tool is also responsible for deleting the users and their identities on all
 ## How is it deployed
 
 The periodic
-job [periodic-github-ldap-user-group-creator](https://deck-internal-ci.apps.ci.l2s4.p1.openshiftapps.com/?job=periodic-github-ldap-user-group-creator) ([definition](https://github.com/openshift/release/blob/master/ci-operator/jobs/infra-periodics.yaml))
+job [periodic-github-ldap-user-group-creator](https://deck-internal-ci.apps.ci.l2s4.p1.openshiftapps.com/?job=periodic-github-ldap-user-group-creator) ([definition](https://github.com/openshift/release/blob/main/ci-operator/jobs/infra-periodics.yaml))
 uses `github-ldap-user-group-creator` to create the groups.
-The service account RBACs are defined in [admin_github-ldap-user-group-creator_rbac.yaml](https://github.com/openshift/release/blob/master/clusters/build-clusters/common/assets/admin_github-ldap-user-group-creator_rbac.yaml)
+The service account RBACs are defined in [admin_github-ldap-user-group-creator_rbac.yaml](https://github.com/openshift/release/blob/main/clusters/build-clusters/common/assets/admin_github-ldap-user-group-creator_rbac.yaml)

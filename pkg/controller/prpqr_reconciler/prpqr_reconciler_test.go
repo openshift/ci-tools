@@ -89,7 +89,7 @@ func TestReconcile(t *testing.T) {
 						PullRequests: []v1.PullRequestUnderTest{{Org: "test-org", Repo: "test-repo", BaseRef: "test-branch", BaseSHA: "123456", PullRequest: &v1.PullRequest{Number: 100, Author: "test", SHA: "12345", Title: "test-pr"}}},
 						Jobs: v1.PullRequestPayloadJobSpec{
 							ReleaseControllerConfig: v1.ReleaseControllerConfig{OCP: "4.9", Release: "ci", Specifier: "informing"},
-							Jobs:                    []v1.ReleaseJobSpec{{CIOperatorConfig: v1.CIOperatorMetadata{Org: "openshift", Repo: "release", Branch: "master"}, Test: "missing"}},
+							Jobs:                    []v1.ReleaseJobSpec{{CIOperatorConfig: v1.CIOperatorMetadata{Org: "openshift", Repo: "release", Branch: "main"}, Test: "missing"}},
 						},
 					},
 				},
@@ -574,7 +574,7 @@ func (f *fakePeriodicDefaulter) DefaultPeriodic(_ *prowconfig.Periodic) error {
 type fakeDispatcherClient struct{}
 
 func (f *fakeDispatcherClient) ClusterForJob(jobName string) (string, error) {
-	if jobName == "periodic-ci-openshift-release-master-missing" {
+	if jobName == "periodic-ci-openshift-release-main-missing" {
 		return "", fmt.Errorf("job: %s not found", jobName)
 	} else {
 		return "build02", nil

@@ -11,7 +11,7 @@
         specifier: informing
       releaseJobSpec:
       - ciOperatorConfig:
-          branch: master
+          branch: main
           org: openshift
           repo: release
         test: missing
@@ -34,11 +34,11 @@
       status: "False"
       type: AllJobsTriggered
     jobs:
-    - jobName: periodic-ci-openshift-release-master-missing
+    - jobName: periodic-ci-openshift-release-main-missing
       prowJob: some-uuid
       status:
-        description: 'failed to generate prowjob: failed to get cluster for job periodic-ci-openshift-release-master-missing:
-          could not determine cluster for job periodic-ci-openshift-release-master-missing:
-          job: periodic-ci-openshift-release-master-missing not found'
+        description: 'failed to generate prowjob: failed to get cluster for job periodic-ci-openshift-release-main-missing:
+          could not determine cluster for job periodic-ci-openshift-release-main-missing:
+          job: periodic-ci-openshift-release-main-missing not found'
         startTime: "1970-01-01T00:00:00Z"
         state: error

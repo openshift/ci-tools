@@ -82,23 +82,23 @@ func TestProwJobBaseBuilder(t *testing.T) {
 			podSpecBuilder: newFakePodSpecBuilder(),
 		},
 		{
-			name:           "job with no builds outside of openshift/release@master: does not have `no-builds` label",
+			name:           "job with no builds outside of openshift/release@main: does not have `no-builds` label",
 			info:           defaultInfo,
 			prefix:         "default",
 			podSpecBuilder: newFakePodSpecBuilder(),
 		},
 		{
-			name: "job with no builds in openshift/release@master: does have `no-builds` label",
+			name: "job with no builds in openshift/release@main: does have `no-builds` label",
 			info: &ProwgenInfo{
-				Metadata: ciop.Metadata{Org: "openshift", Repo: "release", Branch: "master"},
+				Metadata: ciop.Metadata{Org: "openshift", Repo: "release", Branch: "main"},
 			},
 			prefix:         "default",
 			podSpecBuilder: newFakePodSpecBuilder(),
 		},
 		{
-			name: "job with a buildroot in of openshift/release@master: does not have `no-builds` label",
+			name: "job with a buildroot in of openshift/release@main: does not have `no-builds` label",
 			info: &ProwgenInfo{
-				Metadata: ciop.Metadata{Org: "openshift", Repo: "release", Branch: "master"},
+				Metadata: ciop.Metadata{Org: "openshift", Repo: "release", Branch: "main"},
 			},
 			inputs: ciop.InputConfiguration{
 				BuildRootImage: &ciop.BuildRootImageConfiguration{
@@ -109,27 +109,27 @@ func TestProwJobBaseBuilder(t *testing.T) {
 			podSpecBuilder: newFakePodSpecBuilder(),
 		},
 		{
-			name: "job with binary build in openshift/release@master: does not have `no-builds` label",
+			name: "job with binary build in openshift/release@main: does not have `no-builds` label",
 			info: &ProwgenInfo{
-				Metadata: ciop.Metadata{Org: "openshift", Repo: "release", Branch: "master"},
+				Metadata: ciop.Metadata{Org: "openshift", Repo: "release", Branch: "main"},
 			},
 			binCommand:     "make",
 			prefix:         "default",
 			podSpecBuilder: newFakePodSpecBuilder(),
 		},
 		{
-			name: "job with test binary build in of openshift/release@master: does not have `no-builds` label",
+			name: "job with test binary build in of openshift/release@main: does not have `no-builds` label",
 			info: &ProwgenInfo{
-				Metadata: ciop.Metadata{Org: "openshift", Repo: "release", Branch: "master"},
+				Metadata: ciop.Metadata{Org: "openshift", Repo: "release", Branch: "main"},
 			},
 			testBinCommand: "make test",
 			prefix:         "default",
 			podSpecBuilder: newFakePodSpecBuilder(),
 		},
 		{
-			name: "job with image builds in of openshift/release@master: does not have `no-builds` label",
+			name: "job with image builds in of openshift/release@main: does not have `no-builds` label",
 			info: &ProwgenInfo{
-				Metadata: ciop.Metadata{Org: "openshift", Repo: "release", Branch: "master"},
+				Metadata: ciop.Metadata{Org: "openshift", Repo: "release", Branch: "main"},
 			},
 			images:         []ciop.ProjectDirectoryImageBuildStepConfiguration{{From: "base", To: "image"}},
 			prefix:         "default",

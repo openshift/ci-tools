@@ -38,16 +38,16 @@ type jobNameGenerator struct {
 
 var (
 	periodicURLTemplates = []string{
-		"https://raw.githubusercontent.com/openshift/release/master/ci-operator/jobs/openshift/release/openshift-release-release-%s-periodics.yaml",
-		"https://raw.githubusercontent.com/openshift/release/master/ci-operator/jobs/openshift/hypershift/openshift-hypershift-release-%s-periodics.yaml",
+		"https://raw.githubusercontent.com/openshift/release/main/ci-operator/jobs/openshift/release/openshift-release-release-%s-periodics.yaml",
+		"https://raw.githubusercontent.com/openshift/release/main/ci-operator/jobs/openshift/hypershift/openshift-hypershift-release-%s-periodics.yaml",
 	}
 	releaseConfigURLTemplates = []string{
-		"https://raw.githubusercontent.com/openshift/release/master/core-services/release-controller/_releases/release-ocp-%s-arm64.json",
-		"https://raw.githubusercontent.com/openshift/release/master/core-services/release-controller/_releases/release-ocp-%s-ci.json",
-		"https://raw.githubusercontent.com/openshift/release/master/core-services/release-controller/_releases/release-ocp-%s-multi.json",
-		"https://raw.githubusercontent.com/openshift/release/master/core-services/release-controller/_releases/release-ocp-%s-ppc64le.json",
-		"https://raw.githubusercontent.com/openshift/release/master/core-services/release-controller/_releases/release-ocp-%s-s390x.json",
-		"https://raw.githubusercontent.com/openshift/release/master/core-services/release-controller/_releases/release-ocp-%s.json",
+		"https://raw.githubusercontent.com/openshift/release/main/core-services/release-controller/_releases/release-ocp-%s-arm64.json",
+		"https://raw.githubusercontent.com/openshift/release/main/core-services/release-controller/_releases/release-ocp-%s-ci.json",
+		"https://raw.githubusercontent.com/openshift/release/main/core-services/release-controller/_releases/release-ocp-%s-multi.json",
+		"https://raw.githubusercontent.com/openshift/release/main/core-services/release-controller/_releases/release-ocp-%s-ppc64le.json",
+		"https://raw.githubusercontent.com/openshift/release/main/core-services/release-controller/_releases/release-ocp-%s-s390x.json",
+		"https://raw.githubusercontent.com/openshift/release/main/core-services/release-controller/_releases/release-ocp-%s.json",
 	}
 )
 

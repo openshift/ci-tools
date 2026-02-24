@@ -29,7 +29,7 @@
         - --input-hash=multi-pr-openshift-ci-tools-999-openshift-ci-tools-123-unit
         - --report-credentials-file=/etc/report/credentials
         - --target=unit
-        - --with-test-from=openshift/ci-tools@master:unit
+        - --with-test-from=openshift/ci-tools@main:unit
         command:
         - ci-operator
         env:
@@ -71,8 +71,8 @@
         secret:
           secretName: result-aggregator
     refs:
-      base_ref: master
-      base_sha: heads/master
+      base_ref: main
+      base_sha: heads/main
       org: openshift
       pulls:
       - author: ""

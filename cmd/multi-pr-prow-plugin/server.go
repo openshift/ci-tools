@@ -283,12 +283,22 @@ func (s *server) determineJobRuns(comment string, originPR github.PullRequest) (
 				if err != nil {
 					return nil, fmt.Errorf("couldn't get PR from GitHub: %s: %w", rawPR, err)
 				}
+				// For additional PRs from the same org/repo as the job, set the base branch
+				// to the job's branch. This handles renamed default branches (e.g., "master" → "main").
+				if pr.Base.Repo.Owner.Login == jobMetadata.Org && pr.Base.Repo.Name == jobMetadata.Repo {
+					pr.Base.Ref = jobMetadata.Branch
+				}
 				additionalPRs = append(additionalPRs, *pr)
 			}
 
+			// Store the OriginPR with its base branch cleared. The branch is captured
+			// in the job metadata, and clearing it avoids confusion when the PR was
+			// opened against a renamed branch (e.g., "master" when the default is now "main").
+			storedOriginPR := originPR
+			storedOriginPR.Base.Ref = ""
 			jobRuns = append(jobRuns, jobRun{
 				JobMetadata:   *jobMetadata,
-				OriginPR:      originPR,
+				OriginPR:      storedOriginPR,
 				AdditionalPRs: additionalPRs,
 			})
 		}
@@ -367,7 +377,31 @@ func (s *server) generateProwJob(jr jobRun) (*prowv1.ProwJob, error) {
 	}
 	periodic.Name = jobName
 
-	refs, err := createRefsForPullRequests(append(jr.AdditionalPRs, jr.OriginPR), s.ciOpConfigResolver, s.ghc)
+	// Normalize PR base branches to handle renamed default branches (e.g., "master" → "main").
+	// PRs from the same org/repo use the branch from the job metadata. PRs from other
+	// org/repos use the branch from the first matching additional PR.
+	branchByRepo := map[string]string{
+		jr.JobMetadata.Org + "/" + jr.JobMetadata.Repo: jr.JobMetadata.Branch,
+	}
+	for _, pr := range jr.AdditionalPRs {
+		key := pr.Base.Repo.Owner.Login + "/" + pr.Base.Repo.Name
+		if _, exists := branchByRepo[key]; !exists && pr.Base.Ref != "" {
+			branchByRepo[key] = pr.Base.Ref
+		}
+	}
+	normalizePRBranch := func(pr github.PullRequest) github.PullRequest {
+		key := pr.Base.Repo.Owner.Login + "/" + pr.Base.Repo.Name
+		if branch, ok := branchByRepo[key]; ok {
+			pr.Base.Ref = branch
+		}
+		return pr
+	}
+	normalizedPRs := make([]github.PullRequest, 0, len(jr.AdditionalPRs)+1)
+	for _, pr := range jr.AdditionalPRs {
+		normalizedPRs = append(normalizedPRs, normalizePRBranch(pr))
+	}
+	normalizedPRs = append(normalizedPRs, normalizePRBranch(jr.OriginPR))
+	refs, err := createRefsForPullRequests(normalizedPRs, s.ciOpConfigResolver, s.ghc)
 	if err != nil {
 		return nil, fmt.Errorf("create refs for PR: %w", err)
 	}

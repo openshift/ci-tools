@@ -23,7 +23,7 @@ type acquireParams struct {
 }
 
 type AcquireResponse struct {
-	Names []string `json:"names,omitempty"`
+	Names []string `json:"names"`
 }
 
 func parseAcquireParams(r *http.Request) (acquireParams, error) {
@@ -41,7 +41,7 @@ func parseAcquireParams(r *http.Request) (acquireParams, error) {
 	} else {
 		c, err := strconv.ParseUint(count, 10, strconv.IntSize)
 		if err != nil {
-			return params, fmt.Errorf("parameter \"n\" is not valid: %s", count)
+			return params, fmt.Errorf("parameter \"count\" is not valid: %s", count)
 		}
 		params.count = uint(c)
 	}
@@ -83,6 +83,11 @@ func (p *Proxy) acquire(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
+	if params.count == 0 {
+		p.writeAcquireResponse(w, []string{})
+		return
+	}
+
 	c := p.leaseClientFunc()
 	if c == nil {
 		p.logger.Error("Failed to get lease client")
@@ -103,6 +108,10 @@ func (p *Proxy) acquire(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
+	p.writeAcquireResponse(w, names)
+}
+
+func (p *Proxy) writeAcquireResponse(w http.ResponseWriter, names []string) {
 	namesBytes, err := json.Marshal(AcquireResponse{Names: names})
 	if err != nil {
 		p.logger.WithError(err).Warnf("Failed to marshal the response %s", err)
@@ -111,13 +120,12 @@ func (p *Proxy) acquire(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
+	w.Header().Set("Content-Type", "application/json")
 	if _, err := w.Write(namesBytes); err != nil {
 		p.logger.WithError(err).Warn("Failed to write leases response")
 		http.Error(w, "Failed to write response", http.StatusInternalServerError)
 		return
 	}
-
-	w.Header().Set("Content-Type", "application/json")
 }
 
 func (p *Proxy) release(w http.ResponseWriter, r *http.Request) {

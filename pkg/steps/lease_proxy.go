@@ -2,6 +2,7 @@ package steps
 
 import (
 	"context"
+	"errors"
 	"net/http"
 
 	"github.com/sirupsen/logrus"
@@ -47,7 +48,16 @@ func (s *stepLeaseProxyServer) Provides() api.ParameterMap {
 }
 
 func (*stepLeaseProxyServer) Objects() []ctrlruntimeclient.Object { return nil }
-func (*stepLeaseProxyServer) Validate() error                     { return nil }
+
+func (s *stepLeaseProxyServer) Validate() error {
+	if s.srvMux == nil {
+		return errors.New("lease proxy server requires an HTTP server mux")
+	}
+	if s.srvAddr == "" {
+		return errors.New("lease proxy server requires an HTTP server address")
+	}
+	return nil
+}
 
 func (s *stepLeaseProxyServer) Run(ctx context.Context) error {
 	return results.ForReason("executing_lease_proxy").ForError(s.run(ctx))

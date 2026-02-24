@@ -35,6 +35,14 @@ func TestProxy(t *testing.T) {
 			wantCalls: []string{`acquireWaitWithPriority owner aws-1 free leased random`},
 		},
 		{
+			name:      "Acquire: count zero returns no leases",
+			method:    http.MethodPost,
+			url:       "/lease/acquire?type=aws-1&count=0",
+			wantCode:  http.StatusOK,
+			wantBody:  `{"names":[]}`,
+			wantCalls: []string{},
+		},
+		{
 			name:      "Acquire: wrong http method",
 			method:    http.MethodGet,
 			url:       "/lease/acquire?type=aws-1",

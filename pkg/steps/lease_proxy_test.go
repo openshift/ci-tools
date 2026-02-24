@@ -1,6 +1,7 @@
 package steps
 
 import (
+	"errors"
 	"net/http"
 	"testing"
 
@@ -44,6 +45,57 @@ func TestLeaseProxyProvides(t *testing.T) {
 
 			if diff := cmp.Diff(tc.expectedParams, gotParams); diff != "" {
 				t.Errorf("unexpected params: %s", diff)
+			}
+		})
+	}
+}
+
+func TestValidate(t *testing.T) {
+	t.Parallel()
+
+	for _, tc := range []struct {
+		name                  string
+		newLeaseProxyStepFunc func() api.Step
+		wantErr               error
+	}{
+		{
+			name: "Validation passes",
+			newLeaseProxyStepFunc: func() api.Step {
+				return &stepLeaseProxyServer{logger: nil, srvMux: &http.ServeMux{}, srvAddr: "x.y.w.z"}
+			},
+		},
+		{
+			name: "http mux is missing",
+			newLeaseProxyStepFunc: func() api.Step {
+				return &stepLeaseProxyServer{logger: nil, srvMux: nil, srvAddr: "x.y.w.z"}
+			},
+			wantErr: errors.New("lease proxy server requires an HTTP server mux"),
+		},
+		{
+			name: "http address is empty",
+			newLeaseProxyStepFunc: func() api.Step {
+				return &stepLeaseProxyServer{logger: nil, srvMux: &http.ServeMux{}, srvAddr: ""}
+			},
+			wantErr: errors.New("lease proxy server requires an HTTP server address"),
+		},
+	} {
+		t.Run(tc.name, func(t *testing.T) {
+			t.Parallel()
+
+			gotErr := tc.newLeaseProxyStepFunc().Validate()
+
+			switch {
+			case gotErr == nil && tc.wantErr == nil:
+				break
+
+			case gotErr == nil && tc.wantErr != nil:
+				t.Errorf("expected %q but got nil", tc.wantErr.Error())
+
+			case gotErr != nil && tc.wantErr == nil:
+				t.Errorf("expected nil error but got %q", gotErr.Error())
+
+			case gotErr.Error() != tc.wantErr.Error():
+				t.Errorf("want %q but got %q", tc.wantErr.Error(), gotErr.Error())
 			}
 		})
 	}

@@ -53,6 +53,7 @@
                   EXPLICIT_GCS_PREFIX: logs/test-org-test-repo-100-test-name
                   GOOGLE_SA_CREDENTIAL_FILE: /var/run/secrets/google-serviceaccount-credentials.json
                   JOB_START_TIME: "1970-01-01T01:00:00+01:00"
+                  TIMEOUT: 6h0m0s
                   VERIFICATION_JOB_NAME: periodic-ci-test-org-test-repo-test-branch-test-name
                   WORKING_DIR: $(ARTIFACT_DIR)/release-analysis-aggregator
                 test:

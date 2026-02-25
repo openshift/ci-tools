@@ -811,6 +811,7 @@ func generateAggregatorJob(baseCiop *api.Metadata, uid, aggregatorJobName, jobNa
 						"AGGREGATION_ID":            uid,
 						"WORKING_DIR":               "$(ARTIFACT_DIR)/release-analysis-aggregator",
 						"EXPLICIT_GCS_PREFIX":       fmt.Sprintf("logs/%s", submitted),
+						"TIMEOUT":                   aggregatedJobTimeout.String(),
 					},
 					Test: []api.TestStep{
 						{

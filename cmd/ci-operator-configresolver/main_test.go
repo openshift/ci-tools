@@ -44,16 +44,6 @@ func TestValidateStream(t *testing.T) {
 			expected: errors.New("not a valid integrated stream: ns/is"),
 		},
 		{
-			name:   "ocp/4.9 is valid",
-			isNS:   "ocp",
-			isName: "4.9",
-		},
-		{
-			name:   "ocp/4.3 is valid",
-			isNS:   "ocp",
-			isName: "4.3",
-		},
-		{
 			name:     "origin/4.3 is invalid",
 			isNS:     "origin",
 			isName:   "4.3",

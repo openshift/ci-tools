@@ -206,13 +206,13 @@ func getIntegratedStream(ctx context.Context, g IntegratedStreamGetter) http.Han
 var validStreams = []*regexp.Regexp{
 	// https://issues.redhat.com/browse/DPTP-4005
 	// There are some upgrade tests using the 4.1 or 4.3 stream in ocp
-	regexp.MustCompile(`^ocp/[4-9]\.([0-9]|\d\d+)`),
-	regexp.MustCompile(`^origin/[4-9]\.([6-9]|\d\d+)`),
-	regexp.MustCompile(`^origin/scos-[4-9]\.([6-9]|\d\d+)`),
-	regexp.MustCompile(`^ocp-private/[4-9]\.([6-9]|\d\d+)-priv`),
-	regexp.MustCompile(`^origin/sriov-[4-9]\.([6-9]|\d\d+)`),
-	regexp.MustCompile(`^origin/metallb-[4-9]\.([6-9]|\d\d+)`),
-	regexp.MustCompile(`^origin/ptp-[4-9]\.([6-9]|\d\d+)`),
+	regexp.MustCompile(`^ocp/(4\.(1[2-9]|2\d)|5\.\d+)`),
+	regexp.MustCompile(`^origin/(4\.(1[2-9]|2\d)|5\.\d+)`),
+	regexp.MustCompile(`^origin/scos-(4\.(1[2-9]|2\d)|5\.\d+)`),
+	regexp.MustCompile(`^ocp-private/(4\.(1[2-9]|2\d)|5\.\d+)`),
+	regexp.MustCompile(`^origin/sriov-(4\.(1[2-9]|2\d)|5\.\d+)`),
+	regexp.MustCompile(`^origin/metallb-(4\.(1[2-9]|2\d)|5\.\d+)`),
+	regexp.MustCompile(`^origin/ptp-(4\.(1[2-9]|2\d)|5\.\d+)`),
 }
 
 func validateStream(ns string, name string) error {

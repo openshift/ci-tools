@@ -2,6 +2,7 @@ package prowgen
 
 import (
 	"errors"
+	"strings"
 	"testing"
 
 	"github.com/google/go-cmp/cmp"
@@ -527,4 +528,56 @@ func TestGSMConfig(t *testing.T) {
 		}
 		testhelper.CompareWithFixture(t, podspec)
 	})
+}
+
+func TestRegistry(t *testing.T) {
+	t.Parallel()
+	tests := []struct {
+		name         string
+		registryPath string
+		wantArg      string
+	}{
+		{
+			name:         "registry path is added",
+			registryPath: "/go/src/github.com/openshift/release/ci-operator/step-registry",
+			wantArg:      "--registry=/go/src/github.com/openshift/release/ci-operator/step-registry",
+		},
+		{
+			name:         "empty registry path is a nop",
+			registryPath: "",
+			wantArg:      "",
+		},
+	}
+	for _, tc := range tests {
+		tc := tc
+		t.Run(tc.name, func(t *testing.T) {
+			t.Parallel()
+			g := NewCiOperatorPodSpecGenerator()
+			g.Add(Registry(tc.registryPath))
+			podspec, err := g.Build()
+			if err != nil {
+				t.Fatalf("Unexpected error: %v", err)
+			}
+			if tc.wantArg != "" {
+				// Positive case: verify the expected arg is present
+				found := false
+				for _, arg := range podspec.Containers[0].Args {
+					if arg == tc.wantArg {
+						found = true
+						break
+					}
+				}
+				if !found {
+					t.Errorf("Expected arg %q not found in args: %v", tc.wantArg, podspec.Containers[0].Args)
+				}
+			} else {
+				// Negative case: verify no --registry arg is present
+				for _, arg := range podspec.Containers[0].Args {
+					if strings.HasPrefix(arg, "--registry") {
+						t.Errorf("Unexpected --registry arg found: %q", arg)
+					}
+				}
+			}
+		})
+	}
 }

@@ -51,6 +51,10 @@ const (
 	conditionWithErrors       = "WithErrors"
 
 	dependentProwJobsFinalizer = "pullrequestpayloadqualificationruns.ci.openshift.io/dependent-prowjobs"
+
+	// releaseStepRegistryPath is the path where the openshift/release repo's step registry
+	// is cloned when it is included in the PRs under test.
+	releaseStepRegistryPath = "/go/src/github.com/openshift/release/ci-operator/step-registry"
 )
 
 type injectingResolverClient interface {
@@ -641,6 +645,13 @@ func (r *reconciler) generateProwjob(ciopConfig *api.ReleaseBuildConfiguration,
 			jobBaseGen.PodSpec.Add(prowgen.ShardArgs(shardCount, shardIndex))
 		}
 
+		// If openshift/release is among the PRs being tested, configure ci-operator
+		// to use the step registry from the local checkout instead of the remote
+		// config resolver. This allows testing step registry changes via PRPQR.
+		if hasReleaseRepoPR(prs) {
+			jobBaseGen.PodSpec.Add(prowgen.Registry(releaseStepRegistryPath))
+		}
+
 		// Avoid sharing when we run the same job multiple times.
 		// PRPQR name should be safe to use as a discriminating input, because
 		// there should never be more than one execution of a specific job per
@@ -912,6 +923,17 @@ func manageDependentProwJobsFinalizer(atLeastOneJobRunning bool, objMeta *metav1
 func hasDependantProwJobsFinalizer(objMeta *metav1.ObjectMeta) bool {
 	for _, f := range objMeta.Finalizers {
 		if f == dependentProwJobsFinalizer {
+			return true
+		}
+	}
+	return false
+}
+
+// hasReleaseRepoPR checks if openshift/release is among the PRs being tested.
+// When it is, we need to use the step registry from the local checkout.
+func hasReleaseRepoPR(prs []v1.PullRequestUnderTest) bool {
+	for _, pr := range prs {
+		if pr.Org == "openshift" && pr.Repo == "release" {
 			return true
 		}
 	}

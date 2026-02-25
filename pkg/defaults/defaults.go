@@ -1242,7 +1242,7 @@ func filterRequiredBinariesFromSkipped(images []api.ProjectDirectoryImageBuildSt
 }
 
 func isLeaseProxyServerAvailable(cfg *Config) bool {
-	return cfg.LeaseClientEnabled
+	return cfg.LeaseClientEnabled && cfg.HTTPServerAddr != "" && cfg.HTTPServerMux != nil
 }
 
 func leaseProxyServerStep(cfg *Config) []api.Step {

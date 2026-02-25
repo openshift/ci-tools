@@ -16,6 +16,7 @@ import (
 	kapierrors "k8s.io/apimachinery/pkg/api/errors"
 	"k8s.io/apimachinery/pkg/util/sets"
 	coreclientset "k8s.io/client-go/kubernetes/typed/core/v1"
+	"k8s.io/client-go/util/retry"
 	utilpointer "k8s.io/utils/pointer"
 	ctrlruntimeclient "sigs.k8s.io/controller-runtime/pkg/client"
 	prowapi "sigs.k8s.io/prow/pkg/apis/prowjobs/v1"
@@ -1252,5 +1253,7 @@ func leaseProxyServerStep(cfg *Config) []api.Step {
 	}
 
 	logger := logrus.NewEntry(logrus.StandardLogger()).WithField("step", "lease-proxy-server")
-	return append(ret, steps.LeaseProxyStep(logger, cfg.HTTPServerAddr, cfg.HTTPServerMux, cfg.LeaseClient))
+	step := steps.LeaseProxyStep(logger, cfg.HTTPServerAddr, cfg.HTTPServerMux, cfg.LeaseClient,
+		cfg.kubeClient, cfg.JobSpec, retry.DefaultRetry)
+	return append(ret, step)
 }

@@ -81,6 +81,8 @@
         value: /var/run/secrets/ci.openshift.io/multi-stage/kubeadmin-password
       - name: SHARED_DIR
         value: /var/run/secrets/ci.openshift.io/multi-stage
+      - name: LEASE_PROXY_CLIENT_SH
+        value: /opt/scripts/lease-proxy/client.sh
       image: pipeline:src
       name: test
       resources: {}
@@ -108,6 +110,9 @@
         name: dshm
       - mountPath: /var/run/secrets/ci.openshift.io/multi-stage
         name: run podman
+      - mountPath: /opt/scripts/lease-proxy
+        name: lease-proxy
+        readOnly: true
     - env:
       - name: JOB_SPEC
       - name: SIDECAR_OPTIONS
@@ -163,4 +168,7 @@
     - name: run podman
       secret:
         secretName: run podman
+    - configMap:
+        name: lease-proxy
+      name: lease-proxy
   status: {}

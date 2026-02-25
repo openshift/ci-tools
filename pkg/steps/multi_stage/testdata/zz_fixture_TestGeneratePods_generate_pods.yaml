@@ -91,6 +91,8 @@
         value: /var/run/secrets/ci.openshift.io/cluster-profile
       - name: SHARED_DIR
         value: /var/run/secrets/ci.openshift.io/multi-stage
+      - name: LEASE_PROXY_CLIENT_SH
+        value: /opt/scripts/lease-proxy/client.sh
       image: pipeline:src
       name: test
       resources: {}
@@ -110,6 +112,9 @@
         name: cluster-profile
       - mountPath: /var/run/secrets/ci.openshift.io/multi-stage
         name: test
+      - mountPath: /opt/scripts/lease-proxy
+        name: lease-proxy
+        readOnly: true
     - env:
       - name: JOB_SPEC
       - name: SIDECAR_OPTIONS
@@ -171,6 +176,9 @@
     - name: test
       secret:
         secretName: test
+    - configMap:
+        name: lease-proxy
+      name: lease-proxy
   status: {}
 - metadata:
     annotations:
@@ -265,6 +273,8 @@
         value: /var/run/secrets/ci.openshift.io/cluster-profile
       - name: SHARED_DIR
         value: /var/run/secrets/ci.openshift.io/multi-stage
+      - name: LEASE_PROXY_CLIENT_SH
+        value: /opt/scripts/lease-proxy/client.sh
       image: stable:image1
       name: test
       resources: {}
@@ -282,6 +292,9 @@
         name: cluster-profile
       - mountPath: /var/run/secrets/ci.openshift.io/multi-stage
         name: test
+      - mountPath: /opt/scripts/lease-proxy
+        name: lease-proxy
+        readOnly: true
     - env:
       - name: JOB_SPEC
       - name: SIDECAR_OPTIONS
@@ -339,6 +352,9 @@
     - name: test
       secret:
         secretName: test
+    - configMap:
+        name: lease-proxy
+      name: lease-proxy
   status: {}
 - metadata:
     annotations:
@@ -432,6 +448,8 @@
         value: /var/run/secrets/ci.openshift.io/cluster-profile
       - name: SHARED_DIR
         value: /var/run/secrets/ci.openshift.io/multi-stage
+      - name: LEASE_PROXY_CLIENT_SH
+        value: /opt/scripts/lease-proxy/client.sh
       image: stable-initial:installer
       name: test
       resources: {}
@@ -451,6 +469,9 @@
         name: test
       - mountPath: /var/run/configmaps/ci.openshift.io/multi-stage
         name: commands-script
+      - mountPath: /opt/scripts/lease-proxy
+        name: lease-proxy
+        readOnly: true
     - env:
       - name: JOB_SPEC
       - name: SIDECAR_OPTIONS
@@ -511,6 +532,9 @@
         defaultMode: 511
         name: test-commands
       name: commands-script
+    - configMap:
+        name: lease-proxy
+      name: lease-proxy
   status: {}
 - metadata:
     annotations:
@@ -605,6 +629,8 @@
         value: /var/run/secrets/ci.openshift.io/cluster-profile
       - name: SHARED_DIR
         value: /var/run/secrets/ci.openshift.io/multi-stage
+      - name: LEASE_PROXY_CLIENT_SH
+        value: /opt/scripts/lease-proxy/client.sh
       image: pipeline:src
       name: test
       resources: {}
@@ -622,6 +648,9 @@
         name: cluster-profile
       - mountPath: /var/run/secrets/ci.openshift.io/multi-stage
         name: test
+      - mountPath: /opt/scripts/lease-proxy
+        name: lease-proxy
+        readOnly: true
     - env:
       - name: JOB_SPEC
       - name: SIDECAR_OPTIONS
@@ -687,6 +716,9 @@
     - name: test
       secret:
         secretName: test
+    - configMap:
+        name: lease-proxy
+      name: lease-proxy
   status: {}
 - metadata:
     annotations:
@@ -781,6 +813,8 @@
         value: /var/run/secrets/ci.openshift.io/cluster-profile
       - name: SHARED_DIR
         value: /var/run/secrets/ci.openshift.io/multi-stage
+      - name: LEASE_PROXY_CLIENT_SH
+        value: /opt/scripts/lease-proxy/client.sh
       image: pipeline:src
       name: test
       resources: {}
@@ -798,6 +832,9 @@
         name: cluster-profile
       - mountPath: /var/run/secrets/ci.openshift.io/multi-stage
         name: test
+      - mountPath: /opt/scripts/lease-proxy
+        name: lease-proxy
+        readOnly: true
     - env:
       - name: JOB_SPEC
       - name: SIDECAR_OPTIONS
@@ -857,6 +894,9 @@
     - name: test
       secret:
         secretName: test
+    - configMap:
+        name: lease-proxy
+      name: lease-proxy
   status: {}
 - metadata:
     annotations:
@@ -951,6 +991,8 @@
         value: /var/run/secrets/ci.openshift.io/cluster-profile
       - name: SHARED_DIR
         value: /var/run/secrets/ci.openshift.io/multi-stage
+      - name: LEASE_PROXY_CLIENT_SH
+        value: /opt/scripts/lease-proxy/client.sh
       image: pipeline:src
       name: test
       resources: {}
@@ -968,6 +1010,9 @@
         name: cluster-profile
       - mountPath: /var/run/secrets/ci.openshift.io/multi-stage
         name: test
+      - mountPath: /opt/scripts/lease-proxy
+        name: lease-proxy
+        readOnly: true
     - env:
       - name: JOB_SPEC
       - name: SIDECAR_OPTIONS
@@ -1027,4 +1072,7 @@
     - name: test
       secret:
         secretName: test
+    - configMap:
+        name: lease-proxy
+      name: lease-proxy
   status: {}

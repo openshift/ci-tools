@@ -12,7 +12,7 @@ import (
 func TestAcquire(t *testing.T) {
 	ctx := context.Background()
 	var calls []string
-	client := NewFakeClient("owner", "url", 0, nil, &calls)
+	client := NewFakeClient("owner", "url", 0, nil, &calls, nil)
 	if _, err := client.Acquire("rtype", 1, ctx, nil); err != nil {
 		t.Fatal(err)
 	}
@@ -43,7 +43,7 @@ func TestAcquire(t *testing.T) {
 func TestHeartbeatCancel(t *testing.T) {
 	ctx := context.Background()
 	var calls []string
-	client := NewFakeClient("owner", "url", 0, map[string]error{"updateone owner rtype_0 leased 0": errors.New("injected error")}, &calls)
+	client := NewFakeClient("owner", "url", 0, map[string]error{"updateone owner rtype_0 leased 0": errors.New("injected error")}, &calls, nil)
 	var called bool
 	if _, err := client.Acquire("rtype", 1, ctx, func() { called = true }); err != nil {
 		t.Fatal(err)
@@ -102,7 +102,7 @@ func TestHeartbeatRetries(t *testing.T) {
 		t.Run(tc.name, func(t *testing.T) {
 			ctx := context.Background()
 			var calls []string
-			client := NewFakeClient("owner", "url", 2, tc.failures, &calls)
+			client := NewFakeClient("owner", "url", 2, tc.failures, &calls, nil)
 			var called bool
 			if _, err := client.Acquire("rtype", 1, ctx, func() { called = true }); err != nil {
 				t.Fatal(err)

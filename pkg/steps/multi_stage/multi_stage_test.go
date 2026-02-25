@@ -343,6 +343,11 @@ func TestEnvironment(t *testing.T) {
 			expected: []coreapi.EnvVar{{Name: "LEASE_ONE", Value: "ONE"}, {Name: "LEASE_TWO", Value: "TWO"}},
 		},
 		{
+			name:     "leases proxy server URL is exposed in environment",
+			params:   fakeStepParams{api.LeaseProxyServerURLEnvVarName: "http://192.168.1.1"},
+			expected: []coreapi.EnvVar{{Name: api.LeaseProxyServerURLEnvVarName, Value: "http://192.168.1.1"}},
+		},
+		{
 			name: "arbitrary variables are not exposed in environment",
 			params: fakeStepParams{
 				"OO_IMSMART":     "nope",

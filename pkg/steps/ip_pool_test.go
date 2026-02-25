@@ -297,7 +297,7 @@ func TestRun(t *testing.T) {
 	for _, tc := range testCases {
 		t.Run(tc.name, func(t *testing.T) {
 			var calls []string
-			client := lease.NewFakeClient("owner", "url", 0, tc.injectFailures, &calls)
+			client := lease.NewFakeClient("owner", "url", 0, tc.injectFailures, &calls, nil)
 			tc.step.client = &client
 			tc.step.secretClient = newFakeSecretClient([]coreapi.Secret{
 				{

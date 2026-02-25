@@ -1863,6 +1863,9 @@ func TestFromConfig(t *testing.T) {
 		name:              "enable lease proxy server",
 		enableLeaseClient: true,
 		expectedSteps:     []string{"[output-images]", "[images]", "lease-proxy-server"},
+		expectedParams: map[string]string{
+			"LEASE_PROXY_SERVER_URL": "http://10.0.0.1:8080",
+		},
 	}} {
 		t.Run(tc.name, func(t *testing.T) {
 			jobSpec := api.JobSpec{
@@ -1909,9 +1912,10 @@ func TestFromConfig(t *testing.T) {
 				NodeArchitectures:      nil,
 				IntegratedStreams:      map[string]*configresolver.IntegratedStream{},
 				InjectedTest:           tc.injectedTest,
-				GSMConfig:              nil,
 				MetricsAgent:           nil,
 				SkippedImages:          tc.skippedImages,
+				HTTPServerAddr:         "http://10.0.0.1:8080",
+				HTTPServerMux:          &http.ServeMux{},
 			}
 			configSteps, post, err := fromConfig(context.Background(), cfg)
 			if diff := cmp.Diff(tc.expectedErr, err); diff != "" {

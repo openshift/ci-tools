@@ -121,7 +121,10 @@ func fromConfig(ctx context.Context, cfg *Config) ([]api.Step, []api.Step, error
 	rawSteps = append(cfg.GraphConf.Steps, rawSteps...)
 	rawSteps = append(rawSteps, stepsForImageOverrides(utils.GetOverriddenImages())...)
 
-	buildSteps = append(buildSteps, leaseProxyServerStep(cfg)...)
+	for _, leaseProxyServerStep := range leaseProxyServerStep(cfg) {
+		buildSteps = append(buildSteps, leaseProxyServerStep)
+		addProvidesForStep(leaseProxyServerStep, cfg.params)
+	}
 
 	for _, rawStep := range rawSteps {
 		if testStep := rawStep.TestStepConfiguration; testStep != nil {
@@ -1239,7 +1242,7 @@ func filterRequiredBinariesFromSkipped(images []api.ProjectDirectoryImageBuildSt
 }
 
 func isLeaseProxyServerAvailable(cfg *Config) bool {
-	return cfg.LeaseClientEnabled
+	return cfg.LeaseClientEnabled && cfg.HTTPServerAddr != "" && cfg.HTTPServerMux != nil
 }
 
 func leaseProxyServerStep(cfg *Config) []api.Step {
@@ -1249,5 +1252,5 @@ func leaseProxyServerStep(cfg *Config) []api.Step {
 	}
 
 	logger := logrus.NewEntry(logrus.StandardLogger()).WithField("step", "lease-proxy-server")
-	return append(ret, steps.LeaseProxyStep(logger))
+	return append(ret, steps.LeaseProxyStep(logger, cfg.HTTPServerAddr, cfg.HTTPServerMux, cfg.LeaseClient))
 }

@@ -52,7 +52,8 @@ type Config struct {
 	SkippedImages          sets.Set[string]
 	params                 *api.DeferredParameters
 
-	HTTPServerMux *http.ServeMux
+	HTTPServerAddr string
+	HTTPServerMux  *http.ServeMux
 }
 
 type Clients struct {

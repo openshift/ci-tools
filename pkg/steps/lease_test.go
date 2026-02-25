@@ -216,7 +216,7 @@ func TestError(t *testing.T) {
 	}} {
 		t.Run(tc.name, func(t *testing.T) {
 			var calls []string
-			client := lease.NewFakeClient("owner", "url", 0, tc.failures, &calls)
+			client := lease.NewFakeClient("owner", "url", 0, tc.failures, &calls, nil)
 			s := stepNeedsLease{fail: tc.runFails}
 			err := LeaseStep(&client, leases, &s, func() string { return "" }, nil).Run(ctx)
 			if err == nil {
@@ -232,7 +232,7 @@ func TestError(t *testing.T) {
 
 func TestAcquireRelease(t *testing.T) {
 	var calls []string
-	client := lease.NewFakeClient("owner", "url", 0, nil, &calls)
+	client := lease.NewFakeClient("owner", "url", 0, nil, &calls, nil)
 	leases := []api.StepLease{
 		{ResourceType: "rtype1", Count: 1},
 		{ResourceType: "rtype0", Count: 2},

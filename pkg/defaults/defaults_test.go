@@ -1915,6 +1915,7 @@ func TestFromConfig(t *testing.T) {
 				MetricsAgent:           nil,
 				SkippedImages:          tc.skippedImages,
 				HTTPServerAddr:         "http://10.0.0.1:8080",
+				HTTPServerMux:          &http.ServeMux{},
 			}
 			configSteps, post, err := fromConfig(context.Background(), cfg)
 			if diff := cmp.Diff(tc.expectedErr, err); diff != "" {

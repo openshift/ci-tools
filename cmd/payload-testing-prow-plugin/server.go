@@ -304,6 +304,50 @@ func (s *server) handleIssueComment(l *logrus.Entry, ic github.IssueCommentEvent
 	}
 }
 
+// handlePullRequest prunes PRPQRs for a PR when it is closed or merged so runs do not accumulate.
+func (s *server) handlePullRequest(l *logrus.Entry, pr github.PullRequestEvent) {
+	if pr.Action != github.PullRequestActionClosed {
+		return
+	}
+	org := pr.Repo.Owner.Login
+	repo := pr.Repo.Name
+	prNumber := pr.Number
+	deleted, err := s.prunePRPQRsForPR(org, repo, prNumber, l)
+	if err != nil {
+		l.WithError(err).WithFields(logrus.Fields{
+			"org": org, "repo": repo, "pr": prNumber,
+		}).Error("failed to prune PRPQRs on PR close")
+		return
+	}
+	if deleted > 0 {
+		l.WithFields(logrus.Fields{
+			"org": org, "repo": repo, "pr": prNumber, "deleted": deleted,
+		}).Info("pruned PRPQRs for closed/merged PR")
+	}
+}
+
+// prunePRPQRsForPR lists PRPQRs for the given org/repo/PR and deletes them. Returns the number deleted.
+func (s *server) prunePRPQRsForPR(org, repo string, prNumber int, logger *logrus.Entry) (int, error) {
+	labelSelector, err := labelSelectorForPayloadPRPQRs(org, repo, prNumber)
+	if err != nil {
+		return 0, fmt.Errorf("label selector: %w", err)
+	}
+	var list prpqv1.PullRequestPayloadQualificationRunList
+	opt := ctrlruntimeclient.ListOptions{Namespace: s.namespace, LabelSelector: labelSelector}
+	if err := s.kubeClient.List(s.ctx, &list, &opt); err != nil {
+		return 0, fmt.Errorf("list PRPQRs: %w", err)
+	}
+	for i := range list.Items {
+		run := &list.Items[i]
+		if err := s.kubeClient.Delete(s.ctx, run); err != nil {
+			logger.WithError(err).WithField("prpqr", run.Name).Error("failed to delete PRPQR")
+			continue
+		}
+		logger.WithField("prpqr", run.Name).Debug("deleted PRPQR for closed PR")
+	}
+	return len(list.Items), nil
+}
+
 // handle determines what commands, if any, are relevant to this plugin and executes them.
 // it returns a message about what was done including relevant links, and a slice of AdditionalPRs that were included
 func (s *server) handle(l *logrus.Entry, ic github.IssueCommentEvent) (string, []config.AdditionalPR) {

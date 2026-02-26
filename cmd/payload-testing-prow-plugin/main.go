@@ -187,6 +187,7 @@ func main() {
 
 	eventServer := githubeventserver.New(o.githubEventServerOptions, getWebhookHMAC, logger)
 	eventServer.RegisterHandleIssueCommentEvent(serv.handleIssueComment)
+	eventServer.RegisterHandlePullRequestEvent(serv.handlePullRequest)
 	eventServer.RegisterHelpProvider(helpProvider, logger)
 
 	interrupts.OnInterrupt(func() {

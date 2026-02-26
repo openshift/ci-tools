@@ -19,9 +19,11 @@ import (
 	"k8s.io/utils/ptr"
 	ctrlruntimeclient "sigs.k8s.io/controller-runtime/pkg/client"
 	"sigs.k8s.io/controller-runtime/pkg/client/fake"
+	fakectrlruntimeclient "sigs.k8s.io/controller-runtime/pkg/client/fake"
 	"sigs.k8s.io/controller-runtime/pkg/client/interceptor"
 
 	"github.com/openshift/ci-tools/pkg/api"
+	"github.com/openshift/ci-tools/pkg/lease"
 )
 
 func TestLeaseProxyProvides(t *testing.T) {
@@ -74,22 +76,42 @@ func TestValidate(t *testing.T) {
 		{
 			name: "Validation passes",
 			newLeaseProxyStepFunc: func() api.Step {
-				return &stepLeaseProxyServer{logger: nil, srvMux: &http.ServeMux{}, srvAddr: "x.y.w.z"}
+				leaseClient := lease.NewFakeClient("owner", "", 1, nil, nil, nil)
+				kubeClient := fakectrlruntimeclient.NewFakeClient()
+				return LeaseProxyStep(nil, "x.y.w.z", &http.ServeMux{}, &leaseClient, kubeClient, &api.JobSpec{}, wait.Backoff{})
 			},
 		},
 		{
 			name: "http mux is missing",
 			newLeaseProxyStepFunc: func() api.Step {
-				return &stepLeaseProxyServer{logger: nil, srvMux: nil, srvAddr: "x.y.w.z"}
+				kubeClient := fakectrlruntimeclient.NewFakeClient()
+				return LeaseProxyStep(nil, "x.y.w.z", nil, nil, kubeClient, &api.JobSpec{}, wait.Backoff{})
 			},
 			wantErr: errors.New("lease proxy server requires an HTTP server mux"),
 		},
 		{
 			name: "http address is empty",
 			newLeaseProxyStepFunc: func() api.Step {
-				return &stepLeaseProxyServer{logger: nil, srvMux: &http.ServeMux{}, srvAddr: ""}
+				leaseClient := lease.NewFakeClient("owner", "", 1, nil, nil, nil)
+				kubeClient := fakectrlruntimeclient.NewFakeClient()
+				return LeaseProxyStep(nil, "", &http.ServeMux{}, &leaseClient, kubeClient, &api.JobSpec{}, wait.Backoff{})
 			},
 			wantErr: errors.New("lease proxy server requires an HTTP server address"),
+		},
+		{
+			name: "kube client is nil",
+			newLeaseProxyStepFunc: func() api.Step {
+				return LeaseProxyStep(nil, "x.y.w.z", &http.ServeMux{}, nil, nil, &api.JobSpec{}, wait.Backoff{})
+			},
+			wantErr: errors.New("lease proxy server requires a kube client"),
+		},
+		{
+			name: "job spec is nil",
+			newLeaseProxyStepFunc: func() api.Step {
+				kubeClient := fakectrlruntimeclient.NewFakeClient()
+				return LeaseProxyStep(nil, "x.y.w.z", &http.ServeMux{}, nil, kubeClient, nil, wait.Backoff{})
+			},
+			wantErr: errors.New("lease proxy server requires a job spec"),
 		},
 	} {
 		t.Run(tc.name, func(t *testing.T) {

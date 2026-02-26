@@ -239,7 +239,7 @@ func (o *PRCreationOptions) UpsertPR(localSourceDir, org, repo, branch, prTitle 
 	if err := bumper.UpdatePullRequestWithLabels(
 		o.GithubClient,
 		org,
-		repo,
+		origRepo,
 		prTitle,
 		prBodyText,
 		username+":"+sourceBranchName,

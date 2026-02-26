@@ -119,7 +119,7 @@ func (o *GitHubAppOptions) UpsertPR(org, repo, base, head, title, body string, p
 
 	if len(prLabels) > 0 {
 		if err := o.client.AddLabels(org, repo, prNumber, prLabels...); err != nil {
-			l.WithError(err).Warn("Failed to add labels to PR — continuing anyway")
+			return fmt.Errorf("failed to add labels to PR #%d: %w", prNumber, err)
 		}
 	}
 
@@ -127,16 +127,28 @@ func (o *GitHubAppOptions) UpsertPR(org, repo, base, head, title, body string, p
 }
 
 // findExistingPR lists open PRs and finds one matching the given head ref.
-// head is in "owner:branch" format; we match against both the raw Ref and
-// the fully qualified "repo-owner:ref" form.
+// head is typically in "owner:branch" format; we match against both the raw
+// branch ref and the fully qualified "repo-owner:ref" form.
 func (o *GitHubAppOptions) findExistingPR(org, repo, head string) (int, error) {
 	prs, err := o.client.GetPullRequests(org, repo)
 	if err != nil {
 		return 0, fmt.Errorf("failed to list PRs: %w", err)
 	}
+	// Derive the branch name from head, which may be "owner:branch" or just "branch".
+	headBranch := head
+	if i := strings.Index(head, ":"); i != -1 && i+1 < len(head) {
+		headBranch = head[i+1:]
+	}
 	for _, pr := range prs {
+		if pr.Head.Ref == headBranch {
+			return pr.Number, nil
+		}
+		// Guard against nil Head.Repo/Owner, which can occur for PRs from deleted forks.
+		if pr.Head.Repo.Owner.Login == "" {
+			continue
+		}
 		qualifiedRef := pr.Head.Repo.Owner.Login + ":" + pr.Head.Ref
-		if pr.Head.Ref == head || qualifiedRef == head {
+		if qualifiedRef == head {
 			return pr.Number, nil
 		}
 	}

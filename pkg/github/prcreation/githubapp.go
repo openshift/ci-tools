@@ -1,16 +1,14 @@
 package prcreation
 
 import (
-	"crypto/rsa"
 	"flag"
 	"fmt"
 	"os"
 	"strings"
 
-	"github.com/dgrijalva/jwt-go/v4"
 	"github.com/sirupsen/logrus"
 
-	"sigs.k8s.io/prow/pkg/config/secret"
+	"sigs.k8s.io/prow/pkg/flagutil"
 	"sigs.k8s.io/prow/pkg/github"
 )
 
@@ -50,37 +48,27 @@ func (o *GitHubAppOptions) Validate() error {
 	return nil
 }
 
-// Finalize constructs the App-authenticated GitHub client. Must be called
-// after Validate and only when Enabled returns true.
+// Finalize constructs the App-authenticated GitHub client using prow's
+// flagutil.GitHubOptions, which handles secret management, JWT signing,
+// and installation token acquisition. Must be called after Validate and
+// only when Enabled returns true.
 func (o *GitHubAppOptions) Finalize() error {
 	if !o.Enabled() {
 		return nil
 	}
 
-	keyGenerator, err := secret.AddWithParser(
-		o.PrivateKeyPath,
-		func(raw []byte) (*rsa.PrivateKey, error) {
-			key, err := jwt.ParseRSAPrivateKeyFromPEM(raw)
-			if err != nil {
-				return nil, fmt.Errorf("failed to parse RSA private key from PEM: %w", err)
-			}
-			return key, nil
-		},
+	// Initialize a GitHubOptions with proper defaults (endpoints, timeouts)
+	// via a throwaway FlagSet, then configure it for App auth. This reuses
+	// prow's built-in client construction rather than reimplementing it.
+	ghOpts := &flagutil.GitHubOptions{}
+	ghOpts.AddCustomizedFlags(
+		flag.NewFlagSet("pr-app", flag.ContinueOnError),
+		flagutil.DisableThrottlerOptions(),
 	)
-	if err != nil {
-		return fmt.Errorf("failed to load GitHub App private key: %w", err)
-	}
+	ghOpts.AppID = o.AppID
+	ghOpts.AppPrivateKeyPath = o.PrivateKeyPath
 
-	opts := github.ClientOptions{
-		Censor:        secret.Censor,
-		AppID:         o.AppID,
-		AppPrivateKey: keyGenerator,
-		Bases:         []string{github.DefaultAPIEndpoint},
-	}
-
-	_, _, client, err := github.NewClientFromOptions(logrus.Fields{
-		"client": "pr-github-app",
-	}, opts)
+	client, err := ghOpts.GitHubClientWithLogFields(false, logrus.Fields{"client": "pr-github-app"})
 	if err != nil {
 		return fmt.Errorf("failed to construct GitHub App client: %w", err)
 	}
@@ -95,7 +83,10 @@ func (o *GitHubAppOptions) Client() github.Client {
 }
 
 // UpsertPR creates or updates a pull request using the App client.
-// It sets canModify=false to avoid fork_collab errors on cross-fork PRs.
+// It uses org-aware API calls (CreatePullRequest, GetPullRequests, etc.)
+// because prow's apps auth round tripper requires the org to resolve the
+// correct installation token. The generic bumper.UpdatePullRequestWithLabels
+// cannot be used here as it calls FindIssues (which passes an empty org).
 func (o *GitHubAppOptions) UpsertPR(org, repo, base, head, title, body string, prLabels []string) error {
 	l := logrus.WithFields(logrus.Fields{"org": org, "repo": repo, "head": head})
 
@@ -126,31 +117,21 @@ func (o *GitHubAppOptions) UpsertPR(org, repo, base, head, title, body string, p
 	return nil
 }
 
-// findExistingPR lists open PRs and finds one matching the given head ref.
-// head is typically in "owner:branch" format; we match against both the raw
-// branch ref and the fully qualified "repo-owner:ref" form.
+// findExistingPR searches for an open PR matching the given head ref using
+// the GitHub search API via FindIssuesWithOrg (org-aware, required for App auth).
 func (o *GitHubAppOptions) findExistingPR(org, repo, head string) (int, error) {
-	prs, err := o.client.GetPullRequests(org, repo)
-	if err != nil {
-		return 0, fmt.Errorf("failed to list PRs: %w", err)
-	}
 	// Derive the branch name from head, which may be "owner:branch" or just "branch".
 	headBranch := head
 	if i := strings.Index(head, ":"); i != -1 && i+1 < len(head) {
 		headBranch = head[i+1:]
 	}
-	for _, pr := range prs {
-		if pr.Head.Ref == headBranch {
-			return pr.Number, nil
-		}
-		// Guard against nil Head.Repo/Owner, which can occur for PRs from deleted forks.
-		if pr.Head.Repo.Owner.Login == "" {
-			continue
-		}
-		qualifiedRef := pr.Head.Repo.Owner.Login + ":" + pr.Head.Ref
-		if qualifiedRef == head {
-			return pr.Number, nil
-		}
+	query := fmt.Sprintf("is:open is:pr repo:%s/%s head:%s", org, repo, headBranch)
+	issues, err := o.client.FindIssuesWithOrg(org, query, "updated", false)
+	if err != nil {
+		return 0, fmt.Errorf("failed to search for existing PR: %w", err)
 	}
-	return 0, fmt.Errorf("no open PR found matching head %q", head)
+	if len(issues) == 0 {
+		return 0, fmt.Errorf("no open PR found matching head %q", head)
+	}
+	return issues[0].Number, nil
 }

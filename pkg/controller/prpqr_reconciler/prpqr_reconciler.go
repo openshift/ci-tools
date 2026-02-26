@@ -208,6 +208,8 @@ func (r *reconciler) reconcile(ctx context.Context, req reconcile.Request, logge
 	}); err != nil {
 		return err
 	}
+
+	// PRPQR cleanup is done by the payload-testing plugin on PR merge/close.
 	return nil
 }
 

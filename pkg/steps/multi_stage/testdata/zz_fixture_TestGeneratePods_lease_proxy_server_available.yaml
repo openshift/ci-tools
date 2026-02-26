@@ -18,9 +18,9 @@
       ci.openshift.io/metadata.step: step0
       ci.openshift.io/metadata.target: target
       ci.openshift.io/metadata.variant: variant
-      ci.openshift.io/multi-stage-test: run podman
+      ci.openshift.io/multi-stage-test: claim-a-lease
       created-by-ci: "true"
-    name: run podman-step0
+    name: claim-a-lease-step0
     namespace: namespace
   spec:
     containers:
@@ -68,7 +68,7 @@
       - name: NAMESPACE
         value: namespace
       - name: JOB_NAME_SAFE
-        value: run podman
+        value: claim-a-lease
       - name: JOB_NAME_HASH
         value: 5e8c9
       - name: UNIQUE_HASH
@@ -81,6 +81,8 @@
         value: /var/run/secrets/ci.openshift.io/multi-stage/kubeadmin-password
       - name: SHARED_DIR
         value: /var/run/secrets/ci.openshift.io/multi-stage
+      - name: LEASE_PROXY_CLIENT_SH
+        value: /opt/scripts/lease-proxy/client.sh
       image: pipeline:src
       name: test
       resources: {}
@@ -107,12 +109,14 @@
       - mountPath: /dev/shm
         name: dshm
       - mountPath: /var/run/secrets/ci.openshift.io/multi-stage
-        name: run podman
+        name: claim-a-lease
+      - mountPath: /opt/scripts/lease-proxy
+        name: lease-proxy
+        readOnly: true
     - env:
       - name: JOB_SPEC
       - name: SIDECAR_OPTIONS
-        value: '{"gcs_options":{"items":["/logs/artifacts"],"sub_dir":"artifacts/run
-          podman/step0","dry_run":false},"entries":[{"args":["/bin/bash","-c","#!/bin/bash\nset
+        value: '{"gcs_options":{"items":["/logs/artifacts"],"sub_dir":"artifacts/claim-a-lease/step0","dry_run":false},"entries":[{"args":["/bin/bash","-c","#!/bin/bash\nset
           -eu\ncommand0"],"container_name":"test","process_log":"/logs/process-log.txt","marker_file":"/logs/marker-file.txt","metadata_file":"/logs/artifacts/metadata.json"}],"ignore_interrupts":true,"censoring_options":{}}'
       image: sidecar
       name: sidecar
@@ -145,7 +149,7 @@
         name: entrypoint-wrapper
     nodeName: node-name
     restartPolicy: Never
-    serviceAccountName: run podman
+    serviceAccountName: claim-a-lease
     terminationGracePeriodSeconds: 25
     volumes:
     - emptyDir: {}
@@ -160,7 +164,10 @@
         medium: Memory
         sizeLimit: 2G
       name: dshm
-    - name: run podman
+    - name: claim-a-lease
       secret:
-        secretName: run podman
+        secretName: claim-a-lease
+    - configMap:
+        name: lease-proxy
+      name: lease-proxy
   status: {}

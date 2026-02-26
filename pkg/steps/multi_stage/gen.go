@@ -267,7 +267,9 @@ func (s *multiStageTestStep) generatePods(
 			podsutils.ConfigurePodForNestedPodman(pod, containerName, s.name)
 		}
 
-		addLeaseProxyScripts(pod, container)
+		if s.leaseProxyServerAvailable {
+			addLeaseProxyScripts(pod, container)
+		}
 
 		ret = append(ret, *pod)
 	}

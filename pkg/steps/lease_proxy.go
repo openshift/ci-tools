@@ -68,6 +68,12 @@ func (s *stepLeaseProxyServer) Validate() error {
 	if s.srvAddr == "" {
 		return errors.New("lease proxy server requires an HTTP server address")
 	}
+	if s.kubeClient == nil {
+		return errors.New("lease proxy server requires a kube client")
+	}
+	if s.jobSpec == nil {
+		return errors.New("lease proxy server requires a job spec")
+	}
 	return nil
 }
 

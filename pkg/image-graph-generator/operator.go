@@ -104,10 +104,7 @@ func (o *Operator) callback(c *api.ReleaseBuildConfiguration, i *config.Info) er
 
 		for _, image := range c.Images {
 			if !excludedImages.Has(string(image.To)) {
-				multiArch := false
-				if len(image.AdditionalArchitectures) > 0 {
-					multiArch = true
-				}
+				multiArch := len(image.ArchitectureCapabilities()) > 0
 				if err := o.UpdateImage(image, c.BaseImages, target, branchID, multiArch); err != nil {
 					errs = append(errs, err)
 				}

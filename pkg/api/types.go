@@ -2810,10 +2810,15 @@ type ProjectDirectoryImageBuildStepConfiguration struct {
 	MultiArch bool `json:"multi_arch,omitempty"`
 
 	// AdditionalArchitectures is a list of additional architectures to build for. AMD64 architecture is included by default.
+	// DEPRECATED: use Capabilities instead
 	AdditionalArchitectures []string `json:"additional_architectures,omitempty"`
 
 	// Ref is an optional string linking to the extra_ref in "org.repo" format that this belongs to
 	Ref string `json:"ref,omitempty"`
+
+	// Capabilities is the list of strings that
+	// define additional capabilities needed by the image build jobs
+	Capabilities []string `json:"capabilities,omitempty"`
 
 	// isBundleImage indicates that this build step is a bundle image
 	isBundleImage bool
@@ -2832,6 +2837,33 @@ func (p *ProjectDirectoryImageBuildStepConfiguration) IsBundleImage() bool {
 func (p *ProjectDirectoryImageBuildStepConfiguration) WithBundleImage(isBundleImage bool) *ProjectDirectoryImageBuildStepConfiguration {
 	p.isBundleImage = isBundleImage
 	return p
+}
+
+// ValidArchitectures is the set of supported architecture strings for image builds.
+var ValidArchitectures = sets.New[string](
+	"amd64",   // x86-64
+	"arm64",   // AArch64
+	"ppc64le", // PowerPC 64-bit Little Endian
+	"s390x",   // IBM System z 64-bit
+)
+
+// AllCapabilities returns the deduplicated, sorted union of Capabilities and
+// AdditionalArchitectures. Both fields are treated as equivalent during the
+// transition period while AdditionalArchitectures is being phased out.
+func (p *ProjectDirectoryImageBuildStepConfiguration) AllCapabilities() []string {
+	return sets.List(sets.New[string](append(p.Capabilities, p.AdditionalArchitectures...)...))
+}
+
+// ArchitectureCapabilities returns the subset of AllCapabilities that are valid
+// architecture strings (e.g. "arm64", "ppc64le").
+func (p *ProjectDirectoryImageBuildStepConfiguration) ArchitectureCapabilities() []string {
+	var arches []string
+	for _, c := range p.AllCapabilities() {
+		if ValidArchitectures.Has(c) {
+			arches = append(arches, c)
+		}
+	}
+	return arches
 }
 
 // ProjectDirectoryImageBuildInputs holds inputs for an image build from the repo under test

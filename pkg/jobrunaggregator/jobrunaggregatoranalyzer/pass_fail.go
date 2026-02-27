@@ -732,12 +732,6 @@ func testShouldAlwaysPass(jobName, testName, testSuiteName string) string {
 		return "step graph tests are added by ci and are not useful for aggregation"
 	}
 
-	if strings.Contains(testName, `Cluster should remain functional during upgrade`) {
-		// this test is a side-effect of other tests.  For the purpose of aggregation, we can have each individual job run
-		// fail this test, but the aggregated output can be successful.
-		return "this test is a side-effect of other tests"
-	}
-
 	if strings.HasSuffix(testName, "-gather-azure-cli container test") {
 		// this is only for gathering artifacts.
 		return "used only to collect artifacts"

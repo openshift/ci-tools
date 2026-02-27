@@ -546,6 +546,11 @@ func (a *weeklyAverageFromTenDays) innerCheckPercentileDisruptionWithGrace(
 }
 
 func (a *weeklyAverageFromTenDays) CheckFailed(ctx context.Context, jobName string, suiteNames []string, testCaseDetails *jobrunaggregatorlib.TestCaseDetails) (testCaseStatus, string, error) {
+	// Informing tests do not impact aggregation, so treat them as always passing
+	if testCaseDetails.Lifecycle == "informing" {
+		reason := fmt.Sprintf("always passing %q: informing test does not impact aggregation\n", testCaseDetails.Name)
+		return testCasePassed, reason, nil
+	}
 	if reason := testShouldAlwaysPass(jobName, testCaseDetails.Name, testCaseDetails.TestSuiteName); len(reason) > 0 {
 		reason := fmt.Sprintf("always passing %q: %v\n", testCaseDetails.Name, reason)
 		return testCasePassed, reason, nil

@@ -27,6 +27,7 @@ type gitSourceStep struct {
 	pullSecret      *coreapi.Secret
 	architectures   sets.Set[string]
 	metricsAgent    *metrics.MetricsAgent
+	buildType       string
 }
 
 func (s *gitSourceStep) Inputs() (api.InputDefinition, error) {
@@ -52,7 +53,7 @@ func (s *gitSourceStep) run(ctx context.Context) error {
 		if s.config.Ref != "" {
 			root = fmt.Sprintf("%s-%s", root, s.config.Ref)
 		}
-		return handleBuilds(ctx, s.buildClient, s.podClient, *buildFromSource(s.jobSpec, "", api.PipelineImageStreamTagReference(root), buildapi.BuildSource{
+		return handleBuilds(ctx, s.buildClient, s.podClient, s.buildType, *buildFromSource(s.jobSpec, "", api.PipelineImageStreamTagReference(root), buildapi.BuildSource{
 			Type:         buildapi.BuildSourceGit,
 			Dockerfile:   s.config.DockerfileLiteral,
 			ContextDir:   s.config.ContextDir,

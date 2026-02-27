@@ -32,6 +32,7 @@ type indexGeneratorStep struct {
 	pullSecret         *coreapi.Secret
 	architectures      sets.Set[string]
 	metricsAgent       *metrics.MetricsAgent
+	buildType          string
 }
 
 const IndexDataDirectory = "/index-data"
@@ -126,7 +127,7 @@ func (s *indexGeneratorStep) run(ctx context.Context) error {
 		nil,
 		"",
 	)
-	err = handleBuilds(ctx, s.client, s.podClient, *build, s.metricsAgent, newImageBuildOptions(s.architectures.UnsortedList()))
+	err = handleBuilds(ctx, s.client, s.podClient, s.buildType, *build, s.metricsAgent, newImageBuildOptions(s.architectures.UnsortedList()))
 	if err != nil && strings.Contains(err.Error(), "error checking provided apis") {
 		return results.ForReason("generating_index").WithError(err).Errorf("failed to generate operator index due to invalid bundle info: %v", err)
 	}

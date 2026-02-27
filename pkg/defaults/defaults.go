@@ -201,9 +201,9 @@ func fromConfig(ctx context.Context, cfg *Config) ([]api.Step, []api.Step, error
 			inputImages[conf.InputImage] = struct{}{}
 		} else if rawStep.PipelineImageCacheStepConfiguration != nil {
 			skippedBinaries := filterRequiredBinariesFromSkipped(cfg.CIConfig.Images.Items, cfg.SkippedImages)
-			step = steps.PipelineImageCacheStep(*rawStep.PipelineImageCacheStepConfiguration, cfg.CIConfig.Resources, cfg.buildClient, cfg.podClient, cfg.JobSpec, cfg.PullSecret, cfg.MetricsAgent, skippedBinaries)
+			step = steps.PipelineImageCacheStep(*rawStep.PipelineImageCacheStepConfiguration, cfg.CIConfig.Resources, cfg.buildClient, cfg.podClient, cfg.JobSpec, cfg.PullSecret, cfg.MetricsAgent, skippedBinaries, cfg.CIConfig.BuildType)
 		} else if rawStep.SourceStepConfiguration != nil {
-			step = steps.SourceStep(*rawStep.SourceStepConfiguration, cfg.CIConfig.Resources, cfg.buildClient, cfg.podClient, cfg.JobSpec, cfg.CloneAuthConfig, cfg.PullSecret, cfg.MetricsAgent)
+			step = steps.SourceStep(*rawStep.SourceStepConfiguration, cfg.CIConfig.Resources, cfg.buildClient, cfg.podClient, cfg.JobSpec, cfg.CloneAuthConfig, cfg.PullSecret, cfg.MetricsAgent, cfg.CIConfig.BuildType)
 		} else if rawStep.BundleSourceStepConfiguration != nil {
 			step = steps.BundleSourceStep(*rawStep.BundleSourceStepConfiguration, cfg.CIConfig, cfg.CIConfig.Resources, cfg.buildClient, cfg.podClient, cfg.JobSpec, cfg.PullSecret)
 		} else if rawStep.IndexGeneratorStepConfiguration != nil {

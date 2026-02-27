@@ -1004,7 +1004,7 @@ func TestBuildPartialGraph(t *testing.T) {
 					loggingclient.New(fakectrlruntimeclient.NewClientBuilder().WithRuntimeObjects(&imagev1.ImageStreamTag{ObjectMeta: metav1.ObjectMeta{Name: ":"}}).Build(), nil),
 					nil,
 				),
-				steps.SourceStep(api.SourceStepConfiguration{From: api.PipelineImageStreamTagReferenceRoot, To: api.PipelineImageStreamTagReferenceSource}, api.ResourceConfiguration{}, nil, nil, &api.JobSpec{}, nil, nil, nil),
+				steps.SourceStep(api.SourceStepConfiguration{From: api.PipelineImageStreamTagReferenceRoot, To: api.PipelineImageStreamTagReferenceSource}, api.ResourceConfiguration{}, nil, nil, &api.JobSpec{}, nil, nil, nil, "openshift"),
 				steps.ProjectDirectoryImageBuildStep(
 					api.ProjectDirectoryImageBuildStepConfiguration{
 						From: api.PipelineImageStreamTagReferenceSource,

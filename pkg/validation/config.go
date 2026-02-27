@@ -20,6 +20,8 @@ type Validator struct {
 	validClusterClaimOwners api.ClusterClaimOwnersMap
 	// hasTrapCache avoids redundant regexp searches on step commands.
 	hasTrapCache map[string]bool
+	// workflowsByName holds workflows for pre/post override validation
+	workflowsByName map[string]api.MultiStageTestConfiguration
 }
 
 // NewValidator creates an object that optimizes bulk validations.
@@ -33,6 +35,13 @@ func NewValidator(profiles api.ClusterProfilesMap, clusterClaimOwners api.Cluste
 	if clusterClaimOwners != nil {
 		ret.validClusterClaimOwners = clusterClaimOwners
 	}
+	return ret
+}
+
+// NewValidatorWithWorkflows creates a validator with workflow information for pre/post override validation.
+func NewValidatorWithWorkflows(profiles api.ClusterProfilesMap, clusterClaimOwners api.ClusterClaimOwnersMap, workflowsByName map[string]api.MultiStageTestConfiguration) Validator {
+	ret := NewValidator(profiles, clusterClaimOwners)
+	ret.workflowsByName = workflowsByName
 	return ret
 }
 

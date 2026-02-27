@@ -1262,6 +1262,10 @@ type MultiStageTestConfiguration struct {
 	// NodeArchitectureOverrides is a map that allows overriding the node architecture for specific steps
 	// that exist in the Pre, Test and Post steps. The key is the name of the step and the value is the architecture.
 	NodeArchitectureOverrides NodeArchitectureOverrides `json:"node_architecture_overrides,omitempty"`
+	// AllowPrePostStepOverrides must be set to true when a test configuration overrides the pre or post steps
+	// from a workflow. This is a safety mechanism to prevent accidental overriding of critical setup and
+	// teardown steps that could cause resource leaks.
+	AllowPrePostStepOverrides *bool `json:"allow_pre_post_step_overrides,omitempty"`
 }
 
 type NodeArchitectureOverrides map[string]NodeArchitecture

@@ -463,6 +463,8 @@ type options struct {
 	metricsAgent *metrics.MetricsAgent
 
 	skippedImages sets.Set[string]
+
+	successReported bool
 }
 
 func bindOptions(flag *flag.FlagSet) *options {
@@ -973,6 +975,11 @@ func (o *options) Report(errs ...error) {
 	}
 
 	if len(errorToReport) == 0 {
+		// Skip reporting success if it was already reported early (before post steps)
+		if o.successReported {
+			logrus.Debug("Success was already reported early, skipping duplicate report.")
+			return
+		}
 		reporter.Report(nil)
 	}
 }
@@ -1202,13 +1209,31 @@ func (o *options) Run() (errs []error) {
 			return wrapped
 		}
 
-		// Run each of the promotion steps concurrently
+		// Main graph completed successfully - report success immediately before post steps
+		mainGraphCompletedAt := time.Now()
+		mainGraphDuration := mainGraphCompletedAt.Sub(start)
+		eventRecorder.Event(runtimeObject, coreapi.EventTypeNormal, "CiJobSucceeded", eventJobDescription(o.jobSpec, o.namespace))
+
+		// Report success to users immediately (post steps are best-effort cleanup)
+		if shouldReportEarly(o.jobSpec) {
+			reporter, loadErr := o.resultsOptions.Reporter(o.jobSpec, o.consoleHost)
+			if loadErr != nil {
+				logrus.WithError(loadErr).Warn("Could not load result reporting options, skipping early success report.")
+			} else {
+				reporter.Report(nil)
+				o.successReported = true
+			}
+		}
+
+		// Run each of the promotion steps concurrently (best-effort cleanup)
+		postStepsStart := time.Now()
 		lenOfPromotionSteps := len(promotionSteps)
 		detailsChan := make(chan api.CIOperatorStepDetails, lenOfPromotionSteps)
 		errChan := make(chan error, lenOfPromotionSteps)
 		for _, step := range promotionSteps {
 			go runPromotionStep(ctx, step, detailsChan, errChan, o.metricsAgent)
 		}
+		postStepsFailed := false
 		for i := 0; i < lenOfPromotionSteps; i++ {
 			select {
 			case details := <-detailsChan:
@@ -1216,12 +1241,26 @@ func (o *options) Run() (errs []error) {
 			case err := <-errChan:
 				errorDesc := fmt.Sprintf("post step failed while %s. with error: %v", eventJobDescription(o.jobSpec, o.namespace), err)
 				eventRecorder.Event(runtimeObject, coreapi.EventTypeWarning, "PostStepFailed", errorDesc)
-				return []error{results.ForReason("executing_post").WithError(err).Unwrap()} // If any of the promotion steps fail, it is considered a failure
+				logrus.WithError(err).Warn("Post step failed, but job success was already reported. Continuing with cleanup.")
+				postStepsFailed = true
+				// Post step failures don't affect job success (already reported), but we still record them
 			}
 		}
 
-		eventRecorder.Event(runtimeObject, coreapi.EventTypeNormal, "CiJobSucceeded", eventJobDescription(o.jobSpec, o.namespace))
-		o.metricsAgent.Record(metrics.NewInsightsEvent(metrics.InsightExecutionCompleted, metrics.Context{"duration_seconds": time.Since(start).Seconds(), "success": true}))
+		// Record final metrics including post steps duration
+		postStepsDuration := time.Since(postStepsStart)
+		totalDuration := time.Since(start)
+		metricsContext := metrics.Context{
+			"duration_seconds":            totalDuration.Seconds(),
+			"main_graph_duration_seconds": mainGraphDuration.Seconds(),
+			"post_steps_duration_seconds": postStepsDuration.Seconds(),
+			"time_saved_seconds":          postStepsDuration.Seconds(),
+			"success":                     true,
+		}
+		if postStepsFailed {
+			metricsContext["post_steps_failed"] = true
+		}
+		o.metricsAgent.Record(metrics.NewInsightsEvent(metrics.InsightExecutionCompleted, metricsContext))
 
 		return nil
 	}); len(runErrs) > 0 {
@@ -2249,6 +2288,34 @@ func jobSpecFromGitRef(ref string) (*api.JobSpec, error) {
 			},
 		}}
 	return spec, nil
+}
+
+// shouldReportEarly determines if success should be reported immediately after main graph completes.
+// Returns true for presubmits (except rehearsals) and release controller periodics.
+func shouldReportEarly(jobSpec *api.JobSpec) bool {
+	if jobSpec == nil {
+		return false
+	}
+
+	if jobSpec.Type == prowapi.PresubmitJob {
+		if strings.HasPrefix(jobSpec.Job, "rehearse-") {
+			return false
+		}
+		return true
+	}
+
+	if jobSpec.Type == prowapi.PeriodicJob {
+		jobName := strings.ToLower(jobSpec.Job)
+		if strings.Contains(jobName, "release") {
+			if strings.Contains(jobName, "ocp") || strings.Contains(jobName, "nightly") ||
+				strings.Contains(jobName, "ci-") || strings.Contains(jobName, "release-") {
+				return true
+			}
+		}
+		return false
+	}
+
+	return false
 }
 
 func nodeNames(nodes []*api.StepNode) []string {

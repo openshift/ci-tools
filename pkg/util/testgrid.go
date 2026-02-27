@@ -6,6 +6,7 @@ func IsSpecialInformingJobOnTestGrid(jobName string) bool {
 	testGridInformingPrefixes := []string{
 		"periodic-ci-ComplianceAsCode-",
 		"periodic-ci-openshift-cloud-credential-operator-",
+		"periodic-ci-openshift-cluster-api-actuator-pkg-",
 		"periodic-ci-openshift-cluster-control-plane-machine-set-operator-",
 		"periodic-ci-openshift-cluster-etcd-operator-",
 		"periodic-ci-openshift-ovn-kubernetes-release-",

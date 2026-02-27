@@ -1285,25 +1285,11 @@ func TestValidateCredentials(t *testing.T) {
 		{
 			name: "duped cred mount path means error",
 			input: []api.CredentialReference{
-				{Namespace: "ns", Name: "name", MountPath: "/foo", Collection: "1"},
-				{Namespace: "ns", Name: "name", MountPath: "/foo", Collection: "2"},
+				{Namespace: "ns", Name: "name", MountPath: "/foo"},
+				{Namespace: "ns", Name: "name", MountPath: "/foo"},
 			},
 			output: []error{
-				errors.New("root.credentials[0] and credentials[1] mount to the same location (/foo) and have the same name, which would result in a collision"),
-			},
-		},
-		{
-			name: "duped cred mount path is ok if in the same collection",
-			input: []api.CredentialReference{
-				{Namespace: "ns", Name: "name", MountPath: "/foo", Collection: "1"},
-				{Namespace: "ns", Name: "different-name", MountPath: "/foo", Collection: "1"},
-			},
-		},
-		{
-			name: "duped cred name is ok if different mount path",
-			input: []api.CredentialReference{
-				{Namespace: "ns", Name: "name", MountPath: "/foo", Collection: "1"},
-				{Namespace: "ns", Name: "name", MountPath: "/bar", Collection: "1"},
+				errors.New("root.credentials[0] and credentials[1] mount to the same location (/foo), which would result in a collision"),
 			},
 		},
 		{
@@ -1326,11 +1312,262 @@ func TestValidateCredentials(t *testing.T) {
 				{Namespace: "ns", Name: "name", MountPath: "/foo"},
 			},
 		},
+		{
+			name: "bundle reference is valid",
+			input: []api.CredentialReference{
+				{Bundle: "my-bundle", MountPath: "/foo"},
+			},
+		},
+		{
+			name: "auto-discovery (collection + group) is valid",
+			input: []api.CredentialReference{
+				{Collection: "coll", Group: "group", MountPath: "/foo/bar"},
+			},
+		},
+		{
+			name: "explicit field (collection + group + field) is valid",
+			input: []api.CredentialReference{
+				{Collection: "coll", Group: "group", Field: "field", MountPath: "/foo"},
+			},
+		},
+		{
+			name: "explicit field with As is valid",
+			input: []api.CredentialReference{
+				{Collection: "coll", Group: "grp", Field: "fld", As: "renamed", MountPath: "/foo"},
+			},
+		},
+		{
+			name: "as without field means error",
+			input: []api.CredentialReference{
+				{Collection: "coll", Group: "grp", As: "something", MountPath: "/foo"},
+			},
+			output: []error{
+				errors.New("root.credentials[0]: must provide 'field' when 'as' is specified"),
+			},
+		},
+		{
+			name: "bundle without mount_path means error",
+			input: []api.CredentialReference{
+				{Bundle: "my-bundle"},
+			},
+			output: []error{
+				errors.New("root.credentials[0].mountPath cannot be empty"),
+			},
+		},
+		{
+			name: "auto-discovery without mount_path means error",
+			input: []api.CredentialReference{
+				{Collection: "coll", Group: "group"},
+			},
+			output: []error{
+				errors.New("root.credentials[0].mountPath cannot be empty"),
+			},
+		},
+		{
+			name: "bundle with relative mount_path means error",
+			input: []api.CredentialReference{
+				{Bundle: "my-bundle", MountPath: "./foo"},
+			},
+			output: []error{
+				errors.New("root.credentials[0].mountPath is not absolute: ./foo"),
+			},
+		},
+		{
+			name: "auto-discovery with relative mount_path means error",
+			input: []api.CredentialReference{
+				{Collection: "coll", Group: "grp", MountPath: "foo/bar"},
+			},
+			output: []error{
+				errors.New("root.credentials[0].mountPath is not absolute: foo/bar"),
+			},
+		},
+		{
+			name: "bundle with collection means error",
+			input: []api.CredentialReference{
+				{Bundle: "my-bundle", Collection: "coll", MountPath: "/foo"},
+			},
+			output: []error{
+				errors.New("root.credentials[0]: bundle is mutually exclusive with collection, group, and field"),
+			},
+		},
+		{
+			name: "bundle with group means error",
+			input: []api.CredentialReference{
+				{Bundle: "my-bundle", Group: "group", MountPath: "/foo"},
+			},
+			output: []error{
+				errors.New("root.credentials[0]: bundle is mutually exclusive with collection, group, and field"),
+			},
+		},
+		{
+			name: "bundle with field means error",
+			input: []api.CredentialReference{
+				{Bundle: "my-bundle", Field: "fld", MountPath: "/foo"},
+			},
+			output: []error{
+				errors.New("root.credentials[0]: bundle is mutually exclusive with collection, group, and field"),
+			},
+		},
+		{
+			name: "bundle with collection+group means error",
+			input: []api.CredentialReference{
+				{Bundle: "my-bundle", Collection: "coll", Group: "grp", MountPath: "/foo"},
+			},
+			output: []error{
+				errors.New("root.credentials[0]: bundle is mutually exclusive with collection, group, and field"),
+			},
+		},
+		{
+			name: "collection without group means error",
+			input: []api.CredentialReference{
+				{Collection: "coll", MountPath: "/foo"},
+			},
+			output: []error{
+				errors.New("root.credentials[0]: invalid CSI credential reference, must provide bundle, collection+group (auto-discovery), or collection+group+field"),
+			},
+		},
+		{
+			name: "group without collection means error",
+			input: []api.CredentialReference{
+				{Group: "grp", MountPath: "/foo"},
+			},
+			output: []error{
+				errors.New("root.credentials[0]: invalid CSI credential reference, must provide bundle, collection+group (auto-discovery), or collection+group+field"),
+			},
+		},
+		{
+			name: "field without collection + group means error",
+			input: []api.CredentialReference{
+				{Field: "fld", MountPath: "/foo"},
+			},
+			output: []error{
+				errors.New("root.credentials[0]: invalid CSI credential reference, must provide bundle, collection+group (auto-discovery), or collection+group+field"),
+			},
+		},
+		{
+			name: "field with collection but no group means error",
+			input: []api.CredentialReference{
+				{Collection: "coll", Field: "fld", MountPath: "/foo"},
+			},
+			output: []error{
+				errors.New("root.credentials[0]: invalid CSI credential reference, must provide bundle, collection+group (auto-discovery), or collection+group+field"),
+			},
+		},
+		{
+			name: "multiple CSI credentials",
+			input: []api.CredentialReference{
+				{Collection: "coll", Group: "grp", MountPath: "/foo"},
+				{Collection: "another-coll", Group: "grp", MountPath: "/bar"},
+			},
+		},
+		{
+			name: "multiple CSI credentials with auto-discovery and same mount path means error",
+			input: []api.CredentialReference{
+				{Collection: "coll", Group: "grp", MountPath: "/foo"},
+				{Collection: "another-coll", Group: "grp", MountPath: "/foo"},
+			},
+			output: []error{
+				errors.New("root.credentials[0] and credentials[1] mount to the same location (/foo), which would result in a collision"),
+			},
+		},
+		{
+			name: "2nd case: multiple CSI credentials with auto-discovery and same mount path means error",
+			input: []api.CredentialReference{
+				{Collection: "coll", Group: "grp", MountPath: "/foo"},
+				{Collection: "coll", Group: "another-grp", MountPath: "/foo"},
+			},
+			output: []error{
+				errors.New("root.credentials[0] and credentials[1] mount to the same location (/foo), which would result in a collision"),
+			},
+		},
+		{
+			name: "multiple CSI credentials (one auto-discovery) with same mount path means error",
+			input: []api.CredentialReference{
+				{Collection: "coll", Group: "grp", MountPath: "/tmp/secrets"},
+				{Collection: "coll", Group: "another-grp", Field: "field", MountPath: "/tmp/secrets"},
+			},
+			output: []error{
+				errors.New("root.credentials[0] and credentials[1] mount to the same location (/tmp/secrets), which would result in a collision"),
+			},
+		},
+		{
+			name: "auto-discovery creds subdir means error",
+			input: []api.CredentialReference{
+				{Collection: "coll", Group: "grp", MountPath: "/tmp/secrets"},
+				{Collection: "coll", Group: "another-grp", MountPath: "/tmp/secrets/subdir"},
+			},
+			output: []error{
+				errors.New("root.credentials[1] mounts at /tmp/secrets/subdir, which is under credentials[0] (/tmp/secrets)"),
+			},
+		},
+		{
+			name: "field with group but no collection means error",
+			input: []api.CredentialReference{
+				{Group: "grp", Field: "fld", MountPath: "/foo"},
+			},
+			output: []error{
+				errors.New("root.credentials[0]: invalid CSI credential reference, must provide bundle, collection+group (auto-discovery), or collection+group+field"),
+			},
+		},
+		{
+			name: "CSI bundle with old system name means error",
+			input: []api.CredentialReference{
+				{Bundle: "my-bundle", Name: "secret", MountPath: "/foo"},
+			},
+			output: []error{
+				errors.New("root.credentials[0]: cannot use fields (name, namespace) with CSI fields (bundle, collection, group, field)"),
+			},
+		},
+		{
+			name: "CSI bundle with old system namespace means error",
+			input: []api.CredentialReference{
+				{Bundle: "my-bundle", Namespace: "ns", MountPath: "/foo"},
+			},
+			output: []error{
+				errors.New("root.credentials[0]: cannot use fields (name, namespace) with CSI fields (bundle, collection, group, field)"),
+			},
+		},
+		{
+			name: "CSI bundle with old system name and namespace means error",
+			input: []api.CredentialReference{
+				{Bundle: "my-bundle", Name: "secret", Namespace: "ns", MountPath: "/foo"},
+			},
+			output: []error{
+				errors.New("root.credentials[0]: cannot use fields (name, namespace) with CSI fields (bundle, collection, group, field)"),
+			},
+		},
+		{
+			name: "CSI auto-discovery with old system name means error",
+			input: []api.CredentialReference{
+				{Collection: "coll", Group: "grp", Name: "secret", MountPath: "/foo"},
+			},
+			output: []error{
+				errors.New("root.credentials[0]: cannot use fields (name, namespace) with CSI fields (bundle, collection, group, field)"),
+			},
+		},
+		{
+			name: "CSI auto-discovery with old system namespace means error",
+			input: []api.CredentialReference{
+				{Collection: "coll", Group: "grp", Namespace: "ns", MountPath: "/foo"},
+			},
+			output: []error{
+				errors.New("root.credentials[0]: cannot use fields (name, namespace) with CSI fields (bundle, collection, group, field)"),
+			},
+		},
+		{
+			name: "CSI explicit field with old system name and namespace means error",
+			input: []api.CredentialReference{
+				{Collection: "coll", Group: "grp", Field: "fld", Name: "secret", Namespace: "ns", MountPath: "/foo"},
+			},
+			output: []error{
+				errors.New("root.credentials[0]: cannot use fields (name, namespace) with CSI fields (bundle, collection, group, field)"),
+			},
+		},
 	}
 	for _, testCase := range testCases {
 		t.Run(testCase.name, func(t *testing.T) {
 			if actual, expected := validateCredentials("root", testCase.input), testCase.output; !reflect.DeepEqual(actual, expected) {
-				t.Errorf("%s: got incorrect errors: %s", testCase.name, cmp.Diff(actual, expected, cmp.Comparer(func(x, y error) bool {
+				t.Errorf("%s: got incorrect errors (-want,+got): %s", testCase.name, cmp.Diff(actual, expected, cmp.Comparer(func(x, y error) bool {
 					return x.Error() == y.Error()
 				})))
 			}

@@ -523,16 +523,17 @@ func (s *multiStageTestStep) addCredentialsToCensoring(secretVolumes []coreapi.V
 	i := 0
 	for _, step := range append(s.pre, append(s.test, s.post...)...) {
 		for _, credential := range step.Credentials {
-			if seenCredentials[credential.Name] {
+			fullSecretName := gsm.GetGSMSecretName(credential.Collection, credential.Group, credential.Field)
+			if seenCredentials[fullSecretName] {
 				continue
 			}
-			seenCredentials[credential.Name] = true
+			seenCredentials[fullSecretName] = true
 			volumeName := fmt.Sprintf("censor-cred-%d", i)
 			readOnly := true
 
 			// Create individual SPC name for censoring - each credential
 			// had its SPC already created in init.go's createSPCs function
-			censorMountPath := getCensorMountPath(credential.Name)
+			censorMountPath := getCensorMountPath(fullSecretName)
 			censoredCredential := credential
 			censoredCredential.MountPath = censorMountPath
 			individualCredentials := []api.CredentialReference{censoredCredential}
@@ -552,7 +553,7 @@ func (s *multiStageTestStep) addCredentialsToCensoring(secretVolumes []coreapi.V
 			})
 			secretVolumeMounts = append(secretVolumeMounts, coreapi.VolumeMount{
 				Name:      volumeName,
-				MountPath: getMountPath(credential.Name),
+				MountPath: getMountPath(fullSecretName),
 			})
 			i++
 		}

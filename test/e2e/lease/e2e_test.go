@@ -114,7 +114,6 @@ func TestLeases(t *testing.T) {
 	}
 
 	for _, testCase := range testCases {
-		testCase := testCase
 		framework.Run(t, testCase.name, func(t *framework.T, cmd *framework.CiOperatorCommand) {
 			cmd.AddArgs(
 				framework.RemotePullSecretFlag(t),

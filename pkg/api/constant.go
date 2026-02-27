@@ -100,6 +100,7 @@ const (
 	CIOperatorHTTPServerIPEnvVarName = "HTTP_SERVER_IP"
 	CIOperatorHTTPServerPort         = 8080
 	LeaseProxyServerURLEnvVarName    = "LEASE_PROXY_SERVER_URL"
+	LeaseProxyConfigMapName          = "lease-proxy"
 )
 
 var (

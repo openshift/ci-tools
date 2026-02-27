@@ -21,9 +21,10 @@ import (
 )
 
 const (
-	containerName     = "test"
-	profileVolumeName = "cluster-profile"
-	vpnContainerName  = "vpn-client"
+	containerName              = "test"
+	profileVolumeName          = "cluster-profile"
+	vpnContainerName           = "vpn-client"
+	leaseProxyScriptsMountPath = "/opt/scripts/lease-proxy"
 )
 
 func (s *multiStageTestStep) generateObservers(
@@ -264,6 +265,10 @@ func (s *multiStageTestStep) generatePods(
 
 		if step.NestedPodman {
 			podsutils.ConfigurePodForNestedPodman(pod, containerName, s.name)
+		}
+
+		if s.leaseProxyServerAvailable {
+			addLeaseProxyScripts(pod, container)
 		}
 
 		ret = append(ret, *pod)
@@ -624,5 +629,27 @@ func addCommandScript(name string, pod *coreapi.Pod) {
 	container.VolumeMounts = append(container.VolumeMounts, coreapi.VolumeMount{
 		Name:      volumeName,
 		MountPath: CommandScriptMountPath,
+	})
+}
+
+func addLeaseProxyScripts(pod *coreapi.Pod, c *coreapi.Container) {
+	pod.Spec.Volumes = append(pod.Spec.Volumes, coreapi.Volume{
+		Name: "lease-proxy",
+		VolumeSource: coreapi.VolumeSource{
+			ConfigMap: &coreapi.ConfigMapVolumeSource{
+				LocalObjectReference: coreapi.LocalObjectReference{
+					Name: api.LeaseProxyConfigMapName,
+				},
+			},
+		},
+	})
+	c.VolumeMounts = append(c.VolumeMounts, coreapi.VolumeMount{
+		Name:      "lease-proxy",
+		MountPath: leaseProxyScriptsMountPath,
+		ReadOnly:  true,
+	})
+	c.Env = append(c.Env, coreapi.EnvVar{
+		Name:  "LEASE_PROXY_CLIENT_SH",
+		Value: leaseProxyScriptsMountPath + "/client.sh",
 	})
 }

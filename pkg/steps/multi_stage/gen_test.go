@@ -64,11 +64,12 @@ func TestGeneratePods(t *testing.T) {
 	}
 
 	for _, tc := range []struct {
-		name               string
-		config             *api.ReleaseBuildConfiguration
-		env                []coreapi.EnvVar
-		secretVolumes      []coreapi.Volume
-		secretVolumeMounts []coreapi.VolumeMount
+		name                      string
+		config                    *api.ReleaseBuildConfiguration
+		env                       []coreapi.EnvVar
+		secretVolumes             []coreapi.Volume
+		secretVolumeMounts        []coreapi.VolumeMount
+		leaseProxyServerAvailable bool
 	}{
 		{
 			name: "generate pods",
@@ -132,12 +133,31 @@ func TestGeneratePods(t *testing.T) {
 				}},
 			},
 		},
+		{
+			name: "lease proxy server available",
+			config: &api.ReleaseBuildConfiguration{
+				Tests: []api.TestStepConfiguration{{
+					As: "claim-a-lease",
+					MultiStageTestConfigurationLiteral: &api.MultiStageTestConfigurationLiteral{
+						Test: []api.LiteralTestStep{{
+							As:           "step0",
+							From:         "src",
+							NestedPodman: true,
+							Commands:     "command0",
+							Timeout:      &prowapi.Duration{Duration: time.Hour},
+							GracePeriod:  &prowapi.Duration{Duration: 20 * time.Second},
+						}},
+					},
+				}},
+			},
+			leaseProxyServerAvailable: true,
+		},
 	} {
 		t.Run(tc.name, func(t *testing.T) {
 			t.Parallel()
 
 			js := jobSpec()
-			step := newMultiStageTestStep(tc.config.Tests[0], tc.config, nil, nil, &js, nil, "node-name", "", nil, false, nil, false)
+			step := newMultiStageTestStep(tc.config.Tests[0], tc.config, nil, nil, &js, nil, "node-name", "", nil, false, nil, tc.leaseProxyServerAvailable)
 			step.test[0].Resources = resourceRequirements
 
 			ret, _, err := step.generatePods(tc.config.Tests[0].MultiStageTestConfigurationLiteral.Test, tc.env, tc.secretVolumes, tc.secretVolumeMounts, nil)

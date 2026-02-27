@@ -46,7 +46,11 @@ type PodLifecyclePlugin struct {
 }
 
 func NewPodLifecyclePlugin(ctx context.Context, logger *logrus.Entry, client ctrlruntimeclient.Client) *PodLifecyclePlugin {
-	return &PodLifecyclePlugin{ctx: ctx, logger: logger.WithField("plugin", "pods"), client: client}
+	return &PodLifecyclePlugin{
+		ctx:    ctx,
+		logger: logger.WithField("plugin", "pods"),
+		client: client,
+	}
 }
 
 func (p *PodLifecyclePlugin) Name() string {
@@ -70,7 +74,7 @@ func (p *PodLifecyclePlugin) Record(ev MetricsEvent) {
 	e.CreationTime = &pod.CreationTimestamp.Time
 	e.StartTime = &pod.Status.StartTime.Time
 	e.CompletionTime = getPodCompletionTime(pod)
-	e.CIWorkload = pod.Labels["ci-workload"]
+	e.CIWorkload = pod.Labels[CIWorkloadLabel]
 
 	// Only set pod phase if not already set by caller (preserves success/failure determination)
 	if e.PodPhase == "" {

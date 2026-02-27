@@ -580,3 +580,58 @@ func (f *fakeDispatcherClient) ClusterForJob(jobName string) (string, error) {
 		return "build02", nil
 	}
 }
+
+func TestHasReleaseRepoPR(t *testing.T) {
+	t.Parallel()
+	tests := []struct {
+		name string
+		prs  []v1.PullRequestUnderTest
+		want bool
+	}{
+		{
+			name: "no PRs",
+			prs:  nil,
+			want: false,
+		},
+		{
+			name: "single PR from different repo",
+			prs: []v1.PullRequestUnderTest{
+				{Org: "openshift", Repo: "origin"},
+			},
+			want: false,
+		},
+		{
+			name: "single PR from openshift/release",
+			prs: []v1.PullRequestUnderTest{
+				{Org: "openshift", Repo: "release"},
+			},
+			want: true,
+		},
+		{
+			name: "multiple PRs including openshift/release",
+			prs: []v1.PullRequestUnderTest{
+				{Org: "openshift", Repo: "origin"},
+				{Org: "openshift", Repo: "release"},
+			},
+			want: true,
+		},
+		{
+			name: "multiple PRs not including openshift/release",
+			prs: []v1.PullRequestUnderTest{
+				{Org: "openshift", Repo: "origin"},
+				{Org: "openshift", Repo: "installer"},
+			},
+			want: false,
+		},
+	}
+	for _, tc := range tests {
+		tc := tc
+		t.Run(tc.name, func(t *testing.T) {
+			t.Parallel()
+			got := hasReleaseRepoPR(tc.prs)
+			if got != tc.want {
+				t.Errorf("hasReleaseRepoPR() = %v, want %v", got, tc.want)
+			}
+		})
+	}
+}

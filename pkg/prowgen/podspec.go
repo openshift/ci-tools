@@ -750,3 +750,17 @@ func newFakePodSpecBuilder() CiOperatorPodSpecGenerator {
 	f := fakePodSpecBuilder(0)
 	return &f
 }
+
+// Registry configures ci-operator to use a local step registry path instead of
+// the remote config resolver. This is useful when testing changes to the step
+// registry from a PR in openshift/release.
+func Registry(registryPath string) PodSpecMutator {
+	return func(spec *corev1.PodSpec) error {
+		if registryPath == "" {
+			return nil
+		}
+		container := &spec.Containers[0]
+		addUniqueParameter(container, fmt.Sprintf("--registry=%s", registryPath))
+		return nil
+	}
+}

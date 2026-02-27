@@ -74,6 +74,8 @@ const (
 const (
 	// MultiStageTestLabel is the label we use to mark a pod as part of a multi-stage test
 	MultiStageTestLabel = "ci.openshift.io/multi-stage-test"
+	// MultiStageTestPhaseLabel is the label we use to mark which phase (pre, test, post) a pod belongs to
+	MultiStageTestPhaseLabel = "ci.openshift.io/multi-stage-test-phase"
 	// ClusterProfileMountPath is where we mount the cluster profile in a pod
 	ClusterProfileMountPath = "/var/run/secrets/ci.openshift.io/cluster-profile"
 	// SecretMountPath is where we mount the shared dir secret
@@ -269,16 +271,50 @@ func (s *multiStageTestStep) run(ctx context.Context) error {
 	observerDone := make(chan struct{})
 	go s.runObservers(observerContext, ctx, observers, observerDone)
 	s.flags |= shortCircuit
-	if err := s.runSteps(ctx, "pre", s.pre, env, secretVolumes, secretVolumeMounts); err != nil {
-		errs = append(errs, fmt.Errorf("%q pre steps failed: %w", s.name, err))
-	} else if err := s.runSteps(ctx, "test", s.test, env, secretVolumes, secretVolumeMounts); err != nil {
-		errs = append(errs, fmt.Errorf("%q test steps failed: %w", s.name, err))
+
+	// Track if cancellation occurred during pre or test phases
+	cancelledDuringPreOrTest := false
+
+	// Run pre phase
+	preErr := s.runSteps(ctx, "pre", s.pre, env, secretVolumes, secretVolumeMounts)
+	if preErr != nil {
+		errs = append(errs, fmt.Errorf("%q pre steps failed: %w", s.name, preErr))
 	}
+	// Check if cancellation occurred during pre phase (check after runSteps returns)
+	if ctx.Err() != nil {
+		cancelledDuringPreOrTest = true
+		logrus.Warnf("Job was cancelled during pre phase for test %q", s.name)
+	} else if preErr == nil {
+		// Run test phase only if pre succeeded and wasn't cancelled
+		testErr := s.runSteps(ctx, "test", s.test, env, secretVolumes, secretVolumeMounts)
+		if testErr != nil {
+			errs = append(errs, fmt.Errorf("%q test steps failed: %w", s.name, testErr))
+		}
+		// Check if cancellation occurred during test phase
+		if ctx.Err() != nil {
+			cancelledDuringPreOrTest = true
+			logrus.Warnf("Job was cancelled during test phase for test %q", s.name)
+		}
+	}
+
 	s.cancelObserversContext(cancel) // signal to observers that we're tearing down
 	s.flags &= ^shortCircuit
-	if err := s.runSteps(context.Background(), "post", s.post, env, secretVolumes, secretVolumeMounts); err != nil {
-		errs = append(errs, fmt.Errorf("%q post steps failed: %w", s.name, err))
+
+	// Always run post steps, even if the job was cancelled during pre or test phases.
+	// This ensures proper cleanup (e.g., deprovisioning resources) to prevent resource leaks.
+	// Use the original context by default to respect job deadlines/cancellation.
+	// Only switch to context.Background() if cancellation occurred during pre/test to ensure cleanup completes.
+	postCtx := ctx
+	if cancelledDuringPreOrTest {
+		postCtx = context.Background()
+		logrus.Infof("Job was cancelled during pre or test phase, running post steps with background context to ensure cleanup completes for test %q", s.name)
 	}
+	if err := s.runSteps(postCtx, "post", s.post, env, secretVolumes, secretVolumeMounts); err != nil {
+		errs = append(errs, fmt.Errorf("%q post steps failed: %w", s.name, err))
+	} else if cancelledDuringPreOrTest {
+		logrus.Infof("Post steps completed successfully after cancellation for test %q", s.name)
+	}
+
 	<-observerDone // wait for the observers to finish so we get their jUnit
 	return utilerrors.NewAggregate(errs)
 }

@@ -1,7 +1,11 @@
-# CI-Secret-Bootstrap
+# ci-secret-bootstrap
+
+Bootstraps CI secrets from BitWarden and syncs them across Kubernetes/OpenShift clusters.
+
+## Overview
 
 This tool extends the [populate-secrets-from-bitwarden.sh](https://github.com/openshift/release/blob/c8c89d08c56c653b91eb8c7580657f7ce522253f/ci-operator/populate-secrets-from-bitwarden.sh)
-to support mirroring secrets cross Kubernetes/OpenShift-clusters.
+to support mirroring secrets across Kubernetes/OpenShift clusters. It reads secrets from BitWarden and creates Kubernetes secrets in specified clusters and namespaces.
 
 ## Args and config.yaml
 

@@ -31,8 +31,10 @@ func (o *PRCreationOptions) Finalize() error {
 	if err := o.GitHubOptions.Validate(false); err != nil {
 		return err
 	}
-	if err := secret.Add(o.TokenPath); err != nil {
-		return fmt.Errorf("failed to start secretAgent: %w", err)
+	if o.TokenPath != "" {
+		if err := secret.Add(o.TokenPath); err != nil {
+			return fmt.Errorf("failed to start secretAgent: %w", err)
+		}
 	}
 	var err error
 	o.GithubClient, err = o.GitHubClient(false)
@@ -51,6 +53,7 @@ type PrOptions struct {
 	prAssignee       string
 	gitCommitMessage string
 	skipPRCreation   bool
+	head             string
 }
 
 // PrOption is the type for Optional Parameters
@@ -99,6 +102,14 @@ func SkipPRCreation() PrOption {
 	}
 }
 
+// WithHead skips all git operations (fork, commit, push) and jumps
+// straight to PR creation using the provided head ref (e.g. "user:branch").
+func WithHead(head string) PrOption {
+	return func(args *PrOptions) {
+		args.head = head
+	}
+}
+
 // UpsertPR upserts a PR. The PRTitle must be alphanumeric except for spaces, as it will be used as the
 // branchname on the bots fork.
 func (o *PRCreationOptions) UpsertPR(localSourceDir, org, repo, branch, prTitle string, setters ...PrOption) error {
@@ -109,6 +120,11 @@ func (o *PRCreationOptions) UpsertPR(localSourceDir, org, repo, branch, prTitle 
 	if prArgs.matchTitle == "" {
 		prArgs.matchTitle = prTitle
 	}
+
+	if prArgs.head != "" {
+		return o.upsertPR(org, repo, branch, prTitle, prArgs)
+	}
+
 	if err := os.Chdir(localSourceDir); err != nil {
 		return fmt.Errorf("failed to chdir into %s: %w", localSourceDir, err)
 	}
@@ -192,35 +208,48 @@ func (o *PRCreationOptions) UpsertPR(localSourceDir, org, repo, branch, prTitle 
 		return nil
 	}
 
+	prArgs.head = username + ":" + sourceBranchName
+	return o.upsertPR(org, repo, branch, prTitle, prArgs)
+}
+
+// upsertPR creates or updates a PR for a pre-pushed head ref.
+func (o *PRCreationOptions) upsertPR(org, repo, branch, prTitle string, prArgs *PrOptions) error {
+	headBranch := prArgs.head
+	if i := strings.Index(headBranch, ":"); i != -1 {
+		headBranch = headBranch[i+1:]
+	}
+
 	labelsToAdd := prArgs.additionalLabels
 	if o.SelfApprove {
-		l.Infof("Self-aproving PR by adding the %q and %q labels", labels.Approved, labels.LGTM)
+		logrus.Infof("Self-aproving PR by adding the %q and %q labels", labels.Approved, labels.LGTM)
 		labelsToAdd = append(labelsToAdd, labels.Approved, labels.LGTM)
 	}
 
-	assignees := strings.Split(prArgs.prAssignee, ",")
-	for i, assignee := range assignees {
-		assignees[i] = "@" + assignee
-	}
-	assigneeList := strings.Join(assignees, ", ")
+	prBody := prArgs.prBody + formatAssigneeCC(prArgs.prAssignee)
+	prClient := github.Client(&OrgAwareClient{Client: o.GithubClient, Org: org})
 
-	if err := bumper.UpdatePullRequestWithLabels(
-		o.GithubClient,
-		org,
-		repo,
-		prTitle,
-		prArgs.prBody+"\n/cc "+assigneeList,
-		username+":"+sourceBranchName,
-		branch,
-		sourceBranchName,
-		true,
-		labelsToAdd,
-		false,
-	); err != nil {
-		return fmt.Errorf("failed to upsert PR: %w", err)
-	}
+	return bumper.UpdatePullRequestWithLabels(
+		prClient, org, repo, prTitle, prBody,
+		prArgs.head, branch, headBranch,
+		true, labelsToAdd, false,
+	)
+}
 
-	return nil
+func formatAssigneeCC(assigneeCSV string) string {
+	if assigneeCSV == "" {
+		return ""
+	}
+	var mentions []string
+	for _, a := range strings.Split(assigneeCSV, ",") {
+		a = strings.TrimSpace(a)
+		if a != "" {
+			mentions = append(mentions, "@"+a)
+		}
+	}
+	if len(mentions) == 0 {
+		return ""
+	}
+	return "\n/cc " + strings.Join(mentions, ", ")
 }
 
 func waitForRepo(owner, name string, ghc github.Client) error {

@@ -52,6 +52,10 @@
         value: repo
       - name: REPO_OWNER
         value: org
+      - name: SRC_BASE
+        value: org/repo
+      - name: SRC_HOST
+        value: github.com
       - name: GIT_CONFIG_COUNT
         value: "1"
       - name: GIT_CONFIG_KEY_0
@@ -226,6 +230,10 @@
         value: repo
       - name: REPO_OWNER
         value: org
+      - name: SRC_BASE
+        value: org/repo
+      - name: SRC_HOST
+        value: github.com
       - name: GIT_CONFIG_COUNT
         value: "1"
       - name: GIT_CONFIG_KEY_0
@@ -394,6 +402,10 @@
         value: repo
       - name: REPO_OWNER
         value: org
+      - name: SRC_BASE
+        value: org/repo
+      - name: SRC_HOST
+        value: github.com
       - name: GIT_CONFIG_COUNT
         value: "1"
       - name: GIT_CONFIG_KEY_0
@@ -566,6 +578,10 @@
         value: repo
       - name: REPO_OWNER
         value: org
+      - name: SRC_BASE
+        value: org/repo
+      - name: SRC_HOST
+        value: github.com
       - name: GIT_CONFIG_COUNT
         value: "1"
       - name: GIT_CONFIG_KEY_0
@@ -742,6 +758,10 @@
         value: repo
       - name: REPO_OWNER
         value: org
+      - name: SRC_BASE
+        value: org/repo
+      - name: SRC_HOST
+        value: github.com
       - name: GIT_CONFIG_COUNT
         value: "1"
       - name: GIT_CONFIG_KEY_0
@@ -912,6 +932,10 @@
         value: repo
       - name: REPO_OWNER
         value: org
+      - name: SRC_BASE
+        value: org/repo
+      - name: SRC_HOST
+        value: github.com
       - name: GIT_CONFIG_COUNT
         value: "1"
       - name: GIT_CONFIG_KEY_0

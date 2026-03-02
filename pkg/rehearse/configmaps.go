@@ -192,7 +192,7 @@ func (c *CMManager) Create(cms ConfigMaps) error {
 		return err
 	}
 	var errs []error
-	for cm, data := range updateconfig.FilterChanges(replaceSpecNames(c.cluster, c.namespace, c.configUpdaterCfg, cms.Names), changes, c.namespace, false, c.logger) {
+	for cm, data := range updateconfig.FilterChanges(replaceSpecNames(c.cluster, c.namespace, c.configUpdaterCfg, cms.Names), changes, c.namespace, false, c.logger, "") {
 		c.logger.WithFields(logrus.Fields{"cm-name": cm.Name}).Info("creating rehearsal configMap")
 		if err := c.createCM(cm.Name, data); err != nil {
 			errs = append(errs, err)

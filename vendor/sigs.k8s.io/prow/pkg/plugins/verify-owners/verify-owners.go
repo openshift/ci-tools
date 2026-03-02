@@ -45,7 +45,7 @@ import (
 const (
 	// PluginName defines this plugin's registered name.
 	PluginName              = "verify-owners"
-	untrustedResponseFormat = `The following users are mentioned in %s file(s) but are untrusted for the following reasons. One way to make the user trusted is to add them as [members](%s) of the %s org. You can then trigger verification by writing ` + "`/verify-owners`" + ` in a comment.`
+	untrustedResponseFormat = `The OWNERS file contains untrusted users, which makes it INVALID. The following users are mentioned in %s file(s) but are untrusted for the following reasons. One way to make the user trusted is to add them as [members](%s) of the %s org. You can then trigger verification by writing ` + "`/verify-owners`" + ` in a comment.`
 )
 
 type nonTrustedReasons struct {
@@ -273,7 +273,17 @@ func handle(ghc githubClient, gc git.ClientFactory, roc repoownersClient, log *l
 	// If the file was modified, check for non trusted users in the newly added owners.
 	nonTrustedUsers, trustedUsers, repoAliases, err := nonTrustedUsersInOwnersAliases(ghc, log, triggerConfig, org, repo, r.Directory(), modifiedOwnerAliasesFile.Patch, ownerAliasesModified, skipTrustedUserCheck, filenames)
 	if err != nil {
-		return err
+		// if OWNERS_ALIASES file exists and is not parseable
+		// attach invalid owners label and add message to PR
+		if !hasInvalidOwnersLabel {
+			if err := ghc.AddLabel(org, repo, number, labels.InvalidOwners); err != nil {
+				return err
+			}
+		}
+		if err := ghc.CreateComment(org, repo, number, "The content of OWNERS_ALIASES is invalid."); err != nil {
+			return err
+		}
+		return nil
 	}
 
 	// Check if OWNERS_ALIASES has empty aliases, then add a warning comment
@@ -354,7 +364,7 @@ func handle(ghc githubClient, gc git.ClientFactory, roc repoownersClient, log *l
 	if triggerConfig.JoinOrgURL != "" {
 		joinOrgURL = triggerConfig.JoinOrgURL
 	} else {
-		joinOrgURL = fmt.Sprintf("https://github.com/orgs/%s/people", org)
+		joinOrgURL = fmt.Sprintf("https://%s/orgs/%s/people", github.DefaultHost, org)
 	}
 
 	if len(nonTrustedUsers) > 0 {

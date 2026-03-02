@@ -9,6 +9,7 @@ import (
 	"net/http"
 	"os"
 	"path/filepath"
+	"strconv"
 	"strings"
 
 	"github.com/ghodss/yaml"
@@ -125,10 +126,12 @@ func main() {
 
 	boundsToPullspec := make(map[api.VersionBounds]string)
 	for versionBounds := range poolFilesByBounds {
+		// Use multi payload for 4.12+; use amd64 for older versions (multi not available).
+		arch := architectureForBounds(versionBounds)
 		release := api.Prerelease{
 			ReleaseDescriptor: api.ReleaseDescriptor{
 				Product:      api.ReleaseProductOCP,
-				Architecture: api.ReleaseArchitectureAMD64,
+				Architecture: arch,
 			},
 			VersionBounds: versionBounds,
 		}
@@ -322,4 +325,24 @@ func labelsToBounds(labels map[string]string) (*api.VersionBounds, error) {
 		return &bounds, nil
 	}
 	return nil, nil
+}
+
+// architectureForBounds returns MULTI for 4.12+ and AMD64 for older versions (multi payload not available).
+func architectureForBounds(bounds api.VersionBounds) api.ReleaseArchitecture {
+	parts := strings.Split(bounds.Lower, ".")
+	if len(parts) < 2 {
+		return api.ReleaseArchitectureAMD64
+	}
+	major, err := strconv.Atoi(strings.TrimPrefix(parts[0], "v"))
+	if err != nil {
+		return api.ReleaseArchitectureAMD64
+	}
+	minor, err := strconv.Atoi(parts[1])
+	if err != nil {
+		return api.ReleaseArchitectureAMD64
+	}
+	if major < 4 || (major == 4 && minor < 12) {
+		return api.ReleaseArchitectureAMD64
+	}
+	return api.ReleaseArchitectureMULTI
 }

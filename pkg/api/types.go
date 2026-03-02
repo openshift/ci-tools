@@ -1195,7 +1195,9 @@ type StepLease struct {
 	// Env is the environment variable that will contain the resource name.
 	Env string `json:"env"`
 	// Count is the number of resources to acquire (optional, defaults to 1).
-	Count uint `json:"count,omitempty"`
+	Count                uint   `json:"count,omitempty"`
+	ClusterProfile       string `json:"-"`
+	ClusterProfileTarget string `json:"-"`
 }
 
 // FromImageTag returns the internal name for the image tag that will be used

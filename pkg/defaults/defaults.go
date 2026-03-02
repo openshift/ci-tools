@@ -311,7 +311,7 @@ func fromConfig(ctx context.Context, cfg *Config) ([]api.Step, []api.Step, error
 					Env:          api.DefaultLeaseEnv,
 					Count:        1,
 				}}
-				step = steps.LeaseStep(cfg.LeaseClient, leases, step, cfg.JobSpec.Namespace, cfg.MetricsAgent)
+				step = steps.LeaseStep(cfg.LeaseClient, leases, step, cfg.JobSpec.Namespace, cfg.MetricsAgent, cfg.kubeClient, cfg.ClusterProfileGetter)
 				break
 			}
 		}
@@ -397,7 +397,7 @@ func stepForTest(cfg *Config, inputImages inputImageSet, c *api.TestStepConfigur
 ) ([]api.Step, error) {
 	if test := c.MultiStageTestConfigurationLiteral; test != nil {
 		params := cfg.params
-		leases := api.LeasesForTest(test)
+		leases := api.LeasesForTest(c)
 		ipPoolLease := api.IPPoolLeaseForTest(test, cfg.CIConfig.Metadata)
 		if len(leases) != 0 || ipPoolLease.ResourceType != "" {
 			params = api.NewDeferredParameters(params)
@@ -408,7 +408,7 @@ func stepForTest(cfg *Config, inputImages inputImageSet, c *api.TestStepConfigur
 			step = steps.IPPoolStep(cfg.LeaseClient, cfg.podClient, ipPoolLease, step, params, cfg.JobSpec.Namespace, cfg.MetricsAgent)
 		}
 		if len(leases) != 0 {
-			step = steps.LeaseStep(cfg.LeaseClient, leases, step, cfg.JobSpec.Namespace, cfg.MetricsAgent)
+			step = steps.LeaseStep(cfg.LeaseClient, leases, step, cfg.JobSpec.Namespace, cfg.MetricsAgent, cfg.kubeClient, cfg.ClusterProfileGetter)
 		}
 		if c.ClusterClaim != nil {
 			step = steps.ClusterClaimStep(c.As, c.ClusterClaim, cfg.hiveClient, cfg.kubeClient, cfg.JobSpec, step, cfg.Censor)
@@ -436,7 +436,7 @@ func stepForTest(cfg *Config, inputImages inputImageSet, c *api.TestStepConfigur
 			ResourceType: test.ClusterProfile.LeaseType(),
 			Env:          api.DefaultLeaseEnv,
 			Count:        1,
-		}}, step, cfg.JobSpec.Namespace, cfg.MetricsAgent)
+		}}, step, cfg.JobSpec.Namespace, cfg.MetricsAgent, cfg.kubeClient, cfg.ClusterProfileGetter)
 		addProvidesForStep(step, params)
 		return []api.Step{step}, nil
 	}

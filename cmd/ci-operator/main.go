@@ -807,6 +807,7 @@ func (o *options) ToGraphConfig() *defaults.Config {
 		LocalRegistryDNS:       o.localRegistryDNS,
 		MetricsAgent:           o.metricsAgent,
 		SkippedImages:          o.skippedImages,
+		ClusterProfileGetter:   o.resolverClient.ClusterProfile,
 	}
 }
 
@@ -1691,17 +1692,6 @@ func (o *options) initializeNamespace() error {
 		if err := client.Create(ctx, o.cloneAuthConfig.Secret); err != nil && !kerrors.IsAlreadyExists(err) {
 			return fmt.Errorf("couldn't create secret %s for %s authentication: %w", o.cloneAuthConfig.Secret.Name, o.cloneAuthConfig.Type, err)
 		}
-	}
-
-	// adds the appropriate cluster profile secrets to o.secrets,
-	// so they can be created by ctrlruntime client in the for cycle below this one
-	for _, cp := range o.clusterProfiles {
-		cpSecret, err := getClusterProfileSecret(cp, labeledclient.Wrap(ctrlClient, o.jobSpec), o.resolverClient, ctx)
-		if err != nil {
-			return fmt.Errorf("failed to create cluster profile secret %s: %w", cp, err)
-		}
-		cpSecret.Namespace = o.namespace
-		o.secrets = append(o.secrets, cpSecret)
 	}
 
 	if o.configSpec.ExternalImages != nil {
@@ -2676,32 +2666,6 @@ func addSchemes() error {
 	}
 
 	return nil
-}
-
-// getClusterProfileSecret retrieves the cluster profile secret name using config resolver,
-// and gets the secret from the ci namespace
-func getClusterProfileSecret(cp metrics.ClusterProfileForTarget, client ctrlruntimeclient.Client, resolverClient server.ResolverClient, ctx context.Context) (*coreapi.Secret, error) {
-	// Use config-resolver to get details about the cluster profile (which includes the secret's name)
-	cpDetails, err := resolverClient.ClusterProfile(cp.ProfileName)
-	if err != nil {
-		return nil, fmt.Errorf("failed to retrieve details from config resolver for '%s' cluster cp", cp.ProfileName)
-	}
-	// Get the secret from the ci namespace. We expect it exists
-	ciSecret := &coreapi.Secret{}
-	err = client.Get(ctx, ctrlruntimeclient.ObjectKey{Namespace: "ci", Name: cpDetails.Secret}, ciSecret)
-	if err != nil {
-		return nil, fmt.Errorf("failed to get secret '%s' from ci namespace: %w", cpDetails.Secret, err)
-	}
-
-	newSecret := &coreapi.Secret{
-		Data: ciSecret.Data,
-		Type: ciSecret.Type,
-		ObjectMeta: metav1.ObjectMeta{
-			Name: fmt.Sprintf("%s-cluster-profile", cp.Target),
-		},
-	}
-
-	return newSecret, nil
 }
 
 // getClusterProfileNamesFromTargets extracts the needed cluster profile name(s) from the target arg(s)

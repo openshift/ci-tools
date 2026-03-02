@@ -8,18 +8,21 @@ import (
 // LeasesForTest aggregates all the lease configurations in a test.
 // It is assumed that they have been validated and contain only valid and
 // unique values.
-func LeasesForTest(s *MultiStageTestConfigurationLiteral) (ret []StepLease) {
-	if p := s.ClusterProfile; p != "" {
+func LeasesForTest(test *TestStepConfiguration) (ret []StepLease) {
+	multiStageTest := test.MultiStageTestConfigurationLiteral
+	if p := multiStageTest.ClusterProfile; p != "" {
 		ret = append(ret, StepLease{
-			ResourceType: p.LeaseType(),
-			Env:          DefaultLeaseEnv,
-			Count:        1,
+			ResourceType:         p.LeaseType(),
+			Env:                  DefaultLeaseEnv,
+			Count:                1,
+			ClusterProfile:       multiStageTest.ClusterProfile.Name(),
+			ClusterProfileTarget: test.As,
 		})
 	}
-	for _, step := range append(s.Pre, append(s.Test, s.Post...)...) {
+	for _, step := range append(multiStageTest.Pre, append(multiStageTest.Test, multiStageTest.Post...)...) {
 		ret = append(ret, step.Leases...)
 	}
-	ret = append(ret, s.Leases...)
+	ret = append(ret, multiStageTest.Leases...)
 	return
 }
 

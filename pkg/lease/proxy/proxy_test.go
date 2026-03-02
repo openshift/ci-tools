@@ -1,10 +1,11 @@
 package proxy
 
 import (
-	"bytes"
+	"errors"
 	"io"
 	"net/http"
 	"net/http/httptest"
+	"strings"
 	"testing"
 
 	"github.com/google/go-cmp/cmp"
@@ -21,6 +22,7 @@ func TestProxy(t *testing.T) {
 		leaseClientFailingCalls map[string]error
 		method                  string
 		url                     string
+		body                    string
 		endpointFunc            func(http.ResponseWriter, *http.Request)
 		wantCode                int
 		wantBody                string
@@ -80,9 +82,22 @@ func TestProxy(t *testing.T) {
 		{
 			name:      "Release: release 1 lease",
 			method:    http.MethodPost,
-			url:       "/lease/release?name=foo",
+			url:       "/lease/release",
+			body:      `{"names":["foo"]}`,
 			wantCode:  http.StatusNoContent,
 			wantCalls: []string{"releaseone owner foo free"},
+		},
+		{
+			name: "Release: release 1 lease only",
+			leaseClientFailingCalls: map[string]error{
+				"releaseone owner bar free": errors.New("injected"),
+			},
+			method:    http.MethodPost,
+			url:       "/lease/release",
+			body:      `{"names":["foo", "bar"]}`,
+			wantCode:  http.StatusInternalServerError,
+			wantCalls: []string{"releaseone owner foo free", "releaseone owner bar free"},
+			wantBody:  "Failed to release lease bar: injected\nReleased: foo\n",
 		},
 	} {
 		t.Run(tc.name, func(t *testing.T) {
@@ -96,7 +111,7 @@ func TestProxy(t *testing.T) {
 			proxy := New(logger, func() lease.Client { return leaseClient })
 			proxy.RegisterHandlers(srvMux)
 
-			req, err := http.NewRequest(tc.method, tc.url, bytes.NewReader([]byte{}))
+			req, err := http.NewRequest(tc.method, tc.url, strings.NewReader(tc.body))
 			if err != nil {
 				t.Fatalf("unexpected failure when creating the http request: %s", err)
 			}

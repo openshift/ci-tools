@@ -429,9 +429,9 @@ func BuildPartialGraph(steps []Step, names []string) (StepGraph, error) {
 	var required []StepLink
 	candidates := make([]bool, len(steps))
 	var allNames []string
-	for i, step := range steps {
+	for j, name := range names {
 		allNames = append(allNames, step.Name())
-		for j, name := range names {
+		for i, step := range steps {
 			if name != step.Name() {
 				continue
 			}

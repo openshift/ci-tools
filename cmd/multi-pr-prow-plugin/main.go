@@ -124,10 +124,7 @@ func main() {
 		logger.WithError(err).Fatal("Error getting GitHub client.")
 	}
 
-	kubeClient, err := o.getKubeClient(logger)
-	if err != nil {
-		logger.WithError(err).Fatal("Error getting kube client.")
-	}
+	kubeClient := o.getKubeClient(logger)
 
 	agent, err := o.ConfigOptions.ConfigAgent()
 	if err != nil {
@@ -169,7 +166,7 @@ func main() {
 	interrupts.WaitForGracefulShutdown()
 }
 
-func (o *options) getKubeClient(logger *logrus.Entry) (ctrlruntimeclient.Client, error) {
+func (o *options) getKubeClient(logger *logrus.Entry) ctrlruntimeclient.Client {
 	kubeconfigChangedCallBack := func() {
 		logger.Info("Kubeconfig changed, exiting to get restarted by Kubelet and pick up the changes")
 		interrupts.Terminate()
@@ -195,8 +192,8 @@ func (o *options) getKubeClient(logger *logrus.Entry) (ctrlruntimeclient.Client,
 	kubeClient, err := ctrlruntimeclient.New(&kubeConfig, ctrlruntimeclient.Options{})
 	if err != nil {
 		logger.WithError(err).WithField("context", appCIContextName).Fatal("could not get client for kube config")
-		return nil, err
+		return nil
 	}
 
-	return kubeClient, nil
+	return kubeClient
 }

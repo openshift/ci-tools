@@ -4,8 +4,10 @@ import (
 	"encoding/json"
 	"errors"
 	"fmt"
+	"io"
 	"net/http"
 	"strconv"
+	"strings"
 
 	"github.com/sirupsen/logrus"
 
@@ -22,7 +24,7 @@ type acquireParams struct {
 	count uint
 }
 
-type AcquireResponse struct {
+type leaseNames struct {
 	Names []string `json:"names"`
 }
 
@@ -49,12 +51,18 @@ func parseAcquireParams(r *http.Request) (acquireParams, error) {
 	return params, nil
 }
 
-func parseReleaseParams(r *http.Request) (string, error) {
-	name := r.URL.Query().Get("name")
-	if name == "" {
-		return "", errors.New("name is required")
+func parseReleaseRequest(r *http.Request) (leaseNames, error) {
+	req := leaseNames{}
+	requestBytes, err := io.ReadAll(r.Body)
+	if err != nil {
+		return req, fmt.Errorf("read body: %w", err)
 	}
-	return name, nil
+
+	if err := json.Unmarshal(requestBytes, &req); err != nil {
+		return req, fmt.Errorf("unmarshal request body: %w", err)
+	}
+
+	return req, nil
 }
 
 type NewLeaseClientFunc func() lease.Client
@@ -112,7 +120,7 @@ func (p *Proxy) acquire(w http.ResponseWriter, r *http.Request) {
 }
 
 func (p *Proxy) writeAcquireResponse(w http.ResponseWriter, names []string) {
-	namesBytes, err := json.Marshal(AcquireResponse{Names: names})
+	namesBytes, err := json.Marshal(leaseNames{Names: names})
 	if err != nil {
 		p.logger.WithError(err).Warnf("Failed to marshal the response %s", err)
 		msg := fmt.Sprintf("Failed to marshal the response %s", err.Error())
@@ -136,7 +144,7 @@ func (p *Proxy) release(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	name, err := parseReleaseParams(r)
+	releaseReq, err := parseReleaseRequest(r)
 	if err != nil {
 		p.logger.WithError(err).Warn("Failed to parse lease release params")
 		http.Error(w, err.Error(), http.StatusBadRequest)
@@ -150,11 +158,16 @@ func (p *Proxy) release(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	if err := c.Release(name); err != nil {
-		p.logger.WithError(err).Warnf("Failed to release lease %q", name)
-		msg := fmt.Sprintf("Failed to release lease %q: %s", name, err.Error())
-		http.Error(w, msg, http.StatusInternalServerError)
-		return
+	released := make([]string, 0)
+	for _, name := range releaseReq.Names {
+		if err := c.Release(name); err != nil {
+			leasesReleased := strings.Join(released, " ")
+			p.logger.WithError(err).WithField("Released", leasesReleased).Warnf("Failed to release lease %q", name)
+			msg := fmt.Sprintf("Failed to release lease %s: %s\nReleased: %s", name, err.Error(), leasesReleased)
+			http.Error(w, msg, http.StatusInternalServerError)
+			return
+		}
+		released = append(released, name)
 	}
 
 	w.WriteHeader(http.StatusNoContent)

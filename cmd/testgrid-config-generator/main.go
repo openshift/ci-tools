@@ -259,9 +259,9 @@ func addDashboardTab(p prowConfig.Periodic,
 			strings.HasPrefix(prowName, "periodic-ci-openshift-hypershift-main-periodics-"),
 			strings.HasPrefix(prowName, "periodic-ci-openshift-multiarch"),
 			strings.HasPrefix(prowName, "periodic-ci-openshift-openshift-tests-"),
-			strings.HasPrefix(prowName, "periodic-ci-openshift-release-master-ci-"),
-			strings.HasPrefix(prowName, "periodic-ci-openshift-release-master-nightly-"),
-			strings.HasPrefix(prowName, "periodic-ci-openshift-verification-tests-master-"),
+			strings.HasPrefix(prowName, "periodic-ci-openshift-release-main-ci-"),
+			strings.HasPrefix(prowName, "periodic-ci-openshift-release-main-nightly-"),
+			strings.HasPrefix(prowName, "periodic-ci-openshift-verification-tests-main-"),
 			strings.HasPrefix(prowName, "periodic-ci-shiftstack-shiftstack-ci-main-periodic-"),
 			strings.HasPrefix(prowName, "periodic-ci-openshift-osde2e-main-nightly-"):
 			stream = "ocp"

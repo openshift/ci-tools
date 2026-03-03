@@ -7,6 +7,7 @@ import (
 	"testing"
 
 	"github.com/ghodss/yaml"
+	"github.com/google/go-cmp/cmp"
 
 	"k8s.io/apimachinery/pkg/util/diff"
 
@@ -270,50 +271,66 @@ func TestClusterProfilesConfig(t *testing.T) {
 	existingProfiles := make(api.ClusterProfilesMap)
 	for _, profileName := range api.ClusterProfiles() {
 		existingProfiles[profileName] = api.ClusterProfileDetails{
-			Profile: profileName,
-			Secret:  api.GetDefaultClusterProfileSecretName(profileName),
+			Profile:     profileName,
+			ClusterType: profileName.ClusterType(),
+			LeaseType:   profileName.LeaseType(),
+			Secret:      api.GetDefaultClusterProfileSecretName(profileName),
 		}
 	}
 
 	profilesWithOwners := make(api.ClusterProfilesMap)
 	for _, profileName := range api.ClusterProfiles() {
-		if profileName == "aws" {
+		switch profileName {
+		case "aws":
 			profilesWithOwners[profileName] = api.ClusterProfileDetails{
-				Profile: profileName,
-				Owners:  []api.ClusterProfileOwners{{Org: "org1"}},
-				Secret:  api.GetDefaultClusterProfileSecretName(profileName),
+				Profile:     profileName,
+				Owners:      []api.ClusterProfileOwners{{Org: "org1"}},
+				ClusterType: profileName.ClusterType(),
+				LeaseType:   profileName.LeaseType(),
+				Secret:      api.GetDefaultClusterProfileSecretName(profileName),
 			}
-		} else if profileName == "aws-2" {
+		case "aws-2":
 			profilesWithOwners[profileName] = api.ClusterProfileDetails{
-				Profile: profileName,
-				Owners:  []api.ClusterProfileOwners{{Org: "org2", Repos: []string{"repo1", "repo2"}}},
-				Secret:  api.GetDefaultClusterProfileSecretName(profileName),
+				Profile:     profileName,
+				Owners:      []api.ClusterProfileOwners{{Org: "org2", Repos: []string{"repo1", "repo2"}}},
+				ClusterType: profileName.ClusterType(),
+				LeaseType:   profileName.LeaseType(),
+				Secret:      api.GetDefaultClusterProfileSecretName(profileName),
 			}
-		} else {
+		default:
 			profilesWithOwners[profileName] = api.ClusterProfileDetails{
-				Profile: profileName,
-				Secret:  api.GetDefaultClusterProfileSecretName(profileName),
+				Profile:     profileName,
+				ClusterType: profileName.ClusterType(),
+				LeaseType:   profileName.LeaseType(),
+				Secret:      api.GetDefaultClusterProfileSecretName(profileName),
 			}
 		}
 	}
 
 	profilesWithSecrets := make(api.ClusterProfilesMap)
 	for _, profileName := range api.ClusterProfiles() {
-		if profileName == "aws-2" {
+		switch profileName {
+		case "aws-2":
 			profilesWithSecrets[profileName] = api.ClusterProfileDetails{
-				Profile: profileName,
-				Owners:  []api.ClusterProfileOwners{{Org: "org2", Repos: []string{"repo1", "repo2"}}},
-				Secret:  "non-default-secret-name-aws",
+				Profile:     profileName,
+				Owners:      []api.ClusterProfileOwners{{Org: "org2", Repos: []string{"repo1", "repo2"}}},
+				ClusterType: profileName.ClusterType(),
+				LeaseType:   profileName.LeaseType(),
+				Secret:      "non-default-secret-name-aws",
 			}
-		} else if profileName == "vsphere-connected-2" {
+		case "vsphere-connected-2":
 			profilesWithSecrets[profileName] = api.ClusterProfileDetails{
-				Profile: profileName,
-				Secret:  "non-default-secret-name-vsphere",
+				Profile:     profileName,
+				ClusterType: profileName.ClusterType(),
+				LeaseType:   profileName.LeaseType(),
+				Secret:      "non-default-secret-name-vsphere",
 			}
-		} else {
+		default:
 			profilesWithSecrets[profileName] = api.ClusterProfileDetails{
-				Profile: profileName,
-				Secret:  api.GetDefaultClusterProfileSecretName(profileName),
+				Profile:     profileName,
+				ClusterType: profileName.ClusterType(),
+				LeaseType:   profileName.LeaseType(),
+				Secret:      api.GetDefaultClusterProfileSecretName(profileName),
 			}
 		}
 	}
@@ -388,8 +405,9 @@ func TestClusterProfilesConfig(t *testing.T) {
 			}
 
 			actual, _ := ClusterProfilesConfig(tmpFile.Name())
-			if !reflect.DeepEqual(tc.expected, actual) {
-				t.Errorf("\nExpected: %v, \nActual: %v", tc.expected, actual)
+
+			if diff := cmp.Diff(tc.expected, actual); diff != "" {
+				t.Errorf("unexpected cluster profiles: %s", diff)
 			}
 		})
 	}

@@ -270,17 +270,23 @@ func ClusterProfilesConfig(configPath string) (api.ClusterProfilesMap, error) {
 	mergedMap := make(api.ClusterProfilesMap)
 	for _, profileName := range api.ClusterProfiles() {
 		profile, found := profilesFromConfigMap[profileName]
-		if found {
-			if profile.Secret == "" {
-				profile.Secret = api.GetDefaultClusterProfileSecretName(profileName)
-			}
-			mergedMap[profileName] = profile
-		} else {
-			mergedMap[profileName] = api.ClusterProfileDetails{
-				Profile: profileName,
-				Secret:  api.GetDefaultClusterProfileSecretName(profileName),
-			}
+		if !found {
+			profile = api.ClusterProfileDetails{Profile: profileName}
 		}
+
+		// TODO: Remove these assignments once cluster profiles
+		// will be completely migrated into the yaml configuration.
+		if profile.Secret == "" {
+			profile.Secret = api.GetDefaultClusterProfileSecretName(profileName)
+		}
+		if profile.ClusterType == "" {
+			profile.ClusterType = profileName.ClusterType()
+		}
+		if profile.LeaseType == "" {
+			profile.LeaseType = profileName.LeaseType()
+		}
+
+		mergedMap[profileName] = profile
 	}
 
 	return mergedMap, nil

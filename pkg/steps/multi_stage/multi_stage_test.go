@@ -14,6 +14,7 @@ import (
 	fakectrlruntimeclient "sigs.k8s.io/controller-runtime/pkg/client/fake"
 
 	"github.com/openshift/ci-tools/pkg/api"
+	gsm "github.com/openshift/ci-tools/pkg/gsm-secrets"
 	"github.com/openshift/ci-tools/pkg/steps"
 	"github.com/openshift/ci-tools/pkg/steps/loggingclient"
 )
@@ -209,14 +210,22 @@ func TestAddCredentialsToCensoring(t *testing.T) {
 			MountPath: path.Join("/secrets", "1first"),
 		},
 	}
-	credential1 := api.CredentialReference{Name: "credential1", Collection: "test-collection"}
-	credential2 := api.CredentialReference{Name: "credential2", Collection: "another-collection"}
+	credential1 := api.CredentialReference{Collection: "test-collection", Group: "test-group", Field: "key"}
+	credential2 := api.CredentialReference{Collection: "another-collection", Group: "another-group", Field: "key"}
 
 	// Helper function to create a volume
-	newVolume := func(index int, credName, collection string) coreapi.Volume {
+	newVolume := func(index int, collection, group, field string) coreapi.Volume {
 		readOnly := true
-		censorMountPath := getCensorMountPath(credName)
-		individualCredentials := []api.CredentialReference{{Name: credName, Collection: collection, MountPath: censorMountPath}}
+		fullSecretName := gsm.GetGSMSecretName(collection, group, field)
+		censorMountPath := getCensorMountPath(fullSecretName)
+		individualCredentials := []api.CredentialReference{
+			{
+				Collection: collection,
+				Group:      group,
+				Field:      field,
+				MountPath:  censorMountPath,
+			},
+		}
 
 		return coreapi.Volume{
 			Name: fmt.Sprintf("censor-cred-%d", index),
@@ -255,10 +264,10 @@ func TestAddCredentialsToCensoring(t *testing.T) {
 					},
 				},
 			},
-			expectedVolumes: append(secretVolumes, newVolume(0, credential1.Name, credential1.Collection)),
+			expectedVolumes: append(secretVolumes, newVolume(0, credential1.Collection, credential1.Group, credential1.Field)),
 			expectedVolumeMounts: append(secretVolumeMounts, coreapi.VolumeMount{
 				Name:      "censor-cred-0",
-				MountPath: getMountPath(credential1.Name),
+				MountPath: getMountPath(gsm.GetGSMSecretName(credential1.Collection, credential1.Group, credential1.Field)),
 			}),
 		},
 		{
@@ -278,13 +287,17 @@ func TestAddCredentialsToCensoring(t *testing.T) {
 					},
 				},
 			},
-			expectedVolumes: append(secretVolumes, newVolume(0, credential1.Name, credential1.Collection), newVolume(1, credential2.Name, credential2.Collection)),
+			expectedVolumes: append(
+				secretVolumes,
+				newVolume(0, credential1.Collection, credential1.Group, credential1.Field),
+				newVolume(1, credential2.Collection, credential2.Group, credential2.Field),
+			),
 			expectedVolumeMounts: append(secretVolumeMounts, coreapi.VolumeMount{
 				Name:      "censor-cred-0",
-				MountPath: getMountPath(credential1.Name),
+				MountPath: getMountPath(gsm.GetGSMSecretName(credential1.Collection, credential1.Group, credential1.Field)),
 			}, coreapi.VolumeMount{
 				Name:      "censor-cred-1",
-				MountPath: getMountPath(credential2.Name),
+				MountPath: getMountPath(gsm.GetGSMSecretName(credential2.Collection, credential2.Group, credential2.Field)),
 			}),
 		},
 	} {

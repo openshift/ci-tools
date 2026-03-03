@@ -214,6 +214,13 @@ func (s *multiStageTestStep) Run(ctx context.Context) error {
 
 func (s *multiStageTestStep) run(ctx context.Context) error {
 	logrus.Infof("Running multi-stage test %s", s.name)
+
+	clusterProfile, err := getClusterProfileFromParams(s.params)
+	if err != nil {
+		return fmt.Errorf("get cluster profile from parameters: %w", err)
+	}
+	s.profile = clusterProfile
+
 	if s.profile != "" {
 		if err := s.getProfileData(ctx); err != nil {
 			return err
@@ -423,12 +430,14 @@ func (s *multiStageTestStep) environment() ([]coreapi.EnvVar, error) {
 		ret = append(ret, coreapi.EnvVar{Name: l.Env, Value: val})
 	}
 
-	val, err := s.params.Get(api.LeaseProxyServerURLEnvVarName)
-	if err != nil {
-		return nil, err
-	}
-	if val != "" {
-		ret = append(ret, coreapi.EnvVar{Name: api.LeaseProxyServerURLEnvVarName, Value: val})
+	for _, name := range []string{api.LeaseProxyServerURLEnvVarName, api.ClusterProfileSetEnv} {
+		val, err := s.params.Get(name)
+		if err != nil {
+			return nil, err
+		}
+		if val != "" {
+			ret = append(ret, coreapi.EnvVar{Name: name, Value: val})
+		}
 	}
 
 	for _, name := range []string{api.InitialReleaseName, api.LatestReleaseName} {
@@ -570,4 +579,12 @@ func getMountPath(secretName string) string {
 
 func volumeName(ns, name string) string {
 	return strings.ReplaceAll(fmt.Sprintf("%s-%s", ns, name), ".", "-")
+}
+
+func getClusterProfileFromParams(params api.Parameters) (api.ClusterProfile, error) {
+	if params == nil {
+		return "", nil
+	}
+	cp, err := params.Get(api.ClusterProfileParam)
+	return api.ClusterProfile(cp), err
 }

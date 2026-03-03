@@ -4,10 +4,11 @@ import (
 	"context"
 	"fmt"
 	"path"
-	"sort"
+	"strings"
 	"testing"
 
 	"github.com/google/go-cmp/cmp"
+	"github.com/google/go-cmp/cmp/cmpopts"
 
 	coreapi "k8s.io/api/core/v1"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
@@ -378,10 +379,16 @@ func TestEnvironment(t *testing.T) {
 				{Name: "ORIGINAL_RELEASE_IMAGE_LATEST", Value: "latest"},
 			},
 		},
+		{
+			name:     "cluster profile set exposed in environment",
+			params:   fakeStepParams{api.ClusterProfileSetEnv: "openshift-org-aws"},
+			expected: []coreapi.EnvVar{{Name: api.ClusterProfileSetEnv, Value: "openshift-org-aws"}},
+		},
 	}
 
 	for _, tc := range tests {
 		t.Run(tc.name, func(t *testing.T) {
+			t.Parallel()
 			s := &multiStageTestStep{
 				params: tc.params,
 				leases: tc.leases,
@@ -391,13 +398,9 @@ func TestEnvironment(t *testing.T) {
 				t.Errorf("environment() error = %v, wantErr %v", err, tc.expectErr)
 				return
 			}
-			sort.Slice(tc.expected, func(i, j int) bool {
-				return tc.expected[i].Name < tc.expected[j].Name
-			})
-			sort.Slice(got, func(i, j int) bool {
-				return got[i].Name < got[j].Name
-			})
-			if diff := cmp.Diff(tc.expected, got); diff != "" {
+			if diff := cmp.Diff(tc.expected, got, cmpopts.SortSlices(func(a, b string) bool {
+				return strings.Compare(a, b) <= 0
+			})); diff != "" {
 				t.Errorf("%s: result differs from expected:\n %s", tc.name, diff)
 			}
 		})

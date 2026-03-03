@@ -65,12 +65,11 @@ const (
 	// `podStartTimeout`.
 	ReasonPending = "pod_pending"
 	// CliEnv if the env we use to expose the path to the cli
-	CliEnv                        = "CLI_DIR"
-	DefaultLeaseEnv               = "LEASED_RESOURCE"
-	DefaultIPPoolLeaseEnv         = "IP_POOL_AVAILABLE"
-	ClusterProfileResourceTypeEnv = "CLUSTER_PROFILE_RESOURCE_TYPE"
-	ClusterProfileSetNameParam    = "CLUSTER_PROFILE_SET"
-	ClusterProfileNameParam       = "CLUSTER_PROFILE"
+	CliEnv                = "CLI_DIR"
+	DefaultLeaseEnv       = "LEASED_RESOURCE"
+	DefaultIPPoolLeaseEnv = "IP_POOL_AVAILABLE"
+	ClusterProfileSetEnv  = "CLUSTER_PROFILE_SET_NAME"
+	ClusterProfileParam   = "CLUSTER_PROFILE"
 
 	// SkipCensoringLabel is the label we use to mark a secret as not needing to be censored
 	SkipCensoringLabel = "ci.openshift.io/skip-censoring"

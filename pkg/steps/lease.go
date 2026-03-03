@@ -46,7 +46,6 @@ type leaseStep struct {
 	namespace             func() string
 	clusterProfileSetName string
 	clusterProfileName    string
-	clusterProfileResType string
 }
 
 func LeaseStep(client *lease.Client, leases []api.StepLease, wrapped api.Step, namespace func() string, metricsAgent *metrics.MetricsAgent,
@@ -89,11 +88,9 @@ func (s *leaseStep) Provides() api.ParameterMap {
 	}
 
 	// nolint:unparam
-	parameters[api.ClusterProfileSetNameParam] = func() (string, error) { return s.clusterProfileSetName, nil }
+	parameters[api.ClusterProfileSetEnv] = func() (string, error) { return s.clusterProfileSetName, nil }
 	// nolint:unparam
-	parameters[api.ClusterProfileNameParam] = func() (string, error) { return s.clusterProfileName, nil }
-	// nolint:unparam
-	parameters[api.ClusterProfileResourceTypeEnv] = func() (string, error) { return s.clusterProfileResType, nil }
+	parameters[api.ClusterProfileParam] = func() (string, error) { return s.clusterProfileName, nil }
 
 	for i := range s.leases {
 		l := &s.leases[i]
@@ -203,8 +200,6 @@ func (s *leaseStep) acquireLeases(ctx context.Context, cancel context.CancelFunc
 				errs = append(errs, fmt.Errorf("resolve cluster profile %s: %w", s.clusterProfileName, err))
 				break
 			}
-
-			s.clusterProfileResType = cpDetails.LeaseType
 
 			if err := s.importClusterProfileSecret(ctx, cpDetails.Secret, l.ClusterProfileTarget); err != nil {
 				errs = append(errs, fmt.Errorf("import secret %s for cluster profile %s: %w", cpDetails.Secret, s.clusterProfileName, err))

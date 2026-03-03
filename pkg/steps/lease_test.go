@@ -281,12 +281,11 @@ func TestAcquireLeases(t *testing.T) {
 				},
 			},
 			wantProvides: map[string]string{
-				api.ClusterProfileSetNameParam:    "",
-				api.ClusterProfileNameParam:       "",
-				api.ClusterProfileResourceTypeEnv: "",
-				"lease-0":                         "res-type-0",
-				"lease-1":                         "res-type-1",
-				"parameter":                       "map",
+				api.ClusterProfileSetEnv: "",
+				api.ClusterProfileParam:  "",
+				"lease-0":                "res-type-0",
+				"lease-1":                "res-type-1",
+				"parameter":              "map",
 			},
 			wantCalls: []string{
 				"acquireWaitWithPriority owner res-type-0 free leased random",
@@ -329,11 +328,10 @@ func TestAcquireLeases(t *testing.T) {
 				},
 			},
 			wantProvides: map[string]string{
-				"parameter":                       "map",
-				api.ClusterProfileSetNameParam:    "aws-set",
-				api.ClusterProfileNameParam:       "aws",
-				api.ClusterProfileResourceTypeEnv: "aws-quota-slice",
-				api.DefaultLeaseEnv:               "us-east-1",
+				"parameter":              "map",
+				api.ClusterProfileSetEnv: "aws-set",
+				api.ClusterProfileParam:  "aws",
+				api.DefaultLeaseEnv:      "us-east-1",
 			},
 			wantSecrets: corev1.SecretList{
 				Items: []corev1.Secret{

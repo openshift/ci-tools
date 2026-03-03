@@ -13,8 +13,42 @@ import (
 
 	hivev1 "github.com/openshift/hive/apis/hive/v1"
 
+	"github.com/openshift/ci-tools/pkg/api"
 	"github.com/openshift/ci-tools/pkg/testhelper"
 )
+
+func TestArchitectureForBounds(t *testing.T) {
+	tests := []struct {
+		name    string
+		bounds  api.VersionBounds
+		want    api.ReleaseArchitecture
+		wantErr bool
+	}{
+		{"4.7 uses amd64", api.VersionBounds{Lower: "4.7.0-0", Upper: "4.8.0-0"}, api.ReleaseArchitectureAMD64, false},
+		{"4.11 uses amd64", api.VersionBounds{Lower: "4.11.0-0", Upper: "4.12.0-0"}, api.ReleaseArchitectureAMD64, false},
+		{"4.12 uses multi", api.VersionBounds{Lower: "4.12.0-0", Upper: "4.13.0-0"}, api.ReleaseArchitectureMULTI, false},
+		{"4.13 uses multi", api.VersionBounds{Lower: "4.13.0-0", Upper: "4.14.0-0"}, api.ReleaseArchitectureMULTI, false},
+		{"4.21 uses multi", api.VersionBounds{Lower: "4.21.0-0", Upper: "4.22.0-0"}, api.ReleaseArchitectureMULTI, false},
+		{"5.0 uses multi", api.VersionBounds{Lower: "5.0.0-0", Upper: "5.1.0-0"}, api.ReleaseArchitectureMULTI, false},
+		{"5.1 uses multi", api.VersionBounds{Lower: "5.1.0-0", Upper: "5.2.0-0"}, api.ReleaseArchitectureMULTI, false},
+		{"v4.12 uses multi", api.VersionBounds{Lower: "v4.12.0-0", Upper: "4.13.0-0"}, api.ReleaseArchitectureMULTI, false},
+		{"major 3 uses amd64", api.VersionBounds{Lower: "3.12.0-0", Upper: "4.0.0-0"}, api.ReleaseArchitectureAMD64, false},
+		{"unparseable lower fails", api.VersionBounds{Lower: "bad", Upper: "4.8.0-0"}, "", true},
+		{"single segment fails", api.VersionBounds{Lower: "4", Upper: "4.8.0-0"}, "", true},
+	}
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			got, err := architectureForBounds(tt.bounds)
+			if (err != nil) != tt.wantErr {
+				t.Errorf("architectureForBounds() error = %v, wantErr %v", err, tt.wantErr)
+				return
+			}
+			if !tt.wantErr && got != tt.want {
+				t.Errorf("architectureForBounds() = %v, want %v", got, tt.want)
+			}
+		})
+	}
+}
 
 func TestEnsureLabels(t *testing.T) {
 	testCases := []struct {

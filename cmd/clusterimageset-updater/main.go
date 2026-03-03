@@ -9,6 +9,7 @@ import (
 	"net/http"
 	"os"
 	"path/filepath"
+	"strconv"
 	"strings"
 
 	"github.com/ghodss/yaml"
@@ -125,10 +126,15 @@ func main() {
 
 	boundsToPullspec := make(map[api.VersionBounds]string)
 	for versionBounds := range poolFilesByBounds {
+		// Use multi payload for 4.12+; use amd64 for older versions (multi not available).
+		arch, err := architectureForBounds(versionBounds)
+		if err != nil {
+			logrus.WithError(err).Fatalf("Invalid version bounds %s", versionBounds.Query())
+		}
 		release := api.Prerelease{
 			ReleaseDescriptor: api.ReleaseDescriptor{
 				Product:      api.ReleaseProductOCP,
-				Architecture: api.ReleaseArchitectureAMD64,
+				Architecture: arch,
 			},
 			VersionBounds: versionBounds,
 		}
@@ -322,4 +328,25 @@ func labelsToBounds(labels map[string]string) (*api.VersionBounds, error) {
 		return &bounds, nil
 	}
 	return nil, nil
+}
+
+// architectureForBounds returns MULTI for 4.12+ and AMD64 for older versions (multi payload not available).
+// Returns an error if bounds.Lower cannot be parsed as major.minor so misconfigured pools fail fast.
+func architectureForBounds(bounds api.VersionBounds) (api.ReleaseArchitecture, error) {
+	parts := strings.Split(bounds.Lower, ".")
+	if len(parts) < 2 {
+		return "", fmt.Errorf("version_lower %q must be major.minor (e.g. 4.12.0-0)", bounds.Lower)
+	}
+	major, err := strconv.Atoi(strings.TrimPrefix(parts[0], "v"))
+	if err != nil {
+		return "", fmt.Errorf("version_lower %q: major %q is not an integer: %w", bounds.Lower, parts[0], err)
+	}
+	minor, err := strconv.Atoi(parts[1])
+	if err != nil {
+		return "", fmt.Errorf("version_lower %q: minor %q is not an integer: %w", bounds.Lower, parts[1], err)
+	}
+	if major < 4 || (major == 4 && minor < 12) {
+		return api.ReleaseArchitectureAMD64, nil
+	}
+	return api.ReleaseArchitectureMULTI, nil
 }

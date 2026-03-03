@@ -33,6 +33,25 @@ func ClusterPoolFromClaim(ctx context.Context, claim *api.ClusterClaim, hiveClie
 
 	pools := clusterPools.Items
 	logrus.Debugf("Found %d matching pools", len(pools))
+
+	// When architecture is multi and no pool matches, fall back to amd64 so jobs can run where only amd64 pools exist.
+	if len(pools) == 0 && claim.Architecture == api.ReleaseArchitectureMULTI {
+		fallbackOption := make(ctrlruntimeclient.MatchingLabels, len(listOption)+1)
+		for k, v := range listOption {
+			fallbackOption[k] = v
+		}
+		fallbackOption["architecture"] = string(api.ReleaseArchitectureAMD64)
+		clusterPools = &hivev1.ClusterPoolList{}
+		if err := hiveClient.List(ctx, clusterPools, fallbackOption); err != nil {
+			return nil, fmt.Errorf("failed to list cluster pools with list option %v: %w", listOption, err)
+		}
+		pools = clusterPools.Items
+		logrus.Debugf("No multi pool found; tried amd64 fallback: %d matching pools", len(pools))
+		if len(pools) > 0 {
+			logrus.Infof("Claiming from amd64 pool (no multi pool available for product=%s version=%s cloud=%s owner=%s)", claim.Product, claim.Version, claim.Cloud, claim.Owner)
+		}
+	}
+
 	if len(pools) == 0 {
 		return nil, fmt.Errorf("failed to find a cluster pool providing the cluster: %v", listOption)
 	}

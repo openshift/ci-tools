@@ -34,13 +34,8 @@ const (
 )
 
 type Config struct {
-	ProjectIdString string
-	ProjectIdNumber string
-}
-
-var Production = Config{
-	ProjectIdString: "openshift-ci-secrets",
-	ProjectIdNumber: "384486694155",
+	ProjectIdString string `json:"GCP_PROJECT_ID" yaml:"GCP_PROJECT_ID"`
+	ProjectIdNumber string `json:"GCP_PROJECT_NUMBER" yaml:"GCP_PROJECT_NUMBER"`
 }
 
 func (c Config) GetSecretAccessorRole() string {

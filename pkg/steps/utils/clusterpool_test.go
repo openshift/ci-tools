@@ -4,6 +4,7 @@ import (
 	"context"
 	"errors"
 	"fmt"
+	"strings"
 	"testing"
 
 	"github.com/google/go-cmp/cmp"
@@ -233,6 +234,91 @@ func TestClusterPoolFromClaimWithLabels(t *testing.T) {
 			}
 			if diff := cmp.Diff(tc.expected, got, testhelper.RuntimeObjectIgnoreRvTypeMeta); err == nil && diff != "" {
 				t.Errorf("Selected pool differs from expected:\n%s", diff)
+			}
+		})
+	}
+}
+
+func TestClusterPoolFromClaimMultiFallbackToAMD64(t *testing.T) {
+	amd64Pool := &hivev1.ClusterPool{
+		ObjectMeta: v1.ObjectMeta{Name: "pool-amd64", Labels: map[string]string{
+			"architecture": "amd64",
+			"cloud":        "aws",
+			"owner":        "fake",
+			"product":      "ocp",
+			"version":      "4.18",
+		}},
+		Spec:   hivev1.ClusterPoolSpec{Size: 1},
+		Status: hivev1.ClusterPoolStatus{Ready: 1},
+	}
+	multiPool := &hivev1.ClusterPool{
+		ObjectMeta: v1.ObjectMeta{Name: "pool-multi", Labels: map[string]string{
+			"architecture": "multi",
+			"cloud":        "aws",
+			"owner":        "fake",
+			"product":      "ocp",
+			"version":      "4.18",
+		}},
+		Spec:   hivev1.ClusterPoolSpec{Size: 1},
+		Status: hivev1.ClusterPoolStatus{Ready: 1},
+	}
+
+	tests := []struct {
+		name      string
+		pools     []ctrlruntimeclient.Object
+		wantPool  string
+		wantErr   bool
+		errSubstr string
+	}{
+		{
+			name:     "multi requested and multi pool exists returns multi pool",
+			pools:    []ctrlruntimeclient.Object{multiPool},
+			wantPool: "pool-multi",
+		},
+		{
+			name:     "multi requested but only amd64 pool exists returns amd64 pool (fallback)",
+			pools:    []ctrlruntimeclient.Object{amd64Pool},
+			wantPool: "pool-amd64",
+		},
+		{
+			name:     "multi requested with both pools prefers multi",
+			pools:    []ctrlruntimeclient.Object{amd64Pool, multiPool},
+			wantPool: "pool-multi",
+		},
+		{
+			name:      "multi requested and no pools returns error",
+			pools:     []ctrlruntimeclient.Object{},
+			wantErr:   true,
+			errSubstr: "failed to find a cluster pool",
+		},
+	}
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			claim := &api.ClusterClaim{
+				Architecture: api.ReleaseArchitectureMULTI,
+				Cloud:        api.CloudAWS,
+				Owner:        "fake",
+				Product:      api.ReleaseProductOCP,
+				Version:      "4.18",
+			}
+			client := fakectrlruntimeclient.NewClientBuilder().WithObjects(tt.pools...).Build()
+			got, err := ClusterPoolFromClaim(context.TODO(), claim, client)
+			if tt.wantErr {
+				if err == nil {
+					t.Errorf("ClusterPoolFromClaim() expected error containing %q", tt.errSubstr)
+					return
+				}
+				if tt.errSubstr != "" && !strings.Contains(err.Error(), tt.errSubstr) {
+					t.Errorf("ClusterPoolFromClaim() error = %v, want substring %q", err, tt.errSubstr)
+				}
+				return
+			}
+			if err != nil {
+				t.Errorf("ClusterPoolFromClaim() unexpected error: %v", err)
+				return
+			}
+			if got.Name != tt.wantPool {
+				t.Errorf("ClusterPoolFromClaim() pool name = %s, want %s", got.Name, tt.wantPool)
 			}
 		})
 	}

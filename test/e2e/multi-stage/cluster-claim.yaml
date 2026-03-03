@@ -4,6 +4,7 @@ base_images:
     namespace: openshift
     tag: 'stream9'
 releases:
+  # Use 4.18 for latest so the e2e claim tests match the fake cluster pool in CI (pool is versioned 4.18 multi).
   latest:   # include `latest` as a release to verify that `latest` is automatically overridden when using claims
     release:
       channel: stable
@@ -11,7 +12,7 @@ releases:
   custom:   # include `custom` to make sure named claim imports are properly overridden
     release:
       channel: stable
-      version: "4.17"
+      version: "4.18"
 resources:
   '*':
     requests:
@@ -30,7 +31,7 @@ tests:
               memory: 200Mi
   - as: e2e-claim
     cluster_claim:
-      architecture: amd64
+      architecture: multi
       cloud: aws
       owner: fake
       product: ocp
@@ -51,7 +52,7 @@ tests:
   - as: e2e-claim-as-custom
     cluster_claim:
       as: custom
-      architecture: amd64
+      architecture: multi
       cloud: aws
       owner: fake
       product: ocp
@@ -71,7 +72,7 @@ tests:
               memory: 200Mi
   - as: e2e-claim-depend-on-release-image
     cluster_claim:
-      architecture: amd64
+      architecture: multi
       cloud: aws
       owner: fake
       product: ocp

@@ -61,14 +61,17 @@ func main() {
 		logrus.WithError(err).Fatal("failed to gather options")
 	}
 
+	var prOpts []prcreation.PrOption
+	prOpts = append(prOpts, prcreation.PrBody(opts.prMessage))
+	prOpts = append(prOpts, prcreation.PrAssignee(opts.prAssignee))
+	prOpts = append(prOpts, prcreation.GitCommitMessage(opts.gitCommitMessage))
+
 	if err := opts.PRCreationOptions.UpsertPR(".",
 		opts.organization,
 		opts.repo,
 		opts.branch,
 		opts.prTitle,
-		prcreation.PrBody(opts.prMessage),
-		prcreation.PrAssignee(opts.prAssignee),
-		prcreation.GitCommitMessage(opts.gitCommitMessage),
+		prOpts...,
 	); err != nil {
 		logrus.WithError(err).Fatal("failed to upsert PR")
 	}

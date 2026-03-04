@@ -3,6 +3,7 @@ package prcreation
 import (
 	"flag"
 	"fmt"
+	"io"
 	"os"
 	"strings"
 	"time"
@@ -16,6 +17,11 @@ import (
 	"sigs.k8s.io/prow/pkg/labels"
 )
 
+// PRCreationOptions holds configuration for creating pull requests.
+// Authentication is determined by which flags are provided:
+//   - --github-token-path: uses PAT auth, pushes to a fork and creates a cross-repo PR
+//   - --github-app-id + --github-app-private-key-path: uses GitHub App auth,
+//     pushes the branch directly to the upstream repo and creates a same-repo PR
 type PRCreationOptions struct {
 	SelfApprove bool
 	flagutil.GitHubOptions
@@ -31,8 +37,10 @@ func (o *PRCreationOptions) Finalize() error {
 	if err := o.GitHubOptions.Validate(false); err != nil {
 		return err
 	}
-	if err := secret.Add(o.TokenPath); err != nil {
-		return fmt.Errorf("failed to start secretAgent: %w", err)
+	if o.TokenPath != "" {
+		if err := secret.Add(o.TokenPath); err != nil {
+			return fmt.Errorf("failed to start secretAgent: %w", err)
+		}
 	}
 	var err error
 	o.GithubClient, err = o.GitHubClient(false)
@@ -43,7 +51,7 @@ func (o *PRCreationOptions) Finalize() error {
 	return nil
 }
 
-// PrOptions allows optional parameters to upsertPR
+// PrOptions allows optional parameters to UpsertPR.
 type PrOptions struct {
 	prBody           string
 	matchTitle       string
@@ -53,54 +61,62 @@ type PrOptions struct {
 	skipPRCreation   bool
 }
 
-// PrOption is the type for Optional Parameters
+// PrOption is a functional option for configuring PR creation.
 type PrOption func(*PrOptions)
 
-// PrBody is the wrapper to pass in PrBody as a parameter
+// PrBody sets the body/description of the pull request.
 func PrBody(prBody string) PrOption {
 	return func(args *PrOptions) {
 		args.prBody = prBody
 	}
 }
 
-// GitCommitMessage is the wrapper to pass in PrCommitMessage that's different from the PrBody
-// This is useful when you wish to provide large markdown information for the PR, but wish to keep the commit simple.
+// GitCommitMessage sets an explicit git commit message different from the PR body.
+// This is useful when you wish to provide large markdown information for the PR
+// but keep the commit message concise.
 func GitCommitMessage(gitCommitMessage string) PrOption {
 	return func(args *PrOptions) {
 		args.gitCommitMessage = gitCommitMessage
 	}
 }
 
-// MatchTitle is the wrapper to pass in MatchTitle as a parameter
+// MatchTitle sets a custom title to match existing PRs against.
+// When not set, the PR title itself is used for matching.
 func MatchTitle(matchTitle string) PrOption {
 	return func(args *PrOptions) {
 		args.matchTitle = matchTitle
 	}
 }
 
+// AdditionalLabels sets extra labels to apply to the pull request.
 func AdditionalLabels(additionalLabels []string) PrOption {
 	return func(args *PrOptions) {
 		args.additionalLabels = additionalLabels
 	}
 }
 
-// PrAssignee is the user to whom the PR is assigned
+// PrAssignee sets the comma-separated list of GitHub users to assign the PR to.
 func PrAssignee(assignee string) PrOption {
 	return func(args *PrOptions) {
 		args.prAssignee = assignee
 	}
 }
 
-// SkipPRCreation skips the actual pr creation after
-// committing and pushing
+// SkipPRCreation skips the actual PR creation after committing and pushing.
 func SkipPRCreation() PrOption {
 	return func(args *PrOptions) {
 		args.skipPRCreation = true
 	}
 }
 
-// UpsertPR upserts a PR. The PRTitle must be alphanumeric except for spaces, as it will be used as the
-// branchname on the bots fork.
+// UpsertPR creates or updates a pull request. The PRTitle must be alphanumeric
+// except for spaces, as it will be used as the branch name.
+//
+// The authentication method is auto-detected from the configured flags:
+//   - PAT auth (--github-token-path): forks the repo, pushes to the fork,
+//     creates a cross-repo PR from fork to upstream
+//   - App auth (--github-app-id): pushes the branch directly to the upstream
+//     repo, creates a same-repo PR
 func (o *PRCreationOptions) UpsertPR(localSourceDir, org, repo, branch, prTitle string, setters ...PrOption) error {
 	prArgs := &PrOptions{}
 	for _, setter := range setters {
@@ -109,6 +125,46 @@ func (o *PRCreationOptions) UpsertPR(localSourceDir, org, repo, branch, prTitle 
 	if prArgs.matchTitle == "" {
 		prArgs.matchTitle = prTitle
 	}
+
+	if o.AppID != "" {
+		return o.upsertWithAppAuth(localSourceDir, org, repo, branch, prTitle, prArgs)
+	}
+	return o.upsertWithPAT(localSourceDir, org, repo, branch, prTitle, prArgs)
+}
+
+// branchNameFromTitle derives a git branch name from the PR match title.
+func branchNameFromTitle(title string) string {
+	name := strings.ReplaceAll(strings.ToLower(title), " ", "-")
+	name = strings.ReplaceAll(name, ":", "-")
+	return name
+}
+
+// commitMessage returns the appropriate commit message, preferring the explicit
+// git commit message over the PR body.
+func commitMessage(prBody, gitCommitMessage string) string {
+	if gitCommitMessage != "" {
+		return gitCommitMessage
+	}
+	return prBody
+}
+
+// configureGitUser sets the local git user name, email, and disables GPG signing.
+func configureGitUser(username string, stdout, stderr io.Writer) error {
+	for _, args := range [][]string{
+		{"config", "--local", "user.email", fmt.Sprintf("%s@users.noreply.github.com", username)},
+		{"config", "--local", "user.name", username},
+		{"config", "--local", "commit.gpgsign", "false"},
+	} {
+		if err := bumper.Call(stdout, stderr, "git", args); err != nil {
+			return fmt.Errorf("failed to run git %v: %w", args, err)
+		}
+	}
+	return nil
+}
+
+// upsertWithPAT uses a personal access token to fork the repo, commit, push
+// to the fork, and create a cross-repo pull request.
+func (o *PRCreationOptions) upsertWithPAT(localSourceDir, org, repo, branch, prTitle string, prArgs *PrOptions) error {
 	if err := os.Chdir(localSourceDir); err != nil {
 		return fmt.Errorf("failed to chdir into %s: %w", localSourceDir, err)
 	}
@@ -134,9 +190,8 @@ func (o *PRCreationOptions) UpsertPR(localSourceDir, org, repo, branch, prTitle 
 	stdout := bumper.HideSecretsWriter{Delegate: os.Stdout, Censor: secret.Censor}
 	stderr := bumper.HideSecretsWriter{Delegate: os.Stderr, Censor: secret.Censor}
 
-	sourceBranchName := strings.ReplaceAll(strings.ToLower(prArgs.matchTitle), " ", "-")
-	// Fix for NO-ISSUE: title
-	sourceBranchName = strings.ReplaceAll(strings.ToLower(sourceBranchName), ":", "-")
+	sourceBranchName := branchNameFromTitle(prArgs.matchTitle)
+
 	o.GithubClient.SetMax404Retries(0)
 	if _, err := o.GithubClient.GetRepo(username, repo); err != nil {
 		// Somehow github.IsNotFound doesn't recognize this?
@@ -154,23 +209,8 @@ func (o *PRCreationOptions) UpsertPR(localSourceDir, org, repo, branch, prTitle 
 		}
 	}
 
-	// Even when --author is passed on committing, a committer is needed, and that one can not be passed as flag.
-	emailArgs := []string{"config", "--local", "user.email", fmt.Sprintf("%s@users.noreply.github.com", username)}
-	if err := bumper.Call(stdout, stderr, "git", emailArgs); err != nil {
-		return fmt.Errorf("failed to configure email address: %w", err)
-	}
-	userArgs := []string{"config", "--local", "user.name", username}
-	if err := bumper.Call(stdout, stderr, "git", userArgs); err != nil {
-		return fmt.Errorf("failed to configure email address: %w", err)
-	}
-	gpgArgs := []string{"config", "--local", "commit.gpgsign", "false"}
-	if err := bumper.Call(stdout, stderr, "git", gpgArgs); err != nil {
-		return fmt.Errorf("failed to configure disabling gpg signing: %w", err)
-	}
-
-	commitMessage := prArgs.prBody
-	if prArgs.gitCommitMessage != "" {
-		commitMessage = prArgs.gitCommitMessage
+	if err := configureGitUser(username, stdout, stderr); err != nil {
+		return err
 	}
 
 	if err := bumper.GitCommitAndPush(
@@ -178,7 +218,7 @@ func (o *PRCreationOptions) UpsertPR(localSourceDir, org, repo, branch, prTitle 
 		sourceBranchName,
 		username,
 		fmt.Sprintf("%s@users.noreply.github.com", username),
-		prTitle+"\n\n"+commitMessage,
+		prTitle+"\n\n"+commitMessage(prArgs.prBody, prArgs.gitCommitMessage),
 		stdout,
 		stderr,
 		false,
@@ -192,35 +232,127 @@ func (o *PRCreationOptions) UpsertPR(localSourceDir, org, repo, branch, prTitle 
 		return nil
 	}
 
+	head := username + ":" + sourceBranchName
+	return o.ensurePR(org, repo, branch, prTitle, head, sourceBranchName, prArgs)
+}
+
+// upsertWithAppAuth commits the local changes, pushes the branch directly to
+// the upstream repository using the GitHub App installation token (via prow's
+// GitClientFactory), and creates or updates a same-repo pull request. This
+// avoids forking and requires only App auth — no PAT needed.
+func (o *PRCreationOptions) upsertWithAppAuth(localSourceDir, org, repo, branch, prTitle string, prArgs *PrOptions) error {
+	if err := os.Chdir(localSourceDir); err != nil {
+		return fmt.Errorf("failed to chdir into %s: %w", localSourceDir, err)
+	}
+
+	changed, err := bumper.HasChanges()
+	if err != nil {
+		return fmt.Errorf("failed to check for changes: %w", err)
+	}
+
+	l := logrus.WithFields(logrus.Fields{"org": org, "repo": repo, "auth": "github-app"})
+
+	if !changed {
+		l.Info("No changes, not upserting PR")
+		return nil
+	}
+
+	user, err := o.GithubClient.BotUser()
+	if err != nil {
+		return fmt.Errorf("failed to get bot user: %w", err)
+	}
+	username := user.Login
+
+	sourceBranchName := branchNameFromTitle(prArgs.matchTitle)
+	stdout := bumper.HideSecretsWriter{Delegate: os.Stdout, Censor: secret.Censor}
+	stderr := bumper.HideSecretsWriter{Delegate: os.Stderr, Censor: secret.Censor}
+
+	if err := configureGitUser(username, stdout, stderr); err != nil {
+		return err
+	}
+
+	// Create branch, stage, and commit locally
+	if err := bumper.Call(stdout, stderr, "git", []string{"checkout", "-B", sourceBranchName}); err != nil {
+		return fmt.Errorf("failed to create branch %s: %w", sourceBranchName, err)
+	}
+	if err := bumper.Call(stdout, stderr, "git", []string{"add", "-A"}); err != nil {
+		return fmt.Errorf("failed to stage changes: %w", err)
+	}
+	commitArgs := []string{
+		"commit", "-m", prTitle + "\n\n" + commitMessage(prArgs.prBody, prArgs.gitCommitMessage),
+		"--author", fmt.Sprintf("%s <%s@users.noreply.github.com>", username, username),
+	}
+	if err := bumper.Call(stdout, stderr, "git", commitArgs); err != nil {
+		return fmt.Errorf("failed to commit changes: %w", err)
+	}
+
+	// Prow's GitClientFactory handles App auth token generation transparently.
+	// ClientFromDir wires a central remote URL with the installation token
+	// embedded, and PushToCentral pushes directly to the upstream repo.
+	gitClientFactory, err := o.GitHubOptions.GitClientFactory("", nil, false, false)
+	if err != nil {
+		return fmt.Errorf("failed to create git client factory: %w", err)
+	}
+	defer gitClientFactory.Clean()
+
+	repoClient, err := gitClientFactory.ClientFromDir(org, repo, ".")
+	if err != nil {
+		return fmt.Errorf("failed to create repo client for %s/%s: %w", org, repo, err)
+	}
+
+	l.WithField("branch", sourceBranchName).Info("Pushing branch directly to upstream repo")
+	if err := repoClient.PushToCentral(sourceBranchName, true); err != nil {
+		return fmt.Errorf("failed to push branch %s to %s/%s: %w", sourceBranchName, org, repo, err)
+	}
+	l.WithField("branch", fmt.Sprintf("https://github.com/%s/%s/tree/%s", org, repo, sourceBranchName)).Info("Pushed branch to upstream")
+
+	if prArgs.skipPRCreation {
+		l.Info("SkipPRCreation is set, not creating a PR")
+		return nil
+	}
+
+	// For same-repo PRs, head is just the branch name (no user: prefix)
+	return o.ensurePR(org, repo, branch, prTitle, sourceBranchName, sourceBranchName, prArgs)
+}
+
+// ensurePR creates or updates the pull request and applies labels.
+// head is the full head ref (e.g. "user:branch" for cross-repo, or "branch" for same-repo).
+// headBranch is the bare branch name used for label/update operations.
+func (o *PRCreationOptions) ensurePR(org, repo, branch, prTitle, head, headBranch string, prArgs *PrOptions) error {
 	labelsToAdd := prArgs.additionalLabels
 	if o.SelfApprove {
-		l.Infof("Self-aproving PR by adding the %q and %q labels", labels.Approved, labels.LGTM)
+		logrus.Infof("Self-approving PR by adding the %q and %q labels", labels.Approved, labels.LGTM)
 		labelsToAdd = append(labelsToAdd, labels.Approved, labels.LGTM)
 	}
 
-	assignees := strings.Split(prArgs.prAssignee, ",")
-	for i, assignee := range assignees {
-		assignees[i] = "@" + assignee
-	}
-	assigneeList := strings.Join(assignees, ", ")
+	prBody := prArgs.prBody + formatAssigneeCC(prArgs.prAssignee)
 
-	if err := bumper.UpdatePullRequestWithLabels(
-		o.GithubClient,
-		org,
-		repo,
-		prTitle,
-		prArgs.prBody+"\n/cc "+assigneeList,
-		username+":"+sourceBranchName,
-		branch,
-		sourceBranchName,
-		true,
-		labelsToAdd,
-		false,
-	); err != nil {
-		return fmt.Errorf("failed to upsert PR: %w", err)
-	}
+	// Wrap the client so FindIssues routes through FindIssuesWithOrg,
+	// which is required for GitHub App auth.
+	prClient := github.Client(&OrgAwareClient{Client: o.GithubClient, Org: org, IsAppAuth: o.AppID != ""})
 
-	return nil
+	return bumper.UpdatePullRequestWithLabels(
+		prClient, org, repo, prTitle, prBody,
+		head, branch, headBranch,
+		true, labelsToAdd, false,
+	)
+}
+
+func formatAssigneeCC(assigneeCSV string) string {
+	if assigneeCSV == "" {
+		return ""
+	}
+	var mentions []string
+	for _, a := range strings.Split(assigneeCSV, ",") {
+		a = strings.TrimSpace(a)
+		if a != "" {
+			mentions = append(mentions, "@"+a)
+		}
+	}
+	if len(mentions) == 0 {
+		return ""
+	}
+	return "\n/cc " + strings.Join(mentions, ", ")
 }
 
 func waitForRepo(owner, name string, ghc github.Client) error {

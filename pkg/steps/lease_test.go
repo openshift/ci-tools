@@ -7,6 +7,8 @@ import (
 	"reflect"
 	"testing"
 
+	"github.com/google/go-cmp/cmp"
+
 	corev1 "k8s.io/api/core/v1"
 	v1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/apimachinery/pkg/util/diff"
@@ -15,7 +17,6 @@ import (
 	ctrlruntimeclient "sigs.k8s.io/controller-runtime/pkg/client"
 	fakectrlruntimeclient "sigs.k8s.io/controller-runtime/pkg/client/fake"
 
-	"github.com/google/go-cmp/cmp"
 	"github.com/openshift/ci-tools/pkg/api"
 	"github.com/openshift/ci-tools/pkg/junit"
 	"github.com/openshift/ci-tools/pkg/lease"
@@ -292,6 +293,74 @@ func TestAcquireLeases(t *testing.T) {
 				"acquireWaitWithPriority owner res-type-1 free leased random",
 				"releaseone owner res-type-0--slice-0 free",
 				"releaseone owner res-type-1--slice-0 free",
+			},
+		},
+		{
+			name: "Cluster profile lease",
+			leases: []api.StepLease{{
+				ResourceType:         "aws",
+				Env:                  api.DefaultLeaseEnv,
+				Count:                1,
+				ClusterProfile:       "aws",
+				ClusterProfileTarget: "e2e-aws-ovn",
+			}},
+			resources: map[string]*common.Resource{
+				"acquireWaitWithPriority_aws_free_leased_random": {
+					Name: "us-east-1--aws-quota-slice-0",
+				},
+			},
+			objects: []ctrlruntimeclient.Object{&corev1.Secret{
+				ObjectMeta: v1.ObjectMeta{
+					Namespace: "ci",
+					Name:      "cluster-secrets-aws",
+				},
+				Data: map[string][]byte{
+					"k1": []byte("v1"),
+					"k2": []byte("v2"),
+				},
+			}},
+			clusterProfiles: map[string]*api.ClusterProfileDetails{
+				"aws": {
+					Secret:    "cluster-secrets-aws",
+					LeaseType: "aws-quota-slice",
+				},
+			},
+			wantProvides: map[string]string{
+				"parameter":              "map",
+				api.ClusterProfileSetEnv: "",
+				api.ClusterProfileParam:  "aws",
+				api.DefaultLeaseEnv:      "us-east-1",
+			},
+			wantSecrets: corev1.SecretList{
+				Items: []corev1.Secret{
+					{
+						ObjectMeta: v1.ObjectMeta{
+							Namespace:       "ci",
+							Name:            "cluster-secrets-aws",
+							ResourceVersion: "999",
+						},
+						Data: map[string][]byte{
+							"k1": []byte("v1"),
+							"k2": []byte("v2"),
+						},
+					},
+					{
+						ObjectMeta: v1.ObjectMeta{
+							Namespace:       ns,
+							Name:            "e2e-aws-ovn-cluster-profile",
+							ResourceVersion: "1",
+						},
+						Data: map[string][]byte{
+							"k1": []byte("v1"),
+							"k2": []byte("v2"),
+						},
+						Immutable: ptr.To(true),
+					},
+				},
+			},
+			wantCalls: []string{
+				"acquireWaitWithPriority owner aws free leased random",
+				"releaseone owner us-east-1--aws-quota-slice-0 free",
 			},
 		},
 		{

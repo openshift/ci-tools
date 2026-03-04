@@ -167,15 +167,11 @@ func aggregateWrappedErrorAndReleaseError(wrappedErr, releaseErr error) error {
 func (s *leaseStep) acquireLeases(ctx context.Context, cancel context.CancelFunc) error {
 	client := *s.client
 	// Sort by resource type to avoid a(n unlikely and temporary) deadlock.
-	var sorted []int
-	for i := range s.leases {
-		sorted = append(sorted, i)
-	}
-	sort.Slice(sorted, func(i, j int) bool {
+	sort.Slice(s.leases, func(i, j int) bool {
 		return s.leases[i].ResourceType < s.leases[j].ResourceType
 	})
 	var errs []error
-	for _, i := range sorted {
+	for i := range s.leases {
 		l := &s.leases[i]
 		start := time.Now()
 		logrus.Debugf("Acquiring %d lease(s) for %s", l.Count, l.ResourceType)
@@ -188,31 +184,19 @@ func (s *leaseStep) acquireLeases(ctx context.Context, cancel context.CancelFunc
 			break
 		}
 
-		s.clusterProfileName = l.ClusterProfile
-		if clusterProfileName := clusterProfileFromResources(names); clusterProfileName != "" {
-			s.clusterProfileSetName = l.ClusterProfile
-			s.clusterProfileName = clusterProfileName
-		}
-
-		if s.clusterProfileName != "" {
-			cpDetails, err := s.clusterProfileGetter(s.clusterProfileName)
-			if err != nil {
-				errs = append(errs, fmt.Errorf("resolve cluster profile %s: %w", s.clusterProfileName, err))
-				break
-			}
-
-			if err := s.importClusterProfileSecret(ctx, cpDetails.Secret, l.ClusterProfileTarget); err != nil {
-				errs = append(errs, fmt.Errorf("import secret %s for cluster profile %s: %w", cpDetails.Secret, s.clusterProfileName, err))
-				break
-			}
-		}
-
 		for _, name := range names {
 			s.metricsAgent.Record(&metrics.LeaseAcquisitionMetricEvent{RawLeaseName: name, AcquisitionDurationSeconds: time.Since(start).Seconds()})
 		}
 
 		logrus.Infof("Acquired %d lease(s) for %s: %v", l.Count, l.ResourceType, names)
 		l.resources = names
+
+		if l.ClusterProfile != "" {
+			if err := s.handleClusterProfile(ctx, l, names); err != nil {
+				errs = append(errs, err)
+				break
+			}
+		}
 	}
 
 	if errs != nil {
@@ -263,6 +247,30 @@ func clusterProfileFromResources(resources []string) string {
 		}
 	}
 	return ""
+}
+
+func (s *leaseStep) handleClusterProfile(ctx context.Context, l *stepLease, names []string) error {
+	s.clusterProfileName = l.ClusterProfile
+
+	if clusterProfileName := clusterProfileFromResources(names); clusterProfileName != "" {
+		s.clusterProfileSetName = l.ClusterProfile
+		s.clusterProfileName = clusterProfileName
+	}
+
+	if s.clusterProfileName == "" {
+		return nil
+	}
+
+	cpDetails, err := s.clusterProfileGetter(s.clusterProfileName)
+	if err != nil {
+		return fmt.Errorf("resolve cluster profile %s: %w", s.clusterProfileName, err)
+	}
+
+	if err := s.importClusterProfileSecret(ctx, cpDetails.Secret, l.ClusterProfileTarget); err != nil {
+		return fmt.Errorf("import secret %s for cluster profile %s: %w", cpDetails.Secret, s.clusterProfileName, err)
+	}
+
+	return nil
 }
 
 // importClusterProfileSecret retrieves the cluster profile secret name using config resolver,

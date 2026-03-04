@@ -4,7 +4,6 @@ import (
 	"context"
 	"fmt"
 	"path"
-	"strings"
 	"testing"
 
 	"github.com/google/go-cmp/cmp"
@@ -398,8 +397,8 @@ func TestEnvironment(t *testing.T) {
 				t.Errorf("environment() error = %v, wantErr %v", err, tc.expectErr)
 				return
 			}
-			if diff := cmp.Diff(tc.expected, got, cmpopts.SortSlices(func(a, b string) bool {
-				return strings.Compare(a, b) <= 0
+			if diff := cmp.Diff(tc.expected, got, cmpopts.SortSlices(func(a, b coreapi.EnvVar) bool {
+				return a.Name < b.Name
 			})); diff != "" {
 				t.Errorf("%s: result differs from expected:\n %s", tc.name, diff)
 			}

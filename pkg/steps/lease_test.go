@@ -294,6 +294,7 @@ func TestAcquireLeases(t *testing.T) {
 				"releaseone owner res-type-0--slice-0 free",
 				"releaseone owner res-type-1--slice-0 free",
 			},
+			wantSecrets: corev1.SecretList{Items: []corev1.Secret{}},
 		},
 		{
 			name: "Cluster profile lease",
@@ -361,6 +362,84 @@ func TestAcquireLeases(t *testing.T) {
 			wantCalls: []string{
 				"acquireWaitWithPriority owner aws free leased random",
 				"releaseone owner us-east-1--aws-quota-slice-0 free",
+			},
+		},
+		{
+			name: "Cluster profile and regular lease",
+			leases: []api.StepLease{{
+				ResourceType:         "aws",
+				Env:                  api.DefaultLeaseEnv,
+				Count:                1,
+				ClusterProfile:       "aws",
+				ClusterProfileTarget: "e2e-aws-ovn",
+			}, {
+				ResourceType: "foobar",
+				Env:          "FOOBAR_RESOURCE",
+				Count:        1,
+			}},
+			resources: map[string]*common.Resource{
+				"acquireWaitWithPriority_aws_free_leased_random": {
+					Name: "us-east-1--aws-quota-slice-0",
+				},
+				"acquireWaitWithPriority_foobar_free_leased_random": {
+					Name: "foobar-res-0",
+				},
+			},
+			objects: []ctrlruntimeclient.Object{&corev1.Secret{
+				ObjectMeta: v1.ObjectMeta{
+					Namespace: "ci",
+					Name:      "cluster-secrets-aws",
+				},
+				Data: map[string][]byte{
+					"k1": []byte("v1"),
+					"k2": []byte("v2"),
+				},
+			}},
+			clusterProfiles: map[string]*api.ClusterProfileDetails{
+				"aws": {
+					Secret:    "cluster-secrets-aws",
+					LeaseType: "aws-quota-slice",
+				},
+			},
+			wantProvides: map[string]string{
+				"parameter":              "map",
+				api.ClusterProfileSetEnv: "",
+				api.ClusterProfileParam:  "aws",
+				api.DefaultLeaseEnv:      "us-east-1",
+				"FOOBAR_RESOURCE":        "foobar-res-0",
+			},
+			wantSecrets: corev1.SecretList{
+				Items: []corev1.Secret{
+					{
+						ObjectMeta: v1.ObjectMeta{
+							Namespace:       "ci",
+							Name:            "cluster-secrets-aws",
+							ResourceVersion: "999",
+						},
+						Data: map[string][]byte{
+							"k1": []byte("v1"),
+							"k2": []byte("v2"),
+						},
+					},
+					{
+						ObjectMeta: v1.ObjectMeta{
+							Namespace:       ns,
+							Name:            "e2e-aws-ovn-cluster-profile",
+							ResourceVersion: "1",
+						},
+						Data: map[string][]byte{
+							"k1": []byte("v1"),
+							"k2": []byte("v2"),
+						},
+						Immutable: ptr.To(true),
+					},
+				},
+			},
+			wantCalls: []string{
+				"acquireWaitWithPriority owner aws free leased random",
+				"acquireWaitWithPriority owner foobar free leased random",
+				"releaseone owner us-east-1--aws-quota-slice-0 free",
+				"releaseone owner foobar-res-0 free",
 			},
 		},
 		{
@@ -452,7 +531,7 @@ func TestAcquireLeases(t *testing.T) {
 			for k, f := range provides {
 				v, err := f()
 				if err != nil {
-					t.Errorf("failed to resove provides param %s: %s", k, err)
+					t.Errorf("failed to resolve provides param %s: %s", k, err)
 				}
 				gotProvides[k] = v
 			}

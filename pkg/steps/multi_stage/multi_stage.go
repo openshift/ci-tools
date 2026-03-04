@@ -219,7 +219,9 @@ func (s *multiStageTestStep) run(ctx context.Context) error {
 	if err != nil {
 		return fmt.Errorf("get cluster profile from parameters: %w", err)
 	}
-	s.profile = clusterProfile
+	if clusterProfile != "" {
+		s.profile = clusterProfile
+	}
 
 	if s.profile != "" {
 		if err := s.getProfileData(ctx); err != nil {

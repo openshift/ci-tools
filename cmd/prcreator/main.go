@@ -20,7 +20,6 @@ type options struct {
 	organization     string
 	repo             string
 	branch           string
-	head             string
 }
 
 func gatherOptions() (*options, error) {
@@ -33,7 +32,6 @@ func gatherOptions() (*options, error) {
 	flag.StringVar(&opts.organization, "organization", "openshift", "The GitHub organization in which the PR should be created")
 	flag.StringVar(&opts.repo, "repo", "release", "The name of the repo in which the PR should be created")
 	flag.StringVar(&opts.branch, "branch", "main", "The branch for which the PR should be created")
-	flag.StringVar(&opts.head, "head", "", "Pre-pushed head ref (e.g. user:branch). When set, skips fork/commit/push and only creates/updates the PR")
 	flag.Parse()
 
 	var errs []error
@@ -67,9 +65,6 @@ func main() {
 	prOpts = append(prOpts, prcreation.PrBody(opts.prMessage))
 	prOpts = append(prOpts, prcreation.PrAssignee(opts.prAssignee))
 	prOpts = append(prOpts, prcreation.GitCommitMessage(opts.gitCommitMessage))
-	if opts.head != "" {
-		prOpts = append(prOpts, prcreation.WithHead(opts.head))
-	}
 
 	if err := opts.PRCreationOptions.UpsertPR(".",
 		opts.organization,

@@ -161,8 +161,11 @@ type githubClient interface {
 	RemoveLabel(org, repo string, number int, label string) error
 	TriggerGitHubWorkflow(org, repo string, id int) error
 	TriggerFailedGitHubWorkflow(org, repo string, id int) error
+	GetPendingApprovalActionRuns(org, repo, branchName, headSHA string) ([]github.WorkflowRun, error)
+	ApproveGitHubWorkflowRun(org, repo string, id int) error
 	DeleteStaleComments(org, repo string, number int, comments []github.IssueComment, isStale func(github.IssueComment) bool) error
 	GetIssueLabels(org, repo string, number int) ([]github.Label, error)
+	FindIssuesWithOrg(org, query, sort string, asc bool) ([]github.Issue, error)
 }
 
 type trustedPullRequestClient interface {
@@ -210,7 +213,11 @@ func handlePullRequest(pc plugins.Agent, pr github.PullRequestEvent) error {
 }
 
 func handleGenericCommentEvent(pc plugins.Agent, gc github.GenericCommentEvent) error {
-	return handleGenericComment(getClient(pc), pc.PluginConfig.TriggerFor(gc.Repo.Owner.Login, gc.Repo.Name), gc)
+	cp, err := pc.CommentPruner()
+	if err != nil {
+		return err
+	}
+	return handleGenericComment(getClient(pc), cp, pc.PluginConfig.TriggerFor(gc.Repo.Owner.Login, gc.Repo.Name), gc)
 }
 
 func handlePush(pc plugins.Agent, pe github.PushEvent) error {

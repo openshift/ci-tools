@@ -162,9 +162,6 @@ func NewService(ctx context.Context, opts ...option.ClientOption) (*Service, err
 	s.RowAccessPolicies = NewRowAccessPoliciesService(s)
 	s.Tabledata = NewTabledataService(s)
 	s.Tables = NewTablesService(s)
-	if err != nil {
-		return nil, err
-	}
 	if endpoint != "" {
 		s.BasePath = endpoint
 	}
@@ -180,7 +177,7 @@ func New(client *http.Client) (*Service, error) {
 	if client == nil {
 		return nil, errors.New("client is nil")
 	}
-	return NewService(context.Background(), option.WithHTTPClient(client))
+	return NewService(context.TODO(), option.WithHTTPClient(client))
 }
 
 type Service struct {
@@ -979,7 +976,8 @@ func (s BiEngineStatistics) MarshalJSON() ([]byte, error) {
 	return gensupport.MarshalJSON(NoMethod(s), s.ForceSendFields, s.NullFields)
 }
 
-// BigLakeConfiguration: Configuration for BigLake managed tables.
+// BigLakeConfiguration: Configuration for BigQuery tables for Apache Iceberg
+// (formerly BigLake managed tables.)
 type BigLakeConfiguration struct {
 	// ConnectionId: Optional. The connection specifying the credentials to be used
 	// to read and write to external storage, such as Cloud Storage. The
@@ -1837,6 +1835,14 @@ type CsvOptions struct {
 	// STRING and BYTE columns, BigQuery interprets the empty string as an empty
 	// value.
 	NullMarker string `json:"nullMarker,omitempty"`
+	// NullMarkers: Optional. A list of strings represented as SQL NULL value in a
+	// CSV file. null_marker and null_markers can't be set at the same time. If
+	// null_marker is set, null_markers has to be not set. If null_markers is set,
+	// null_marker has to be not set. If both null_marker and null_markers are set
+	// at the same time, a user error would be thrown. Any strings listed in
+	// null_markers, including empty string would be interpreted as SQL NULL. This
+	// applies to all column types.
+	NullMarkers []string `json:"nullMarkers,omitempty"`
 	// PreserveAsciiControlCharacters: Optional. Indicates if the embedded ASCII
 	// control characters (the first 32 characters in the ASCII-table, from '\x00'
 	// to '\x1F') are preserved.
@@ -1867,6 +1873,15 @@ type CsvOptions struct {
 	// skipped. Otherwise row N is used to extract column names for the detected
 	// schema.
 	SkipLeadingRows int64 `json:"skipLeadingRows,omitempty,string"`
+	// SourceColumnMatch: Optional. Controls the strategy used to match loaded
+	// columns to the schema. If not set, a sensible default is chosen based on how
+	// the schema is provided. If autodetect is used, then columns are matched by
+	// name. Otherwise, columns are matched by position. This is done to keep the
+	// behavior backward-compatible. Acceptable values are: POSITION - matches by
+	// position. This assumes that the columns are ordered the same way as the
+	// schema. NAME - matches by name. This reads the header row as column names
+	// and reorders columns to match the field names in the schema.
+	SourceColumnMatch string `json:"sourceColumnMatch,omitempty"`
 	// ForceSendFields is a list of field names (e.g. "AllowJaggedRows") to
 	// unconditionally include in API requests. By default, fields with empty or
 	// default values are omitted from API requests. See
@@ -4345,6 +4360,12 @@ type JobConfiguration struct {
 	Load *JobConfigurationLoad `json:"load,omitempty"`
 	// Query: [Pick one] Configures a query job.
 	Query *JobConfigurationQuery `json:"query,omitempty"`
+	// Reservation: Optional. The reservation that job would use. User can specify
+	// a reservation to execute the job. If reservation is not set, reservation is
+	// determined based on the rules defined by the reservation assignments. The
+	// expected format is
+	// `projects/{project}/locations/{location}/reservations/{reservation}`.
+	Reservation string `json:"reservation,omitempty"`
 	// ForceSendFields is a list of field names (e.g. "Copy") to unconditionally
 	// include in API requests. By default, fields with empty or default values are
 	// omitted from API requests. See
@@ -4596,6 +4617,14 @@ type JobConfigurationLoad struct {
 	// STRING and BYTE columns, BigQuery interprets the empty string as an empty
 	// value.
 	NullMarker string `json:"nullMarker,omitempty"`
+	// NullMarkers: Optional. A list of strings represented as SQL NULL value in a
+	// CSV file. null_marker and null_markers can't be set at the same time. If
+	// null_marker is set, null_markers has to be not set. If null_markers is set,
+	// null_marker has to be not set. If both null_marker and null_markers are set
+	// at the same time, a user error would be thrown. Any strings listed in
+	// null_markers, including empty string would be interpreted as SQL NULL. This
+	// applies to all column types.
+	NullMarkers []string `json:"nullMarkers,omitempty"`
 	// ParquetOptions: Optional. Additional properties to set if sourceFormat is
 	// set to PARQUET.
 	ParquetOptions *ParquetOptions `json:"parquetOptions,omitempty"`
@@ -4666,6 +4695,22 @@ type JobConfigurationLoad struct {
 	// skipped. Otherwise row N is used to extract column names for the detected
 	// schema.
 	SkipLeadingRows int64 `json:"skipLeadingRows,omitempty"`
+	// SourceColumnMatch: Optional. Controls the strategy used to match loaded
+	// columns to the schema. If not set, a sensible default is chosen based on how
+	// the schema is provided. If autodetect is used, then columns are matched by
+	// name. Otherwise, columns are matched by position. This is done to keep the
+	// behavior backward-compatible.
+	//
+	// Possible values:
+	//   "SOURCE_COLUMN_MATCH_UNSPECIFIED" - Uses sensible defaults based on how
+	// the schema is provided. If autodetect is used, then columns are matched by
+	// name. Otherwise, columns are matched by position. This is done to keep the
+	// behavior backward-compatible.
+	//   "POSITION" - Matches by position. This assumes that the columns are
+	// ordered the same way as the schema.
+	//   "NAME" - Matches by name. This reads the header row as column names and
+	// reorders columns to match the field names in the schema.
+	SourceColumnMatch string `json:"sourceColumnMatch,omitempty"`
 	// SourceFormat: Optional. The format of the data files. For CSV files, specify
 	// "CSV". For datastore backups, specify "DATASTORE_BACKUP". For
 	// newline-delimited JSON, specify "NEWLINE_DELIMITED_JSON". For Avro, specify
@@ -4687,8 +4732,8 @@ type JobConfigurationLoad struct {
 	// table. Only one of timePartitioning and rangePartitioning should be
 	// specified.
 	TimePartitioning *TimePartitioning `json:"timePartitioning,omitempty"`
-	// TimeZone: Optional. [Experimental] Default time zone that will apply when
-	// parsing timestamp values that have no specific time zone.
+	// TimeZone: Optional. Default time zone that will apply when parsing timestamp
+	// values that have no specific time zone.
 	TimeZone string `json:"timeZone,omitempty"`
 	// TimestampFormat: Optional. Date format used for parsing TIMESTAMP values.
 	TimestampFormat string `json:"timestampFormat,omitempty"`
@@ -5325,8 +5370,7 @@ type JobStatistics2 struct {
 	QueryPlan []*ExplainQueryStage `json:"queryPlan,omitempty"`
 	// ReferencedRoutines: Output only. Referenced routines for the job.
 	ReferencedRoutines []*RoutineReference `json:"referencedRoutines,omitempty"`
-	// ReferencedTables: Output only. Referenced tables for the job. Queries that
-	// reference more than 50 tables will not have a complete list.
+	// ReferencedTables: Output only. Referenced tables for the job.
 	ReferencedTables []*TableReference `json:"referencedTables,omitempty"`
 	// ReservationUsage: Output only. Job resource usage breakdown by reservation.
 	// This field reported misleading information and will no longer be populated.
@@ -7050,6 +7094,10 @@ type QueryRequest struct {
 	// 15 minutes. In other words, if two requests are sent with the same
 	// request_id, but more than 15 minutes apart, idempotency is not guaranteed.
 	RequestId string `json:"requestId,omitempty"`
+	// Reservation: Optional. The reservation that jobs.query request would use.
+	// User can specify a reservation to execute the job.query. The expected format
+	// is `projects/{project}/locations/{location}/reservations/{reservation}`.
+	Reservation string `json:"reservation,omitempty"`
 	// TimeoutMs: Optional. Optional: Specifies the maximum amount of time, in
 	// milliseconds, that the client is willing to wait for the query to complete.
 	// By default, this limit is 10 seconds (10,000 milliseconds). If the query is
@@ -7221,6 +7269,10 @@ type QueryTimelineSample struct {
 	// PendingUnits: Total units of work remaining for the query. This number can
 	// be revised (increased or decreased) while the query is running.
 	PendingUnits int64 `json:"pendingUnits,omitempty,string"`
+	// ShuffleRamUsageRatio: Total shuffle usage ratio in shuffle RAM per
+	// reservation of this query. This will be provided for reservation customers
+	// only.
+	ShuffleRamUsageRatio float64 `json:"shuffleRamUsageRatio,omitempty"`
 	// TotalSlotMs: Cumulative slot-ms consumed by the query.
 	TotalSlotMs int64 `json:"totalSlotMs,omitempty,string"`
 	// ForceSendFields is a list of field names (e.g. "ActiveUnits") to
@@ -7239,6 +7291,20 @@ type QueryTimelineSample struct {
 func (s QueryTimelineSample) MarshalJSON() ([]byte, error) {
 	type NoMethod QueryTimelineSample
 	return gensupport.MarshalJSON(NoMethod(s), s.ForceSendFields, s.NullFields)
+}
+
+func (s *QueryTimelineSample) UnmarshalJSON(data []byte) error {
+	type NoMethod QueryTimelineSample
+	var s1 struct {
+		ShuffleRamUsageRatio gensupport.JSONFloat64 `json:"shuffleRamUsageRatio"`
+		*NoMethod
+	}
+	s1.NoMethod = (*NoMethod)(s)
+	if err := json.Unmarshal(data, &s1); err != nil {
+		return err
+	}
+	s.ShuffleRamUsageRatio = float64(s1.ShuffleRamUsageRatio)
+	return nil
 }
 
 type RangePartitioning struct {
@@ -8650,8 +8716,8 @@ func (s SystemVariables) MarshalJSON() ([]byte, error) {
 }
 
 type Table struct {
-	// BiglakeConfiguration: Optional. Specifies the configuration of a BigLake
-	// managed table.
+	// BiglakeConfiguration: Optional. Specifies the configuration of a BigQuery
+	// table for Apache Iceberg.
 	BiglakeConfiguration *BigLakeConfiguration `json:"biglakeConfiguration,omitempty"`
 	// CloneDefinition: Output only. Contains information about the clone. This
 	// value is set via the clone operation.
@@ -10715,15 +10781,15 @@ func (c *DatasetsGetCall) AccessPolicyVersion(accessPolicyVersion int64) *Datase
 // Possible values:
 //
 //	"DATASET_VIEW_UNSPECIFIED" - The default value. Default to the FULL view.
-//	"METADATA" - Includes metadata information for the dataset, such as
+//	"METADATA" - Updates metadata information for the dataset, such as
 //
-// location, etag, lastModifiedTime, etc.
+// friendlyName, description, labels, etc.
 //
-//	"ACL" - Includes ACL information for the dataset, which defines dataset
+//	"ACL" - Updates ACL information for the dataset, which defines dataset
 //
 // access for one or more entities.
 //
-//	"FULL" - Includes both dataset metadata and ACL information.
+//	"FULL" - Updates both dataset metadata and ACL information.
 func (c *DatasetsGetCall) DatasetView(datasetView string) *DatasetsGetCall {
 	c.urlParams_.Set("datasetView", datasetView)
 	return c
@@ -11151,6 +11217,27 @@ func (c *DatasetsPatchCall) AccessPolicyVersion(accessPolicyVersion int64) *Data
 	return c
 }
 
+// UpdateMode sets the optional parameter "updateMode": Specifies the fields of
+// dataset that update/patch operation is targeting By default, both metadata
+// and ACL fields are updated.
+//
+// Possible values:
+//
+//	"UPDATE_MODE_UNSPECIFIED" - The default value. Default to the UPDATE_FULL.
+//	"UPDATE_METADATA" - Includes metadata information for the dataset, such as
+//
+// friendlyName, description, labels, etc.
+//
+//	"UPDATE_ACL" - Includes ACL information for the dataset, which defines
+//
+// dataset access for one or more entities.
+//
+//	"UPDATE_FULL" - Includes both dataset metadata and ACL information.
+func (c *DatasetsPatchCall) UpdateMode(updateMode string) *DatasetsPatchCall {
+	c.urlParams_.Set("updateMode", updateMode)
+	return c
+}
+
 // Fields allows partial responses to be retrieved. See
 // https://developers.google.com/gdata/docs/2.0/basics#PartialResponse for more
 // details.
@@ -11386,6 +11473,27 @@ func (r *DatasetsService) Update(projectId string, datasetId string, dataset *Da
 // set policy in IAM.
 func (c *DatasetsUpdateCall) AccessPolicyVersion(accessPolicyVersion int64) *DatasetsUpdateCall {
 	c.urlParams_.Set("accessPolicyVersion", fmt.Sprint(accessPolicyVersion))
+	return c
+}
+
+// UpdateMode sets the optional parameter "updateMode": Specifies the fields of
+// dataset that update/patch operation is targeting By default, both metadata
+// and ACL fields are updated.
+//
+// Possible values:
+//
+//	"UPDATE_MODE_UNSPECIFIED" - The default value. Default to the UPDATE_FULL.
+//	"UPDATE_METADATA" - Includes metadata information for the dataset, such as
+//
+// friendlyName, description, labels, etc.
+//
+//	"UPDATE_ACL" - Includes ACL information for the dataset, which defines
+//
+// dataset access for one or more entities.
+//
+//	"UPDATE_FULL" - Includes both dataset metadata and ACL information.
+func (c *DatasetsUpdateCall) UpdateMode(updateMode string) *DatasetsUpdateCall {
+	c.urlParams_.Set("updateMode", updateMode)
 	return c
 }
 

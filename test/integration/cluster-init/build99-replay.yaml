@@ -1,4 +1,10 @@
 api.build99.fake:6443:
+  /api:
+  - request:
+      method: GET
+    response:
+      body: eyJraW5kIjoiQVBJVmVyc2lvbnMiLCJhcGlWZXJzaW9uIjoidjEiLCJ2ZXJzaW9ucyI6WyJ2MSJdLCJzZXJ2ZXJBZGRyZXNzQnlDbGllbnRDSURScyI6W3siY2xpZW50Q0lEUiI6IjAuMC4wLjAvMCIsInNlcnZlckFkZHJlc3MiOiJhcGkuYnVpbGQ5OS5mYWtlOjY0NDMifV19
+      status: 200
   /api/v1:
   - request:
       method: GET
@@ -22,6 +28,12 @@ api.build99.fake:6443:
       method: GET
     response:
       body: eyJhcGlWZXJzaW9uIjoidjEiLCJkYXRhIjp7ImF3c19hY2Nlc3Nfa2V5X2lkIjoiWm1GclpRPT0iLCJhd3Nfc2VjcmV0X2FjY2Vzc19rZXkiOiJabUZyWlE9PSJ9LCJraW5kIjoiU2VjcmV0IiwibWV0YWRhdGEiOnsibmFtZSI6ImF3cy1jcmVkcyIsIm5hbWVzcGFjZSI6Imt1YmUtc3lzdGVtIn0sInR5cGUiOiJPcGFxdWUifQ==
+      status: 200
+  /apis:
+  - request:
+      method: GET
+    response:
+      body: eyJraW5kIjoiQVBJR3JvdXBMaXN0IiwiYXBpVmVyc2lvbiI6InYxIiwiZ3JvdXBzIjpbeyJuYW1lIjoiY29uZmlnLm9wZW5zaGlmdC5pbyIsInZlcnNpb25zIjpbeyJncm91cFZlcnNpb24iOiJjb25maWcub3BlbnNoaWZ0LmlvL3YxIiwidmVyc2lvbiI6InYxIn1dLCJwcmVmZXJyZWRWZXJzaW9uIjp7Imdyb3VwVmVyc2lvbiI6ImNvbmZpZy5vcGVuc2hpZnQuaW8vdjEiLCJ2ZXJzaW9uIjoidjEifX0seyJuYW1lIjoiaW1hZ2Uub3BlbnNoaWZ0LmlvIiwidmVyc2lvbnMiOlt7Imdyb3VwVmVyc2lvbiI6ImltYWdlLm9wZW5zaGlmdC5pby92MSIsInZlcnNpb24iOiJ2MSJ9XSwicHJlZmVycmVkVmVyc2lvbiI6eyJncm91cFZlcnNpb24iOiJpbWFnZS5vcGVuc2hpZnQuaW8vdjEiLCJ2ZXJzaW9uIjoidjEifX0seyJuYW1lIjoiaW1hZ2VyZWdpc3RyeS5vcGVyYXRvci5vcGVuc2hpZnQuaW8iLCJ2ZXJzaW9ucyI6W3siZ3JvdXBWZXJzaW9uIjoiaW1hZ2VyZWdpc3RyeS5vcGVyYXRvci5vcGVuc2hpZnQuaW8vdjEiLCJ2ZXJzaW9uIjoidjEifV0sInByZWZlcnJlZFZlcnNpb24iOnsiZ3JvdXBWZXJzaW9uIjoiaW1hZ2VyZWdpc3RyeS5vcGVyYXRvci5vcGVuc2hpZnQuaW8vdjEiLCJ2ZXJzaW9uIjoidjEifX0seyJuYW1lIjoicm91dGUub3BlbnNoaWZ0LmlvIiwidmVyc2lvbnMiOlt7Imdyb3VwVmVyc2lvbiI6InJvdXRlLm9wZW5zaGlmdC5pby92MSIsInZlcnNpb24iOiJ2MSJ9XSwicHJlZmVycmVkVmVyc2lvbiI6eyJncm91cFZlcnNpb24iOiJyb3V0ZS5vcGVuc2hpZnQuaW8vdjEiLCJ2ZXJzaW9uIjoidjEifX1dfQ==
       status: 200
   /apis/config.openshift.io/v1:
   - request:

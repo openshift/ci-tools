@@ -16,12 +16,11 @@ import (
 )
 
 const (
-	githubOrg      = "kubernetes"
-	githubRepo     = "test-infra"
-	githubLogin    = "openshift-bot"
-	githubTeam     = "openshift/test-platform"
-	matchTitle     = "Update OpenShift testgrid definitions by auto-testgrid-generator job"
-	upstreamBranch = "main"
+	githubOrg   = "kubernetes"
+	githubRepo  = "test-infra"
+	githubLogin = "openshift-bot"
+	githubTeam  = "openshift/test-platform"
+	matchTitle  = "Update OpenShift testgrid definitions by auto-testgrid-generator job"
 )
 
 type options struct {
@@ -49,10 +48,10 @@ func parseOptions() options {
 	fs.StringVar(&o.prowJobsDir, "prow-jobs-dir", "", "The directory where prow-job configs are stored")
 	fs.StringVar(&o.allowList, "allow-list", "", "File containing release-type information to override the defaults")
 	fs.StringVar(&o.githubOrg, "github-org", githubOrg, "The github org to use for testing with a dummy repository.")
-	fs.StringVar(&o.upstreamBranch, "upstream-branch", upstreamBranch, "The repository branch name where the PR will be created.")
+	fs.StringVar(&o.upstreamBranch, "upstream-branch", "master", "The repository branch name where the PR will be created.")
 
 	o.GitAuthorOptions.AddFlags(fs)
-	o.PRCreationOptions.GitHubOptions.AddFlags(fs)
+	o.PRCreationOptions.AddFlags(fs)
 	if err := fs.Parse(os.Args[1:]); err != nil {
 		logrus.WithError(err).Errorf("cannot parse args: '%s'", os.Args[1:])
 	}
@@ -60,10 +59,7 @@ func parseOptions() options {
 }
 
 func validateOptions(o options) error {
-	if err := o.GitAuthorOptions.Validate(); err != nil {
-		return err
-	}
-	return o.GitHubOptions.Validate(false)
+	return o.GitAuthorOptions.Validate()
 }
 
 func main() {

@@ -18,6 +18,7 @@ import (
 
 	secretmanager "cloud.google.com/go/secretmanager/apiv1"
 	"github.com/sirupsen/logrus"
+	"google.golang.org/api/option"
 
 	coreapi "k8s.io/api/core/v1"
 	"k8s.io/apimachinery/pkg/api/equality"
@@ -80,8 +81,9 @@ type options struct {
 	vaultConfig     secretbootstrap.Config
 	generatorConfig secretgenerator.Config
 
-	gsmConfig        api.GSMConfig
-	gsmProjectConfig gsm.Config
+	gsmConfig          api.GSMConfig
+	gsmProjectConfig   gsm.Config
+	gsmCredentialsFile string
 
 	allowUnused flagutil.Strings
 
@@ -103,11 +105,15 @@ func parseOptions(censor *secrets.DynamicCensor) (options, error) {
 	fs.BoolVar(&o.validateItemsUsage, "validate-bitwarden-items-usage", false, fmt.Sprintf("If set, the tool only validates if all fields that exist in Vault and were last modified before %d days ago are being used in the given config.", allowUnusedDays))
 	fs.BoolVar(&o.dryRun, "dry-run", true, "Whether to actually create the secrets with oc command")
 	fs.BoolVar(&o.confirm, "confirm", true, "Whether to mutate the actual secrets in the targeted clusters")
-	fs.BoolVar(&o.enableGsm, "enable-gsm", false, "Whether to enable GSM bundles mechanism")
+
 	o.kubernetesOptions.AddFlags(fs)
 	fs.StringVar(&o.vaultConfigPath, "config", "", "Path to the config file to use for this tool.")
 	fs.StringVar(&o.generatorConfigPath, "generator-config", "", "Path to the secret-generator config file.")
+
+	fs.BoolVar(&o.enableGsm, "enable-gsm", false, "Whether to enable GSM bundles mechanism")
 	fs.StringVar(&o.gsmConfigPath, "gsm-config", "", "Path to the Google Secret Manager config file.")
+	fs.StringVar(&o.gsmCredentialsFile, "gsm-credentials-file", "", "Path to Google Secret Manager service account credentials.")
+
 	fs.StringVar(&o.cluster, "cluster", "", "If set, only provision secrets for this cluster")
 	fs.Var(&o.secretNamesRaw, "secret-names", "If set, only provision secrets with the given name. user_secrets_target_clusters in the configuration is ignored. Can be passed multiple times.")
 	fs.BoolVar(&o.force, "force", false, "If true, update the secrets even if existing one differs from Bitwarden items instead of existing with error. Default false.")
@@ -131,8 +137,13 @@ func (o *options) validateOptions() error {
 	if o.vaultConfigPath == "" {
 		errs = append(errs, errors.New("--config is required"))
 	}
-	if o.enableGsm && o.gsmConfigPath == "" {
-		errs = append(errs, errors.New("--gsm-config is required when --enable-gsm is true"))
+	if o.enableGsm {
+		if o.gsmConfigPath == "" {
+			errs = append(errs, errors.New("--gsm-config is required when --enable-gsm is true"))
+		}
+		if o.gsmCredentialsFile == "" {
+			errs = append(errs, errors.New("--gsm-credentials-file is required when --enable-gsm is true"))
+		}
 	}
 	if len(o.allowUnused.Strings()) > 0 && !o.validateItemsUsage {
 		errs = append(errs, errors.New("--bw-allow-unused must be specified with --validate-items-usage"))
@@ -1143,8 +1154,8 @@ func main() {
 	var gsmClient *secretmanager.Client
 	if o.enableGsm && !o.validateOnly {
 		ctx := context.Background()
-		var err error
-		gsmClient, err = secretmanager.NewClient(ctx)
+		opts := []option.ClientOption{option.WithCredentialsFile(o.gsmCredentialsFile)}
+		gsmClient, err := secretmanager.NewClient(ctx, opts...)
 		if err != nil {
 			logrus.WithError(err).Fatal("Failed to create GSM client.")
 		}

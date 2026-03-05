@@ -1169,6 +1169,16 @@ func (o *options) Run() (errs []error) {
 				return []error{fmt.Errorf("failed to create the lease client: %w", err)}
 			}
 			o.metricsAgent.RegisterLeaseClient(o.leaseClient)
+			stopHeartbeating := o.startLeaseHearthbeating()
+			defer func() {
+				close(stopHeartbeating)
+				if l, err := o.leaseClient.ReleaseAll(); err != nil {
+					logrus.WithError(err).Errorf("Failed to release leaked leases (%v)", l)
+				} else if len(l) != 0 {
+					o.metricsAgent.Record(metrics.NewInsightsEvent(metrics.InsightLeaseReleased, metrics.Context{"released_count": len(l)}))
+					logrus.Warnf("Would leak leases: %v", l)
+				}
+			}()
 		}
 		go monitorNamespace(ctx, cancel, o.namespace, client.Namespaces())
 		authClient, err := authclientset.NewForConfig(o.clusterConfig)
@@ -2156,21 +2166,27 @@ func (o *options) initializeLeaseClient() error {
 	if o.leaseClient, err = lease.NewClient(owner, o.leaseServer, username, passwordGetter, 60, o.leaseAcquireTimeout); err != nil {
 		return fmt.Errorf("failed to create the lease client: %w", err)
 	}
+	return nil
+}
+
+func (o *options) startLeaseHearthbeating() chan struct{} {
+	stopChan := make(chan struct{})
 	t := time.NewTicker(30 * time.Second)
 	go func() {
-		for range t.C {
-			if err := o.leaseClient.Heartbeat(); err != nil {
-				logrus.WithError(err).Warn("Failed to update leases.")
+	loop:
+		for {
+			select {
+			case <-t.C:
+				if err := o.leaseClient.Heartbeat(); err != nil {
+					logrus.WithError(err).Warn("Failed to update leases.")
+				}
+			case <-stopChan:
+				t.Stop()
+				break loop
 			}
 		}
-		if l, err := o.leaseClient.ReleaseAll(); err != nil {
-			logrus.WithError(err).Errorf("Failed to release leaked leases (%v)", l)
-		} else if len(l) != 0 {
-			o.metricsAgent.Record(metrics.NewInsightsEvent(metrics.InsightLeaseReleased, metrics.Context{"released_count": len(l)}))
-			logrus.Warnf("Would leak leases: %v", l)
-		}
 	}()
-	return nil
+	return stopChan
 }
 
 // eventJobDescription returns a string representing the pull requests and authors description, to be used in events.

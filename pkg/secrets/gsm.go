@@ -25,11 +25,7 @@ type gsmSyncDecorator struct {
 
 func NewGSMSyncDecorator(wrappedVaultClient Client, gcpProjectConfig gsm.Config, credentialsFile string) (Client, error) {
 	ctx := context.Background()
-
-	var opts []option.ClientOption
-	if credentialsFile != "" {
-		opts = append(opts, option.WithCredentialsFile(credentialsFile))
-	}
+	opts := []option.ClientOption{option.WithCredentialsFile(credentialsFile)}
 
 	gsmClient, err := secretmanager.NewClient(ctx, opts...)
 	if err != nil {

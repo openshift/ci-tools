@@ -109,7 +109,7 @@ func (o *options) validateOptions() error {
 	if o.validate && o.bootstrapConfigPath == "" {
 		return errors.New("--bootstrap-config is required with --validate")
 	}
-	if o.enableGsmSync && o.gsmCredentialsFile == "" {
+	if o.enableGsmSync && o.gsmCredentialsFile == "" && !o.dryRun && !o.validateOnly {
 		return errors.New("--gsm-credentials-file is required when --enable-gsm-sync is true")
 	}
 	return nil

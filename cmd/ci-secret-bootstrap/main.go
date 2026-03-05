@@ -141,7 +141,7 @@ func (o *options) validateOptions() error {
 		if o.gsmConfigPath == "" {
 			errs = append(errs, errors.New("--gsm-config is required when --enable-gsm is true"))
 		}
-		if o.gsmCredentialsFile == "" {
+		if !o.validateOnly && o.gsmCredentialsFile == "" {
 			errs = append(errs, errors.New("--gsm-credentials-file is required when --enable-gsm is true"))
 		}
 	}

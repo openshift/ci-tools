@@ -1155,7 +1155,7 @@ func main() {
 	if o.enableGsm && !o.validateOnly {
 		ctx := context.Background()
 		opts := []option.ClientOption{option.WithCredentialsFile(o.gsmCredentialsFile)}
-		gsmClient, err := secretmanager.NewClient(ctx, opts...)
+		gsmClient, err = secretmanager.NewClient(ctx, opts...)
 		if err != nil {
 			logrus.WithError(err).Fatal("Failed to create GSM client.")
 		}

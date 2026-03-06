@@ -17,7 +17,7 @@
   "verify":{
     "aggregated-aws-ovn-upgrade-4.10-micro":{
       "upgrade":true,
-      "prowJob":{"name":"periodic-ci-openshift-release-master-ci-4.10-e2e-aws-ovn-upgrade"},
+      "prowJob":{"name":"periodic-ci-openshift-release-main-ci-4.10-e2e-aws-ovn-upgrade"},
       "aggregatedProwJob": {
         "analysisJobCount": 10
       }
@@ -25,7 +25,7 @@
     "aggregated-aws-ovn-upgrade-4.10-minor":{
       "upgrade":true,
       "upgradeFrom": "PreviousMinor",
-      "prowJob":{"name":"periodic-ci-openshift-release-master-ci-4.10-upgrade-from-stable-4.9-e2e-aws-ovn-upgrade"},
+      "prowJob":{"name":"periodic-ci-openshift-release-main-ci-4.10-upgrade-from-stable-4.9-e2e-aws-ovn-upgrade"},
       "aggregatedProwJob": {
         "analysisJobCount": 10
       }

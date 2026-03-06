@@ -5,4 +5,5 @@ presubmits:
     labels:
       ci-operator.openshift.io/cluster: build01
       pj-rehearse.openshift.io/can-be-rehearsed: "true"
+      presets.ci.openshift.io/registry-pull: "true"
     name: pull-ci-organization-repository-branch-unit

@@ -10,4 +10,5 @@ labels:
   capability/intranet: intranet
   capability/rce: rce
   capability/sshd-bastion: sshd-bastion
+  presets.ci.openshift.io/registry-pull: "true"
 name: branch-ci-organization-repository-branch-postsubmit

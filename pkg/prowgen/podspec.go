@@ -11,7 +11,6 @@ import (
 	"k8s.io/apimachinery/pkg/api/resource"
 	kerrors "k8s.io/apimachinery/pkg/util/errors"
 
-	"github.com/openshift/ci-tools/pkg/api"
 	cioperatorapi "github.com/openshift/ci-tools/pkg/api"
 	"github.com/openshift/ci-tools/pkg/steps/utils"
 )
@@ -21,6 +20,7 @@ var defaultPodSpec = corev1.PodSpec{
 	Containers: []corev1.Container{
 		{
 			Args: []string{
+				// /etc/pull-secret mount provided by registry-pull preset in Prow config
 				"--image-import-pull-secret=/etc/pull-secret/.dockerconfigjson",
 				"--gcs-upload-secret=/secrets/gcs/service-account.json",
 				"--report-credentials-file=/etc/report/credentials",
@@ -32,11 +32,6 @@ var defaultPodSpec = corev1.PodSpec{
 				Requests: corev1.ResourceList{"cpu": *resource.NewMilliQuantity(10, resource.DecimalSI)},
 			},
 			VolumeMounts: []corev1.VolumeMount{
-				{
-					Name:      "pull-secret",
-					MountPath: "/etc/pull-secret",
-					ReadOnly:  true,
-				},
 				{
 					Name:      "result-aggregator",
 					MountPath: "/etc/report",
@@ -56,12 +51,6 @@ var defaultPodSpec = corev1.PodSpec{
 		},
 	},
 	Volumes: []corev1.Volume{
-		{
-			Name: "pull-secret",
-			VolumeSource: corev1.VolumeSource{
-				Secret: &corev1.SecretVolumeSource{SecretName: cioperatorapi.RegistryPullCredentialsSecret},
-			},
-		},
 		{
 			Name: "result-aggregator",
 			VolumeSource: corev1.VolumeSource{
@@ -476,7 +465,7 @@ var (
 	}
 
 	smallHTTPServerEnv = corev1.EnvVar{
-		Name: api.CIOperatorHTTPServerIPEnvVarName,
+		Name: cioperatorapi.CIOperatorHTTPServerIPEnvVarName,
 		ValueFrom: &corev1.EnvVarSource{
 			FieldRef: &corev1.ObjectFieldSelector{
 				FieldPath: "status.podIP",

@@ -9,32 +9,39 @@ import (
 func TestLeasesForTest(t *testing.T) {
 	for _, tc := range []struct {
 		name     string
-		tests    MultiStageTestConfigurationLiteral
+		tests    TestStepConfiguration
 		expected []StepLease
 	}{{
 		name:  "no configuration or cluster profile, no lease",
-		tests: MultiStageTestConfigurationLiteral{},
+		tests: TestStepConfiguration{MultiStageTestConfigurationLiteral: &MultiStageTestConfigurationLiteral{}},
 	}, {
 		name: "cluster profile, lease",
-		tests: MultiStageTestConfigurationLiteral{
-			ClusterProfile: ClusterProfileAWS,
+		tests: TestStepConfiguration{
+			MultiStageTestConfigurationLiteral: &MultiStageTestConfigurationLiteral{
+				ClusterProfile: ClusterProfileAWS,
+			},
 		},
 		expected: []StepLease{{
-			ResourceType: "aws-quota-slice",
-			Env:          DefaultLeaseEnv,
-			Count:        1,
+			ResourceType:   "aws-quota-slice",
+			Env:            DefaultLeaseEnv,
+			Count:          1,
+			ClusterProfile: string(ClusterProfileAWS),
 		}},
 	}, {
 		name: "explicit configuration, lease",
-		tests: MultiStageTestConfigurationLiteral{
-			Leases: []StepLease{{ResourceType: "aws-quota-slice"}},
+		tests: TestStepConfiguration{
+			MultiStageTestConfigurationLiteral: &MultiStageTestConfigurationLiteral{
+				Leases: []StepLease{{ResourceType: "aws-quota-slice"}},
+			},
 		},
 		expected: []StepLease{{ResourceType: "aws-quota-slice"}},
 	}, {
 		name: "explicit configuration in step, lease",
-		tests: MultiStageTestConfigurationLiteral{
-			Test: []LiteralTestStep{
-				{Leases: []StepLease{{ResourceType: "aws-quota-slice"}}},
+		tests: TestStepConfiguration{
+			MultiStageTestConfigurationLiteral: &MultiStageTestConfigurationLiteral{
+				Test: []LiteralTestStep{
+					{Leases: []StepLease{{ResourceType: "aws-quota-slice"}}},
+				},
 			},
 		},
 		expected: []StepLease{{ResourceType: "aws-quota-slice"}},

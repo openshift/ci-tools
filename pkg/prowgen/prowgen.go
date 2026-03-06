@@ -232,7 +232,7 @@ func testContainsLease(test *cioperatorapi.TestStepConfiguration) bool {
 		return false
 	}
 
-	return len(cioperatorapi.LeasesForTest(test.MultiStageTestConfigurationLiteral)) > 0
+	return len(cioperatorapi.LeasesForTest(test)) > 0
 }
 
 type generatePresubmitOptions struct {

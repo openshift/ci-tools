@@ -4,12 +4,15 @@ import (
 	"context"
 	"errors"
 	"fmt"
+	"slices"
 	"sort"
 	"strings"
 	"time"
 
 	"github.com/sirupsen/logrus"
 
+	coreapi "k8s.io/api/core/v1"
+	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	utilerrors "k8s.io/apimachinery/pkg/util/errors"
 	ctrlruntimeclient "sigs.k8s.io/controller-runtime/pkg/client"
 
@@ -18,6 +21,7 @@ import (
 	"github.com/openshift/ci-tools/pkg/lease"
 	"github.com/openshift/ci-tools/pkg/metrics"
 	"github.com/openshift/ci-tools/pkg/results"
+	"github.com/openshift/ci-tools/pkg/util"
 )
 
 var NoLeaseClientErr = errors.New("step needs a lease but no lease client provided")
@@ -27,23 +31,32 @@ type stepLease struct {
 	resources []string
 }
 
+type ClusterProfileGetter func(name string) (*api.ClusterProfileDetails, error)
+
 // leaseStep wraps another step and acquires/releases one or more leases.
 type leaseStep struct {
-	client       *lease.Client
-	leases       []stepLease
-	wrapped      api.Step
-	metricsAgent *metrics.MetricsAgent
+	client               *lease.Client
+	leases               []stepLease
+	wrapped              api.Step
+	metricsAgent         *metrics.MetricsAgent
+	kubeClient           ctrlruntimeclient.Client
+	clusterProfileGetter ClusterProfileGetter
 
 	// for sending heartbeats during lease acquisition
-	namespace func() string
+	namespace             func() string
+	clusterProfileSetName string
+	clusterProfileName    string
 }
 
-func LeaseStep(client *lease.Client, leases []api.StepLease, wrapped api.Step, namespace func() string, metricsAgent *metrics.MetricsAgent) api.Step {
+func LeaseStep(client *lease.Client, leases []api.StepLease, wrapped api.Step, namespace func() string, metricsAgent *metrics.MetricsAgent,
+	kubeClient ctrlruntimeclient.Client, clusterProfileGetter ClusterProfileGetter) api.Step {
 	ret := leaseStep{
-		client:       client,
-		wrapped:      wrapped,
-		namespace:    namespace,
-		metricsAgent: metricsAgent,
+		client:               client,
+		wrapped:              wrapped,
+		namespace:            namespace,
+		metricsAgent:         metricsAgent,
+		kubeClient:           kubeClient,
+		clusterProfileGetter: clusterProfileGetter,
 	}
 	for _, l := range leases {
 		ret.leases = append(ret.leases, stepLease{StepLease: l})
@@ -73,28 +86,41 @@ func (s *leaseStep) Provides() api.ParameterMap {
 	if parameters == nil {
 		parameters = api.ParameterMap{}
 	}
+
+	// nolint:unparam
+	parameters[api.ClusterProfileSetEnv] = func() (string, error) { return s.clusterProfileSetName, nil }
+	// nolint:unparam
+	parameters[api.ClusterProfileParam] = func() (string, error) { return s.clusterProfileName, nil }
+
 	for i := range s.leases {
 		l := &s.leases[i]
+		// nolint:unparam
 		parameters[l.Env] = func() (string, error) {
 			if len(l.resources) == 0 {
 				return "", nil
 			}
-			strip := func(r string) string {
-				if i := strings.Index(r, "--"); i == -1 {
-					return r
-				} else {
-					return r[:i]
+
+			values := func(yield func(resource string) bool) {
+				for _, res := range l.resources {
+					val := res
+					parts := strings.Split(res, "--")
+					switch {
+					case len(parts) > 2:
+						val = parts[1]
+					case len(parts) > 1:
+						val = parts[0]
+					}
+
+					if !yield(val) {
+						return
+					}
 				}
 			}
-			builder := strings.Builder{}
-			builder.WriteString(strip(l.resources[0]))
-			for _, r := range l.resources[1:] {
-				builder.WriteString(" ")
-				builder.WriteString(strip(r))
-			}
-			return builder.String(), nil
+
+			return strings.Join(slices.Collect(values), " "), nil
 		}
 	}
+
 	return parameters
 }
 
@@ -117,7 +143,7 @@ func (s *leaseStep) run(ctx context.Context) error {
 	logrus.Infof("Acquiring leases for test %s: %v", s.Name(), types)
 	client := *s.client
 	ctx, cancel := context.WithCancel(ctx)
-	if err := acquireLeases(client, ctx, cancel, s.leases, s.metricsAgent); err != nil {
+	if err := s.acquireLeases(ctx, cancel); err != nil {
 		return err
 	}
 	wrappedErr := results.ForReason("executing_test").ForError(s.wrapped.Run(ctx))
@@ -138,24 +164,15 @@ func aggregateWrappedErrorAndReleaseError(wrappedErr, releaseErr error) error {
 	}
 }
 
-func acquireLeases(
-	client lease.Client,
-	ctx context.Context,
-	cancel context.CancelFunc,
-	leases []stepLease,
-	metricsAgent *metrics.MetricsAgent,
-) error {
+func (s *leaseStep) acquireLeases(ctx context.Context, cancel context.CancelFunc) error {
+	client := *s.client
 	// Sort by resource type to avoid a(n unlikely and temporary) deadlock.
-	var sorted []int
-	for i := range leases {
-		sorted = append(sorted, i)
-	}
-	sort.Slice(sorted, func(i, j int) bool {
-		return leases[i].ResourceType < leases[j].ResourceType
+	sort.Slice(s.leases, func(i, j int) bool {
+		return s.leases[i].ResourceType < s.leases[j].ResourceType
 	})
 	var errs []error
-	for _, i := range sorted {
-		l := &leases[i]
+	for i := range s.leases {
+		l := &s.leases[i]
 		start := time.Now()
 		logrus.Debugf("Acquiring %d lease(s) for %s", l.Count, l.ResourceType)
 		names, err := client.Acquire(l.ResourceType, l.Count, ctx, cancel)
@@ -168,17 +185,26 @@ func acquireLeases(
 		}
 
 		for _, name := range names {
-			metricsAgent.Record(&metrics.LeaseAcquisitionMetricEvent{RawLeaseName: name, AcquisitionDurationSeconds: time.Since(start).Seconds()})
+			s.metricsAgent.Record(&metrics.LeaseAcquisitionMetricEvent{RawLeaseName: name, AcquisitionDurationSeconds: time.Since(start).Seconds()})
 		}
 
 		logrus.Infof("Acquired %d lease(s) for %s: %v", l.Count, l.ResourceType, names)
 		l.resources = names
+
+		if l.ClusterProfile != "" {
+			if err := s.handleClusterProfile(ctx, l, names); err != nil {
+				errs = append(errs, err)
+				break
+			}
+		}
 	}
+
 	if errs != nil {
-		if err := releaseLeases(client, metricsAgent, leases...); err != nil {
+		if err := releaseLeases(client, s.metricsAgent, s.leases...); err != nil {
 			errs = append(errs, fmt.Errorf("failed to release leases after acquisition failure: %w", err))
 		}
 	}
+
 	return utilerrors.NewAggregate(errs)
 }
 
@@ -212,4 +238,68 @@ func printResourceMetrics(client lease.Client, rtype string) {
 		return
 	}
 	logrus.Errorf("error: Failed to acquire resource, current capacity: %d free, %d leased", m.Free, m.Leased)
+}
+
+func clusterProfileFromResources(resources []string) string {
+	for _, resource := range resources {
+		if parts := strings.Split(resource, "--"); len(parts) > 2 {
+			return parts[0]
+		}
+	}
+	return ""
+}
+
+func (s *leaseStep) handleClusterProfile(ctx context.Context, l *stepLease, names []string) error {
+	s.clusterProfileName = l.ClusterProfile
+
+	if clusterProfileName := clusterProfileFromResources(names); clusterProfileName != "" {
+		s.clusterProfileSetName = l.ClusterProfile
+		s.clusterProfileName = clusterProfileName
+	}
+
+	if s.clusterProfileName == "" {
+		return nil
+	}
+
+	cpDetails, err := s.clusterProfileGetter(s.clusterProfileName)
+	if err != nil {
+		return fmt.Errorf("resolve cluster profile %s: %w", s.clusterProfileName, err)
+	}
+
+	if err := s.importClusterProfileSecret(ctx, cpDetails.Secret, l.ClusterProfileTarget); err != nil {
+		return fmt.Errorf("import secret %s for cluster profile %s: %w", cpDetails.Secret, s.clusterProfileName, err)
+	}
+
+	return nil
+}
+
+// importClusterProfileSecret retrieves the cluster profile secret name using config resolver,
+// and gets the secret from the ci namespace
+func (s *leaseStep) importClusterProfileSecret(ctx context.Context, secretName, testName string) error {
+	ciSecret := &coreapi.Secret{}
+	err := s.kubeClient.Get(ctx, ctrlruntimeclient.ObjectKey{Namespace: "ci", Name: secretName}, ciSecret)
+	if err != nil {
+		return fmt.Errorf("failed to get secret '%s' from ci namespace: %w", secretName, err)
+	}
+
+	newSecret := &coreapi.Secret{
+		Data: ciSecret.Data,
+		Type: ciSecret.Type,
+		ObjectMeta: metav1.ObjectMeta{
+			Name:      fmt.Sprintf("%s-cluster-profile", testName),
+			Namespace: s.namespace(),
+		},
+	}
+
+	created, err := util.UpsertImmutableSecret(ctx, s.kubeClient, newSecret)
+	if err != nil {
+		return fmt.Errorf("could not update secret %s: %w", newSecret.Name, err)
+	}
+	if created {
+		logrus.Debugf("Created secret %s", newSecret.Name)
+	} else {
+		logrus.Debugf("Updated secret %s", newSecret.Name)
+	}
+
+	return nil
 }

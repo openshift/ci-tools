@@ -1712,8 +1712,10 @@ func TestFromConfig(t *testing.T) {
 		params:        map[string]string{"CLUSTER_TYPE": "aws"},
 		expectedSteps: []string{"template", "[output-images]", "[images]"},
 		expectedParams: map[string]string{
-			"CLUSTER_TYPE":      "aws",
-			api.DefaultLeaseEnv: "",
+			"CLUSTER_PROFILE":          "",
+			"CLUSTER_PROFILE_SET_NAME": "",
+			"CLUSTER_TYPE":             "aws",
+			api.DefaultLeaseEnv:        "",
 		},
 	}, {
 		name:       "param files",

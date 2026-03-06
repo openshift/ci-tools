@@ -68,6 +68,9 @@ const (
 	CliEnv                = "CLI_DIR"
 	DefaultLeaseEnv       = "LEASED_RESOURCE"
 	DefaultIPPoolLeaseEnv = "IP_POOL_AVAILABLE"
+	ClusterProfileSetEnv  = "CLUSTER_PROFILE_SET_NAME"
+	ClusterProfileParam   = "CLUSTER_PROFILE"
+
 	// SkipCensoringLabel is the label we use to mark a secret as not needing to be censored
 	SkipCensoringLabel = "ci.openshift.io/skip-censoring"
 

@@ -2,6 +2,7 @@ package config
 
 import (
 	"context"
+	"errors"
 	"flag"
 	"fmt"
 	"os"
@@ -90,6 +91,7 @@ func updateConfig(ctx context.Context, log *logrus.Entry, opts *updateConfigOpti
 		return fmt.Errorf("load cluster-installs: %w", err)
 	}
 
+	var errs []error
 	for clusterName, clusterInstall := range clusterInstalls {
 		ctrlClient, kubeClient, config, err := newKubeClients(kubeconfigs, clusterName)
 		clusterInstall.Config = config
@@ -98,12 +100,13 @@ func updateConfig(ctx context.Context, log *logrus.Entry, opts *updateConfigOpti
 			continue
 		}
 		if err := addClusterInstallRuntimeInfo(ctx, clusterInstall, ctrlClient); err != nil {
-			return err
+			errs = append(errs, fmt.Errorf("cluster %s: %w", clusterName, err))
+			continue
 		}
 		if err := runConfigSteps(ctx, log, true, clusterInstall, ctrlClient, kubeClient, opts.releaseBranch); err != nil {
-			return fmt.Errorf("update config for cluster %s: %w", clusterName, err)
+			errs = append(errs, fmt.Errorf("update config for cluster %s: %w", clusterName, err))
 		}
 	}
 
-	return nil
+	return errors.Join(errs...)
 }

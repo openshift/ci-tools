@@ -74,6 +74,28 @@ func TestValidateTests(t *testing.T) {
 			expectedError: errors.New("tests[0].as: should not begin with 'ci-index' because it gets confused with 'ci-index' and `ci-index-...` targets"),
 		},
 		{
+			id: `ReleaseBuildConfiguration{Tests: {As: "e2e-gcp-op-ocl-1of2"}}`,
+			tests: []api.TestStepConfiguration{
+				{
+					As:                         "e2e-gcp-op-ocl-1of2",
+					Commands:                   "commands",
+					ContainerTestConfiguration: &api.ContainerTestConfiguration{From: "ignored"},
+				},
+			},
+			expectedError: errors.New("tests[0].as: 'e2e-gcp-op-ocl-1of2' ends with a shard suffix (e.g. -1of2) which is reserved for infrastructure use and will be stripped from the test name during rehearsals"),
+		},
+		{
+			id: `ReleaseBuildConfiguration{Tests: {As: "e2e-test-3of10"}}`,
+			tests: []api.TestStepConfiguration{
+				{
+					As:                         "e2e-test-3of10",
+					Commands:                   "commands",
+					ContainerTestConfiguration: &api.ContainerTestConfiguration{From: "ignored"},
+				},
+			},
+			expectedError: errors.New("tests[0].as: 'e2e-test-3of10' ends with a shard suffix (e.g. -1of2) which is reserved for infrastructure use and will be stripped from the test name during rehearsals"),
+		},
+		{
 			id: "No test type",
 			tests: []api.TestStepConfiguration{
 				{

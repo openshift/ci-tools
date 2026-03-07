@@ -200,7 +200,7 @@ func (s *projectDirectoryImageBuildStep) Objects() []ctrlruntimeclient.Object {
 
 func (s *projectDirectoryImageBuildStep) ResolveMultiArch() sets.Set[string] {
 	s.architectures.Insert(string(api.NodeArchitectureAMD64))
-	s.architectures.Insert(s.config.AdditionalArchitectures...)
+	s.architectures.Insert(s.config.ArchitectureCapabilities()...)
 
 	// TODO: deprecated when the multi_arch field is removed from the configuration
 	if s.multiArch {

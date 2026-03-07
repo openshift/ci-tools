@@ -190,6 +190,7 @@ func (config ReleaseBuildConfiguration) IsPipelineImage(name string) bool {
 		return true
 	}
 	if strings.HasPrefix(name, string(PipelineImageStreamTagReferenceRoot)) ||
+		strings.HasPrefix(name, string(PipelineImageStreamTagReferenceScratchSource)) ||
 		strings.HasPrefix(name, string(PipelineImageStreamTagReferenceSource)) ||
 		strings.HasPrefix(name, string(PipelineImageStreamTagReferenceBinaries)) ||
 		strings.HasPrefix(name, string(PipelineImageStreamTagReferenceTestBinaries)) ||
@@ -626,6 +627,7 @@ type StepConfiguration struct {
 	InputImageTagStepConfiguration              *InputImageTagStepConfiguration              `json:"input_image_tag_step,omitempty"`
 	PipelineImageCacheStepConfiguration         *PipelineImageCacheStepConfiguration         `json:"pipeline_image_cache_step,omitempty"`
 	SourceStepConfiguration                     *SourceStepConfiguration                     `json:"source_step,omitempty"`
+	SrcAssemblyStepConfiguration                *SrcAssemblyStepConfiguration                `json:"src_assembly_step,omitempty"`
 	BundleSourceStepConfiguration               *BundleSourceStepConfiguration               `json:"bundle_source_step,omitempty"`
 	IndexGeneratorStepConfiguration             *IndexGeneratorStepConfiguration             `json:"index_generator_step,omitempty"`
 	ProjectDirectoryImageBuildStepConfiguration *ProjectDirectoryImageBuildStepConfiguration `json:"project_directory_image_build_step,omitempty"`
@@ -2631,11 +2633,12 @@ type OpenshiftInstallerGCPNestedVirtCustomTestImageClusterTestConfiguration stru
 type PipelineImageStreamTagReference string
 
 const (
-	PipelineImageStreamTagReferenceRoot         PipelineImageStreamTagReference = "root"
-	PipelineImageStreamTagReferenceSource       PipelineImageStreamTagReference = "src"
-	PipelineImageStreamTagReferenceBinaries     PipelineImageStreamTagReference = "bin"
-	PipelineImageStreamTagReferenceTestBinaries PipelineImageStreamTagReference = "test-bin"
-	PipelineImageStreamTagReferenceRPMs         PipelineImageStreamTagReference = "rpms"
+	PipelineImageStreamTagReferenceRoot          PipelineImageStreamTagReference = "root"
+	PipelineImageStreamTagReferenceScratchSource PipelineImageStreamTagReference = "scratch-source"
+	PipelineImageStreamTagReferenceSource        PipelineImageStreamTagReference = "src"
+	PipelineImageStreamTagReferenceBinaries      PipelineImageStreamTagReference = "bin"
+	PipelineImageStreamTagReferenceTestBinaries  PipelineImageStreamTagReference = "test-bin"
+	PipelineImageStreamTagReferenceRPMs          PipelineImageStreamTagReference = "rpms"
 )
 
 // The fields in ReleaseBuildConfiguration which originate each pipeline image
@@ -2651,10 +2654,11 @@ const (
 	ClonerefsPath     string = "/ko-app/clonerefs"
 )
 
-// SourceStepConfiguration describes a step that
-// clones the source repositories required for
-// jobs. If no output tag is provided, the default
-// of `src` is used.
+// SourceStepConfiguration describes a step that clones the source
+// repositories required for jobs into an architecture-independent
+// "scratch-source" image (FROM scratch). This image contains only
+// source files and is built once regardless of how many architectures
+// are targeted.
 type SourceStepConfiguration struct {
 	From PipelineImageStreamTagReference `json:"from"`
 	To   PipelineImageStreamTagReference `json:"to,omitempty"`
@@ -2670,6 +2674,23 @@ type SourceStepConfiguration struct {
 }
 
 func (config SourceStepConfiguration) TargetName() string {
+	return string(config.To)
+}
+
+// SrcAssemblyStepConfiguration describes a step that assembles a "src"
+// image by overlaying the cloned source from the architecture-independent
+// "scratch-source" image onto the architecture-specific build root. This
+// step is multi-arch aware and produces per-architecture "src" images.
+type SrcAssemblyStepConfiguration struct {
+	From              PipelineImageStreamTagReference `json:"from"`
+	ScratchSourceFrom PipelineImageStreamTagReference `json:"scratch_source_from"`
+	To                PipelineImageStreamTagReference `json:"to"`
+
+	// Ref is an optional string linking to the extra_ref in "org.repo" format that this belongs to
+	Ref string `json:"ref,omitempty"`
+}
+
+func (config SrcAssemblyStepConfiguration) TargetName() string {
 	return string(config.To)
 }
 

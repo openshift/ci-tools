@@ -552,6 +552,12 @@ const ciOperatorReferenceYaml = "# The list of base images describe\n" +
 	"        # Ref is an optional string linking to the extra_ref in \"org.repo\" format that this belongs to\n" +
 	"        ref: ' '\n" +
 	"        to: ' '\n" +
+	"      src_assembly_step:\n" +
+	"        from: ' '\n" +
+	"        # Ref is an optional string linking to the extra_ref in \"org.repo\" format that this belongs to\n" +
+	"        ref: ' '\n" +
+	"        scratch_source_from: ' '\n" +
+	"        to: ' '\n" +
 	"      test_step:\n" +
 	"        # AlwaysRun can be set to false to disable running the job on every PR\n" +
 	"        always_run: false\n" +

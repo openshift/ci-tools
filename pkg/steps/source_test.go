@@ -29,7 +29,7 @@ import (
 	testhelper_kube "github.com/openshift/ci-tools/pkg/testhelper/kubernetes"
 )
 
-func TestCreateBuild(t *testing.T) {
+func TestCreateScratchSourceBuild(t *testing.T) {
 	t.Parallel()
 	var testCases = []struct {
 		name            string
@@ -240,13 +240,13 @@ func TestCreateBuild(t *testing.T) {
 			testCase.jobSpec.SetNamespace("namespace")
 			config := api.SourceStepConfiguration{
 				From:              api.PipelineImageStreamTagReferenceRoot,
-				To:                api.PipelineImageStreamTagReferenceSource,
+				To:                api.PipelineImageStreamTagReferenceScratchSource,
 				ClonerefsPullSpec: api.ClonerefsPullSpec,
 				ClonerefsPath:     api.ClonerefsPath,
 			}
 			clonerefsRef := coreapi.ObjectReference{Kind: "DockerImage", Name: config.ClonerefsPullSpec}
 			resources := map[string]api.ResourceRequirements{"*": {Requests: map[string]string{"cpu": "200m"}}}
-			actual := createBuild(config, testCase.jobSpec, clonerefsRef, resources, testCase.cloneAuthConfig, testCase.pullSecret, "imagedigest")
+			actual := createScratchSourceBuild(config, testCase.jobSpec, clonerefsRef, resources, testCase.cloneAuthConfig, testCase.pullSecret)
 			testhelper.CompareWithFixture(t, actual)
 		})
 	}

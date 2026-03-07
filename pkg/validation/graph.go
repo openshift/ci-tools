@@ -22,8 +22,9 @@ func IsValidGraphConfiguration(rawSteps []api.StepConfiguration) error {
 	var containerTests, multiStageTests []*api.TestStepConfiguration
 	names := sets.New[string]()
 	pipelineImages := pipelineImageSet{
-		// `src` can only be validated at runtime
-		api.PipelineImageStreamTagReferenceSource: {},
+		// `scratch-source` and `src` can only be validated at runtime
+		api.PipelineImageStreamTagReferenceScratchSource: {},
+		api.PipelineImageStreamTagReferenceSource:        {},
 	}
 	addName := func(n string) {
 		if names.Has(n) {
@@ -40,6 +41,9 @@ func IsValidGraphConfiguration(rawSteps []api.StepConfiguration) error {
 			addName(c.TargetName())
 			pipelineImages[c.To] = sets.Empty{}
 		} else if c := s.SourceStepConfiguration; c != nil {
+			addName(c.TargetName())
+			pipelineImages[c.To] = sets.Empty{}
+		} else if c := s.SrcAssemblyStepConfiguration; c != nil {
 			addName(c.TargetName())
 			pipelineImages[c.To] = sets.Empty{}
 		} else if c := s.BundleSourceStepConfiguration; c != nil {

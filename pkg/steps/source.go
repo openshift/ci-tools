@@ -20,12 +20,10 @@ import (
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/apimachinery/pkg/runtime"
 	utilerrors "k8s.io/apimachinery/pkg/util/errors"
-	"k8s.io/apimachinery/pkg/util/sets"
 	"k8s.io/apimachinery/pkg/util/wait"
 	ctrlruntimeclient "sigs.k8s.io/controller-runtime/pkg/client"
 	prowv1 "sigs.k8s.io/prow/pkg/apis/prowjobs/v1"
 	"sigs.k8s.io/prow/pkg/clonerefs"
-	"sigs.k8s.io/prow/pkg/pod-utils/decorate"
 
 	buildapi "github.com/openshift/api/build/v1"
 	imagev1 "github.com/openshift/api/image/v1"
@@ -81,12 +79,18 @@ var (
 	JobSpecAnnotation = fmt.Sprintf("%s/%s", CiAnnotationPrefix, "job-spec")
 )
 
-func sourceDockerfile(fromTag api.PipelineImageStreamTagReference, workingDir string, cloneAuthConfig *CloneAuthConfig) string {
+// scratchSourceDockerfile generates a multi-stage Dockerfile that clones
+// the source using the build root and then copies only the source tree
+// into a FROM scratch image. The result is architecture-independent and
+// only needs to be built once. The first stage ("root") is resolved via
+// source.images As substitution, so the last FROM (scratch) is the
+// effective base.
+func scratchSourceDockerfile(cloneAuthConfig *CloneAuthConfig) string {
 	var dockerCommands []string
 	var secretPath string
 
 	dockerCommands = append(dockerCommands, "")
-	dockerCommands = append(dockerCommands, fmt.Sprintf("FROM %s:%s", api.PipelineImageStream, fromTag))
+	dockerCommands = append(dockerCommands, "FROM root AS cloner")
 	dockerCommands = append(dockerCommands, fmt.Sprintf("ADD .%s %s", ClonerefsBinaryPath, ClonerefsBinaryPath))
 
 	if cloneAuthConfig != nil {
@@ -101,16 +105,14 @@ func sourceDockerfile(fromTag api.PipelineImageStreamTagReference, workingDir st
 		}
 	}
 
-	dockerCommands = append(dockerCommands, fmt.Sprintf("RUN umask 0002 && %s && find %s/src -type d -not -perm -0775 | xargs --max-procs 10 --max-args 100 --no-run-if-empty chmod g+xw", ClonerefsBinaryPath, gopath))
-	dockerCommands = append(dockerCommands, fmt.Sprintf("WORKDIR %s/", workingDir))
-	dockerCommands = append(dockerCommands, fmt.Sprintf("ENV GOPATH=%s", gopath))
-
-	// After the clonerefs command, we don't need the secret anymore.
-	// We don't want to let the key keep existing in the image's layer.
+	cloneCmd := fmt.Sprintf("RUN umask 0002 && %s && find %s/src -type d -not -perm -0775 | xargs --max-procs 10 --max-args 100 --no-run-if-empty chmod g+xw", ClonerefsBinaryPath, gopath)
 	if len(secretPath) > 0 {
-		dockerCommands = append(dockerCommands, fmt.Sprintf("RUN rm -f %s", secretPath))
+		cloneCmd += fmt.Sprintf(" && rm -f %s", secretPath)
 	}
+	dockerCommands = append(dockerCommands, cloneCmd)
 
+	dockerCommands = append(dockerCommands, "FROM scratch")
+	dockerCommands = append(dockerCommands, fmt.Sprintf("COPY --from=cloner %s/src %s/src", gopath, gopath))
 	dockerCommands = append(dockerCommands, "")
 
 	return strings.Join(dockerCommands, "\n")
@@ -171,7 +173,6 @@ type sourceStep struct {
 	jobSpec         *api.JobSpec
 	cloneAuthConfig *CloneAuthConfig
 	pullSecret      *corev1.Secret
-	architectures   sets.Set[string]
 	metricsAgent    *metrics.MetricsAgent
 }
 
@@ -188,19 +189,15 @@ func (s *sourceStep) Run(ctx context.Context) error {
 func (s *sourceStep) run(ctx context.Context) error {
 	clonerefsRef := corev1.ObjectReference{Kind: "DockerImage", Name: s.config.ClonerefsPullSpec}
 
-	fromDigest, err := resolvePipelineImageStreamTagReference(ctx, s.client, s.config.From, s.jobSpec)
-	if err != nil {
-		return err
-	}
-	return handleBuilds(
+	return handleBuild(
 		ctx,
 		s.client,
 		s.podClient,
-		*createBuild(s.config, s.jobSpec, clonerefsRef, s.resources, s.cloneAuthConfig, s.pullSecret, fromDigest), s.metricsAgent, newImageBuildOptions(s.architectures.UnsortedList()),
+		*createScratchSourceBuild(s.config, s.jobSpec, clonerefsRef, s.resources, s.cloneAuthConfig, s.pullSecret),
 	)
 }
 
-func createBuild(config api.SourceStepConfiguration, jobSpec *api.JobSpec, clonerefsRef corev1.ObjectReference, resources api.ResourceConfiguration, cloneAuthConfig *CloneAuthConfig, pullSecret *corev1.Secret, fromDigest string) *buildapi.Build {
+func cloneRefs(config api.SourceStepConfiguration, jobSpec *api.JobSpec, cloneAuthConfig *CloneAuthConfig) []prowv1.Refs {
 	var refs []prowv1.Refs
 	if jobSpec.Refs != nil {
 		r := *jobSpec.Refs
@@ -222,12 +219,30 @@ func createBuild(config api.SourceStepConfiguration, jobSpec *api.JobSpec, clone
 			refs = append(refs, r)
 		}
 	}
+	return refs
+}
 
-	dockerfile := sourceDockerfile(config.From, decorate.DetermineWorkDir(gopath, refs), cloneAuthConfig)
+// createScratchSourceBuild creates a build for the architecture-independent
+// "scratch-source" image. It uses a multi-stage Dockerfile: the first stage
+// clones source using the build root, then the final stage (FROM scratch)
+// contains only the source files. The "root" image is resolved via
+// source.images As substitution so the build strategy From is left nil.
+func createScratchSourceBuild(config api.SourceStepConfiguration, jobSpec *api.JobSpec, clonerefsRef corev1.ObjectReference, resources api.ResourceConfiguration, cloneAuthConfig *CloneAuthConfig, pullSecret *corev1.Secret) *buildapi.Build {
+	refs := cloneRefs(config, jobSpec, cloneAuthConfig)
+
+	dockerfile := scratchSourceDockerfile(cloneAuthConfig)
 	buildSource := buildapi.BuildSource{
 		Type:       buildapi.BuildSourceDockerfile,
 		Dockerfile: &dockerfile,
 		Images: []buildapi.ImageSource{
+			{
+				From: corev1.ObjectReference{
+					Kind:      "ImageStreamTag",
+					Namespace: jobSpec.Namespace(),
+					Name:      fmt.Sprintf("%s:%s", api.PipelineImageStream, config.From),
+				},
+				As: []string{"root"},
+			},
 			{
 				From: clonerefsRef,
 				Paths: []buildapi.ImageSourcePath{
@@ -265,11 +280,9 @@ func createBuild(config api.SourceStepConfiguration, jobSpec *api.JobSpec, clone
 			optionsSpec.KeyFiles = append(optionsSpec.KeyFiles, sshPrivateKey)
 		} else {
 			optionsSpec.OauthTokenFile = oauthToken
-
 		}
 	}
 
-	// hack to work around a build subsystem string-escaping bug w.r.t. escaping in env vars
 	for i := range optionsSpec.GitRefs {
 		for j := range optionsSpec.GitRefs[i].Pulls {
 			optionsSpec.GitRefs[i].Pulls[j].Title = ""
@@ -281,7 +294,10 @@ func createBuild(config api.SourceStepConfiguration, jobSpec *api.JobSpec, clone
 		panic(fmt.Errorf("couldn't create JSON spec for clonerefs: %w", err))
 	}
 
-	build := buildFromSource(jobSpec, config.From, config.To, buildSource, fromDigest, "", resources, pullSecret, nil, config.Ref)
+	// Empty fromTag: no strategy.dockerStrategy.from override. The last
+	// FROM (scratch) is used as-is, and the first stage ("root") is
+	// resolved via the As substitution in source.images.
+	build := buildFromSource(jobSpec, "", config.To, buildSource, "", "", resources, pullSecret, nil, config.Ref)
 	build.Spec.CommonSpec.Strategy.DockerStrategy.Env = append(
 		build.Spec.CommonSpec.Strategy.DockerStrategy.Env,
 		corev1.EnvVar{Name: clonerefs.JSONConfigEnvVar, Value: optionsJSON},
@@ -467,30 +483,12 @@ func isBuildPhaseTerminated(phase buildapi.BuildPhase) bool {
 }
 
 type ImageBuildOptions struct {
-	Architectures            []string
-	NeedsMultiArchWorkaround func() bool
+	Architectures []string
 }
 
 func newImageBuildOptions(archs []string) ImageBuildOptions {
 	return ImageBuildOptions{Architectures: archs}
 }
-
-// multiArchRepos are repos that need the sleep workaround for multi-arch builds.
-var multiArchRepos = sets.New[string](
-	"openshift/ci-tools",
-	"openshift/kueue-operator",
-	"openshift/loki",
-	"openshift/multiarch-tuning-operator",
-	"openshift/oadp-must-gather",
-	"openshift/oadp-operator",
-	"openshift/openshift-velero-plugin",
-	"openshift/velero",
-	"openshift/velero-plugin-for-aws",
-	"openshift/velero-plugin-for-gcp",
-	"openshift/velero-plugin-for-legacy-aws",
-	"openshift/velero-plugin-for-microsoft-azure",
-	"openshift-eng/baremetal-qe-infra",
-)
 
 func handleBuilds(ctx context.Context, buildClient BuildClient, podClient kubernetes.PodClient, build buildapi.Build, metricsAgent *metrics.MetricsAgent, opts ...ImageBuildOptions) error {
 	var wg sync.WaitGroup
@@ -498,17 +496,6 @@ func handleBuilds(ctx context.Context, buildClient BuildClient, podClient kubern
 	o := ImageBuildOptions{}
 	if len(opts) > 0 {
 		o = opts[0]
-	}
-
-	// Create closure that checks if this build is for a multi-arch repo
-	needsMultiArchWorkaround := o.NeedsMultiArchWorkaround
-	if needsMultiArchWorkaround == nil {
-		needsMultiArchWorkaround = func() bool {
-			if org, repo := build.Labels[LabelMetadataOrg], build.Labels[LabelMetadataRepo]; org != "" && repo != "" {
-				return multiArchRepos.Has(fmt.Sprintf("%s/%s", org, repo))
-			}
-			return false
-		}
 	}
 
 	builds := constructMultiArchBuilds(build, o.Architectures)
@@ -519,7 +506,7 @@ func handleBuilds(ctx context.Context, buildClient BuildClient, podClient kubern
 		go func(b buildapi.Build) {
 			defer wg.Done()
 			metricsAgent.AddNodeWorkload(ctx, b.Namespace, fmt.Sprintf("%s-build", b.Name), b.Name, podClient)
-			if err := handleBuild(ctx, buildClient, podClient, b, needsMultiArchWorkaround); err != nil {
+			if err := handleBuild(ctx, buildClient, podClient, b); err != nil {
 				errChan <- fmt.Errorf("error occurred handling build %s: %w", b.Name, err)
 			}
 			metricsAgent.RemoveNodeWorkload(b.Name)
@@ -577,17 +564,12 @@ func constructMultiArchBuilds(build buildapi.Build, stepArchitectures []string) 
 	return ret
 }
 
-func handleBuild(ctx context.Context, client BuildClient, podClient kubernetes.PodClient, build buildapi.Build, needsMultiArchWorkaround func() bool) error {
+func handleBuild(ctx context.Context, client BuildClient, podClient kubernetes.PodClient, build buildapi.Build) error {
 	const attempts = 5
 	ns, name := build.Namespace, build.Name
 	var errs []error
 	if err := wait.ExponentialBackoff(wait.Backoff{Duration: time.Minute, Factor: 1.5, Steps: attempts}, func() (bool, error) {
 		var attempt buildapi.Build
-		// TODO: This is a workaround to avoid race condition with multiple ci-operator instances building different architectures
-		// See https://issues.redhat.com/browse/OCPBUGS-65845
-		if needsMultiArchWorkaround != nil && needsMultiArchWorkaround() {
-			time.Sleep(5 * time.Minute)
-		}
 		build.DeepCopyInto(&attempt)
 		if err := client.Create(ctx, &attempt); err == nil {
 			logrus.Infof("Created build %q", name)
@@ -857,14 +839,6 @@ func (s *sourceStep) Objects() []ctrlruntimeclient.Object {
 	return s.client.Objects()
 }
 
-func (s *sourceStep) ResolveMultiArch() sets.Set[string] {
-	return s.architectures
-}
-
-func (s *sourceStep) AddArchitectures(archs []string) {
-	s.architectures.Insert(archs...)
-}
-
 func SourceStep(
 	config api.SourceStepConfiguration,
 	resources api.ResourceConfiguration,
@@ -883,7 +857,6 @@ func SourceStep(
 		jobSpec:         jobSpec,
 		cloneAuthConfig: cloneAuthConfig,
 		pullSecret:      pullSecret,
-		architectures:   sets.New[string](),
 		metricsAgent:    metricsAgent,
 	}
 }

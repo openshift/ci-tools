@@ -217,6 +217,8 @@ func fromConfig(ctx context.Context, cfg *Config) ([]api.Step, []api.Step, error
 			step = steps.PipelineImageCacheStep(*rawStep.PipelineImageCacheStepConfiguration, cfg.CIConfig.Resources, cfg.buildClient, cfg.podClient, cfg.JobSpec, cfg.PullSecret, cfg.MetricsAgent, skippedBinaries)
 		} else if rawStep.SourceStepConfiguration != nil {
 			step = steps.SourceStep(*rawStep.SourceStepConfiguration, cfg.CIConfig.Resources, cfg.buildClient, cfg.podClient, cfg.JobSpec, cfg.CloneAuthConfig, cfg.PullSecret, cfg.MetricsAgent)
+		} else if rawStep.SrcAssemblyStepConfiguration != nil {
+			step = steps.SrcAssemblyStep(*rawStep.SrcAssemblyStepConfiguration, cfg.CIConfig.Resources, cfg.buildClient, cfg.podClient, cfg.JobSpec, cfg.PullSecret, cfg.MetricsAgent)
 		} else if rawStep.BundleSourceStepConfiguration != nil {
 			step = steps.BundleSourceStep(*rawStep.BundleSourceStepConfiguration, cfg.CIConfig, cfg.CIConfig.Resources, cfg.buildClient, cfg.podClient, cfg.JobSpec, cfg.PullSecret)
 		} else if rawStep.IndexGeneratorStepConfiguration != nil {
@@ -1091,13 +1093,12 @@ func getSourceStepsForJobSpec(jobSpec *api.JobSpec, injectedTest bool) []api.Ste
 	var sourceSteps []api.StepConfiguration
 	primaryRef := determinePrimaryRef(jobSpec, injectedTest)
 	if primaryRef != nil {
-		sourceSteps = append(sourceSteps, sourceStepForRef(primaryRef, true))
+		sourceSteps = append(sourceSteps, sourceStepsForRef(primaryRef, true)...)
 	}
 
-	// Any extra_refs for an injected test scenario are secondary refs
 	if injectedTest {
 		for _, ref := range jobSpec.ExtraRefs {
-			sourceSteps = append(sourceSteps, sourceStepForRef(&ref, false))
+			sourceSteps = append(sourceSteps, sourceStepsForRef(&ref, false)...)
 		}
 	}
 
@@ -1119,22 +1120,32 @@ func determinePrimaryRef(jobSpec *api.JobSpec, injectedTest bool) *prowapi.Refs 
 	return nil
 }
 
-func sourceStepForRef(ref *prowapi.Refs, primaryRef bool) api.StepConfiguration {
+func sourceStepsForRef(ref *prowapi.Refs, primaryRef bool) []api.StepConfiguration {
 	orgRepo := ""
 	root := api.PipelineImageStreamTagReferenceRoot
+	scratchSource := api.PipelineImageStreamTagReferenceScratchSource
 	source := api.PipelineImageStreamTagReferenceSource
-	if !primaryRef { // We only care about these suffixes when building extra refs
+	if !primaryRef {
 		orgRepo = fmt.Sprintf("%s.%s", ref.Org, ref.Repo)
 		root = api.PipelineImageStreamTagReference(fmt.Sprintf("%s-%s", api.PipelineImageStreamTagReferenceRoot, orgRepo))
+		scratchSource = api.PipelineImageStreamTagReference(fmt.Sprintf("%s-%s", api.PipelineImageStreamTagReferenceScratchSource, orgRepo))
 		source = api.PipelineImageStreamTagReference(fmt.Sprintf("%s-%s", api.PipelineImageStreamTagReferenceSource, orgRepo))
 	}
-	return api.StepConfiguration{SourceStepConfiguration: &api.SourceStepConfiguration{
-		From:              root,
-		To:                source,
-		ClonerefsPullSpec: api.ClonerefsPullSpec,
-		ClonerefsPath:     api.ClonerefsPath,
-		Ref:               orgRepo,
-	}}
+	return []api.StepConfiguration{
+		{SourceStepConfiguration: &api.SourceStepConfiguration{
+			From:              root,
+			To:                scratchSource,
+			ClonerefsPullSpec: api.ClonerefsPullSpec,
+			ClonerefsPath:     api.ClonerefsPath,
+			Ref:               orgRepo,
+		}},
+		{SrcAssemblyStepConfiguration: &api.SrcAssemblyStepConfiguration{
+			From:              root,
+			ScratchSourceFrom: scratchSource,
+			To:                source,
+			Ref:               orgRepo,
+		}},
+	}
 }
 
 func paramsHasAllParametersAsInput(p api.Parameters, params map[string]func() (string, error)) (map[string]string, bool) {

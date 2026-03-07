@@ -3,6 +3,7 @@ postsubmits:
   - always_run: true
     labels:
       ci-operator.openshift.io/is-promotion: "true"
+      presets.ci.openshift.io/registry-pull: "true"
     max_concurrency: 1
     name: branch-ci-organization-repository-branch-images
     reporter_config:
@@ -16,6 +17,7 @@ presubmits:
   - always_run: false
     labels:
       pj-rehearse.openshift.io/can-be-rehearsed: "true"
+      presets.ci.openshift.io/registry-pull: "true"
     name: pull-ci-organization-repository-branch-images
     reporter_config:
       slack:

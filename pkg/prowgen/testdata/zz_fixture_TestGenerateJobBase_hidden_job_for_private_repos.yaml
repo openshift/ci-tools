@@ -3,4 +3,6 @@ decorate: true
 decoration_config:
   skip_cloning: true
 hidden: true
+labels:
+  presets.ci.openshift.io/registry-pull: "true"
 name: pull-ci-org-repo-branch-test

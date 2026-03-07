@@ -2,4 +2,6 @@ agent: kubernetes
 decorate: true
 decoration_config:
   skip_cloning: true
+labels:
+  presets.ci.openshift.io/registry-pull: "true"
 name: default-ci-org-repo-branch-best-test

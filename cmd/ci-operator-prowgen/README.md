@@ -1,9 +1,30 @@
-prowgen
-=======
+# ci-operator-prowgen
+
+Generates Prow job configurations from ci-operator configuration files.
+
+## Overview
 
 Prowgen is a tool that generates [job configurations](https://docs.prow.k8s.io/docs/jobs/) based on
 [ci-operator configuration](https://docs.ci.openshift.org/architecture/ci-operator/) and its own
 configuration file named `.config.prowgen`.
+
+## Usage
+
+```bash
+ci-operator-prowgen \
+  --from-dir=ci-operator/config \
+  --to-dir=ci-operator/jobs
+```
+
+## Options
+
+- `--from-dir`: Directory containing ci-operator configs
+- `--to-dir`: Directory to write generated Prow job configs
+- `--from-release-repo`: Use release repo as source
+- `--to-release-repo`: Write to release repo
+- `--known-infra-file`: Known infrastructure job files
+
+## Configuration
 
 The contents of `.config.prowgen` will be appended to every job configuration during Prowgen execution:
 

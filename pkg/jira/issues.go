@@ -26,6 +26,12 @@ type IssueFiler interface {
 	FileIssue(issueType, title, description, reporter string, logger *logrus.Entry) (*jira.Issue, error)
 }
 
+// IssueUpdater knows how to update and close Jira issues
+type IssueUpdater interface {
+	AddComment(issueKey, comment string, logger *logrus.Entry) error
+	TransitionIssue(issueKey, transitionName string, logger *logrus.Entry) error
+}
+
 type slackClient interface {
 	GetUserInfo(user string) (*slack.User, error)
 }
@@ -60,6 +66,8 @@ type jiraClient interface {
 type filer struct {
 	slackClient slackClient
 	jiraClient  jiraClient
+	// delegateClient is the underlying jira.Client for operations not covered by jiraClient interface
+	delegateClient *jira.Client
 	// project caches metadata for the Jira project we create
 	// issues under - this will never change so we can read it
 	// once at startup and reuse it forever
@@ -96,6 +104,76 @@ func (f *filer) FileIssue(issueType, title, description, reporter string, logger
 	return issue, jirautil.HandleJiraError(response, err)
 }
 
+// AddWatchers adds watchers to a Jira issue.
+// watchers is a slice of Jira usernames (account IDs) to add as watchers.
+func (f *filer) AddWatchers(issueKey string, watchers []string, logger *logrus.Entry) error {
+	if f.delegateClient == nil {
+		return fmt.Errorf("delegate client not available")
+	}
+	for _, watcher := range watchers {
+		response, err := f.delegateClient.Issue.AddWatcher(issueKey, watcher)
+		if err != nil {
+			if err := jirautil.HandleJiraError(response, err); err != nil {
+				logger.WithError(err).WithField("watcher", watcher).Warn("failed to add watcher to Jira issue")
+				// Continue with other watchers even if one fails
+				continue
+			}
+		}
+		logger.WithField("watcher", watcher).Debug("added watcher to Jira issue")
+	}
+	return nil
+}
+
+// AddComment adds a comment to a Jira issue with private visibility for Red Hat employees only.
+func (f *filer) AddComment(issueKey, comment string, logger *logrus.Entry) error {
+	if f.delegateClient == nil {
+		return fmt.Errorf("delegate client not available")
+	}
+	jiraComment := &jira.Comment{
+		Body: comment,
+		Visibility: jira.CommentVisibility{
+			Type:  "group",
+			Value: "Red Hat Employee",
+		},
+	}
+	_, response, err := f.delegateClient.Issue.AddComment(issueKey, jiraComment)
+	if err != nil {
+		return jirautil.HandleJiraError(response, err)
+	}
+	logger.WithField("issue", issueKey).Debug("added private comment to Jira issue")
+	return nil
+}
+
+// TransitionIssue transitions a Jira issue to a new status.
+func (f *filer) TransitionIssue(issueKey, transitionName string, logger *logrus.Entry) error {
+	if f.delegateClient == nil {
+		return fmt.Errorf("delegate client not available")
+	}
+	transitions, response, err := f.delegateClient.Issue.GetTransitions(issueKey)
+	if err != nil {
+		return jirautil.HandleJiraError(response, err)
+	}
+	var transitionID string
+	for _, t := range transitions {
+		if t.Name == transitionName {
+			transitionID = t.ID
+			break
+		}
+	}
+	if transitionID == "" {
+		return fmt.Errorf("transition %q not found for issue %s", transitionName, issueKey)
+	}
+	response, err = f.delegateClient.Issue.DoTransition(issueKey, transitionID)
+	if err != nil {
+		return jirautil.HandleJiraError(response, err)
+	}
+	logger.WithFields(logrus.Fields{
+		"issue":      issueKey,
+		"transition": transitionName,
+	}).Debug("transitioned Jira issue")
+	return nil
+}
+
 // resolveRequester attempts to get more information about the Slack
 // user that requested the Jira issue, doing everything best-effort
 func (f *filer) resolveRequester(reporter string, logger *logrus.Entry) (string, *jira.User) {
@@ -122,6 +200,8 @@ func (f *filer) resolveRequester(reporter string, logger *logrus.Entry) (string,
 	}
 	return suffix, requester
 }
+
+var _ IssueFiler = (*filer)(nil)
 
 func NewIssueFiler(slackClient *slack.Client, jiraClient *jira.Client) (IssueFiler, error) {
 	filer := &filer{

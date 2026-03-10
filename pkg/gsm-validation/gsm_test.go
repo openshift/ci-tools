@@ -235,9 +235,9 @@ func TestNormalizeName(t *testing.T) {
 			expected: fmt.Sprintf("secret%swith%sdots", DotReplacementString, DotReplacementString),
 		},
 		{
-			name:     "underscores get encoded",
+			name:     "underscores are ok",
 			input:    "secret_with_underscores",
-			expected: fmt.Sprintf("secret%swith%sunderscores", UnderscoreReplacementString, UnderscoreReplacementString),
+			expected: "secret_with_underscores",
 		},
 		{
 			name:     "dot in the middle of name",
@@ -245,9 +245,9 @@ func TestNormalizeName(t *testing.T) {
 			expected: fmt.Sprintf("SECRET%sNAME", DotReplacementString),
 		},
 		{
-			name:     "real world example with underscores and dots",
+			name:     "real world example",
 			input:    "build_farm.cluster-init.build01.config",
-			expected: fmt.Sprintf("build%sfarm%scluster-init%sbuild01%sconfig", UnderscoreReplacementString, DotReplacementString, DotReplacementString, DotReplacementString),
+			expected: fmt.Sprintf("build_farm%scluster-init%sbuild01%sconfig", DotReplacementString, DotReplacementString, DotReplacementString),
 		},
 		{
 			name:     "empty string",
@@ -260,27 +260,7 @@ func TestNormalizeName(t *testing.T) {
 			expected: fmt.Sprintf("secret%s%s%sname", DotReplacementString, DotReplacementString, DotReplacementString),
 		},
 		{
-			name:     "multiple consecutive underscores",
-			input:    "secret___name",
-			expected: fmt.Sprintf("secret%s%s%sname", UnderscoreReplacementString, UnderscoreReplacementString, UnderscoreReplacementString),
-		},
-		{
-			name:     "dots and underscores together",
-			input:    "secret._name",
-			expected: fmt.Sprintf("secret%s%sname", DotReplacementString, UnderscoreReplacementString),
-		},
-		{
-			name:     "name with slash",
-			input:    "secret/path",
-			expected: fmt.Sprintf("secret%spath", SlashReplacementString),
-		},
-		{
-			name:     "backwards compatibility: aws_creds",
-			input:    "aws_creds",
-			expected: fmt.Sprintf("aws%screds", UnderscoreReplacementString),
-		},
-		{
-			name:     ".dockerconfigjson",
+			name:     "dockerconfig",
 			input:    ".dockerconfigjson",
 			expected: fmt.Sprintf("%sdockerconfigjson", DotReplacementString),
 		},
@@ -308,11 +288,6 @@ func TestDenormalizeName(t *testing.T) {
 		expected string
 	}{
 		{
-			name:     "decode underscores",
-			input:    fmt.Sprintf("aws%screds", UnderscoreReplacementString),
-			expected: "aws_creds",
-		},
-		{
 			name:     "decode dots",
 			input:    fmt.Sprintf("%sdockerconfigjson", DotReplacementString),
 			expected: ".dockerconfigjson",
@@ -324,7 +299,7 @@ func TestDenormalizeName(t *testing.T) {
 		},
 		{
 			name:     "decode mixed characters",
-			input:    fmt.Sprintf("build%sfarm%scluster-init%sbuild01%sconfig", UnderscoreReplacementString, DotReplacementString, DotReplacementString, DotReplacementString),
+			input:    fmt.Sprintf("build_farm%scluster-init%sbuild01%sconfig", DotReplacementString, DotReplacementString, DotReplacementString),
 			expected: "build_farm.cluster-init.build01.config",
 		},
 		{
@@ -416,18 +391,33 @@ func TestValidateGroupName(t *testing.T) {
 			expectedValid: false,
 		},
 		{
-			name:          "invalid group: contains underscore",
+			name:          "valid group: contains single underscore",
 			group:         "group_name",
-			expectedValid: false,
+			expectedValid: true,
 		},
 		{
-			name:          "invalid group: underscore in path",
+			name:          "valid group: underscore in path",
 			group:         "group/sub_group",
+			expectedValid: true,
+		},
+		{
+			name:          "valid group: multiple single underscores",
+			group:         "aws_something/my_subgroup",
+			expectedValid: true,
+		},
+		{
+			name:          "invalid group: starts with underscore",
+			group:         "_group",
 			expectedValid: false,
 		},
 		{
-			name:          "invalid group: uppercase letters",
-			group:         "Group/Name",
+			name:          "invalid group: double underscores",
+			group:         "group__name",
+			expectedValid: false,
+		},
+		{
+			name:          "invalid group: double underscores in path",
+			group:         "group/sub__group",
 			expectedValid: false,
 		},
 		{

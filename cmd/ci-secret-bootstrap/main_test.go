@@ -3806,9 +3806,9 @@ func TestConstructSecretsFromGSM(t *testing.T) {
 								Collection: "test",
 								Group:      "group1",
 								Fields: []api.FieldEntry{
-									{Name: "aws--u--creds"},
+									{Name: "aws_creds"},
 									{Name: "--dot--dockerconfigjson"},
-									{Name: "renamed--u--field", As: "custom-name"},
+									{Name: "renamed_field", As: "custom-name"},
 								},
 							},
 						},
@@ -3816,9 +3816,9 @@ func TestConstructSecretsFromGSM(t *testing.T) {
 				},
 			},
 			gsmSecretsPayloads: map[string][]byte{
-				"projects/123456/secrets/test__group1__aws--u--creds/versions/latest":           []byte("aws-value"),
+				"projects/123456/secrets/test__group1__aws_creds/versions/latest":               []byte("aws-value"),
 				"projects/123456/secrets/test__group1__--dot--dockerconfigjson/versions/latest": []byte("docker-value"),
-				"projects/123456/secrets/test__group1__renamed--u--field/versions/latest":       []byte("renamed-value"),
+				"projects/123456/secrets/test__group1__renamed_field/versions/latest":           []byte("renamed secret value"),
 			},
 			expected: map[string][]*coreapi.Secret{
 				"build01": {
@@ -3832,7 +3832,7 @@ func TestConstructSecretsFromGSM(t *testing.T) {
 						Data: map[string][]byte{
 							"aws_creds":         []byte("aws-value"),
 							".dockerconfigjson": []byte("docker-value"),
-							"custom-name":       []byte("renamed-value"),
+							"custom-name":       []byte("renamed secret value"),
 						},
 					},
 				},

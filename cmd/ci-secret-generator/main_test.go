@@ -565,22 +565,22 @@ func TestBuildSecretsToUpdate(t *testing.T) {
 		{
 			name: "GSM sync enabled - names with forbidden characters are normalized in index",
 			config: secretgenerator.Config{{
-				ItemName: "aws/config",
+				ItemName: "aws.config",
 				Fields: []secretgenerator.FieldGenerator{
 					{Name: "config.json", Cmd: "printf 'value1'"},
 					{Name: "auth_token", Cmd: "printf 'value2'"},
 				},
 			}},
 			expectedItems: map[string]ItemUpdateInfo{
-				"aws/config": {
-					ItemName: "aws/config",
+				"aws.config": {
+					ItemName: "aws.config",
 					Fields: []FieldUpdateInfo{
 						{FieldName: "config.json", Payload: []byte("value1")},
 						{FieldName: "auth_token", Payload: []byte("value2")},
 					},
 				},
 			},
-			expectedIndexFields: []string{"aws--slash--config__config--dot--json", "aws--slash--config__auth--u--token"},
+			expectedIndexFields: []string{"aws--dot--config__config--dot--json", "aws--dot--config__auth_token"},
 		},
 		{
 			name: "GSM sync enabled - item with notes",

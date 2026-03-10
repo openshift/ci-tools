@@ -10,12 +10,10 @@ const (
 	CollectionSecretDelimiter = "__"
 
 	// Encoding constants for special characters
-	DotReplacementString        = "--dot--"
-	SlashReplacementString      = "--slash--"
-	UnderscoreReplacementString = "--u--"
+	DotReplacementString = "--dot--"
 
 	CollectionRegex = "^([a-z0-9_-]*[a-z0-9])?$"
-	GroupRegex      = `^[a-z0-9]+([a-z0-9-]*[a-z0-9]+)?(/[a-z0-9]+([a-z0-9-]*[a-z0-9]+)?)*$`
+	GroupRegex      = `^[a-z0-9]+([a-z0-9_-]*[a-z0-9]+)?(/[a-z0-9]+([a-z0-9_-]*[a-z0-9]+)?)*$`
 	SecretNameRegex = "^[A-Za-z0-9_-]+$"
 
 	// MaxCollectionLength is the maximum length of a collection name
@@ -55,9 +53,18 @@ func ValidateGroupName(group string) bool {
 		return false
 	}
 
+	if strings.HasPrefix(group, "_") {
+		return false
+	}
+
 	if strings.HasSuffix(group, "_") {
 		return false
 	}
+
+	if strings.Contains(group, "__") {
+		return false
+	}
+
 	return groupRegexp.MatchString(group)
 }
 
@@ -83,25 +90,17 @@ func ValidateSecretName(secretName string) bool {
 // This is used when migrating from Vault to GSM to handle special characters in field names.
 // Rules:
 //   - `.` → `--dot--` (dots not allowed in GSM secret names)
-//   - `_` → `--u--` (underscores act as delimiters in our 3-level hierarchy)
-//   - `/` → `--slash--` (slashes only allowed in group paths, not field names)
 //
 // Example: "aws_creds" → "aws--u--creds"
 // Example: ".dockerconfigjson" → "--dot--dockerconfigjson"
 func NormalizeName(name string) string {
 	// Encode in specific order to avoid conflicts
-	normalized := strings.ReplaceAll(name, "_", UnderscoreReplacementString)
-	normalized = strings.ReplaceAll(normalized, ".", DotReplacementString)
-	normalized = strings.ReplaceAll(normalized, "/", SlashReplacementString)
-	return normalized
+	return strings.ReplaceAll(name, ".", DotReplacementString)
 }
 
 // DenormalizeName decodes field names back to their original form.
 // This reverses the encoding done by NormalizeName.
 func DenormalizeName(name string) string {
 	// Decode in reverse order
-	denormalized := strings.ReplaceAll(name, SlashReplacementString, "/")
-	denormalized = strings.ReplaceAll(denormalized, DotReplacementString, ".")
-	denormalized = strings.ReplaceAll(denormalized, UnderscoreReplacementString, "_")
-	return denormalized
+	return strings.ReplaceAll(name, DotReplacementString, ".")
 }

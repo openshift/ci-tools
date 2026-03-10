@@ -78,7 +78,7 @@ func (c *Config) validate() error {
 		}
 		for _, collection := range v.SecretCollections {
 			if !validation.ValidateCollectionName(collection) {
-				return fmt.Errorf("invalid collection name '%s' in the configuration file: must be max %d characters long and start and end with lowercase letters or numbers, with hyphens allowed in the middle", collection, validation.MaxCollectionLength)
+				return fmt.Errorf("invalid collection name '%s' in the configuration file: must be at most %d characters, contain only lowercase letters, numbers, hyphens, and underscores (no double underscores), and end with a lowercase letter or number", collection, validation.MaxCollectionLength)
 			}
 		}
 	}

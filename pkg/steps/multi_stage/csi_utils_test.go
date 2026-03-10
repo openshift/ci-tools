@@ -447,12 +447,6 @@ func TestReplaceForbiddenSymbolsInCredentialName(t *testing.T) {
 			expected:    "some_key-secret",
 			expectError: false,
 		},
-		{
-			name:        "secret with slashes should work",
-			secretName:  fmt.Sprintf("path%sto%ssecret", gsmvalidation.SlashReplacementString, gsmvalidation.SlashReplacementString),
-			expected:    "path/to/secret",
-			expectError: false,
-		},
 		// Invalid cases - forbidden characters that are not allowed
 		{
 			name:        "secret with special characters should fail validation",
@@ -486,7 +480,7 @@ func TestReplaceForbiddenSymbolsInCredentialName(t *testing.T) {
 		},
 		{
 			name:        "secret with multiple invalid characters should fail validation",
-			secretName:  fmt.Sprintf("some%sweird@secret%sname!", gsmvalidation.DotReplacementString, gsmvalidation.SlashReplacementString),
+			secretName:  fmt.Sprintf("some%sweird@secretname!", gsmvalidation.DotReplacementString),
 			expected:    "",
 			expectError: true,
 		},

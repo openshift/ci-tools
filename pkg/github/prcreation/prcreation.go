@@ -172,12 +172,15 @@ func configureGitUser(username string, stdout, stderr io.Writer) error {
 	return nil
 }
 
-func (o *PRCreationOptions) prepareUpsert(localSourceDir, prTitle string, l *logrus.Entry) (*upsertContext, error) {
+func (o *PRCreationOptions) prepareUpsert(localSourceDir, prTitle, sourceBranchTitle string, l *logrus.Entry) (*upsertContext, error) {
 	if err := os.Chdir(localSourceDir); err != nil {
 		return nil, fmt.Errorf("failed to chdir into %s: %w", localSourceDir, err)
 	}
 	if prTitle == "" {
 		return nil, fmt.Errorf("pr title must not be empty")
+	}
+	if sourceBranchTitle == "" {
+		return nil, fmt.Errorf("source branch title must not be empty")
 	}
 
 	changed, err := bumper.HasChanges()
@@ -197,7 +200,7 @@ func (o *PRCreationOptions) prepareUpsert(localSourceDir, prTitle string, l *log
 
 	ctx := &upsertContext{
 		username:         username,
-		sourceBranchName: branchNameFromTitle(prTitle),
+		sourceBranchName: branchNameFromTitle(sourceBranchTitle),
 		stdout:           bumper.HideSecretsWriter{Delegate: os.Stdout, Censor: secret.Censor},
 		stderr:           bumper.HideSecretsWriter{Delegate: os.Stderr, Censor: secret.Censor},
 	}
@@ -211,7 +214,7 @@ func (o *PRCreationOptions) prepareUpsert(localSourceDir, prTitle string, l *log
 // to the fork, and create a cross-repo pull request.
 func (o *PRCreationOptions) upsertWithPAT(localSourceDir, org, repo, branch, prTitle string, prArgs *PrOptions) error {
 	l := logrus.WithFields(logrus.Fields{"org": org, "repo": repo})
-	ctx, err := o.prepareUpsert(localSourceDir, prTitle, l)
+	ctx, err := o.prepareUpsert(localSourceDir, prTitle, prArgs.matchTitle, l)
 	if err != nil {
 		return err
 	}
@@ -267,7 +270,7 @@ func (o *PRCreationOptions) upsertWithPAT(localSourceDir, org, repo, branch, prT
 // avoids forking and requires only App auth — no PAT needed.
 func (o *PRCreationOptions) upsertWithAppAuth(localSourceDir, org, repo, branch, prTitle string, prArgs *PrOptions) error {
 	l := logrus.WithFields(logrus.Fields{"org": org, "repo": repo, "auth": "github-app"})
-	ctx, err := o.prepareUpsert(localSourceDir, prTitle, l)
+	ctx, err := o.prepareUpsert(localSourceDir, prTitle, prArgs.matchTitle, l)
 	if err != nil {
 		return err
 	}

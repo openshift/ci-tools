@@ -1505,6 +1505,7 @@ const (
 	ClusterProfileAWS4                    ClusterProfile = "aws-4"
 	ClusterProfileAWS5                    ClusterProfile = "aws-5"
 	ClusterProfileOpenshiftOrgAWS         ClusterProfile = "openshift-org-aws"
+	ClusterProfileOpenshiftOrgAzure       ClusterProfile = "openshift-org-azure"
 	ClusterProfileGCPVirtualization       ClusterProfile = "gcp-virtualization"
 	ClusterProfileAWSVirtualization       ClusterProfile = "aws-virtualization"
 	ClusterProfileAzureVirtualization     ClusterProfile = "azure-virtualization"
@@ -1571,6 +1572,7 @@ func ClusterProfiles() []ClusterProfile {
 		ClusterProfileAWS4,
 		ClusterProfileAWS5,
 		ClusterProfileOpenshiftOrgAWS,
+		ClusterProfileOpenshiftOrgAzure,
 		ClusterProfileAWSC2SQE,
 		ClusterProfileAWSCPaaS,
 		ClusterProfileAWSCSPIQE,
@@ -1859,6 +1861,7 @@ func (p ClusterProfile) ClusterType() string {
 	case
 		ClusterProfileAzure2,
 		ClusterProfileAzure4,
+		ClusterProfileOpenshiftOrgAzure,
 		ClusterProfileAzureArc,
 		ClusterProfileAzureQE,
 		ClusterProfileAzureObservability,
@@ -2380,6 +2383,8 @@ func (p ClusterProfile) LeaseType() string {
 		return "aws-5-quota-slice"
 	case ClusterProfileOpenshiftOrgAWS:
 		return "openshift-org-aws-quota-slice"
+	case ClusterProfileOpenshiftOrgAzure:
+		return "openshift-org-azure-quota-slice"
 	case ClusterProfileOCIAgent:
 		return "oci-agent-qe-quota-slice"
 	case ClusterProfileOCIAssisted:

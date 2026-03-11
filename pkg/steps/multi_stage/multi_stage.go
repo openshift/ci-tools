@@ -194,6 +194,17 @@ func newMultiStageTestStep(
 	return s
 }
 
+func (s *multiStageTestStep) hasLatestReleaseConfigured() bool {
+	if s.config == nil {
+		return false
+	}
+	if s.config.ReleaseTagConfiguration != nil {
+		return true
+	}
+	_, hasLatest := s.config.Releases[api.LatestReleaseName]
+	return hasLatest
+}
+
 func (s *multiStageTestStep) profileSecretName() string {
 	name := s.name
 	if s.additionalSuffix != "" {
@@ -345,7 +356,7 @@ func (s *multiStageTestStep) Requires() (ret []api.StepLink) {
 			ret = append(ret, api.LinkForImage(imageStream, name))
 		}
 	}
-	if s.profile != "" {
+	if s.profile != "" && s.hasLatestReleaseConfigured() {
 		needsReleasePayload = true
 		for _, env := range envForProfile {
 			if link, ok := utils.LinkForEnv(env); ok {
@@ -452,7 +463,7 @@ func (s *multiStageTestStep) environment() ([]coreapi.EnvVar, error) {
 		}
 	}
 
-	if s.profile != "" {
+	if s.profile != "" && s.hasLatestReleaseConfigured() {
 		for _, e := range envForProfile {
 			val, err := s.params.Get(e)
 			if err != nil {
@@ -460,6 +471,8 @@ func (s *multiStageTestStep) environment() ([]coreapi.EnvVar, error) {
 			}
 			ret = append(ret, coreapi.EnvVar{Name: e, Value: val})
 		}
+	}
+	if s.profile != "" {
 		if s.profile == "aws" { //TODO(sgoeddel): only enabled for aws for now, later this will be configurable
 			val, err := s.params.Get(api.DefaultIPPoolLeaseEnv)
 			if err != nil {

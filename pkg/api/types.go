@@ -1801,7 +1801,6 @@ func (p ClusterProfile) ClusterType() string {
 		ClusterProfileAWSPerfScaleQE,
 		ClusterProfileAWSPerfScaleLRCQE,
 		ClusterProfileAWSRestrictedQE,
-		ClusterProfileAWSEUSC,
 		ClusterProfileAWSServerless,
 		ClusterProfileAWSStackrox,
 		ClusterProfileAWSOutpostQE,
@@ -1854,6 +1853,8 @@ func (p ClusterProfile) ClusterType() string {
 		return "aws-usgov"
 	case ClusterProfileAWSSC2SQE:
 		return "aws-sc2s"
+	case ClusterProfileAWSEUSC:
+		return "aws-eusc"
 	case ClusterProfileAWSSCPQE:
 		return "aws-scp"
 	case ClusterProfileAWSOSDMSP:
@@ -2121,7 +2122,7 @@ func (p ClusterProfile) LeaseType() string {
 	case ClusterProfileAWSRestrictedQE:
 		return "aws-restricted-qe"
 	case ClusterProfileAWSEUSC:
-		return "aws-eusc"
+		return "aws-eusc-quota-slice"
 	case ClusterProfileAWSManagedCSPIQE:
 		return "aws-managed-cspi-qe-quota-slice"
 	case ClusterProfileAWSGovCloudQE:
@@ -2519,7 +2520,7 @@ func GetDefaultClusterProfileSecretName(profile ClusterProfile) string {
 func LeaseTypeFromClusterType(t string) (string, error) {
 	switch t {
 	case
-		"aws", "aws-c2s", "aws-china", "aws-usgov", "aws-sc2s", "aws-osd-msp", "aws-opendatahub", "aws-splat",
+		"aws", "aws-c2s", "aws-china", "aws-usgov", "aws-sc2s", "aws-eusc", "aws-osd-msp", "aws-opendatahub", "aws-splat",
 		"alibaba", "azure-2", "azure4", "azure-arc", "azure-arm64", "azurestack", "azuremag", "equinix-ocp-metal",
 		"gcp", "gcp-arm64", "gcp-opendatahub", "libvirt-ppc64le", "libvirt-ppc64le-s2s", "libvirt-s390x",
 		"libvirt-s390x-1", "libvirt-s390x-2", "libvirt-s390x-amd64", "libvirt-s390x-vpn", "ibmcloud-multi-ppc64le",

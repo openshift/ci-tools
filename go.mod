@@ -2,9 +2,6 @@ module github.com/openshift/ci-tools
 
 go 1.25.5
 
-// Forked version that disables diff trimming
-replace github.com/google/go-cmp => github.com/alvaroaleman/go-cmp v0.5.7-0.20210615160450-f8688cd5aaa0
-
 replace github.com/docker/distribution => github.com/docker/distribution v2.7.1+incompatible
 
 require (

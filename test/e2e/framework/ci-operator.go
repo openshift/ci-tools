@@ -86,6 +86,7 @@ func newCiOperatorCommand(t *T) CiOperatorCommand {
 	})
 	cmd := exec.CommandContext(ctx, "ci-operator",
 		"--input-hash="+strconv.Itoa(rand.Int()), // we need unique namespaces
+		"--pod-pending-timeout=10m",
 		GCSPushCredentialsFlag(t),
 		ManifestToolCredentialsFlag(t),
 		LocalRegistryDNSFlag(t),

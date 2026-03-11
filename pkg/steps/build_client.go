@@ -15,6 +15,7 @@ import (
 
 type BuildClient interface {
 	loggingclient.LoggingClient
+	Client() loggingclient.LoggingClient
 	Logs(namespace, name string, options *buildapi.BuildLogOptions) (io.ReadCloser, error)
 	NodeArchitectures() []string
 	ManifestToolDockerCfg() string
@@ -66,4 +67,8 @@ func (c *buildClient) LocalRegistryDNS() string {
 
 func (c *buildClient) MetricsAgent() *metrics.MetricsAgent {
 	return c.metricsAgent
+}
+
+func (c *buildClient) Client() loggingclient.LoggingClient {
+	return c.LoggingClient
 }

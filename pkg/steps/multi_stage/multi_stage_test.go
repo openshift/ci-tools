@@ -11,6 +11,7 @@ import (
 
 	coreapi "k8s.io/api/core/v1"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
+	"k8s.io/apimachinery/pkg/util/wait"
 	fakectrlruntimeclient "sigs.k8s.io/controller-runtime/pkg/client/fake"
 
 	"github.com/openshift/ci-tools/pkg/api"
@@ -87,7 +88,7 @@ func TestRequires(t *testing.T) {
 				As:                                 "some-e2e",
 				ClusterClaim:                       tc.clusterClaim,
 				MultiStageTestConfigurationLiteral: &tc.steps,
-			}, &tc.config, api.NewDeferredParameters(nil), nil, nil, nil, "node-name", "", nil, false, nil, tc.leaseProxyServerAvailable)
+			}, &tc.config, api.NewDeferredParameters(nil), nil, nil, nil, "node-name", "", nil, false, nil, tc.leaseProxyServerAvailable, wait.Backoff{})
 			ret := step.Requires()
 			if len(ret) == len(tc.req) {
 				matches := true

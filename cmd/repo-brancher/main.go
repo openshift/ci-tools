@@ -25,11 +25,10 @@ import (
 
 type options struct {
 	promotion.FutureOptions
-	gitDir      string
-	username    string
-	tokenPath   string
-	fastForward bool
-	ignore      flagutil.Strings
+	gitDir    string
+	username  string
+	tokenPath string
+	ignore    flagutil.Strings
 }
 
 func (o *options) Validate() error {
@@ -51,7 +50,6 @@ func (o *options) bind(fs *flag.FlagSet) {
 	fs.StringVar(&o.gitDir, "git-dir", "", "Optional dir to do git operations in. If unset, temp dir will be used.")
 	fs.StringVar(&o.username, "username", "", "Username to use when pushing to GitHub.")
 	fs.StringVar(&o.tokenPath, "token-path", "", "Path to token to use when pushing to GitHub.")
-	fs.BoolVar(&o.fastForward, "fast-forward", false, "Attempt to fast-forward future branches if they already exist.")
 	fs.Var(&o.ignore, "ignore", "Ignore a repo or entire org. Format: org or org/repo. Can be passed multiple times.")
 	o.FutureOptions.Bind(fs)
 }

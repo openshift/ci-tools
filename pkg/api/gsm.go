@@ -258,7 +258,8 @@ type bundleKey struct {
 	namespace string
 }
 
-// Validate checks the GSMConfig for internal consistency
+// Validate checks the GSMConfig for internal consistency.
+// Expects a resolved config (resolve() is called automatically during unmarshaling).
 func (c *GSMConfig) Validate() error {
 	var errs []error
 

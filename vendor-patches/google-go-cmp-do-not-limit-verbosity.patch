@@ -1,0 +1,28 @@
+diff --git i/vendor/github.com/google/go-cmp/cmp/report_compare.go w/vendor/github.com/google/go-cmp/cmp/report_compare.go
+index 2050bf6b4..bb81f26e0 100644
+--- i/vendor/github.com/google/go-cmp/cmp/report_compare.go
++++ w/vendor/github.com/google/go-cmp/cmp/report_compare.go
+@@ -67,7 +67,9 @@ func (opts formatOptions) WithDiffMode(d diffMode) formatOptions {
+ }
+ func (opts formatOptions) WithVerbosity(level int) formatOptions {
+ 	opts.VerbosityLevel = level
+-	opts.LimitVerbosity = true
++	// WE PATCH VENDORED CODE
++	// IF YOU SEE THIS AFTER `go mod vendor` PLEASE RUN 'make vendor'
++	opts.LimitVerbosity = false
+ 	return opts
+ }
+ func (opts formatOptions) verbosity() uint {
+diff --git i/vendor/github.com/google/go-cmp/cmp/report_reflect.go w/vendor/github.com/google/go-cmp/cmp/report_reflect.go
+index e39f42284..c51c7a37e 100644
+--- i/vendor/github.com/google/go-cmp/cmp/report_reflect.go
++++ w/vendor/github.com/google/go-cmp/cmp/report_reflect.go
+@@ -364,7 +364,7 @@ func formatMapKey(v reflect.Value, disambiguate bool, ptrs *pointerReferences) s
+ 	opts.AvoidStringer = disambiguate
+ 	opts.QualifiedNames = disambiguate
+ 	opts.VerbosityLevel = maxVerbosityPreset
+-	opts.LimitVerbosity = true
++	opts.LimitVerbosity = false
+ 	s := opts.FormatValue(v, reflect.Map, ptrs).String()
+ 	return strings.TrimSpace(s)
+ }

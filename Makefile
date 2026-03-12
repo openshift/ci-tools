@@ -86,24 +86,27 @@ update-vendor:
 		-v $$(go env GOCACHE):/.cache:Z \
 		-v $$PWD:/go/src/github.com/openshift/ci-tools:Z \
 		-w /go/src/github.com/openshift/ci-tools \
-		-e GO111MODULE=on \
 		-e GOPROXY=https://proxy.golang.org \
 		-e GOCACHE=/tmp/go-build-cache \
-		registry.ci.openshift.org/openshift/release:rhel-9-release-golang-1.23-openshift-4.19 \
-		/bin/bash -c "go mod tidy && go mod vendor"
+		registry.ci.openshift.org/openshift/release:rhel-9-release-golang-1.25-openshift-4.21 \
+		/bin/bash -c "make vendor"
 .PHONY: update-vendor
 
 # Validate vendored code and manifests to ensure formatting.
 #
 # Example:
 #   make validate-vendor
-validate-vendor:
-	go version
-	GO111MODULE=on GOPROXY=https://proxy.golang.org go mod tidy
-	GO111MODULE=on GOPROXY=https://proxy.golang.org go mod vendor
+validate-vendor: vendor
 	git status -s ./vendor/ go.mod go.sum
 	test -z "$$(git status -s ./vendor/ go.mod go.sum | grep -v vendor/modules.txt)"
 .PHONY: validate-vendor
+
+vendor:
+	go version
+	GOPROXY=https://proxy.golang.org go mod tidy
+	GOPROXY=https://proxy.golang.org go mod vendor
+	git apply vendor-patches/*.patch
+.PHONY: vendor
 
 # Use verbosity by default, allow users to opt out
 VERBOSE := $(if $(QUIET),,-v )

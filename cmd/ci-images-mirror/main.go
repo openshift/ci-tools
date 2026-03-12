@@ -238,6 +238,7 @@ func main() {
 	logrusutil.ComponentInit()
 	controllerruntime.SetLogger(logrusr.New(logrus.StandardLogger()))
 	logrus.SetLevel(logrus.TraceLevel)
+	logrus.Infof("%s version %s", version.Name, version.Version)
 	opts := newOpts()
 	if err := opts.validate(); err != nil {
 		logrus.WithError(err).Fatal("Failed to validate options")

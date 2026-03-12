@@ -63,7 +63,9 @@ func (opts formatOptions) WithTypeMode(t typeMode) formatOptions {
 }
 func (opts formatOptions) WithVerbosity(level int) formatOptions {
 	opts.VerbosityLevel = level
-	opts.LimitVerbosity = true
+	// WE PATCH VENDORED CODE
+	// IF YOU SEE THIS AFTER `go mod vendor` PLEASE RUN 'make vendor'
+	opts.LimitVerbosity = false
 	return opts
 }
 func (opts formatOptions) verbosity() uint {

@@ -717,6 +717,10 @@ func (c *fakeBuildClient) LocalRegistryDNS() string {
 
 func (c *fakeBuildClient) MetricsAgent() *metrics.MetricsAgent { return nil }
 
+func (c *fakeBuildClient) Client() loggingclient.LoggingClient {
+	return c.LoggingClient
+}
+
 func Test_constructMultiArchBuilds(t *testing.T) {
 	tests := []struct {
 		name              string

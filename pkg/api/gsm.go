@@ -9,6 +9,7 @@ import (
 	utilerrors "k8s.io/apimachinery/pkg/util/errors"
 	"sigs.k8s.io/yaml"
 
+	gsm "github.com/openshift/ci-tools/pkg/gsm-secrets"
 	gsmvalidation "github.com/openshift/ci-tools/pkg/gsm-validation"
 	"github.com/openshift/ci-tools/pkg/util/gzip"
 )
@@ -89,6 +90,21 @@ func LoadGSMConfigFromFile(file string, config *GSMConfig) error {
 		return fmt.Errorf("couldn't read GSM config file: %w", err)
 	}
 	return yaml.UnmarshalStrict(bytes, config)
+}
+
+// LoadGSMProjectConfigFromFile loads a GSM project configuration from a YAML file
+func LoadGSMProjectConfigFromFile(file string, config *gsm.Config) error {
+	bytes, err := gzip.ReadFileMaybeGZIP(file)
+	if err != nil {
+		return fmt.Errorf("couldn't read GSM project config file: %w", err)
+	}
+	if err := yaml.UnmarshalStrict(bytes, config); err != nil {
+		return err
+	}
+	if strings.TrimSpace(config.ProjectIdString) == "" || strings.TrimSpace(config.ProjectIdNumber) == "" {
+		return fmt.Errorf("GSM project config must define non-empty GCP_PROJECT_ID and GCP_PROJECT_NUMBER")
+	}
+	return nil
 }
 
 func (c *GSMConfig) UnmarshalJSON(d []byte) error {

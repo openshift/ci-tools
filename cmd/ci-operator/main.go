@@ -458,6 +458,8 @@ type options struct {
 	enableSecretsStoreCSIDriver bool
 	gsmConfigPath               string
 	gsmConfig                   api.GSMConfig
+	gsmProjectConfigPath        string
+	gsmProjectConfig            gsm.Config
 	gsmCredentialsFile          string
 
 	metricsAgent *metrics.MetricsAgent
@@ -514,7 +516,8 @@ func bindOptions(flag *flag.FlagSet) *options {
 	flag.StringVar(&opt.impersonateUser, "as", "", "Username to impersonate")
 	flag.BoolVar(&opt.restrictNetworkAccess, "restrict-network-access", false, "Restrict network access to 10.0.0.0/8 (RedHat intranet).")
 	flag.BoolVar(&opt.enableSecretsStoreCSIDriver, "enable-secrets-store-csi-driver", false, "Use Secrets Store CSI driver for accessing multi-stage credentials.")
-	flag.StringVar(&opt.gsmConfigPath, "gsm-config", "", "Path to the gsm config file.")
+	flag.StringVar(&opt.gsmConfigPath, "gsm-config", "", "Path to the gsm secrets config file.")
+	flag.StringVar(&opt.gsmProjectConfigPath, "gsm-project-config", "", "Path to the GSM project config file.")
 	flag.StringVar(&opt.gsmCredentialsFile, "gsm-credentials-file", "", "Path to GCP service account credentials.")
 
 	// flags needed for the configresolver
@@ -769,8 +772,10 @@ func (o *options) Complete() error {
 	handleTargetAdditionalSuffix(o)
 
 	if o.enableSecretsStoreCSIDriver {
-		err := api.LoadGSMConfigFromFile(o.gsmConfigPath, &o.gsmConfig)
-		if err != nil {
+		if err := api.LoadGSMConfigFromFile(o.gsmConfigPath, &o.gsmConfig); err != nil {
+			return err
+		}
+		if err = api.LoadGSMProjectConfigFromFile(o.gsmProjectConfigPath, &o.gsmProjectConfig); err != nil {
 			return err
 		}
 	}
@@ -1063,10 +1068,6 @@ func (o *options) Run() (errs []error) {
 
 	var gsmConfig *multi_stage.GSMConfiguration
 	if o.enableSecretsStoreCSIDriver {
-		gsmProjectConfig, err := gsm.GetConfigFromEnv()
-		if err != nil {
-			return []error{results.ForReason("gsm_config").WithError(err).Errorf("failed to get GSM project config from environment: %v", err)}
-		}
 		var opts []option.ClientOption
 		if o.gsmCredentialsFile != "" {
 			opts = append(opts, option.WithCredentialsFile(o.gsmCredentialsFile))
@@ -1083,7 +1084,7 @@ func (o *options) Run() (errs []error) {
 		gsmConfig = &multi_stage.GSMConfiguration{
 			Config:          &o.gsmConfig,
 			CredentialsFile: o.gsmCredentialsFile,
-			ProjectConfig:   gsmProjectConfig,
+			ProjectConfig:   o.gsmProjectConfig,
 			Client:          gsmClient,
 		}
 	}

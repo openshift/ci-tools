@@ -258,7 +258,7 @@ func replacer(
 			return nil
 		}
 
-		if len(config.Images) == 0 {
+		if len(config.Images.Items) == 0 {
 			return nil
 		}
 
@@ -286,7 +286,7 @@ func replacer(
 			// that we do not have the appropriate permissions.
 			var hasNonEmptyDockerfile bool
 
-			for idx, image := range config.Images {
+			for idx, image := range config.Images.Items {
 				var dockerfile []byte
 				if image.DockerfileLiteral != nil {
 					dockerfile = []byte(*image.DockerfileLiteral)
@@ -310,7 +310,7 @@ func replacer(
 					return fmt.Errorf("failed to apply replacements to Dockerfile in %s/%s@%s: %w", info.Org, info.Repo, info.Branch, err)
 				}
 
-				foundTags, err := ensureReplacement(&config.Images[idx], dockerfile)
+				foundTags, err := ensureReplacement(&config.Images.Items[idx], dockerfile)
 				if err != nil {
 					return fmt.Errorf("failed to ensure replacements in %s/%s@%s: %w", info.Org, info.Repo, info.Branch, err)
 				}
@@ -598,7 +598,7 @@ func pruneReplacements(config *api.ReleaseBuildConfiguration, filter asDirective
 	var prunedImages []api.ProjectDirectoryImageBuildStepConfiguration
 	var errs []error
 
-	for _, image := range config.Images {
+	for _, image := range config.Images.Items {
 		for k, sourceImage := range image.Inputs {
 			var newAs []string
 			for _, sourceImage := range sourceImage.As {
@@ -624,7 +624,7 @@ func pruneReplacements(config *api.ReleaseBuildConfiguration, filter asDirective
 		}
 	}
 
-	config.Images = prunedImages
+	config.Images.Items = prunedImages
 
 	return utilerrors.NewAggregate(errs)
 }
@@ -667,7 +667,7 @@ func pruneUnusedBaseImages(config *api.ReleaseBuildConfiguration, resolvedConfig
 		getTestStepImages(resolvedConfig, &usedBaseImages, &test)
 	}
 
-	for _, image := range resolvedConfig.Images {
+	for _, image := range resolvedConfig.Images.Items {
 		usedBaseImages.Insert(string(image.From))
 		for input := range image.Inputs {
 			usedBaseImages.Insert(input)
@@ -818,7 +818,7 @@ func updateDockerfilesToMatchOCPBuildData(
 		return
 	}
 
-	for idx, image := range config.Images {
+	for idx, image := range config.Images.Items {
 		promotionTarget, ok := promotedTags[string(image.To)]
 		if !ok {
 			continue
@@ -830,10 +830,10 @@ func updateDockerfilesToMatchOCPBuildData(
 			continue
 		}
 		if image.ContextDir != dockerfilePath.contextDir {
-			config.Images[idx].ContextDir = dockerfilePath.contextDir
+			config.Images.Items[idx].ContextDir = dockerfilePath.contextDir
 		}
 		if image.DockerfilePath != dockerfilePath.dockerfile {
-			config.Images[idx].DockerfilePath = dockerfilePath.dockerfile
+			config.Images.Items[idx].DockerfilePath = dockerfilePath.dockerfile
 		}
 	}
 }

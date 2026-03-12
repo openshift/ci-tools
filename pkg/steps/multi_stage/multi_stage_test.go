@@ -50,9 +50,9 @@ func TestRequires(t *testing.T) {
 	}, {
 		name: "step needs images, should have InternalImageLink",
 		config: api.ReleaseBuildConfiguration{
-			Images: []api.ProjectDirectoryImageBuildStepConfiguration{
+			Images: api.ImageConfiguration{Items: []api.ProjectDirectoryImageBuildStepConfiguration{
 				{To: "from-images"},
-			},
+			}},
 		},
 		steps: api.MultiStageTestConfigurationLiteral{
 			Test: []api.LiteralTestStep{{From: "from-images"}},

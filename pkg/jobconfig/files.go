@@ -488,14 +488,17 @@ func mergePresubmits(old, new *prowconfig.Presubmit) prowconfig.Presubmit {
 		return ""
 	}()
 
-	// TODO(muller): Special case images jobs for now. Some repos are marking
-	// images jobs as optional for which we do not have syntax in ci-operator (should we?).
-	// Tolerate manual changes for these jobs for now
+	// For images jobs: if prowgen didn't derive run/skip filters from the ci-operator config
+	// (i.e. the new job has no filters), preserve any manually-set filters from the existing
+	// job file. Once all repos set images_run_if_changed / images_skip_if_only_changed in
+	// their ci-operator config this workaround can be removed.
 	if strings.HasSuffix(merged.Name, "-images") {
-		if old.RunIfChanged != "" || old.SkipIfOnlyChanged != "" {
-			merged.RunIfChanged = old.RunIfChanged
-			merged.SkipIfOnlyChanged = old.SkipIfOnlyChanged
-			merged.AlwaysRun = false
+		if merged.RunIfChanged == "" && merged.SkipIfOnlyChanged == "" {
+			if old.RunIfChanged != "" || old.SkipIfOnlyChanged != "" {
+				merged.RunIfChanged = old.RunIfChanged
+				merged.SkipIfOnlyChanged = old.SkipIfOnlyChanged
+				merged.AlwaysRun = false
+			}
 		}
 	}
 

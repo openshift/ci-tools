@@ -138,9 +138,9 @@ func TestOverlay(t *testing.T) {
 
 func TestBuildsImage(t *testing.T) {
 	conf := ReleaseBuildConfiguration{
-		Images: []ProjectDirectoryImageBuildStepConfiguration{
+		Images: ImageConfiguration{Items: []ProjectDirectoryImageBuildStepConfiguration{
 			{To: "this-image-is-in-the-images-field"},
-		},
+		}},
 	}
 	for _, tc := range []struct {
 		name  string
@@ -175,7 +175,7 @@ func TestIsPipelineImage(t *testing.T) {
 		BinaryBuildCommands:     "make",
 		TestBinaryBuildCommands: "make test-bin",
 		RpmBuildCommands:        "make rpms",
-		Images:                  []ProjectDirectoryImageBuildStepConfiguration{{To: "img"}},
+		Images:                  ImageConfiguration{Items: []ProjectDirectoryImageBuildStepConfiguration{{To: "img"}}},
 	}
 	for _, tc := range []struct {
 		name string

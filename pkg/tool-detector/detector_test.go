@@ -301,14 +301,14 @@ func TestDetector_getAffectedToolsByImageChanges(t *testing.T) {
 		{
 			name: "single image with context_dir change",
 			config: &api.ReleaseBuildConfiguration{
-				Images: []api.ProjectDirectoryImageBuildStepConfiguration{
+				Images: api.ImageConfiguration{Items: []api.ProjectDirectoryImageBuildStepConfiguration{
 					{
 						To: "ci-operator",
 						ProjectDirectoryImageBuildInputs: api.ProjectDirectoryImageBuildInputs{
 							ContextDir: "images/ci-operator",
 						},
 					},
-				},
+				}},
 			},
 			changedFiles: []string{"images/ci-operator/Dockerfile"},
 			expected:     sets.New("ci-operator"),
@@ -316,14 +316,14 @@ func TestDetector_getAffectedToolsByImageChanges(t *testing.T) {
 		{
 			name: "single image with context_dir change - trailing slash",
 			config: &api.ReleaseBuildConfiguration{
-				Images: []api.ProjectDirectoryImageBuildStepConfiguration{
+				Images: api.ImageConfiguration{Items: []api.ProjectDirectoryImageBuildStepConfiguration{
 					{
 						To: "ci-operator",
 						ProjectDirectoryImageBuildInputs: api.ProjectDirectoryImageBuildInputs{
 							ContextDir: "images/ci-operator/",
 						},
 					},
-				},
+				}},
 			},
 			changedFiles: []string{"images/ci-operator/Dockerfile"},
 			expected:     sets.New("ci-operator"),
@@ -331,14 +331,14 @@ func TestDetector_getAffectedToolsByImageChanges(t *testing.T) {
 		{
 			name: "multiple files in same context_dir",
 			config: &api.ReleaseBuildConfiguration{
-				Images: []api.ProjectDirectoryImageBuildStepConfiguration{
+				Images: api.ImageConfiguration{Items: []api.ProjectDirectoryImageBuildStepConfiguration{
 					{
 						To: "ci-operator",
 						ProjectDirectoryImageBuildInputs: api.ProjectDirectoryImageBuildInputs{
 							ContextDir: "images/ci-operator",
 						},
 					},
-				},
+				}},
 			},
 			changedFiles: []string{
 				"images/ci-operator/Dockerfile",
@@ -350,7 +350,7 @@ func TestDetector_getAffectedToolsByImageChanges(t *testing.T) {
 		{
 			name: "multiple images with different context_dirs",
 			config: &api.ReleaseBuildConfiguration{
-				Images: []api.ProjectDirectoryImageBuildStepConfiguration{
+				Images: api.ImageConfiguration{Items: []api.ProjectDirectoryImageBuildStepConfiguration{
 					{
 						To: "ci-operator",
 						ProjectDirectoryImageBuildInputs: api.ProjectDirectoryImageBuildInputs{
@@ -363,7 +363,7 @@ func TestDetector_getAffectedToolsByImageChanges(t *testing.T) {
 							ContextDir: "images/pj-rehearse",
 						},
 					},
-				},
+				}},
 			},
 			changedFiles: []string{
 				"images/ci-operator/Dockerfile",
@@ -374,14 +374,14 @@ func TestDetector_getAffectedToolsByImageChanges(t *testing.T) {
 		{
 			name: "change in different directory",
 			config: &api.ReleaseBuildConfiguration{
-				Images: []api.ProjectDirectoryImageBuildStepConfiguration{
+				Images: api.ImageConfiguration{Items: []api.ProjectDirectoryImageBuildStepConfiguration{
 					{
 						To: "ci-operator",
 						ProjectDirectoryImageBuildInputs: api.ProjectDirectoryImageBuildInputs{
 							ContextDir: "images/ci-operator",
 						},
 					},
-				},
+				}},
 			},
 			changedFiles: []string{"images/other-tool/Dockerfile"},
 			expected:     sets.New[string](),
@@ -389,7 +389,7 @@ func TestDetector_getAffectedToolsByImageChanges(t *testing.T) {
 		{
 			name: "mixed changes - some match, some don't",
 			config: &api.ReleaseBuildConfiguration{
-				Images: []api.ProjectDirectoryImageBuildStepConfiguration{
+				Images: api.ImageConfiguration{Items: []api.ProjectDirectoryImageBuildStepConfiguration{
 					{
 						To: "ci-operator",
 						ProjectDirectoryImageBuildInputs: api.ProjectDirectoryImageBuildInputs{
@@ -402,7 +402,7 @@ func TestDetector_getAffectedToolsByImageChanges(t *testing.T) {
 							ContextDir: "images/pj-rehearse",
 						},
 					},
-				},
+				}},
 			},
 			changedFiles: []string{
 				"images/ci-operator/Dockerfile",
@@ -414,14 +414,14 @@ func TestDetector_getAffectedToolsByImageChanges(t *testing.T) {
 		{
 			name: "image with empty context_dir",
 			config: &api.ReleaseBuildConfiguration{
-				Images: []api.ProjectDirectoryImageBuildStepConfiguration{
+				Images: api.ImageConfiguration{Items: []api.ProjectDirectoryImageBuildStepConfiguration{
 					{
 						To: "ci-operator",
 						ProjectDirectoryImageBuildInputs: api.ProjectDirectoryImageBuildInputs{
 							ContextDir: "",
 						},
 					},
-				},
+				}},
 			},
 			changedFiles: []string{"images/ci-operator/Dockerfile"},
 			expected:     sets.New[string](),
@@ -429,14 +429,14 @@ func TestDetector_getAffectedToolsByImageChanges(t *testing.T) {
 		{
 			name: "no changed files",
 			config: &api.ReleaseBuildConfiguration{
-				Images: []api.ProjectDirectoryImageBuildStepConfiguration{
+				Images: api.ImageConfiguration{Items: []api.ProjectDirectoryImageBuildStepConfiguration{
 					{
 						To: "ci-operator",
 						ProjectDirectoryImageBuildInputs: api.ProjectDirectoryImageBuildInputs{
 							ContextDir: "images/ci-operator",
 						},
 					},
-				},
+				}},
 			},
 			changedFiles: []string{},
 			expected:     sets.New[string](),

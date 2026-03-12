@@ -365,8 +365,8 @@ func ResolveAndMergeConfigsAndInjectTest(configs Getter, resolver Resolver, reso
 				mergedConfig.Releases = config.Releases
 			}
 
-			for i := range config.Images {
-				image := config.Images[i]
+			for i := range config.Images.Items {
+				image := config.Images.Items[i]
 				if image.From != "" {
 					image.From = api.PipelineImageStreamTagReference(fmt.Sprintf("%s-%s", image.From, ref))
 				}
@@ -377,7 +377,7 @@ func ResolveAndMergeConfigsAndInjectTest(configs Getter, resolver Resolver, reso
 				image.Inputs = inputs
 				image.To = api.PipelineImageStreamTagReference(fmt.Sprintf("%s-%s", image.To, ref))
 				image.Ref = ref
-				mergedConfig.Images = append(mergedConfig.Images, image)
+				mergedConfig.Images.Items = append(mergedConfig.Images.Items, image)
 			}
 
 			// Attempt to handle a few simple raw_step types on a best-effort basis

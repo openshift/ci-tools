@@ -1234,7 +1234,7 @@ func (o *options) Run() (errs []error) {
 // determineSkippedImages determines which images can be skipped when
 // build_images_if_affected is enabled and the [images] target is requested.
 func determineSkippedImages(config *api.ReleaseBuildConfiguration, jobSpec *api.JobSpec, targets []string) sets.Set[string] {
-	if config == nil || jobSpec == nil || !config.BuildImagesIfAffected {
+	if config == nil || jobSpec == nil || !config.Images.BuildIfAffected {
 		return nil
 	}
 
@@ -1250,7 +1250,7 @@ func determineSkippedImages(config *api.ReleaseBuildConfiguration, jobSpec *api.
 	}
 
 	skipped := sets.New[string]()
-	for _, img := range config.Images {
+	for _, img := range config.Images.Items {
 		if !affectedTools.Has(string(img.To)) {
 			skipped.Insert(string(img.To))
 		}

@@ -26,7 +26,7 @@ func TestProwJobBaseBuilder(t *testing.T) {
 		name string
 
 		inputs         ciop.InputConfiguration
-		images         []ciop.ProjectDirectoryImageBuildStepConfiguration
+		images         ciop.ImageConfiguration
 		binCommand     string
 		testBinCommand string
 
@@ -131,7 +131,7 @@ func TestProwJobBaseBuilder(t *testing.T) {
 			info: &ProwgenInfo{
 				Metadata: ciop.Metadata{Org: "openshift", Repo: "release", Branch: "main"},
 			},
-			images:         []ciop.ProjectDirectoryImageBuildStepConfiguration{{From: "base", To: "image"}},
+			images:         ciop.ImageConfiguration{Items: []ciop.ProjectDirectoryImageBuildStepConfiguration{{From: "base", To: "image"}}},
 			prefix:         "default",
 			podSpecBuilder: newFakePodSpecBuilder(),
 		},

@@ -102,7 +102,7 @@ func (o *Operator) callback(c *api.ReleaseBuildConfiguration, i *config.Info) er
 	for _, target := range api.PromotionTargets(c.PromotionConfiguration) {
 		excludedImages := sets.New[string](target.ExcludedImages...)
 
-		for _, image := range c.Images {
+		for _, image := range c.Images.Items {
 			if !excludedImages.Has(string(image.To)) {
 				multiArch := false
 				if len(image.AdditionalArchitectures) > 0 {

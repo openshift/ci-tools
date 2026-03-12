@@ -10,8 +10,9 @@ build_root:
     tag: golang-1.10
 canonical_go_repository: whoa.com/super/duper
 images:
-- from: base
-  to: test-image
+  items:
+  - from: base
+    to: test-image
 promotion:
   to:
   - name: other

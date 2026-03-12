@@ -677,7 +677,7 @@ func generateCIOperatorConfig(config initConfig, originConfig *api.PromotionConf
 	}
 
 	generated.Configuration.BaseImages = config.BaseImages
-	generated.Configuration.Images = config.Images
+	generated.Configuration.Images.Items = config.Images
 
 	if config.CanonicalGoRepository != "" {
 		generated.Configuration.CanonicalGoRepository = &config.CanonicalGoRepository

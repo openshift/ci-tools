@@ -9,10 +9,11 @@ build_root:
     namespace: openshift
     tag: golang-1.10
 images:
-- from: base
-  to: test-image
-- from: base
-  to: change-should-cause-rehearsal-of-all-jobs-that-use-this-cfg
+  items:
+  - from: base
+    to: test-image
+  - from: base
+    to: change-should-cause-rehearsal-of-all-jobs-that-use-this-cfg
 resources:
   '*':
     limits:

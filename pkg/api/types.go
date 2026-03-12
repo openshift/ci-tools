@@ -107,12 +107,7 @@ type ReleaseBuildConfiguration struct {
 	// baseImage the project as part of the release
 	// process. The name of each image is its "to" value
 	// and can be used to build only a specific image.
-	Images []ProjectDirectoryImageBuildStepConfiguration `json:"images,omitempty"`
-
-	// BuildImagesIfAffected means images are only built if their corresponding cmd tools are affected by code changes.
-	// When enabled, the tool-detector package analyzes git changes to determine which images should be built.
-	// The image name (To field) should match the cmd tool name for this to work correctly.
-	BuildImagesIfAffected bool `json:"build_images_if_affected,omitempty"`
+	Images ImageConfiguration `json:"images,omitzero"`
 
 	// Operator describes the operator bundle(s) that is built by the project
 	Operator *OperatorStepConfiguration `json:"operator,omitempty"`
@@ -167,7 +162,7 @@ type Metadata struct {
 
 // BuildsImage checks if an image is built by the release configuration.
 func (config ReleaseBuildConfiguration) BuildsImage(name string) bool {
-	for _, i := range config.Images {
+	for _, i := range config.Images.Items {
 		if string(i.To) == name {
 			return true
 		}
@@ -2790,6 +2785,34 @@ func (config ReleaseBuildConfiguration) IsBundleImage(imageName string) bool {
 
 func BundleName(index int) string {
 	return fmt.Sprintf("%s%d", BundlePrefix, index)
+}
+
+// ImageConfiguration holds the configuration for building images
+// along with the run conditions for the auto-generated images job.
+type ImageConfiguration struct {
+	// RunIfChanged is a regex that will cause the auto-generated images
+	// presubmit and postsubmit to only run if a file matching the regex is changed.
+	RunIfChanged string `json:"run_if_changed,omitempty"`
+
+	// SkipIfOnlyChanged is a regex that will cause the auto-generated images
+	// presubmit and postsubmit to be skipped if all changed files match the regex.
+	SkipIfOnlyChanged string `json:"skip_if_only_changed,omitempty"`
+
+	// PipelineRunIfChanged is a regex that will cause the auto-generated images
+	// presubmit to only run in the second stage of the pipeline if a matching file is changed.
+	PipelineRunIfChanged string `json:"pipeline_run_if_changed,omitempty"`
+
+	// PipelineSkipIfOnlyChanged is a regex that will cause the auto-generated images
+	// presubmit to be skipped in the second stage of the pipeline if all changed files match the regex.
+	PipelineSkipIfOnlyChanged string `json:"pipeline_skip_if_only_changed,omitempty"`
+
+	// BuildIfAffected means images are only built if their corresponding cmd tools are affected by code changes.
+	// When enabled, the tool-detector package analyzes git changes to determine which images should be built.
+	// The image name (To field) should match the cmd tool name for this to work correctly.
+	BuildIfAffected bool `json:"build_if_affected,omitempty"`
+
+	// Items is the list of images to build.
+	Items []ProjectDirectoryImageBuildStepConfiguration `json:"items,omitempty"`
 }
 
 // ProjectDirectoryImageBuildStepConfiguration describes an

@@ -448,66 +448,67 @@ base_images:
 binary_build_commands: make build WHAT='cmd/hypershift vendor/k8s.io/kubernetes/cmd/hyperkube'
 canonical_go_repository: github.com/openshift/origin
 images:
-- dockerfile_path: images/template-service-broker/Dockerfile.rhel
-  from: base
-  to: template-service-broker
-  inputs:
-    bin:
-      as:
-      - builder
-- dockerfile_path: images/cli/Dockerfile.rhel
-  from: base
-  to: cli
-  inputs:
-    bin:
-      as:
-      - builder
-- dockerfile_path: images/hypershift/Dockerfile.rhel
-  from: base
-  to: hypershift
-  inputs:
-    bin:
-      as:
-      - builder
-- dockerfile_path: images/hyperkube/Dockerfile.rhel
-  from: base
-  to: hyperkube
-  inputs:
-    bin:
-      as:
-      - builder
-- dockerfile_path: images/tests/Dockerfile.rhel
-  from: cli
-  to: tests
-  inputs:
-    bin:
-      as:
-      - builder
-- context_dir: images/deployer/
-  dockerfile_path: Dockerfile.rhel
-  from: cli
-  to: deployer
-- context_dir: images/recycler/
-  dockerfile_path: Dockerfile.rhel
-  from: cli
-  to: recycler
-- dockerfile_path: images/sdn/Dockerfile.rhel
-  from: base
-  to: node # TODO: SDN
-  inputs:
-    bin:
-      as:
-      - builder
-- context_dir: images/os/
-  from: base
-  inputs:
-    base-machine-with-rpms:
-      as:
-      - builder
-    machine-os-content-base:
-      as:
-      -  registry.svc.ci.openshift.org/openshift/origin-v4.0:machine-os-content
-  to: machine-os-content
+  items:
+  - dockerfile_path: images/template-service-broker/Dockerfile.rhel
+    from: base
+    to: template-service-broker
+    inputs:
+      bin:
+        as:
+        - builder
+  - dockerfile_path: images/cli/Dockerfile.rhel
+    from: base
+    to: cli
+    inputs:
+      bin:
+        as:
+        - builder
+  - dockerfile_path: images/hypershift/Dockerfile.rhel
+    from: base
+    to: hypershift
+    inputs:
+      bin:
+        as:
+        - builder
+  - dockerfile_path: images/hyperkube/Dockerfile.rhel
+    from: base
+    to: hyperkube
+    inputs:
+      bin:
+        as:
+        - builder
+  - dockerfile_path: images/tests/Dockerfile.rhel
+    from: cli
+    to: tests
+    inputs:
+      bin:
+        as:
+        - builder
+  - context_dir: images/deployer/
+    dockerfile_path: Dockerfile.rhel
+    from: cli
+    to: deployer
+  - context_dir: images/recycler/
+    dockerfile_path: Dockerfile.rhel
+    from: cli
+    to: recycler
+  - dockerfile_path: images/sdn/Dockerfile.rhel
+    from: base
+    to: node # TODO: SDN
+    inputs:
+      bin:
+        as:
+        - builder
+  - context_dir: images/os/
+    from: base
+    inputs:
+      base-machine-with-rpms:
+        as:
+        - builder
+      machine-os-content-base:
+        as:
+        -  registry.svc.ci.openshift.org/openshift/origin-v4.0:machine-os-content
+    to: machine-os-content
 raw_steps:
 - pipeline_image_cache_step:
     commands: mkdir -p _output/local/releases; touch _output/local/releases/CHECKSUM;
@@ -697,7 +698,7 @@ var parsedConfig = &api.ReleaseBuildConfiguration{
 	RpmBuildCommands:        "make build-rpms",
 	RpmBuildLocation:        "",
 	CanonicalGoRepository:   pointer.StringPtr("github.com/openshift/origin"),
-	Images: []api.ProjectDirectoryImageBuildStepConfiguration{{
+	Images: api.ImageConfiguration{Items: []api.ProjectDirectoryImageBuildStepConfiguration{{
 		From: "base",
 		To:   "template-service-broker",
 		ProjectDirectoryImageBuildInputs: api.ProjectDirectoryImageBuildInputs{
@@ -763,7 +764,7 @@ var parsedConfig = &api.ReleaseBuildConfiguration{
 				"machine-os-content-base": {As: []string{"registry.svc.ci.openshift.org/openshift/origin-v4.0:machine-os-content"}},
 			},
 		},
-	}},
+	}}},
 	RawSteps: []api.StepConfiguration{{
 		PipelineImageCacheStepConfiguration: &api.PipelineImageCacheStepConfiguration{
 			From:     "bin",

@@ -12,9 +12,10 @@ images:
   items:
   - from: base
     to: test-image
+  pipeline_run_if_changed: ^src/
 promotion:
   to:
-  - name: "4.5"
+  - name: other
     namespace: ocp
 resources:
   '*':
@@ -31,6 +32,7 @@ tests:
   container:
     from: src
 zz_generated_metadata:
-  branch: official
-  org: foo
-  repo: barry-white
+  branch: master
+  org: super
+  repo: duper
+  variant: images-pipeline-changed

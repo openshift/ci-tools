@@ -83,9 +83,9 @@ func TestWithPresubmitFrom(t *testing.T) {
 		},
 		{
 			name:         "images from base is kept",
-			base:         &ReleaseBuildConfiguration{Images: []ProjectDirectoryImageBuildStepConfiguration{baseImage}},
-			source:       &ReleaseBuildConfiguration{Images: []ProjectDirectoryImageBuildStepConfiguration{sourceImage}},
-			expected:     &ReleaseBuildConfiguration{Images: []ProjectDirectoryImageBuildStepConfiguration{baseImage}},
+			base:         &ReleaseBuildConfiguration{Images: ImageConfiguration{Items: []ProjectDirectoryImageBuildStepConfiguration{baseImage}}},
+			source:       &ReleaseBuildConfiguration{Images: ImageConfiguration{Items: []ProjectDirectoryImageBuildStepConfiguration{sourceImage}}},
+			expected:     &ReleaseBuildConfiguration{Images: ImageConfiguration{Items: []ProjectDirectoryImageBuildStepConfiguration{baseImage}}},
 			defaultTests: true,
 		},
 		{

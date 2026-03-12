@@ -488,17 +488,6 @@ func mergePresubmits(old, new *prowconfig.Presubmit) prowconfig.Presubmit {
 		return ""
 	}()
 
-	// TODO(muller): Special case images jobs for now. Some repos are marking
-	// images jobs as optional for which we do not have syntax in ci-operator (should we?).
-	// Tolerate manual changes for these jobs for now
-	if strings.HasSuffix(merged.Name, "-images") {
-		if old.RunIfChanged != "" || old.SkipIfOnlyChanged != "" {
-			merged.RunIfChanged = old.RunIfChanged
-			merged.SkipIfOnlyChanged = old.SkipIfOnlyChanged
-			merged.AlwaysRun = false
-		}
-	}
-
 	return merged
 }
 

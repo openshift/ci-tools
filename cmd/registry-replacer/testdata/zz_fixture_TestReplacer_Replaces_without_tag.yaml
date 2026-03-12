@@ -4,12 +4,13 @@ base_images:
     namespace: org
     tag: latest
 images:
-- dockerfile_path: dockerfile
-  inputs:
-    org_repo_latest:
-      as:
-      - registry.svc.ci.openshift.org/org/repo
-  to: ""
+  items:
+  - dockerfile_path: dockerfile
+    inputs:
+      org_repo_latest:
+        as:
+        - registry.svc.ci.openshift.org/org/repo
+    to: ""
 zz_generated_metadata:
   branch: ""
   org: ""

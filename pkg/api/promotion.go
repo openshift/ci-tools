@@ -42,7 +42,7 @@ func ImageTargets(c *ReleaseBuildConfiguration) sets.Set[string] {
 		}
 	}
 
-	if len(c.Images) > 0 || imageTargets.Len() > 0 {
+	if len(c.Images.Items) > 0 || imageTargets.Len() > 0 {
 		imageTargets.Insert("[images]")
 	}
 	return imageTargets

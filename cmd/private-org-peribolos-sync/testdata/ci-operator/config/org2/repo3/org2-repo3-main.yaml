@@ -4,9 +4,10 @@ build_root:
     namespace: openshift
     tag: golang-1.21
 images:
-- dockerfile_path: Dockerfile
-  from: base
-  to: whitelisted-image
+  items:
+  - dockerfile_path: Dockerfile
+    from: base
+    to: whitelisted-image
 promotion:
   to:
   - name: "latest"

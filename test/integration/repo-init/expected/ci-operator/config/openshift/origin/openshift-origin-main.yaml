@@ -4,13 +4,14 @@ build_root:
     namespace: openshift
     tag: golang-1.12
 images:
-- dockerfile_path: images/tests/Dockerfile.rhel
-  from: cli
-  inputs:
-    bin:
-      as:
-      - registry.svc.ci.openshift.org/ocp/builder:golang-1.12
-  to: tests
+  items:
+  - dockerfile_path: images/tests/Dockerfile.rhel
+    from: cli
+    inputs:
+      bin:
+        as:
+        - registry.svc.ci.openshift.org/ocp/builder:golang-1.12
+    to: tests
 promotion:
   to:
   - additional_images:

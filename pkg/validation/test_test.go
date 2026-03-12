@@ -619,12 +619,13 @@ func TestValidateTests(t *testing.T) {
 		{
 			id: "Run if changed and skip_if_only_changed are mutually exclusive",
 			tests: []api.TestStepConfiguration{{
-				As:                "unit",
-				Commands:          "commands",
-				RunIfChanged:      "^README.md$",
-				SkipIfOnlyChanged: "^OTHER_README.md$",
+				As:                         "unit",
+				Commands:                   "commands",
+				RunIfChanged:               "^README.md$",
+				SkipIfOnlyChanged:          "^OTHER_README.md$",
+				ContainerTestConfiguration: &api.ContainerTestConfiguration{From: "ignored"},
 			}},
-			expectedError: errors.New("tests[0]: `run_if_changed` and `skip_if_only_changed` are mutually exclusive"),
+			expectedError: errors.New("tests[0]: `run_if_changed`, `skip_if_only_changed`, `pipeline_run_if_changed`, and `pipeline_skip_if_only_changed` are mutually exclusive"),
 		},
 		{
 			id: "secrets used on multi-stage tests",

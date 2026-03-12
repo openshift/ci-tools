@@ -8,14 +8,15 @@ base_images:
     namespace: org
     tag: latest
 images:
-- inputs:
-    image:
-      as:
-      - org/image
-    org_image_latest:
-      as:
-      - registry.svc.ci.openshift.org/org/image
-  to: cool_image
+  items:
+  - inputs:
+      image:
+        as:
+        - org/image
+      org_image_latest:
+        as:
+        - registry.svc.ci.openshift.org/org/image
+    to: cool_image
 tests:
 - as: ""
   literal_steps:

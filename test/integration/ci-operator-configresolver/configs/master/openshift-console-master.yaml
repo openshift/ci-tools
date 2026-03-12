@@ -13,8 +13,9 @@ build_root:
     namespace: openshift
     tag: golang-1.20
 images:
-- to: console
-  from: base
+  items:
+  - to: console
+    from: base
 resources:
   '*':
     limits:

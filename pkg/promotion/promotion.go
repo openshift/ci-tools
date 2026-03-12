@@ -42,7 +42,7 @@ func AllPromotionImageStreamTags(configSpec *cioperatorapi.ReleaseBuildConfigura
 
 		disabled := sets.New(target.ExcludedImages...)
 		if !disabled.Has(api.PromotionExcludeImageWildcard) {
-			for _, image := range configSpec.Images {
+			for _, image := range configSpec.Images.Items {
 				result.Insert(fmt.Sprintf("%s/%s:%s", target.Namespace, target.Name, image.To))
 			}
 		}

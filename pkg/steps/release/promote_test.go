@@ -159,9 +159,9 @@ func TestPromotedTags(t *testing.T) {
 		{
 			name: "promoted image means output tags",
 			input: &api.ReleaseBuildConfiguration{
-				Images: []api.ProjectDirectoryImageBuildStepConfiguration{
+				Images: api.ImageConfiguration{Items: []api.ProjectDirectoryImageBuildStepConfiguration{
 					{To: api.PipelineImageStreamTagReference("foo")},
-				},
+				}},
 				PromotionConfiguration: &api.PromotionConfiguration{
 					Targets: []api.PromotionTarget{{
 						Namespace: "roger",
@@ -176,9 +176,9 @@ func TestPromotedTags(t *testing.T) {
 		{
 			name: "promoted image but disabled promotion means no output tags",
 			input: &api.ReleaseBuildConfiguration{
-				Images: []api.ProjectDirectoryImageBuildStepConfiguration{
+				Images: api.ImageConfiguration{Items: []api.ProjectDirectoryImageBuildStepConfiguration{
 					{To: api.PipelineImageStreamTagReference("foo")},
-				},
+				}},
 				PromotionConfiguration: &api.PromotionConfiguration{
 					Targets: []api.PromotionTarget{{
 						Namespace: "roger",
@@ -192,9 +192,9 @@ func TestPromotedTags(t *testing.T) {
 		{
 			name: "promoted image by tag means output tags",
 			input: &api.ReleaseBuildConfiguration{
-				Images: []api.ProjectDirectoryImageBuildStepConfiguration{
+				Images: api.ImageConfiguration{Items: []api.ProjectDirectoryImageBuildStepConfiguration{
 					{To: api.PipelineImageStreamTagReference("foo")},
-				},
+				}},
 				PromotionConfiguration: &api.PromotionConfiguration{
 					Targets: []api.PromotionTarget{{
 						Namespace: "roger",
@@ -209,9 +209,9 @@ func TestPromotedTags(t *testing.T) {
 		{
 			name: "promoted additional image with rename",
 			input: &api.ReleaseBuildConfiguration{
-				Images: []api.ProjectDirectoryImageBuildStepConfiguration{
+				Images: api.ImageConfiguration{Items: []api.ProjectDirectoryImageBuildStepConfiguration{
 					{To: api.PipelineImageStreamTagReference("foo")},
-				},
+				}},
 				PromotionConfiguration: &api.PromotionConfiguration{
 					Targets: []api.PromotionTarget{{
 						Namespace: "roger",
@@ -230,9 +230,9 @@ func TestPromotedTags(t *testing.T) {
 		{
 			name: "disabled image",
 			input: &api.ReleaseBuildConfiguration{
-				Images: []api.ProjectDirectoryImageBuildStepConfiguration{
+				Images: api.ImageConfiguration{Items: []api.ProjectDirectoryImageBuildStepConfiguration{
 					{To: api.PipelineImageStreamTagReference("foo")},
-				},
+				}},
 				PromotionConfiguration: &api.PromotionConfiguration{
 					Targets: []api.PromotionTarget{{
 						Namespace:      "roger",
@@ -246,7 +246,7 @@ func TestPromotedTags(t *testing.T) {
 		{
 			name: "promotion set and binaries built, means binaries promoted",
 			input: &api.ReleaseBuildConfiguration{
-				Images:              []api.ProjectDirectoryImageBuildStepConfiguration{},
+				Images:              api.ImageConfiguration{},
 				BinaryBuildCommands: "something",
 				PromotionConfiguration: &api.PromotionConfiguration{
 					Targets: []api.PromotionTarget{{
@@ -318,9 +318,9 @@ func TestPromotedTagsWithRequiredImages(t *testing.T) {
 		{
 			name: "promoted image means output tags",
 			input: &api.ReleaseBuildConfiguration{
-				Images: []api.ProjectDirectoryImageBuildStepConfiguration{
+				Images: api.ImageConfiguration{Items: []api.ProjectDirectoryImageBuildStepConfiguration{
 					{To: api.PipelineImageStreamTagReference("foo")},
-				},
+				}},
 				PromotionConfiguration: &api.PromotionConfiguration{
 					Targets: []api.PromotionTarget{{
 						Namespace: "roger",
@@ -338,10 +338,10 @@ func TestPromotedTagsWithRequiredImages(t *testing.T) {
 		{
 			name: "optional image is ignored means output tags",
 			input: &api.ReleaseBuildConfiguration{
-				Images: []api.ProjectDirectoryImageBuildStepConfiguration{
+				Images: api.ImageConfiguration{Items: []api.ProjectDirectoryImageBuildStepConfiguration{
 					{To: api.PipelineImageStreamTagReference("foo")},
 					{To: api.PipelineImageStreamTagReference("bar"), Optional: true},
-				},
+				}},
 				PromotionConfiguration: &api.PromotionConfiguration{
 					Targets: []api.PromotionTarget{{
 						Namespace: "roger",
@@ -359,9 +359,9 @@ func TestPromotedTagsWithRequiredImages(t *testing.T) {
 		{
 			name: "optional image that's required means output tags",
 			input: &api.ReleaseBuildConfiguration{
-				Images: []api.ProjectDirectoryImageBuildStepConfiguration{
+				Images: api.ImageConfiguration{Items: []api.ProjectDirectoryImageBuildStepConfiguration{
 					{To: api.PipelineImageStreamTagReference("foo"), Optional: true},
-				},
+				}},
 				PromotionConfiguration: &api.PromotionConfiguration{
 					Targets: []api.PromotionTarget{{
 						Namespace: "roger",
@@ -380,9 +380,9 @@ func TestPromotedTagsWithRequiredImages(t *testing.T) {
 		{
 			name: "promoted image but disabled promotion means no output tags",
 			input: &api.ReleaseBuildConfiguration{
-				Images: []api.ProjectDirectoryImageBuildStepConfiguration{
+				Images: api.ImageConfiguration{Items: []api.ProjectDirectoryImageBuildStepConfiguration{
 					{To: api.PipelineImageStreamTagReference("foo")},
-				},
+				}},
 				PromotionConfiguration: &api.PromotionConfiguration{
 					Targets: []api.PromotionTarget{{
 						Namespace: "roger",
@@ -397,9 +397,9 @@ func TestPromotedTagsWithRequiredImages(t *testing.T) {
 		{
 			name: "promoted image by tag means output tags",
 			input: &api.ReleaseBuildConfiguration{
-				Images: []api.ProjectDirectoryImageBuildStepConfiguration{
+				Images: api.ImageConfiguration{Items: []api.ProjectDirectoryImageBuildStepConfiguration{
 					{To: api.PipelineImageStreamTagReference("foo")},
-				},
+				}},
 				PromotionConfiguration: &api.PromotionConfiguration{
 					Targets: []api.PromotionTarget{{
 						Namespace: "roger",
@@ -417,9 +417,9 @@ func TestPromotedTagsWithRequiredImages(t *testing.T) {
 		{
 			name: "promoted image tagged by commit means an additional tag",
 			input: &api.ReleaseBuildConfiguration{
-				Images: []api.ProjectDirectoryImageBuildStepConfiguration{
+				Images: api.ImageConfiguration{Items: []api.ProjectDirectoryImageBuildStepConfiguration{
 					{To: api.PipelineImageStreamTagReference("foo")},
-				},
+				}},
 				PromotionConfiguration: &api.PromotionConfiguration{
 					Targets: []api.PromotionTarget{{
 						Namespace:   "roger",
@@ -440,9 +440,9 @@ func TestPromotedTagsWithRequiredImages(t *testing.T) {
 		{
 			name: "promoted additional image with rename",
 			input: &api.ReleaseBuildConfiguration{
-				Images: []api.ProjectDirectoryImageBuildStepConfiguration{
+				Images: api.ImageConfiguration{Items: []api.ProjectDirectoryImageBuildStepConfiguration{
 					{To: api.PipelineImageStreamTagReference("foo")},
-				},
+				}},
 				PromotionConfiguration: &api.PromotionConfiguration{
 					Targets: []api.PromotionTarget{{
 						Namespace: "roger",
@@ -466,9 +466,9 @@ func TestPromotedTagsWithRequiredImages(t *testing.T) {
 		{
 			name: "disabled image",
 			input: &api.ReleaseBuildConfiguration{
-				Images: []api.ProjectDirectoryImageBuildStepConfiguration{
+				Images: api.ImageConfiguration{Items: []api.ProjectDirectoryImageBuildStepConfiguration{
 					{To: api.PipelineImageStreamTagReference("foo")},
-				},
+				}},
 				PromotionConfiguration: &api.PromotionConfiguration{
 					Targets: []api.PromotionTarget{{
 						Namespace:      "roger",
@@ -483,7 +483,7 @@ func TestPromotedTagsWithRequiredImages(t *testing.T) {
 		{
 			name: "promotion set and binaries built, means binaries promoted",
 			input: &api.ReleaseBuildConfiguration{
-				Images:              []api.ProjectDirectoryImageBuildStepConfiguration{},
+				Images:              api.ImageConfiguration{},
 				BinaryBuildCommands: "something",
 				PromotionConfiguration: &api.PromotionConfiguration{
 					Targets: []api.PromotionTarget{{
@@ -505,7 +505,7 @@ func TestPromotedTagsWithRequiredImages(t *testing.T) {
 		{
 			name: "promotion set and binaries built, build cache disabled means no binaries promoted",
 			input: &api.ReleaseBuildConfiguration{
-				Images:              []api.ProjectDirectoryImageBuildStepConfiguration{},
+				Images:              api.ImageConfiguration{},
 				BinaryBuildCommands: "something",
 				PromotionConfiguration: &api.PromotionConfiguration{
 					Targets: []api.PromotionTarget{{
@@ -598,7 +598,7 @@ func TestPromotedTagsWithRequiredImages(t *testing.T) {
 		{
 			name: "promotion only cli-ocm to ci",
 			input: &api.ReleaseBuildConfiguration{
-				Images: []api.ProjectDirectoryImageBuildStepConfiguration{
+				Images: api.ImageConfiguration{Items: []api.ProjectDirectoryImageBuildStepConfiguration{
 					{
 						From: "cli",
 						To:   "cli-ocm",
@@ -607,7 +607,7 @@ func TestPromotedTagsWithRequiredImages(t *testing.T) {
 						From: "src",
 						To:   "cli",
 					},
-				},
+				}},
 				PromotionConfiguration: &api.PromotionConfiguration{
 					Targets: []api.PromotionTarget{
 						{
@@ -644,10 +644,10 @@ func TestPromotedTagsWithRequiredImages(t *testing.T) {
 		{
 			name: "exclude everything",
 			input: &api.ReleaseBuildConfiguration{
-				Images: []api.ProjectDirectoryImageBuildStepConfiguration{
+				Images: api.ImageConfiguration{Items: []api.ProjectDirectoryImageBuildStepConfiguration{
 					{To: "img_a"},
 					{To: "img_b"},
-				},
+				}},
 				PromotionConfiguration: &api.PromotionConfiguration{
 					Targets: []api.PromotionTarget{{
 						ExcludedImages: []string{api.PromotionExcludeImageWildcard},

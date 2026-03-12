@@ -4,12 +4,13 @@ base_images:
     namespace: org
     tag: tag
 images:
-- dockerfile_literal: FROM registry.svc.ci.openshift.org/org/repo:tag
-  inputs:
-    org_repo_tag:
-      as:
-      - registry.svc.ci.openshift.org/org/repo:tag
-  to: ""
+  items:
+  - dockerfile_literal: FROM registry.svc.ci.openshift.org/org/repo:tag
+    inputs:
+      org_repo_tag:
+        as:
+        - registry.svc.ci.openshift.org/org/repo:tag
+    to: ""
 zz_generated_metadata:
   branch: ""
   org: ""

@@ -468,7 +468,7 @@ func (s server) validateConfig(w http.ResponseWriter, r *http.Request) {
 		case BaseImages:
 			validationErrors = append(validationErrors, validation.ValidateBaseImages(context.AddField("base_images"), generated.BaseImages)...)
 		case ContainerImages:
-			validation.ValidateImages(context.AddField("images"), generated.Images)
+			validation.ValidateImages(context.AddField("images"), generated.Images.Items)
 		case OperatorBundle:
 			validationErrors = append(validationErrors, validation.ValidateOperator(context.AddField("operator_bundle"), generated)...)
 		case Tests:
@@ -489,7 +489,7 @@ func (s server) validateConfig(w http.ResponseWriter, r *http.Request) {
 							To:        api.PipelineImageStreamTagReference(image.Name),
 						}}})
 			}
-			for _, i := range generated.Images {
+			for _, i := range generated.Images.Items {
 				image := i
 				rawSteps = append(rawSteps, api.StepConfiguration{
 					ProjectDirectoryImageBuildStepConfiguration: &image,

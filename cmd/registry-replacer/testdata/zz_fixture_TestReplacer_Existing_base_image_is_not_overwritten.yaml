@@ -4,11 +4,12 @@ base_images:
     namespace: other_org
     tag: other_tag
 images:
-- inputs:
-    org_repo_tag:
-      as:
-      - registry.svc.ci.openshift.org/org/repo:tag
-  to: ""
+  items:
+  - inputs:
+      org_repo_tag:
+        as:
+        - registry.svc.ci.openshift.org/org/repo:tag
+    to: ""
 zz_generated_metadata:
   branch: ""
   org: ""

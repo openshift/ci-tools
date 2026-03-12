@@ -428,6 +428,22 @@ func TestMergePresubmits(t *testing.T) {
 			new:      &prowconfig.Presubmit{RegexpChangeMatcher: prowconfig.RegexpChangeMatcher{SkipIfOnlyChanged: "new"}},
 			expected: prowconfig.Presubmit{RegexpChangeMatcher: prowconfig.RegexpChangeMatcher{SkipIfOnlyChanged: "new"}},
 		},
+		{
+			name: "images job: old manual skip_if_only_changed is NOT preserved (change to ci-operator config)",
+			old: &prowconfig.Presubmit{
+				JobBase:             prowconfig.JobBase{Name: "pull-ci-org-repo-branch-images"},
+				RegexpChangeMatcher: prowconfig.RegexpChangeMatcher{SkipIfOnlyChanged: "^docs/"},
+				AlwaysRun:           false,
+			},
+			new: &prowconfig.Presubmit{
+				JobBase:   prowconfig.JobBase{Name: "pull-ci-org-repo-branch-images"},
+				AlwaysRun: true,
+			},
+			expected: prowconfig.Presubmit{
+				JobBase:   prowconfig.JobBase{Name: "pull-ci-org-repo-branch-images"},
+				AlwaysRun: true,
+			},
+		},
 	}
 	for _, testCase := range testCases {
 		t.Run(testCase.name, func(t *testing.T) {

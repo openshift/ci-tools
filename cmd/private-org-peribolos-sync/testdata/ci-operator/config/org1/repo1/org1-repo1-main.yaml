@@ -4,9 +4,10 @@ build_root:
     namespace: openshift
     tag: golang-1.21
 images:
-- dockerfile_path: Dockerfile
-  from: base
-  to: test-image
+  items:
+  - dockerfile_path: Dockerfile
+    from: base
+    to: test-image
 promotion:
   to:
   - name: "4.17"

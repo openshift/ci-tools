@@ -1,0 +1,52 @@
+base_images:
+  base:
+    name: origin-v4.0
+    namespace: openshift
+    tag: base
+build_root:
+  image_stream_tag:
+    name: release
+    namespace: openshift
+    tag: golang-1.10
+prowgen:
+  private: true
+  expose: true
+resources:
+  '*':
+    limits:
+      cpu: 500Mi
+    requests:
+      cpu: 10Mi
+tag_specification:
+  name: origin-v4.0
+  namespace: openshift
+tests:
+- as: unit
+  commands: make test-unit
+  container:
+    from: src
+  slack_reporter:
+    channel: "#test-channel"
+- as: e2e
+  commands: make test-e2e
+  container:
+    from: src
+  postsubmit: true
+  slack_reporter:
+    channel: "#e2e-channel"
+    job_states_to_report:
+    - success
+    - failure
+    report_template: "custom template"
+  max_concurrency: 3
+- as: nightly
+  commands: make nightly
+  container:
+    from: src
+  cron: "0 0 * * *"
+  disable_rehearsal: true
+  max_concurrency: 2
+zz_generated_metadata:
+  branch: master
+  org: prowgen-config
+  repo: duper

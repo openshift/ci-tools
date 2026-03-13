@@ -10,6 +10,7 @@ import (
 
 	"k8s.io/apimachinery/pkg/util/sets"
 
+	"github.com/openshift/ci-tools/pkg/api"
 	"github.com/openshift/ci-tools/pkg/api/secretbootstrap"
 	"github.com/openshift/ci-tools/pkg/api/secretgenerator"
 	"github.com/openshift/ci-tools/pkg/secrets"
@@ -229,6 +230,7 @@ func TestValidateContexts(t *testing.T) {
 		name         string
 		cfg          secretgenerator.Config
 		bootstrapCfg secretbootstrap.Config
+		gsmConfig    api.GSMConfig
 	}{
 		{
 			name: "Directly found",
@@ -236,6 +238,7 @@ func TestValidateContexts(t *testing.T) {
 			bootstrapCfg: secretbootstrap.Config{Secrets: []secretbootstrap.SecretConfig{{
 				From: map[string]secretbootstrap.ItemContext{"": {Item: "some-item", Field: "field"}},
 			}}},
+			gsmConfig: api.GSMConfig{},
 		},
 		{
 			name: "Directly found dockerconfigjson",
@@ -245,6 +248,7 @@ func TestValidateContexts(t *testing.T) {
 					Item: "some-item", AuthField: "field",
 				}}}},
 			}}},
+			gsmConfig: api.GSMConfig{},
 		},
 		{
 			name: "Strip prefix",
@@ -255,6 +259,7 @@ func TestValidateContexts(t *testing.T) {
 					From: map[string]secretbootstrap.ItemContext{"": {Item: "some-item", Field: "field"}},
 				}},
 			},
+			gsmConfig: api.GSMConfig{},
 		},
 		{
 			name: "Strip prefix dockerconfigjson",
@@ -267,12 +272,73 @@ func TestValidateContexts(t *testing.T) {
 					}}}},
 				}},
 			},
+			gsmConfig: api.GSMConfig{},
+		},
+		{
+			name: "Found among gsm secrets",
+			cfg:  secretgenerator.Config{{ItemName: "build_cluster", Fields: []secretgenerator.FieldGenerator{{Name: "target-field"}}}},
+			bootstrapCfg: secretbootstrap.Config{
+				VaultDPTPPrefix: "dptp",
+				Secrets:         []secretbootstrap.SecretConfig{{}},
+			},
+			gsmConfig: api.GSMConfig{
+				Bundles: []api.GSMBundle{
+					{
+						Name: "bundle",
+						GSMSecrets: []api.GSMSecretRef{{
+							Collection: "test-platform",
+							Group:      "build_cluster",
+							Fields:     []api.FieldEntry{{Name: "target-field"}},
+						}},
+					},
+				},
+			},
+		},
+		{
+			name: "Found among gsm secret components",
+			cfg:  secretgenerator.Config{{ItemName: "build_cluster", Fields: []secretgenerator.FieldGenerator{{Name: "target-dc-field"}}}},
+			bootstrapCfg: secretbootstrap.Config{
+				VaultDPTPPrefix: "dptp",
+				Secrets:         []secretbootstrap.SecretConfig{{}},
+			},
+			gsmConfig: api.GSMConfig{
+				Components: map[string][]api.GSMSecretRef{
+					"some-component": {
+						{
+							Collection: "test-platform",
+							Group:      "aws",
+							Fields:     []api.FieldEntry{{Name: "key", As: "something-else"}},
+						}},
+				},
+				Bundles: []api.GSMBundle{
+					{
+						Name:       "bundle",
+						Components: []string{"some-component"},
+						GSMSecrets: []api.GSMSecretRef{{
+							Collection: "test-platform",
+							Group:      "aws",
+							Fields:     []api.FieldEntry{{Name: "key", As: "something-else"}},
+						}},
+					},
+					{
+						Name: "some-bundle",
+						DockerConfig: &api.DockerConfigSpec{
+							Registries: []api.RegistryAuthData{
+								{
+									Collection:  "test-platform",
+									Group:       "build_cluster",
+									AuthField:   "target-dc-field",
+									RegistryURL: "https://registry.io",
+								}}},
+					},
+				},
+			},
 		},
 	}
 
 	for _, tc := range testCases {
 		t.Run(tc.name, func(t *testing.T) {
-			if err := validateContexts(itemContextsFromConfig(tc.cfg), tc.bootstrapCfg); err != nil {
+			if err := validateContexts(itemContextsFromConfig(tc.cfg), tc.bootstrapCfg, tc.gsmConfig); err != nil {
 				t.Errorf("validation failed unexpectedly: %v", err)
 			}
 		})

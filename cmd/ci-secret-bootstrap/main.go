@@ -81,9 +81,10 @@ type options struct {
 	vaultConfig     secretbootstrap.Config
 	generatorConfig secretgenerator.Config
 
-	gsmConfig          api.GSMConfig
-	gsmProjectConfig   gsm.Config
-	gsmCredentialsFile string
+	gsmConfig            api.GSMConfig
+	gsmProjectConfigPath string
+	gsmProjectConfig     gsm.Config
+	gsmCredentialsFile   string
 
 	allowUnused flagutil.Strings
 
@@ -113,6 +114,7 @@ func parseOptions(censor *secrets.DynamicCensor) (options, error) {
 	fs.BoolVar(&o.enableGsm, "enable-gsm", false, "Whether to enable GSM bundles mechanism")
 	fs.StringVar(&o.gsmConfigPath, "gsm-config", "", "Path to the Google Secret Manager config file.")
 	fs.StringVar(&o.gsmCredentialsFile, "gsm-credentials-file", "", "Path to Google Secret Manager service account credentials.")
+	fs.StringVar(&o.gsmProjectConfigPath, "gsm-project-config", "", "Path to the GCP project config file where secrets are stored.")
 
 	fs.StringVar(&o.cluster, "cluster", "", "If set, only provision secrets for this cluster")
 	fs.Var(&o.secretNamesRaw, "secret-names", "If set, only provision secrets with the given name. user_secrets_target_clusters in the configuration is ignored. Can be passed multiple times.")
@@ -162,14 +164,12 @@ func (o *options) completeOptions(censor *secrets.DynamicCensor, kubeConfigs map
 	}
 
 	if o.enableGsm {
+		if err := api.LoadGSMProjectConfigFromFile(o.gsmProjectConfigPath, &o.gsmProjectConfig); err != nil {
+			return err
+		}
 		if err := api.LoadGSMConfigFromFile(o.gsmConfigPath, &o.gsmConfig); err != nil {
 			return err
 		}
-		gsmProjectConfig, err := gsm.GetConfigFromEnv()
-		if err != nil {
-			return err
-		}
-		o.gsmProjectConfig = gsmProjectConfig
 	}
 
 	if vals := o.secretNamesRaw.Strings(); len(vals) > 0 {

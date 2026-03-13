@@ -19,6 +19,7 @@ import (
 	"k8s.io/apimachinery/pkg/util/sets"
 	"sigs.k8s.io/prow/pkg/logrusutil"
 
+	"github.com/openshift/ci-tools/pkg/api"
 	"github.com/openshift/ci-tools/pkg/api/secretbootstrap"
 	"github.com/openshift/ci-tools/pkg/api/secretgenerator"
 	gsm "github.com/openshift/ci-tools/pkg/gsm-secrets"
@@ -53,9 +54,12 @@ type options struct {
 	maxConcurrency      int
 	disabledClusters    sets.Set[string]
 
-	enableGsmSync      bool
-	gcpProjectConfig   gsm.Config
-	gsmCredentialsFile string
+	enableGsmSync        bool
+	gsmProjectConfigPath string
+	gsmProjectConfig     gsm.Config
+	gsmConfigPath        string
+	gsmConfig            api.GSMConfig
+	gsmCredentialsFile   string
 
 	config          secretgenerator.Config
 	bootstrapConfig secretbootstrap.Config
@@ -75,18 +79,12 @@ func parseOptions(censor *secrets.DynamicCensor) options {
 
 	fs.BoolVar(&o.enableGsmSync, "enable-gsm-sync", false, "Whether to enable syncing cluster-init secrets to GSM.")
 	fs.StringVar(&o.gsmCredentialsFile, "gsm-credentials-file", "", "Path to GCP service account credentials.")
+	fs.StringVar(&o.gsmProjectConfigPath, "gsm-project-config", "", "Path to the GCP project config file we use for secrets.")
+	fs.StringVar(&o.gsmConfigPath, "gsm-config", "", "Path to the GSM config file used for bootstrapping cluster secrets after using this tool.")
 
 	o.secrets.Bind(fs, os.Getenv, censor)
 	if err := fs.Parse(os.Args[1:]); err != nil {
 		logrus.WithError(err).Errorf("cannot parse args: %q", os.Args[1:])
-	}
-
-	if o.enableGsmSync {
-		gcpConfig, err := gsm.GetConfigFromEnv()
-		if err != nil {
-			logrus.WithError(err).Error("Failed to get GCP config from environment, GSM sync will fail")
-		}
-		o.gcpProjectConfig = gcpConfig
 	}
 
 	return o
@@ -106,8 +104,13 @@ func (o *options) validateOptions() error {
 	if o.configPath == "" {
 		return errors.New("--config is empty")
 	}
-	if o.validate && o.bootstrapConfigPath == "" {
-		return errors.New("--bootstrap-config is required with --validate")
+	if o.validate {
+		if o.bootstrapConfigPath == "" {
+			return errors.New("--bootstrap-config is required with --validate")
+		}
+		if o.enableGsmSync && o.gsmConfigPath == "" {
+			return errors.New("--gsm-config is required with --validate when --enable-gsm-sync is true")
+		}
 	}
 	if o.enableGsmSync && o.gsmCredentialsFile == "" && !o.dryRun && !o.validateOnly {
 		return errors.New("--gsm-credentials-file is required when --enable-gsm-sync is true")
@@ -129,6 +132,14 @@ func (o *options) completeOptions(censor *secrets.DynamicCensor) error {
 	if o.bootstrapConfigPath != "" {
 		if err := secretbootstrap.LoadConfigFromFile(o.bootstrapConfigPath, &o.bootstrapConfig); err != nil {
 			return fmt.Errorf("couldn't load the bootstrap config: %w", err)
+		}
+	}
+	if o.enableGsmSync && o.gsmConfigPath != "" {
+		if err := api.LoadGSMConfigFromFile(o.gsmConfigPath, &o.gsmConfig); err != nil {
+			return fmt.Errorf("couldn't load the bootstrap GSM config: %w", err)
+		}
+		if err := api.LoadGSMProjectConfigFromFile(o.gsmProjectConfigPath, &o.gsmProjectConfig); err != nil {
+			logrus.WithError(err).Fatal("failed to load GSM project info from config map, GSM sync will fail")
 		}
 	}
 
@@ -334,7 +345,7 @@ func main() {
 
 	itemContextsFromConfig := itemContextsFromConfig(o.config)
 	if o.validate {
-		if err := validateContexts(itemContextsFromConfig, o.bootstrapConfig); err != nil {
+		if err := validateContexts(itemContextsFromConfig, o.bootstrapConfig, o.gsmConfig); err != nil {
 			for _, err := range err.Errors() {
 				logrus.WithError(err).Error("Invalid entry")
 			}
@@ -380,7 +391,7 @@ func generateSecrets(o options, censor *secrets.DynamicCensor) (errs []error) {
 		}
 
 		if o.enableGsmSync {
-			client, err = secrets.NewGSMSyncDecorator(client, o.gcpProjectConfig, o.gsmCredentialsFile)
+			client, err = secrets.NewGSMSyncDecorator(client, o.gsmProjectConfig, o.gsmCredentialsFile)
 			if err != nil {
 				return append(errs, fmt.Errorf("failed to enable GSM sync: %w", err))
 			}
@@ -411,7 +422,7 @@ func readIndexSecret(o options) ([]byte, error) {
 	defer gsmClient.Close()
 
 	indexSecretName := gsm.GetIndexSecretName(secrets.TestPlatformCollection)
-	secretResourceName := fmt.Sprintf("projects/%s/secrets/%s", o.gcpProjectConfig.ProjectIdNumber, indexSecretName)
+	secretResourceName := fmt.Sprintf("projects/%s/secrets/%s", o.gsmProjectConfig.ProjectIdNumber, indexSecretName)
 
 	indexContent, err := gsm.GetSecretPayload(ctx, gsmClient, secretResourceName)
 	if err != nil {
@@ -433,8 +444,10 @@ func itemContextsFromConfig(items secretgenerator.Config) []secretbootstrap.Item
 	return itemContexts
 }
 
-func validateContexts(contexts []secretbootstrap.ItemContext, config secretbootstrap.Config) utilerrors.Aggregate {
+func validateContexts(contexts []secretbootstrap.ItemContext, config secretbootstrap.Config, gsmConfig api.GSMConfig) utilerrors.Aggregate {
 	var errs []error
+
+	var notFoundInOldConfig []secretbootstrap.ItemContext
 	for _, needle := range contexts {
 		var found bool
 		for _, secret := range config.Secrets {
@@ -455,7 +468,41 @@ func validateContexts(contexts []secretbootstrap.ItemContext, config secretboots
 			}
 		}
 		if !found {
-			errs = append(errs, fmt.Errorf("could not find context %v in bootstrap config", needle))
+			notFoundInOldConfig = append(notFoundInOldConfig, needle)
+		}
+	}
+	for _, itemAndField := range notFoundInOldConfig {
+		var found bool
+		for _, bundle := range gsmConfig.Bundles {
+			for _, gsmSecret := range bundle.GSMSecrets {
+				item := strings.TrimPrefix(itemAndField.Item, config.VaultDPTPPrefix+"/")
+				if gsmvalidation.NormalizeName(item) != gsmSecret.Group {
+					continue
+				}
+				for _, field := range gsmSecret.Fields {
+					if gsmvalidation.NormalizeName(itemAndField.Field) == field.Name {
+						found = true
+					}
+				}
+			}
+			if bundle.DockerConfig == nil {
+				continue
+			}
+			for _, dcRegistry := range bundle.DockerConfig.Registries {
+				item := strings.TrimPrefix(itemAndField.Item, config.VaultDPTPPrefix+"/")
+				if gsmvalidation.NormalizeName(item) != dcRegistry.Group {
+					continue
+				}
+				if gsmvalidation.NormalizeName(itemAndField.Field) == dcRegistry.AuthField {
+					found = true
+				}
+				if gsmvalidation.NormalizeName(itemAndField.Field) == dcRegistry.EmailField {
+					found = true
+				}
+			}
+		}
+		if !found {
+			errs = append(errs, fmt.Errorf("could not find context %v in old bootstrap nor GSM config", itemAndField))
 		}
 	}
 	return utilerrors.NewAggregate(errs)

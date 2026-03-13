@@ -259,6 +259,7 @@ func main() {
 	labelsToAdd := []string{
 		"tide/merge-method-merge",
 		rehearse.RehearsalsAckLabel,
+		"priority/ci-critical",
 	}
 	if o.selfApprove {
 		logrus.Infof("Self-approving PR by adding the %q and %q labels", labels.Approved, labels.LGTM)

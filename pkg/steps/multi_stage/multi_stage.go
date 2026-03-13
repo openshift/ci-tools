@@ -12,8 +12,15 @@ import (
 	"github.com/sirupsen/logrus"
 
 	coreapi "k8s.io/api/core/v1"
+	"k8s.io/apimachinery/pkg/api/equality"
+	kerrors "k8s.io/apimachinery/pkg/api/errors"
+	v1 "k8s.io/apimachinery/pkg/apis/meta/v1"
+	"k8s.io/apimachinery/pkg/types"
 	utilerrors "k8s.io/apimachinery/pkg/util/errors"
 	"k8s.io/apimachinery/pkg/util/sets"
+	"k8s.io/apimachinery/pkg/util/wait"
+	"k8s.io/client-go/util/retry"
+	"k8s.io/utils/ptr"
 	ctrlruntimeclient "sigs.k8s.io/controller-runtime/pkg/client"
 	"sigs.k8s.io/yaml"
 
@@ -105,25 +112,26 @@ type multiStageTestStep struct {
 	profile          api.ClusterProfile
 	config           *api.ReleaseBuildConfiguration
 	// params exposes getters for variables created by other steps
-	params                      api.Parameters
-	env                         api.TestEnvironment
-	client                      kubernetes.PodClient
-	jobSpec                     *api.JobSpec
-	observers                   []api.Observer
-	pre, test, post             []api.LiteralTestStep
-	subLock                     *sync.Mutex
-	subTests                    []*junit.TestCase
-	subSteps                    []api.CIOperatorStepDetailInfo
-	flags                       stepFlag
-	leases                      []api.StepLease
-	clusterClaim                *api.ClusterClaim
-	vpnConf                     *vpnConf
-	cancelObservers             func(context.CancelFunc)
-	nodeArchitecture            api.NodeArchitecture
-	enableSecretsStoreCSIDriver bool
-	gsm                         *GSMConfiguration
-	requireNestedPodman         bool
-	leaseProxyServerAvailable   bool
+	params                           api.Parameters
+	env                              api.TestEnvironment
+	client                           kubernetes.PodClient
+	jobSpec                          *api.JobSpec
+	observers                        []api.Observer
+	pre, test, post                  []api.LiteralTestStep
+	subLock                          *sync.Mutex
+	subTests                         []*junit.TestCase
+	subSteps                         []api.CIOperatorStepDetailInfo
+	flags                            stepFlag
+	leases                           []api.StepLease
+	clusterClaim                     *api.ClusterClaim
+	vpnConf                          *vpnConf
+	cancelObservers                  func(context.CancelFunc)
+	nodeArchitecture                 api.NodeArchitecture
+	enableSecretsStoreCSIDriver      bool
+	gsm                              *GSMConfiguration
+	requireNestedPodman              bool
+	leaseProxyServerAvailable        bool
+	leaseProxyClientConfigMapBackoff wait.Backoff
 }
 
 func MultiStageTestStep(
@@ -139,8 +147,10 @@ func MultiStageTestStep(
 	enableSecretsStoreCSIDriver bool,
 	gsmConfig *GSMConfiguration,
 	leaseProxyServerAvailable bool,
+	leaseProxyClientConfigMapBackoff wait.Backoff,
 ) api.Step {
-	return newMultiStageTestStep(testConfig, config, params, client, jobSpec, leases, nodeName, targetAdditionalSuffix, cancelObservers, enableSecretsStoreCSIDriver, gsmConfig, leaseProxyServerAvailable)
+	return newMultiStageTestStep(testConfig, config, params, client, jobSpec, leases, nodeName, targetAdditionalSuffix,
+		cancelObservers, enableSecretsStoreCSIDriver, gsmConfig, leaseProxyServerAvailable, leaseProxyClientConfigMapBackoff)
 }
 
 func newMultiStageTestStep(
@@ -156,6 +166,7 @@ func newMultiStageTestStep(
 	enableSecretsStoreCSIDriver bool,
 	gsmConfig *GSMConfiguration,
 	leaseProxyServerAvailable bool,
+	leaseProxyClientConfigMapBackoff wait.Backoff,
 ) *multiStageTestStep {
 	ms := testConfig.MultiStageTestConfigurationLiteral
 	var flags stepFlag
@@ -166,28 +177,29 @@ func newMultiStageTestStep(
 		flags |= allowBestEffortPostSteps
 	}
 	s := &multiStageTestStep{
-		name:                        testConfig.As,
-		additionalSuffix:            targetAdditionalSuffix,
-		nodeName:                    nodeName,
-		profile:                     ms.ClusterProfile,
-		config:                      config,
-		params:                      params,
-		env:                         ms.Environment,
-		client:                      client,
-		jobSpec:                     jobSpec,
-		observers:                   ms.Observers,
-		pre:                         ms.Pre,
-		test:                        ms.Test,
-		post:                        ms.Post,
-		flags:                       flags,
-		leases:                      leases,
-		clusterClaim:                testConfig.ClusterClaim,
-		subLock:                     &sync.Mutex{},
-		cancelObservers:             cancelObservers,
-		nodeArchitecture:            testConfig.NodeArchitecture,
-		enableSecretsStoreCSIDriver: enableSecretsStoreCSIDriver,
-		gsm:                         gsmConfig,
-		leaseProxyServerAvailable:   leaseProxyServerAvailable,
+		name:                             testConfig.As,
+		additionalSuffix:                 targetAdditionalSuffix,
+		nodeName:                         nodeName,
+		profile:                          ms.ClusterProfile,
+		config:                           config,
+		params:                           params,
+		env:                              ms.Environment,
+		client:                           client,
+		jobSpec:                          jobSpec,
+		observers:                        ms.Observers,
+		pre:                              ms.Pre,
+		test:                             ms.Test,
+		post:                             ms.Post,
+		flags:                            flags,
+		leases:                           leases,
+		clusterClaim:                     testConfig.ClusterClaim,
+		subLock:                          &sync.Mutex{},
+		cancelObservers:                  cancelObservers,
+		nodeArchitecture:                 testConfig.NodeArchitecture,
+		enableSecretsStoreCSIDriver:      enableSecretsStoreCSIDriver,
+		gsm:                              gsmConfig,
+		leaseProxyServerAvailable:        leaseProxyServerAvailable,
+		leaseProxyClientConfigMapBackoff: leaseProxyClientConfigMapBackoff,
 	}
 	s.requireNestedPodman = stepRequiresNestedPodman(s)
 
@@ -257,6 +269,11 @@ func (s *multiStageTestStep) run(ctx context.Context) error {
 		if s.vpnConf.namespaceUID, err = getNamespaceUID(ctx, s.jobSpec.Namespace(), s.client); err != nil {
 			return fmt.Errorf("failed to determine namespace UID range: %w", err)
 		}
+	}
+	if err := s.ensureScriptConfigMap(ctx,
+		ctrlruntimeclient.ObjectKey{Namespace: "ci", Name: api.LeaseProxyConfigMapName},
+		ctrlruntimeclient.ObjectKey{Namespace: s.jobSpec.Namespace(), Name: api.LeaseProxyConfigMapName}); err != nil {
+		return fmt.Errorf("copy lease proxy scripts into ns %s: %w", s.jobSpec.Namespace(), err)
 	}
 	secretVolumes, secretVolumeMounts, err := secretsForCensoring(s.client, s.jobSpec.Namespace(), ctx)
 	if err != nil {
@@ -589,4 +606,74 @@ func getClusterProfileFromParams(params api.Parameters) (api.ClusterProfile, err
 	}
 	cp, err := params.Get(api.ClusterProfileParam)
 	return api.ClusterProfile(cp), err
+}
+
+// ensureScriptConfigMap copies the lease proxy scripts ConfigMap from src to dst.
+// If the destination ConfigMap exists and differs from the source, it is overwritten.
+func (s *multiStageTestStep) ensureScriptConfigMap(ctx context.Context, src, dst ctrlruntimeclient.ObjectKey) error {
+	// We have a retry in place here because multiple ci-operator instances might be executing
+	// this code simultaneously.
+	type mustRetryErr struct{ error }
+	return retry.OnError(s.leaseProxyClientConfigMapBackoff,
+		func(err error) bool {
+			_, ok := err.(*mustRetryErr)
+			return ok
+		},
+		func() error {
+			srcCM := &coreapi.ConfigMap{}
+			if err := s.client.Get(ctx, src, srcCM); err != nil {
+				return fmt.Errorf("get configmap %s/%s: %w", src.Namespace, src.Name, err)
+			}
+
+			dstCM := &coreapi.ConfigMap{
+				ObjectMeta: v1.ObjectMeta{
+					Name:      dst.Name,
+					Namespace: dst.Namespace,
+				},
+				Immutable:  ptr.To(true),
+				Data:       srcCM.Data,
+				BinaryData: srcCM.BinaryData,
+			}
+
+			err := s.client.Create(ctx, dstCM)
+			if err == nil {
+				return nil
+			}
+
+			if !kerrors.IsAlreadyExists(err) {
+				return fmt.Errorf("create configmap %s/%s: %w", dstCM.Namespace, dstCM.Name, err)
+			}
+
+			existingCM := &coreapi.ConfigMap{}
+			if err := s.client.Get(ctx, types.NamespacedName{Namespace: dstCM.Namespace, Name: dstCM.Name}, existingCM); err != nil {
+				e := fmt.Errorf("get existing configmap %s/%s: %w", dstCM.Namespace, dstCM.Name, err)
+				if kerrors.IsNotFound(err) {
+					return &mustRetryErr{e}
+				}
+				return e
+			}
+
+			if equality.Semantic.DeepEqual(dstCM.Data, existingCM.Data) &&
+				equality.Semantic.DeepEqual(dstCM.BinaryData, existingCM.BinaryData) {
+				return nil
+			}
+
+			if err := s.client.Delete(ctx, existingCM); err != nil {
+				e := fmt.Errorf("delete existing configmap %s/%s: %w", existingCM.Namespace, existingCM.Name, err)
+				if kerrors.IsNotFound(err) {
+					return &mustRetryErr{e}
+				}
+				return e
+			}
+
+			if err := s.client.Create(ctx, dstCM); err != nil {
+				e := fmt.Errorf("create configmap %s/%s: %w", dstCM.Namespace, dstCM.Name, err)
+				if kerrors.IsAlreadyExists(err) {
+					return &mustRetryErr{e}
+				}
+				return e
+			}
+
+			return nil
+		})
 }

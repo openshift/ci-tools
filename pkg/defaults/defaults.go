@@ -403,7 +403,7 @@ func stepForTest(cfg *Config, inputImages inputImageSet, c *api.TestStepConfigur
 			params = api.NewDeferredParameters(params)
 		}
 		var ret []api.Step
-		step := multi_stage.MultiStageTestStep(*c, cfg.CIConfig, params, cfg.podClient, cfg.JobSpec, leases, cfg.NodeName, cfg.TargetAdditionalSuffix, nil, cfg.GSMConfig != nil, cfg.GSMConfig, isLeaseProxyServerAvailable(cfg))
+		step := multi_stage.MultiStageTestStep(*c, cfg.CIConfig, params, cfg.podClient, cfg.JobSpec, leases, cfg.NodeName, cfg.TargetAdditionalSuffix, nil, cfg.GSMConfig != nil, cfg.GSMConfig, isLeaseProxyServerAvailable(cfg), retry.DefaultRetry)
 		if ipPoolLease.ResourceType != "" {
 			step = steps.IPPoolStep(cfg.LeaseClient, cfg.podClient, ipPoolLease, step, params, cfg.JobSpec.Namespace, cfg.MetricsAgent)
 		}
@@ -1253,7 +1253,6 @@ func leaseProxyServerStep(cfg *Config) []api.Step {
 	}
 
 	logger := logrus.NewEntry(logrus.StandardLogger()).WithField("step", "lease-proxy-server")
-	step := steps.LeaseProxyStep(logger, cfg.HTTPServerAddr, cfg.HTTPServerMux, cfg.LeaseClient,
-		cfg.kubeClient, cfg.JobSpec, retry.DefaultRetry)
+	step := steps.LeaseProxyStep(logger, cfg.HTTPServerAddr, cfg.HTTPServerMux, cfg.LeaseClient)
 	return append(ret, step)
 }

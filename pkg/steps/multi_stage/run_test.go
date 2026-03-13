@@ -2,19 +2,28 @@ package multi_stage
 
 import (
 	"context"
+	"errors"
 	"fmt"
 	"reflect"
+	"strings"
+	"sync/atomic"
 	"testing"
 	"time"
 
 	"github.com/google/go-cmp/cmp"
+	"github.com/google/go-cmp/cmp/cmpopts"
 
+	corev1 "k8s.io/api/core/v1"
 	v1 "k8s.io/api/core/v1"
+	apierrors "k8s.io/apimachinery/pkg/api/errors"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/apimachinery/pkg/util/diff"
 	"k8s.io/apimachinery/pkg/util/sets"
+	"k8s.io/apimachinery/pkg/util/wait"
+	"k8s.io/utils/ptr"
 	ctrlruntimeclient "sigs.k8s.io/controller-runtime/pkg/client"
 	fakectrlruntimeclient "sigs.k8s.io/controller-runtime/pkg/client/fake"
+	"sigs.k8s.io/controller-runtime/pkg/client/interceptor"
 	prowapi "sigs.k8s.io/prow/pkg/apis/prowjobs/v1"
 	prowdapi "sigs.k8s.io/prow/pkg/pod-utils/downwardapi"
 
@@ -25,66 +34,441 @@ import (
 )
 
 func TestRun(t *testing.T) {
-	yes := true
+	jobSpec := api.JobSpec{
+		JobSpec: prowdapi.JobSpec{
+			Job:       "job",
+			BuildID:   "build_id",
+			ProwJobID: "prow_job_id",
+			Type:      prowapi.PeriodicJob,
+			DecorationConfig: &prowapi.DecorationConfig{
+				Timeout:     &prowapi.Duration{Duration: time.Minute},
+				GracePeriod: &prowapi.Duration{Duration: time.Second},
+				UtilityImages: &prowapi.UtilityImages{
+					Sidecar:    "sidecar",
+					Entrypoint: "entrypoint",
+				},
+			},
+		},
+	}
+	jobSpec.SetNamespace("ns")
+
+	sa := &v1.ServiceAccount{
+		ObjectMeta:       metav1.ObjectMeta{Name: "test", Namespace: "ns", Labels: map[string]string{"ci.openshift.io/multi-stage-test": "test"}},
+		ImagePullSecrets: []v1.LocalObjectReference{{Name: "ci-operator-dockercfg-12345"}},
+	}
+
 	for _, tc := range []struct {
-		name      string
-		failures  sets.Set[string]
-		observers []api.Observer
-		expected  []string
+		name                             string
+		failures                         sets.Set[string]
+		testConfig                       *api.TestStepConfiguration
+		observers                        []api.Observer
+		objects                          []ctrlruntimeclient.Object
+		leaseProxyClientConfigMapBackoff wait.Backoff
+		interceptorsFunc                 func() interceptor.Funcs
+		wantPodNames                     []string
+		wantConfigMaps                   []corev1.ConfigMap
+		wantSecrets                      []corev1.Secret
+		wantErr                          error
 	}{
 		{
 			name: "no step fails, no error",
-			expected: []string{
+			testConfig: &api.TestStepConfiguration{
+				As: "test",
+				MultiStageTestConfigurationLiteral: &api.MultiStageTestConfigurationLiteral{
+					Pre:                []api.LiteralTestStep{{As: "pre0"}, {As: "pre1"}},
+					Test:               []api.LiteralTestStep{{As: "test0"}, {As: "test1"}},
+					Post:               []api.LiteralTestStep{{As: "post0"}, {As: "post1", OptionalOnSuccess: ptr.To(true)}},
+					AllowSkipOnSuccess: ptr.To(true),
+				},
+			},
+			wantPodNames: []string{
 				"test-pre0", "test-pre1",
 				"test-test0", "test-test1",
 				"test-post0",
 			},
+			wantConfigMaps: []corev1.ConfigMap{{
+				ObjectMeta: metav1.ObjectMeta{Name: "test-commands", Namespace: "ns", ResourceVersion: "1"},
+				Immutable:  ptr.To(true),
+				Data:       map[string]string{"post0": "", "post1": "", "pre0": "", "pre1": "", "test0": "", "test1": ""},
+			}},
+			wantSecrets: []v1.Secret{{
+				ObjectMeta: metav1.ObjectMeta{
+					Name:            "test",
+					Namespace:       "ns",
+					ResourceVersion: "1",
+					Labels:          map[string]string{"ci.openshift.io/skip-censoring": "true"},
+				},
+			}},
 		},
 		{
 			name:     "failure in a pre step, test should not run, post should",
-			failures: sets.New[string]("test-pre0"),
-			expected: []string{
+			failures: sets.New("test-pre0"),
+			testConfig: &api.TestStepConfiguration{
+				As: "test",
+				MultiStageTestConfigurationLiteral: &api.MultiStageTestConfigurationLiteral{
+					Pre:                []api.LiteralTestStep{{As: "pre0"}, {As: "pre1"}},
+					Test:               []api.LiteralTestStep{{As: "test0"}, {As: "test1"}},
+					Post:               []api.LiteralTestStep{{As: "post0"}, {As: "post1", OptionalOnSuccess: ptr.To(true)}},
+					AllowSkipOnSuccess: ptr.To(true),
+				},
+			},
+			wantPodNames: []string{
 				"test-pre0",
 				"test-post0", "test-post1",
 			},
-		}, {
+			wantConfigMaps: []corev1.ConfigMap{{
+				ObjectMeta: metav1.ObjectMeta{Name: "test-commands", Namespace: "ns", ResourceVersion: "1"},
+				Immutable:  ptr.To(true),
+				Data:       map[string]string{"post0": "", "post1": "", "pre0": "", "pre1": "", "test0": "", "test1": ""},
+			}},
+			wantSecrets: []v1.Secret{{
+				ObjectMeta: metav1.ObjectMeta{
+					Name:            "test",
+					Namespace:       "ns",
+					ResourceVersion: "1",
+					Labels:          map[string]string{"ci.openshift.io/skip-censoring": "true"},
+				},
+			}},
+			wantErr: errors.New(`"test" pre steps failed: "test" pod "test-pre0" failed: could not watch pod: the pod ns/test-pre0 failed after 0s (failed containers: sidecar, test): ContainerFailed one or more containers exited
+
+Container test exited with code 1, reason 
+Container sidecar exited with code 1, reason
+Link to step on registry info site: https://steps.ci.openshift.org/reference/pre0
+Link to job on registry info site: https://steps.ci.openshift.org/job?org=&repo=&branch=&test=test`),
+		},
+		{
 			name:     "failure in a test step, post should run",
-			failures: sets.New[string]("test-test0"),
-			expected: []string{
+			failures: sets.New("test-test0"),
+			testConfig: &api.TestStepConfiguration{
+				As: "test",
+				MultiStageTestConfigurationLiteral: &api.MultiStageTestConfigurationLiteral{
+					Pre:                []api.LiteralTestStep{{As: "pre0"}, {As: "pre1"}},
+					Test:               []api.LiteralTestStep{{As: "test0"}, {As: "test1"}},
+					Post:               []api.LiteralTestStep{{As: "post0"}, {As: "post1", OptionalOnSuccess: ptr.To(true)}},
+					AllowSkipOnSuccess: ptr.To(true),
+				},
+			},
+			wantPodNames: []string{
 				"test-pre0", "test-pre1",
 				"test-test0",
 				"test-post0", "test-post1",
 			},
+			wantConfigMaps: []corev1.ConfigMap{{
+				ObjectMeta: metav1.ObjectMeta{Name: "test-commands", Namespace: "ns", ResourceVersion: "1"},
+				Immutable:  ptr.To(true),
+				Data:       map[string]string{"post0": "", "post1": "", "pre0": "", "pre1": "", "test0": "", "test1": ""},
+			}},
+			wantSecrets: []v1.Secret{{
+				ObjectMeta: metav1.ObjectMeta{
+					Name:            "test",
+					Namespace:       "ns",
+					ResourceVersion: "1",
+					Labels:          map[string]string{"ci.openshift.io/skip-censoring": "true"},
+				},
+			}},
+			wantErr: errors.New(`"test" test steps failed: "test" pod "test-test0" failed: could not watch pod: the pod ns/test-test0 failed after 0s (failed containers: sidecar, test): ContainerFailed one or more containers exited
+
+Container test exited with code 1, reason 
+Container sidecar exited with code 1, reason
+Link to step on registry info site: https://steps.ci.openshift.org/reference/test0
+Link to job on registry info site: https://steps.ci.openshift.org/job?org=&repo=&branch=&test=test`),
 		},
 		{
 			name:     "failure in a post step, other post steps should still run",
-			failures: sets.New[string]("test-post0"),
-			expected: []string{
+			failures: sets.New("test-post0"),
+			testConfig: &api.TestStepConfiguration{
+				As: "test",
+				MultiStageTestConfigurationLiteral: &api.MultiStageTestConfigurationLiteral{
+					Pre:                []api.LiteralTestStep{{As: "pre0"}, {As: "pre1"}},
+					Test:               []api.LiteralTestStep{{As: "test0"}, {As: "test1"}},
+					Post:               []api.LiteralTestStep{{As: "post0"}, {As: "post1", OptionalOnSuccess: ptr.To(true)}},
+					AllowSkipOnSuccess: ptr.To(true),
+				},
+			},
+			wantPodNames: []string{
 				"test-pre0", "test-pre1",
 				"test-test0", "test-test1",
 				"test-post0",
 			},
+			wantConfigMaps: []corev1.ConfigMap{{
+				ObjectMeta: metav1.ObjectMeta{Name: "test-commands", Namespace: "ns", ResourceVersion: "1"},
+				Immutable:  ptr.To(true),
+				Data:       map[string]string{"post0": "", "post1": "", "pre0": "", "pre1": "", "test0": "", "test1": ""},
+			}},
+			wantSecrets: []v1.Secret{{
+				ObjectMeta: metav1.ObjectMeta{
+					Name:            "test",
+					Namespace:       "ns",
+					ResourceVersion: "1",
+					Labels:          map[string]string{"ci.openshift.io/skip-censoring": "true"},
+				},
+			}},
+			wantErr: errors.New(`"test" post steps failed: "test" pod "test-post0" failed: could not watch pod: the pod ns/test-post0 failed after 0s (failed containers: sidecar, test): ContainerFailed one or more containers exited
+
+Container test exited with code 1, reason 
+Container sidecar exited with code 1, reason
+Link to step on registry info site: https://steps.ci.openshift.org/reference/post0
+Link to job on registry info site: https://steps.ci.openshift.org/job?org=&repo=&branch=&test=test`),
 		},
 		{
-			name:      "observer fails, no error",
-			observers: []api.Observer{{Name: "obsrv0"}},
-			failures:  sets.New[string]("test-obsrv0"),
-			expected: []string{
+			name:     "observer fails, no error",
+			failures: sets.New("test-obsrv0"),
+			testConfig: &api.TestStepConfiguration{
+				As: "test",
+				MultiStageTestConfigurationLiteral: &api.MultiStageTestConfigurationLiteral{
+					Pre:                []api.LiteralTestStep{{As: "pre0"}, {As: "pre1"}},
+					Test:               []api.LiteralTestStep{{As: "test0"}, {As: "test1"}},
+					Post:               []api.LiteralTestStep{{As: "post0"}, {As: "post1", OptionalOnSuccess: ptr.To(true)}},
+					Observers:          []api.Observer{{Name: "obsrv0"}},
+					AllowSkipOnSuccess: ptr.To(true),
+				},
+			},
+			wantPodNames: []string{
 				"test-pre0", "test-pre1",
 				"test-test0", "test-test1",
 				"test-post0",
 			},
+			wantConfigMaps: []corev1.ConfigMap{{
+				ObjectMeta: metav1.ObjectMeta{Name: "test-commands", Namespace: "ns", ResourceVersion: "1"},
+				Immutable:  ptr.To(true),
+				Data:       map[string]string{"post0": "", "post1": "", "pre0": "", "pre1": "", "test0": "", "test1": ""},
+			}},
+			wantSecrets: []v1.Secret{{
+				ObjectMeta: metav1.ObjectMeta{
+					Name:            "test",
+					Namespace:       "ns",
+					ResourceVersion: "1",
+					Labels:          map[string]string{"ci.openshift.io/skip-censoring": "true"},
+				},
+			}},
+		},
+		{
+			name: "Copy lease proxy script config map: success",
+			objects: []ctrlruntimeclient.Object{&corev1.ConfigMap{
+				ObjectMeta: metav1.ObjectMeta{Namespace: "ci", Name: "lease-proxy"},
+				Data:       map[string]string{"foo": "bar"},
+			}},
+			leaseProxyClientConfigMapBackoff: wait.Backoff{Steps: 3},
+			wantConfigMaps: []corev1.ConfigMap{
+				{
+					ObjectMeta: metav1.ObjectMeta{Namespace: "ci", Name: "lease-proxy", ResourceVersion: "999"},
+					Data:       map[string]string{"foo": "bar"},
+				},
+				{
+					ObjectMeta: metav1.ObjectMeta{Namespace: "ns", Name: "lease-proxy", ResourceVersion: "1"},
+					Data:       map[string]string{"foo": "bar"},
+					Immutable:  ptr.To(true),
+				},
+				{
+					ObjectMeta: metav1.ObjectMeta{Name: "test-commands", Namespace: "ns", ResourceVersion: "1"},
+					Immutable:  ptr.To(true),
+				},
+			},
+			wantSecrets: []v1.Secret{{
+				ObjectMeta: metav1.ObjectMeta{
+					Name:            "test",
+					Namespace:       "ns",
+					ResourceVersion: "1",
+					Labels:          map[string]string{"ci.openshift.io/skip-censoring": "true"},
+				},
+			}},
+		},
+		{
+			name: "Copy lease proxy script config map: update stale configmap",
+			objects: []ctrlruntimeclient.Object{
+				&corev1.ConfigMap{
+					ObjectMeta: metav1.ObjectMeta{Namespace: "ci", Name: "lease-proxy"},
+					Data:       map[string]string{"super": "duper"},
+				},
+				&corev1.ConfigMap{
+					ObjectMeta: metav1.ObjectMeta{Namespace: "ns", Name: "lease-proxy"},
+					Data:       map[string]string{"foo": "bar"},
+				},
+			},
+			leaseProxyClientConfigMapBackoff: wait.Backoff{Steps: 3},
+			wantConfigMaps: []corev1.ConfigMap{
+				{
+					ObjectMeta: metav1.ObjectMeta{Namespace: "ci", Name: "lease-proxy", ResourceVersion: "999"},
+					Data:       map[string]string{"super": "duper"},
+				},
+				{
+					ObjectMeta: metav1.ObjectMeta{Namespace: "ns", Name: "lease-proxy", ResourceVersion: "1"},
+					Data:       map[string]string{"super": "duper"},
+					Immutable:  ptr.To(true),
+				},
+				{
+					ObjectMeta: metav1.ObjectMeta{Name: "test-commands", Namespace: "ns", ResourceVersion: "1"},
+					Immutable:  ptr.To(true),
+				},
+			},
+			wantSecrets: []v1.Secret{{
+				ObjectMeta: metav1.ObjectMeta{
+					Name:            "test",
+					Namespace:       "ns",
+					ResourceVersion: "1",
+					Labels:          map[string]string{"ci.openshift.io/skip-censoring": "true"},
+				},
+			}},
+		},
+		{
+			name: "Copy lease proxy script config map: retry on deletion failure",
+			objects: []ctrlruntimeclient.Object{
+				&corev1.ConfigMap{
+					ObjectMeta: metav1.ObjectMeta{Namespace: "ci", Name: "lease-proxy"},
+					Data:       map[string]string{"super": "duper"},
+				},
+				&corev1.ConfigMap{
+					ObjectMeta: metav1.ObjectMeta{Namespace: "ns", Name: "lease-proxy"},
+					Data:       map[string]string{"foo": "bar"},
+				},
+			},
+			leaseProxyClientConfigMapBackoff: wait.Backoff{Steps: 3},
+			interceptorsFunc: func() interceptor.Funcs {
+				deleted := atomic.Bool{}
+				return interceptor.Funcs{
+					Delete: func(ctx context.Context, client ctrlruntimeclient.WithWatch, obj ctrlruntimeclient.Object, opts ...ctrlruntimeclient.DeleteOption) error {
+						if _, ok := obj.(*corev1.ConfigMap); ok && deleted.CompareAndSwap(false, true) {
+							return &apierrors.StatusError{ErrStatus: metav1.Status{Reason: metav1.StatusReasonNotFound}}
+						}
+						return client.Delete(ctx, obj, opts...)
+					},
+				}
+			},
+			wantConfigMaps: []corev1.ConfigMap{
+				{
+					ObjectMeta: metav1.ObjectMeta{Namespace: "ci", Name: "lease-proxy", ResourceVersion: "999"},
+					Data:       map[string]string{"super": "duper"},
+				},
+				{
+					ObjectMeta: metav1.ObjectMeta{Namespace: "ns", Name: "lease-proxy", ResourceVersion: "1"},
+					Data:       map[string]string{"super": "duper"},
+					Immutable:  ptr.To(true),
+				},
+				{
+					ObjectMeta: metav1.ObjectMeta{Name: "test-commands", Namespace: "ns", ResourceVersion: "1"},
+					Immutable:  ptr.To(true),
+				},
+			},
+			wantSecrets: []v1.Secret{{
+				ObjectMeta: metav1.ObjectMeta{
+					Name:            "test",
+					Namespace:       "ns",
+					ResourceVersion: "1",
+					Labels:          map[string]string{"ci.openshift.io/skip-censoring": "true"},
+				},
+			}},
+		},
+		{
+			name: "Copy lease proxy script config map: retry when it fails to create the up-to-date configmap",
+			objects: []ctrlruntimeclient.Object{
+				&corev1.ConfigMap{
+					ObjectMeta: metav1.ObjectMeta{Namespace: "ci", Name: "lease-proxy"},
+					Data:       map[string]string{"super": "duper"},
+				},
+				&corev1.ConfigMap{
+					ObjectMeta: metav1.ObjectMeta{Namespace: "ns", Name: "lease-proxy"},
+					Data:       map[string]string{"foo": "bar"},
+				},
+			},
+			leaseProxyClientConfigMapBackoff: wait.Backoff{Steps: 3},
+			interceptorsFunc: func() interceptor.Funcs {
+				createCount := atomic.Int32{}
+				return interceptor.Funcs{
+					Create: func(ctx context.Context, client ctrlruntimeclient.WithWatch, obj ctrlruntimeclient.Object, opts ...ctrlruntimeclient.CreateOption) error {
+						// Fail when `create` is called for the second time. This means the stale configmap
+						// has been deleted and the new one, with the up-to-date content, is about to be created.
+						if cm, ok := obj.(*corev1.ConfigMap); ok && cm.Name == api.LeaseProxyConfigMapName && createCount.Add(1) == 2 {
+							return &apierrors.StatusError{ErrStatus: metav1.Status{Reason: metav1.StatusReasonAlreadyExists}}
+						}
+						return client.Create(ctx, obj, opts...)
+					},
+				}
+			},
+			wantConfigMaps: []corev1.ConfigMap{
+				{
+					ObjectMeta: metav1.ObjectMeta{Namespace: "ci", Name: "lease-proxy", ResourceVersion: "999"},
+					Data:       map[string]string{"super": "duper"},
+				},
+				{
+					ObjectMeta: metav1.ObjectMeta{Namespace: "ns", Name: "lease-proxy", ResourceVersion: "1"},
+					Data:       map[string]string{"super": "duper"},
+					Immutable:  ptr.To(true),
+				},
+				{
+					ObjectMeta: metav1.ObjectMeta{Name: "test-commands", Namespace: "ns", ResourceVersion: "1"},
+					Immutable:  ptr.To(true),
+				},
+			},
+			wantSecrets: []v1.Secret{{
+				ObjectMeta: metav1.ObjectMeta{
+					Name:            "test",
+					Namespace:       "ns",
+					ResourceVersion: "1",
+					Labels:          map[string]string{"ci.openshift.io/skip-censoring": "true"},
+				},
+			}},
+		},
+		{
+			name: "Copy lease proxy script config map: give up retrying due to create failing consistently",
+			objects: []ctrlruntimeclient.Object{
+				&corev1.ConfigMap{
+					ObjectMeta: metav1.ObjectMeta{Namespace: "ci", Name: "lease-proxy"},
+					Data:       map[string]string{"super": "duper"},
+				},
+				&corev1.ConfigMap{
+					ObjectMeta: metav1.ObjectMeta{Namespace: "ns", Name: "lease-proxy"},
+					Data:       map[string]string{"foo": "bar"},
+				},
+			},
+			leaseProxyClientConfigMapBackoff: wait.Backoff{Steps: 3},
+			interceptorsFunc: func() interceptor.Funcs {
+				return interceptor.Funcs{
+					Create: func(ctx context.Context, client ctrlruntimeclient.WithWatch, obj ctrlruntimeclient.Object, opts ...ctrlruntimeclient.CreateOption) error {
+						if cm, ok := obj.(*corev1.ConfigMap); ok && cm.Name == "lease-proxy" {
+							return errors.New("permafailing")
+						}
+						return client.Create(ctx, obj, opts...)
+					},
+				}
+			},
+			wantConfigMaps: []corev1.ConfigMap{
+				{
+					ObjectMeta: metav1.ObjectMeta{Namespace: "ci", Name: "lease-proxy", ResourceVersion: "999"},
+					Data:       map[string]string{"super": "duper"},
+				},
+				{
+					ObjectMeta: metav1.ObjectMeta{Namespace: "ns", Name: "lease-proxy", ResourceVersion: "999"},
+					Data:       map[string]string{"foo": "bar"},
+				},
+				{
+					ObjectMeta: metav1.ObjectMeta{Name: "test-commands", Namespace: "ns", ResourceVersion: "1"},
+					Immutable:  ptr.To(true),
+				},
+			},
+			wantSecrets: []v1.Secret{{
+				ObjectMeta: metav1.ObjectMeta{
+					Name:            "test",
+					Namespace:       "ns",
+					ResourceVersion: "1",
+					Labels:          map[string]string{"ci.openshift.io/skip-censoring": "true"},
+				},
+			}},
+			wantErr: errors.New("copy lease proxy scripts into ns ns: create configmap ns/lease-proxy: permafailing"),
 		},
 	} {
 		t.Run(tc.name, func(t *testing.T) {
-			sa := &v1.ServiceAccount{
-				ObjectMeta:       metav1.ObjectMeta{Name: "test", Namespace: "ns", Labels: map[string]string{"ci.openshift.io/multi-stage-test": "test"}},
-				ImagePullSecrets: []v1.LocalObjectReference{{Name: "ci-operator-dockercfg-12345"}},
+			if tc.testConfig == nil {
+				tc.testConfig = &api.TestStepConfiguration{
+					As:                                 "test",
+					MultiStageTestConfigurationLiteral: &api.MultiStageTestConfigurationLiteral{}}
 			}
-			name := "test"
+			if tc.interceptorsFunc == nil {
+				tc.interceptorsFunc = func() interceptor.Funcs { return interceptor.Funcs{} }
+			}
+
 			observerPodNames := sets.New[string]()
-			for _, observerPod := range tc.observers {
-				observerPodNames.Insert(fmt.Sprintf("%s-%s", name, observerPod.Name))
+			for _, observerPod := range tc.testConfig.MultiStageTestConfigurationLiteral.Observers {
+				observerPodNames.Insert(fmt.Sprintf("%s-%s", tc.testConfig.As, observerPod.Name))
 			}
 
 			crclient := &testhelper_kube.FakePodExecutor{
@@ -92,68 +476,80 @@ func TestRun(t *testing.T) {
 					fakectrlruntimeclient.NewClientBuilder().
 						WithIndex(&v1.Pod{}, "metadata.name", fakePodNameIndexer).
 						WithObjects(sa).
+						WithObjects(tc.objects...).
+						WithInterceptorFuncs(tc.interceptorsFunc()).
 						Build(), nil),
 				Failures:     tc.failures,
 				AutoSchedule: true,
 			}
-			jobSpec := api.JobSpec{
-				JobSpec: prowdapi.JobSpec{
-					Job:       "job",
-					BuildID:   "build_id",
-					ProwJobID: "prow_job_id",
-					Type:      prowapi.PeriodicJob,
-					DecorationConfig: &prowapi.DecorationConfig{
-						Timeout:     &prowapi.Duration{Duration: time.Minute},
-						GracePeriod: &prowapi.Duration{Duration: time.Second},
-						UtilityImages: &prowapi.UtilityImages{
-							Sidecar:    "sidecar",
-							Entrypoint: "entrypoint",
-						},
-					},
-				},
-			}
-			jobSpec.SetNamespace("ns")
+
 			client := &testhelper_kube.FakePodClient{
 				PendingTimeout:  30 * time.Minute,
 				FakePodExecutor: crclient,
 			}
-			step := MultiStageTestStep(api.TestStepConfiguration{
-				As: name,
-				MultiStageTestConfigurationLiteral: &api.MultiStageTestConfigurationLiteral{
-					Pre:                []api.LiteralTestStep{{As: "pre0"}, {As: "pre1"}},
-					Test:               []api.LiteralTestStep{{As: "test0"}, {As: "test1"}},
-					Post:               []api.LiteralTestStep{{As: "post0"}, {As: "post1", OptionalOnSuccess: &yes}},
-					Observers:          tc.observers,
-					AllowSkipOnSuccess: &yes,
-				},
-			}, &api.ReleaseBuildConfiguration{}, nil, client, &jobSpec, nil, "node-name", "", func(cf context.CancelFunc) {}, false, nil, false)
+			step := MultiStageTestStep(*tc.testConfig, &api.ReleaseBuildConfiguration{}, nil, client, &jobSpec, nil, "node-name", "", func(cf context.CancelFunc) {}, false, nil, false, tc.leaseProxyClientConfigMapBackoff)
 
-			// An Observer pod failure doesn't make the test fail
-			failures := tc.failures.Delete(observerPodNames.UnsortedList()...)
-			hasFailures := failures != nil && failures.Len() > 0
+			gotErr := step.Run(context.Background())
 
-			if err := step.Run(context.Background()); (err != nil) != hasFailures {
-				t.Errorf("expected error: %t, got error: %v", hasFailures, err)
+			// Observer do not produce any error.
+			wantFailures := tc.failures.Clone()
+			observers := sets.New[string]()
+			if len(tc.testConfig.MultiStageTestConfigurationLiteral.Observers) > 0 {
+				for _, o := range tc.testConfig.MultiStageTestConfigurationLiteral.Observers {
+					observers.Insert(tc.testConfig.As + "-" + o.Name)
+				}
 			}
-			secrets := &v1.SecretList{}
-			if err := crclient.List(context.TODO(), secrets, ctrlruntimeclient.InNamespace(jobSpec.Namespace())); err != nil {
+			wantFailures = wantFailures.Difference(observers)
+			// Do not compare errors literally when we expect a pod to fail. The error message is not stable
+			// since a pod might fail after an arbitrary amount of time, therefore we get:
+			// `pod ns/test-post0 failed after <n>s` and we can't predict what the value of <n>
+			// might actually be.
+			if wantFailures.Len() > 0 {
+				if gotErr == nil {
+					t.Fatal("expected pod failure errors but got nil")
+				}
+				msg := gotErr.Error()
+				for pod := range tc.failures {
+					if observers.Has(pod) {
+						continue
+					}
+					if !strings.Contains(msg, fmt.Sprintf("pod %q failed", pod)) {
+						t.Errorf("pod %s didn't fail as expected", pod)
+					}
+				}
+			} else {
+				if gotErr != nil && tc.wantErr == nil {
+					t.Errorf("want err nil but got: %v", gotErr)
+				}
+				if gotErr == nil && tc.wantErr != nil {
+					t.Errorf("want err %v but nil", tc.wantErr)
+				}
+				if gotErr != nil && tc.wantErr != nil {
+					if diff := cmp.Diff(tc.wantErr.Error(), gotErr.Error()); diff != "" {
+						t.Errorf("unexpected error: %s", diff)
+					}
+				}
+			}
+
+			gotSecrets := &v1.SecretList{}
+			if err := crclient.List(context.TODO(), gotSecrets, ctrlruntimeclient.InNamespace(jobSpec.Namespace())); err != nil {
 				t.Fatal(err)
 			}
-			if l := secrets.Items; len(l) != 1 || l[0].ObjectMeta.Name != name {
-				t.Errorf("unexpected secrets: %#v", l)
+			secretSorter := func(a, b *v1.Secret) bool { return a.Namespace+a.Name <= b.Namespace+b.Name }
+			if diff := cmp.Diff(tc.wantSecrets, gotSecrets.Items, cmpopts.SortSlices(secretSorter)); diff != "" {
+				t.Errorf("unexpected secrets: %s", diff)
 			}
-			var names []string
 
 			// An observer pod can be executed at any time, therefore making unstable the output
 			// of the pods the client has created. Do not take into account them.
 			observerPodsToRemove := observerPodNames.Clone()
-
+			var gotPodNames []string
 			for _, pod := range crclient.CreatedPods {
 				if pod.Namespace != jobSpec.Namespace() {
 					t.Errorf("pod %s didn't have namespace %s set, had %q instead", pod.Name, jobSpec.Namespace(), pod.Namespace)
 				}
 				if !observerPodsToRemove.Has(pod.Name) {
-					names = append(names, pod.Name)
+					gotPodNames = append(gotPodNames, pod.Name)
 				} else {
 					observerPodsToRemove.Delete(pod.Name)
 				}
@@ -163,8 +559,18 @@ func TestRun(t *testing.T) {
 				t.Errorf("did not find the following pods to remove: %s", observerPodsToRemove.UnsortedList())
 			}
 
-			if diff := cmp.Diff(names, tc.expected); diff != "" {
-				t.Errorf("did not execute correct pods: %s, actual: %v, expected: %v", diff, names, tc.expected)
+			if diff := cmp.Diff(gotPodNames, tc.wantPodNames); diff != "" {
+				t.Errorf("did not execute correct pods: %s, actual: %v, expected: %v", diff, gotPodNames, tc.wantPodNames)
+			}
+
+			gotCMs := corev1.ConfigMapList{}
+			if err := client.List(context.TODO(), &gotCMs, &ctrlruntimeclient.ListOptions{}); err != nil {
+				t.Fatalf("list configmaps: %s", err)
+			}
+
+			configMapSorter := func(a, b *v1.ConfigMap) bool { return a.Namespace+a.Name <= b.Namespace+b.Name }
+			if diff := cmp.Diff(tc.wantConfigMaps, gotCMs.Items, cmpopts.SortSlices(configMapSorter)); diff != "" {
+				t.Errorf("unexpected configmaps: %s", diff)
 			}
 		})
 	}
@@ -266,11 +672,12 @@ func TestJUnit(t *testing.T) {
 					Test: []api.LiteralTestStep{{As: "test0"}, {As: "test1"}},
 					Post: []api.LiteralTestStep{{As: "post0"}, {As: "post1"}},
 				},
-			}, &api.ReleaseBuildConfiguration{}, nil, client, &jobSpec, nil, "node-name", "", nil, false, nil, false)
+			}, &api.ReleaseBuildConfiguration{}, nil, client, &jobSpec, nil, "node-name", "", nil, false, nil, false, wait.Backoff{})
 			if err := step.Run(context.Background()); tc.failures == nil && err != nil {
 				t.Error(err)
 				return
 			}
+
 			var names []string
 			for _, t := range step.(steps.SubtestReporter).SubTests() {
 				names = append(names, t.Name)
@@ -341,7 +748,7 @@ func TestRunPodDeletesPendingPodsOnError(t *testing.T) {
 			Post:               []api.LiteralTestStep{{As: "post0"}},
 			AllowSkipOnSuccess: &yes,
 		},
-	}, &api.ReleaseBuildConfiguration{}, nil, client, &jobSpec, nil, "node-name", "", func(cf context.CancelFunc) {}, false, nil, false)
+	}, &api.ReleaseBuildConfiguration{}, nil, client, &jobSpec, nil, "node-name", "", func(cf context.CancelFunc) {}, false, nil, false, wait.Backoff{})
 
 	// Use a context with timeout to ensure the test doesn't hang
 	ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)

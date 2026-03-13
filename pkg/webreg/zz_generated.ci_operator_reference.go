@@ -257,6 +257,8 @@ const ciOperatorReferenceYaml = "# The list of base images describe\n" +
 	"          # UpdateGraph defines the update mode to use when adding the bundle to the base index.\n" +
 	"          # Can be: semver (default), semver-skippatch, or replaces\n" +
 	"          update_graph: ' '\n" +
+	"    # SkipPresubmits prevents generation of operator bundle presubmit jobs.\n" +
+	"    skip_presubmits: false\n" +
 	"    # Substitutions describes the pullspecs in the operator manifests that must be subsituted\n" +
 	"    # with the pull specs of the images in the CI registry\n" +
 	"    substitutions:\n" +
@@ -320,6 +322,21 @@ const ciOperatorReferenceYaml = "# The list of base images describe\n" +
 	"          # this will cause both a floating tag and commit-specific tags\n" +
 	"          # to be promoted.\n" +
 	"          tag_by_commit: true\n" +
+	"# Prowgen holds fields that control Prow job generation behavior.\n" +
+	"# These fields were previously configured via the .config.prowgen file.\n" +
+	"prowgen:\n" +
+	"    # DisableRehearsals prevents all tests in this config from being rehearsed.\n" +
+	"    disable_rehearsals: false\n" +
+	"    # EnableSecretsStoreCSIDriver indicates that jobs should use the new CSI Secrets Store\n" +
+	"    # mechanism to handle multi-stage credentials secrets.\n" +
+	"    enable_secrets_store_csi_driver: false\n" +
+	"    # Expose declares that jobs should not be hidden from view in deck if they\n" +
+	"    # are private. This field has no effect if private is not set.\n" +
+	"    expose: false\n" +
+	"    # Private indicates that generated jobs should be marked as hidden\n" +
+	"    # from display in deck and that they should mount appropriate git credentials\n" +
+	"    # to clone the repository under test.\n" +
+	"    private: false\n" +
 	"# RawSteps are literal Steps that should be\n" +
 	"# included in the final pipeline.\n" +
 	"raw_steps:\n" +
@@ -607,6 +624,8 @@ const ciOperatorReferenceYaml = "# The list of base images describe\n" +
 	"        # of pull request workflows. Setting this field will\n" +
 	"        # create a periodic job instead of a presubmit\n" +
 	"        cron: \"\"\n" +
+	"        # DisableRehearsal prevents this specific test from being picked up for rehearsals.\n" +
+	"        disable_rehearsal: false\n" +
 	"        # Interval is how frequently the test should be run based\n" +
 	"        # on the last time the test ran. Setting this field will\n" +
 	"        # create a periodic job instead of a presubmit\n" +
@@ -1018,6 +1037,10 @@ const ciOperatorReferenceYaml = "# The list of base images describe\n" +
 	"                  timeout: 0s\n" +
 	"            # Override job timeout\n" +
 	"            timeout: 0s\n" +
+	"        # MaxConcurrency sets the maximum number of concurrent runs of this job.\n" +
+	"        # For postsubmit and periodic jobs, this defaults to 1 if not set.\n" +
+	"        # Setting 0 means no concurrency limit.\n" +
+	"        max_concurrency: 0\n" +
 	"        # MinimumInterval to wait between two runs of the job. Consecutive\n" +
 	"        # jobs are run at `minimum_interval` + `duration of previous job`\n" +
 	"        # apart. Setting this field will create a periodic job instead of a\n" +
@@ -1104,6 +1127,19 @@ const ciOperatorReferenceYaml = "# The list of base images describe\n" +
 	"        shard_count: 0\n" +
 	"        # SkipIfOnlyChanged is a regex that will result in the test being skipped if all changed files match that regex.\n" +
 	"        skip_if_only_changed: ' '\n" +
+	"        # SlackReporter configures Slack reporting for this specific test.\n" +
+	"        # When set, the generated Prow job will have Slack reporter configuration\n" +
+	"        # that reports to the specified channel on the specified job states.\n" +
+	"        slack_reporter:\n" +
+	"            # Channel is the Slack channel to report to (e.g., \"#my-channel\").\n" +
+	"            channel: ' '\n" +
+	"            # JobStatesToReport determines which job states trigger a Slack report.\n" +
+	"            # If not set, defaults to [\"failure\", \"error\"].\n" +
+	"            job_states_to_report:\n" +
+	"                - \"\"\n" +
+	"            # ReportTemplate is an optional Go template for the Slack message.\n" +
+	"            # If not set, a default template is used.\n" +
+	"            report_template: ' '\n" +
 	"        steps:\n" +
 	"            # AllowBestEffortPostSteps defines if any `post` steps can be ignored when\n" +
 	"            # they fail. The given step must explicitly ask for being ignored by setting\n" +
@@ -1547,6 +1583,8 @@ const ciOperatorReferenceYaml = "# The list of base images describe\n" +
 	"      # of pull request workflows. Setting this field will\n" +
 	"      # create a periodic job instead of a presubmit\n" +
 	"      cron: \"\"\n" +
+	"      # DisableRehearsal prevents this specific test from being picked up for rehearsals.\n" +
+	"      disable_rehearsal: false\n" +
 	"      # Interval is how frequently the test should be run based\n" +
 	"      # on the last time the test ran. Setting this field will\n" +
 	"      # create a periodic job instead of a presubmit\n" +
@@ -1958,6 +1996,10 @@ const ciOperatorReferenceYaml = "# The list of base images describe\n" +
 	"              timeout: 0s\n" +
 	"        # Override job timeout\n" +
 	"        timeout: 0s\n" +
+	"      # MaxConcurrency sets the maximum number of concurrent runs of this job.\n" +
+	"      # For postsubmit and periodic jobs, this defaults to 1 if not set.\n" +
+	"      # Setting 0 means no concurrency limit.\n" +
+	"      max_concurrency: 0\n" +
 	"      # MinimumInterval to wait between two runs of the job. Consecutive\n" +
 	"      # jobs are run at `minimum_interval` + `duration of previous job`\n" +
 	"      # apart. Setting this field will create a periodic job instead of a\n" +
@@ -2044,6 +2086,19 @@ const ciOperatorReferenceYaml = "# The list of base images describe\n" +
 	"      shard_count: 0\n" +
 	"      # SkipIfOnlyChanged is a regex that will result in the test being skipped if all changed files match that regex.\n" +
 	"      skip_if_only_changed: ' '\n" +
+	"      # SlackReporter configures Slack reporting for this specific test.\n" +
+	"      # When set, the generated Prow job will have Slack reporter configuration\n" +
+	"      # that reports to the specified channel on the specified job states.\n" +
+	"      slack_reporter:\n" +
+	"        # Channel is the Slack channel to report to (e.g., \"#my-channel\").\n" +
+	"        channel: ' '\n" +
+	"        # JobStatesToReport determines which job states trigger a Slack report.\n" +
+	"        # If not set, defaults to [\"failure\", \"error\"].\n" +
+	"        job_states_to_report:\n" +
+	"            - \"\"\n" +
+	"        # ReportTemplate is an optional Go template for the Slack message.\n" +
+	"        # If not set, a default template is used.\n" +
+	"        report_template: ' '\n" +
 	"      steps:\n" +
 	"        # AllowBestEffortPostSteps defines if any `post` steps can be ignored when\n" +
 	"        # they fail. The given step must explicitly ask for being ignored by setting\n" +

@@ -24,6 +24,46 @@ func IsPromotionJob(jobLabels map[string]string) bool {
 	return ok
 }
 
+// DefaultSlackReportTemplate is the default Go template used for Slack messages
+// when no custom template is provided.
+const DefaultSlackReportTemplate = `{{if eq .Status.State "success"}} :large_green_circle: Job *{{.Spec.Job}}* ended with *{{.Status.State}}*. <{{.Status.URL}}|View logs> {{else}} :red_circle: Job *{{.Spec.Job}}* ended with *{{.Status.State}}*. <{{.Status.URL}}|View logs> {{end}}`
+
+// DefaultSlackReporterJobStatesToReport is the default set of job states that
+// trigger a Slack report when no custom states are provided.
+var DefaultSlackReporterJobStatesToReport = []prowv1.ProwJobState{
+	prowv1.FailureState,
+	prowv1.ErrorState,
+}
+
+// SlackReporter configures Slack reporting for a specific test.
+type SlackReporter struct {
+	// Channel is the Slack channel to report to (e.g., "#my-channel").
+	Channel string `json:"channel"`
+	// JobStatesToReport determines which job states trigger a Slack report.
+	// If not set, defaults to ["failure", "error"].
+	JobStatesToReport []prowv1.ProwJobState `json:"job_states_to_report,omitempty"`
+	// ReportTemplate is an optional Go template for the Slack message.
+	// If not set, a default template is used.
+	ReportTemplate string `json:"report_template,omitempty"`
+}
+
+// ProwgenExtras holds fields that control Prow job generation behavior.
+// These fields were previously configured via the .config.prowgen file.
+type ProwgenExtras struct {
+	// Private indicates that generated jobs should be marked as hidden
+	// from display in deck and that they should mount appropriate git credentials
+	// to clone the repository under test.
+	Private *bool `json:"private,omitempty"`
+	// Expose declares that jobs should not be hidden from view in deck if they
+	// are private. This field has no effect if private is not set.
+	Expose *bool `json:"expose,omitempty"`
+	// DisableRehearsals prevents all tests in this config from being rehearsed.
+	DisableRehearsals *bool `json:"disable_rehearsals,omitempty"`
+	// EnableSecretsStoreCSIDriver indicates that jobs should use the new CSI Secrets Store
+	// mechanism to handle multi-stage credentials secrets.
+	EnableSecretsStoreCSIDriver *bool `json:"enable_secrets_store_csi_driver,omitempty"`
+}
+
 // ReleaseBuildConfiguration describes how release
 // artifacts are built from a repository of source
 // code. The configuration is made up of two parts:
@@ -38,6 +78,10 @@ type ReleaseBuildConfiguration struct {
 	Metadata Metadata `json:"zz_generated_metadata"`
 
 	InputConfiguration `json:",inline"`
+
+	// Prowgen holds fields that control Prow job generation behavior.
+	// These fields were previously configured via the .config.prowgen file.
+	Prowgen *ProwgenExtras `json:"prowgen,omitempty"`
 
 	// BinaryBuildCommands will create a "bin" image based on "src" that
 	// contains the output of this command. This allows reuse of binary artifacts
@@ -861,6 +905,19 @@ type TestStepConfiguration struct {
 
 	// RestrictNetworkAccess restricts network access to RedHat intranet.
 	RestrictNetworkAccess *bool `json:"restrict_network_access,omitempty"`
+
+	// SlackReporter configures Slack reporting for this specific test.
+	// When set, the generated Prow job will have Slack reporter configuration
+	// that reports to the specified channel on the specified job states.
+	SlackReporter *SlackReporter `json:"slack_reporter,omitempty"`
+
+	// DisableRehearsal prevents this specific test from being picked up for rehearsals.
+	DisableRehearsal *bool `json:"disable_rehearsal,omitempty"`
+
+	// MaxConcurrency sets the maximum number of concurrent runs of this job.
+	// For postsubmit and periodic jobs, this defaults to 1 if not set.
+	// Setting 0 means no concurrency limit.
+	MaxConcurrency *int `json:"max_concurrency,omitempty"`
 
 	// ShardCount describes the number of jobs that should be generated as shards for this test
 	// Each generated job will be a duplication, but contain a suffix and the necessary SHARD_ARGS will be passed to the steps
@@ -2698,6 +2755,9 @@ type OperatorStepConfiguration struct {
 	// Substitutions describes the pullspecs in the operator manifests that must be subsituted
 	// with the pull specs of the images in the CI registry
 	Substitutions []PullSpecSubstitution `json:"substitutions,omitempty"`
+
+	// SkipPresubmits prevents generation of operator bundle presubmit jobs.
+	SkipPresubmits *bool `json:"skip_presubmits,omitempty"`
 }
 
 // IndexUpdate specifies the update mode for an operator being added to an index

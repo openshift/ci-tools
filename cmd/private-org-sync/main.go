@@ -313,13 +313,40 @@ func (g gitSyncer) makeGitDir(org, repo string) (string, error) {
 	return repoDir, err
 }
 
+// initRepo initializes a local git repository and sets up the source remote.
+// This should be called once per (org, repo) pair before calling mirror() for
+// individual branches.
+func (g gitSyncer) initRepo(repoDir, org, repo string) error {
+	logger := g.logger
+
+	logger.Debug("Initializing git repository")
+	if _, exitCode, err := g.git(logger, repoDir, "init"); err != nil || exitCode != 0 {
+		logger.WithField("exit-code", exitCode).WithError(err).Error("Failed to initialize local git directory")
+		return fmt.Errorf("failed to initialize local git directory")
+	}
+
+	srcRemote := fmt.Sprintf("%s-%s", org, repo)
+	_, exitCode, err := g.git(logger, repoDir, "remote", "get-url", srcRemote)
+	if err != nil {
+		logger.WithError(err).Error("Failed to query local git repository for remotes")
+		return fmt.Errorf("failed to query local git repository for remotes")
+	}
+
+	if exitCode != 0 {
+		if err := addGitRemote(logger, g.git, g.prefix, g.token, org, repo, repoDir, srcRemote); err != nil {
+			return err
+		}
+	}
+
+	return nil
+}
+
 // mirror syncs content from source location to destination one, using a local
-// repository in the given path. The `repoDir` directory must exist and be
-// either empty, or previously used in a `mirror()` call. If it is empty,
-// a git repository will be initialized in it. The git content from
-// the `src` location will be fetched to this local repository and then
-// pushed to the `dst` location. Multiple `mirror` calls over the same `repoDir`
-// will reuse the content fetched in previous calls, acting like a cache.
+// repository in the given path. The `repoDir` must have been previously
+// initialized via initRepo(). The git content from the `src` location will
+// be fetched to this local repository and then pushed to the `dst` location.
+// Multiple `mirror` calls over the same `repoDir` will reuse the content
+// fetched in previous calls, acting like a cache.
 func (g gitSyncer) mirror(repoDir string, src, dst location) error {
 	mirrorFields := logrus.Fields{
 		"source":      src.String(),
@@ -355,27 +382,7 @@ func (g gitSyncer) mirror(repoDir string, src, dst location) error {
 	}
 	dstCommitHash := dstHeads[dst.branch]
 
-	logger.Debug("Initializing git repository")
-	if _, exitCode, err := g.git(logger, repoDir, "init"); err != nil || exitCode != 0 {
-		logger.WithField("exit-code", exitCode).WithError(err).Error("Failed to initialize local git directory")
-		return fmt.Errorf("failed to initialize local git directory")
-	}
-
-	// We set up a named remote for our source, called $org-$repo
-	// We do this to allow git to reuse already fetched refs in subsequent fetches
-	// so the local git repository acts like a cache.
 	srcRemote := fmt.Sprintf("%s-%s", src.org, src.repo)
-	_, exitCode, err := g.git(logger, repoDir, "remote", "get-url", srcRemote)
-	if err != nil {
-		logger.WithError(err).Error("Failed to query local git repository for remotes")
-		return fmt.Errorf("failed to query local git repository for remotes")
-	}
-
-	if exitCode != 0 {
-		if err := addGitRemote(logger, g.git, g.prefix, g.token, src.org, src.repo, repoDir, srcRemote); err != nil {
-			return err
-		}
-	}
 
 	logger.Debug("Determining HEAD of source branch")
 	srcHeads, err := getRemoteBranchHeads(logger, withRetryOnNonzero(g.git, 5), repoDir, srcRemote)
@@ -636,40 +643,58 @@ func main() {
 		errs = append(errs, err)
 	}
 
+	// Group locations by (org, repo) so we can initialize each repo once
+	type repoKey struct{ org, repo string }
+	grouped := make(map[repoKey][]location)
 	for source := range locations {
-		syncer.logger = config.LoggerForInfo(config.Info{
-			Metadata: api.Metadata{
-				Org:    source.org,
-				Repo:   source.repo,
-				Branch: source.branch,
-			},
-		})
+		key := repoKey{org: source.org, repo: source.repo}
+		grouped[key] = append(grouped[key], source)
+	}
 
-		destination := source
-		destination.org = o.targetOrg
+	flattenedOrgs := sets.New[string](defaultFlattenOrgs...)
+	flattenedOrgs.Insert(o.flattenOrgs...)
+	if o.org != "" {
+		flattenedOrgs.Insert(o.org)
+	}
 
-		// Use <org>-<repo> naming for repos from organizations not in the flatten list
-		// This prevents collisions when multiple orgs have repos with the same name
-		// Start with the default flattened orgs for backwards compatibility
-		flattenedOrgs := sets.New[string](defaultFlattenOrgs...)
-		// Add any additional orgs specified via --flatten-org
-		flattenedOrgs.Insert(o.flattenOrgs...)
-		// The --only-org is also flattened if specified
-		if o.org != "" {
-			flattenedOrgs.Insert(o.org)
-		}
-		if !flattenedOrgs.Has(source.org) {
-			destination.repo = fmt.Sprintf("%s-%s", source.org, source.repo)
-		}
-
-		gitDir, err := syncer.makeGitDir(source.org, source.repo)
+	for key, branches := range grouped {
+		gitDir, err := syncer.makeGitDir(key.org, key.repo)
 		if err != nil {
-			errs = append(errs, fmt.Errorf("%s->%s: %w", source.String(), destination.String(), err))
+			for _, source := range branches {
+				errs = append(errs, fmt.Errorf("%s: %w", source.String(), err))
+			}
 			continue
 		}
 
-		if err := syncer.mirror(gitDir, source, destination); err != nil {
-			errs = append(errs, fmt.Errorf("%s->%s: %w", source.String(), destination.String(), err))
+		syncer.logger = logrus.WithFields(logrus.Fields{
+			"org":  key.org,
+			"repo": key.repo,
+		})
+		if err := syncer.initRepo(gitDir, key.org, key.repo); err != nil {
+			for _, source := range branches {
+				errs = append(errs, fmt.Errorf("%s: %w", source.String(), err))
+			}
+			continue
+		}
+
+		for _, source := range branches {
+			syncer.logger = config.LoggerForInfo(config.Info{
+				Metadata: api.Metadata{
+					Org:    source.org,
+					Repo:   source.repo,
+					Branch: source.branch,
+				},
+			})
+
+			destination := source
+			destination.org = o.targetOrg
+			if !flattenedOrgs.Has(source.org) {
+				destination.repo = fmt.Sprintf("%s-%s", source.org, source.repo)
+			}
+
+			if err := syncer.mirror(gitDir, source, destination); err != nil {
+				errs = append(errs, fmt.Errorf("%s->%s: %w", source.String(), destination.String(), err))
+			}
 		}
 	}
 

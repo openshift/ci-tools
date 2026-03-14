@@ -266,93 +266,56 @@ func TestMirror(t *testing.T) {
 		expectError      bool
 	}{
 		{
-			description: "cold cache, confirm, success -> no error",
+			description: "confirm, success -> no error",
 			src:         location{org: org, repo: repo, branch: branch},
 			dst:         location{org: destOrg, repo: repo, branch: branch},
 			confirm:     true,
 			expectedGitCalls: []mockGitCall{
 				{call: "ls-remote --heads https://TOKEN@github.com/dest/repo", output: "dest-sha refs/heads/branch"},
-				{call: "init"},
-				{call: "remote get-url org-repo", exitCode: 1},
-				{call: "remote add org-repo https://TOKEN@github.com/org/repo"},
 				{call: "ls-remote --heads org-repo", output: "source-sha refs/heads/branch"},
 				{call: "fetch --tags org-repo branch --depth=2"},
 				{call: "push --tags https://TOKEN@github.com/dest/repo FETCH_HEAD:refs/heads/branch"},
 			},
 		},
 		{
-			description: "cold cache, fails to set up remote -> error",
+			description: "no confirm, success -> push with dry run",
 			src:         location{org: org, repo: repo, branch: branch},
 			dst:         location{org: destOrg, repo: repo, branch: branch},
 			expectedGitCalls: []mockGitCall{
 				{call: "ls-remote --heads https://TOKEN@github.com/dest/repo", output: "dest-sha refs/heads/branch"},
-				{call: "init"},
-				{call: "remote get-url org-repo", exitCode: 1},
-				{call: "remote add org-repo https://TOKEN@github.com/org/repo", exitCode: 1},
-			},
-			expectError: true,
-		},
-		{
-			description: "warm cache, confirm, success -> no error",
-			src:         location{org: org, repo: repo, branch: branch},
-			dst:         location{org: destOrg, repo: repo, branch: branch},
-			confirm:     true,
-			expectedGitCalls: []mockGitCall{
-				{call: "ls-remote --heads https://TOKEN@github.com/dest/repo", output: "dest-sha refs/heads/branch"},
-				{call: "init"},
-				{call: "remote get-url org-repo"},
-				{call: "ls-remote --heads org-repo", output: "source-sha refs/heads/branch"},
-				{call: "fetch --tags org-repo branch --depth=2"},
-				{call: "push --tags https://TOKEN@github.com/dest/repo FETCH_HEAD:refs/heads/branch"},
-			},
-		},
-		{
-			description: "warm cache, no confirm, success -> push with dry run",
-			src:         location{org: org, repo: repo, branch: branch},
-			dst:         location{org: destOrg, repo: repo, branch: branch},
-			expectedGitCalls: []mockGitCall{
-				{call: "ls-remote --heads https://TOKEN@github.com/dest/repo", output: "dest-sha refs/heads/branch"},
-				{call: "init"},
-				{call: "remote get-url org-repo"},
 				{call: "ls-remote --heads org-repo", output: "source-sha refs/heads/branch"},
 				{call: "fetch --tags org-repo branch --depth=2"},
 				{call: "push --tags --dry-run https://TOKEN@github.com/dest/repo FETCH_HEAD:refs/heads/branch"},
 			},
 		},
 		{
-			description: "warm cache, no confirm, source has more branches -> push with dry run",
+			description: "no confirm, source has more branches -> push with dry run",
 			src:         location{org: org, repo: repo, branch: branch},
 			dst:         location{org: destOrg, repo: repo, branch: branch},
 			expectedGitCalls: []mockGitCall{
 				{call: "ls-remote --heads https://TOKEN@github.com/dest/repo", output: "dest-sha refs/heads/branch"},
-				{call: "init"},
-				{call: "remote get-url org-repo"},
 				{call: "ls-remote --heads org-repo", output: "source-sha refs/heads/branch\nanother-sha refs/heads/another-branch"},
 				{call: "fetch --tags org-repo branch --depth=2"},
 				{call: "push --tags --dry-run https://TOKEN@github.com/dest/repo FETCH_HEAD:refs/heads/branch"},
 			},
 		},
 		{
-			description: "warm cache, fails to fetch -> error",
+			description: "fails to fetch -> error",
 			src:         location{org: org, repo: repo, branch: branch},
 			dst:         location{org: destOrg, repo: repo, branch: branch},
 			expectedGitCalls: []mockGitCall{
 				{call: "ls-remote --heads https://TOKEN@github.com/dest/repo", output: "dest-sha refs/heads/branch"},
-				{call: "init"},
-				{call: "remote get-url org-repo"},
 				{call: "ls-remote --heads org-repo", output: "source-sha refs/heads/branch"},
 				{call: "fetch --tags org-repo branch --depth=2", exitCode: 1},
 			},
 			expectError: true,
 		},
 		{
-			description: "warm cache, no confirm, fails to push -> error",
+			description: "no confirm, fails to push -> error",
 			src:         location{org: org, repo: repo, branch: branch},
 			dst:         location{org: destOrg, repo: repo, branch: branch},
 			expectedGitCalls: []mockGitCall{
 				{call: "ls-remote --heads https://TOKEN@github.com/dest/repo", output: "dest-sha refs/heads/branch"},
-				{call: "init"},
-				{call: "remote get-url org-repo"},
 				{call: "ls-remote --heads org-repo", output: "source-sha refs/heads/branch"},
 				{call: "fetch --tags org-repo branch --depth=2"},
 				{call: "push --tags --dry-run https://TOKEN@github.com/dest/repo FETCH_HEAD:refs/heads/branch", exitCode: 1},
@@ -360,24 +323,20 @@ func TestMirror(t *testing.T) {
 			expectError: true,
 		},
 		{
-			description: "warm cache, branches are in sync -> no fetch, no push",
+			description: "branches are in sync -> no fetch, no push",
 			src:         location{org: org, repo: repo, branch: branch},
 			dst:         location{org: destOrg, repo: repo, branch: branch},
 			expectedGitCalls: []mockGitCall{
 				{call: "ls-remote --heads https://TOKEN@github.com/dest/repo", output: "source-sha refs/heads/branch"},
-				{call: "init"},
-				{call: "remote get-url org-repo"},
 				{call: "ls-remote --heads org-repo", output: "source-sha refs/heads/branch"},
 			},
 		},
 		{
-			description: "warm cache, ls-remote source fails with retries -> error",
+			description: "ls-remote source fails with retries -> error",
 			src:         location{org: org, repo: repo, branch: branch},
 			dst:         location{org: destOrg, repo: repo, branch: branch},
 			expectedGitCalls: []mockGitCall{
 				{call: "ls-remote --heads https://TOKEN@github.com/dest/repo", output: "source-sha refs/heads/branch"},
-				{call: "init"},
-				{call: "remote get-url org-repo"},
 				{call: "ls-remote --heads org-repo", exitCode: 1},
 				{call: "ls-remote --heads org-repo", exitCode: 1},
 				{call: "ls-remote --heads org-repo", exitCode: 1},
@@ -387,25 +346,21 @@ func TestMirror(t *testing.T) {
 			expectError: true,
 		},
 		{
-			description: "warm cache, ls-remote source succeeds after retries -> success",
+			description: "ls-remote source succeeds after retries -> success",
 			src:         location{org: org, repo: repo, branch: branch},
 			dst:         location{org: destOrg, repo: repo, branch: branch},
 			expectedGitCalls: []mockGitCall{
 				{call: "ls-remote --heads https://TOKEN@github.com/dest/repo", output: "source-sha refs/heads/branch"},
-				{call: "init"},
-				{call: "remote get-url org-repo"},
 				{call: "ls-remote --heads org-repo", exitCode: 1},
 				{call: "ls-remote --heads org-repo", output: "source-sha refs/heads/branch"},
 			},
 		},
 		{
-			description: "warm cache, source branch does not exist -> error",
+			description: "source branch does not exist -> error",
 			src:         location{org: org, repo: repo, branch: branch},
 			dst:         location{org: destOrg, repo: repo, branch: branch},
 			expectedGitCalls: []mockGitCall{
 				{call: "ls-remote --heads https://TOKEN@github.com/dest/repo", output: "source-sha refs/heads/branch"},
-				{call: "init"},
-				{call: "remote get-url org-repo"},
 				{call: "ls-remote --heads org-repo", output: "some-sha refs/heads/not-the-branch"},
 			},
 			expectError: true,
@@ -433,26 +388,22 @@ func TestMirror(t *testing.T) {
 			expectError:          true,
 		},
 		{
-			description: "warm cache, destination is empty repo, needs many commits -> full fetch then success",
+			description: "destination is empty repo, needs many commits -> full fetch then success",
 			src:         location{org: org, repo: repo, branch: branch},
 			dst:         location{org: destOrg, repo: repo, branch: branch},
 			expectedGitCalls: []mockGitCall{
 				{call: "ls-remote --heads https://TOKEN@github.com/dest/repo"},
-				{call: "init"},
-				{call: "remote get-url org-repo"},
 				{call: "ls-remote --heads org-repo", output: "source-sha refs/heads/branch"},
 				{call: "fetch --tags org-repo branch"},
 				{call: "push --tags --dry-run https://TOKEN@github.com/dest/repo FETCH_HEAD:refs/heads/branch"},
 			},
 		},
 		{
-			description: "warm cache, destination needs 50 commits -> retries deepening fetches, then success",
+			description: "destination needs 50 commits -> retries deepening fetches, then success",
 			src:         location{org: org, repo: repo, branch: branch},
 			dst:         location{org: destOrg, repo: repo, branch: branch},
 			expectedGitCalls: []mockGitCall{
 				{call: "ls-remote --heads https://TOKEN@github.com/dest/repo", output: "dest-sha refs/heads/branch"},
-				{call: "init"},
-				{call: "remote get-url org-repo"},
 				{call: "ls-remote --heads org-repo", output: "source-sha refs/heads/branch"},
 				{call: "fetch --tags org-repo branch --depth=2"},
 				{
@@ -494,13 +445,11 @@ func TestMirror(t *testing.T) {
 			},
 		},
 		{
-			description: "warm cache, destination needs to merge with source -> retries exceeded, then perform merge after fetching --unshallow",
+			description: "destination needs to merge with source -> retries exceeded, then perform merge after fetching --unshallow",
 			src:         location{org: org, repo: repo, branch: branch},
 			dst:         location{org: destOrg, repo: repo, branch: branch},
 			expectedGitCalls: []mockGitCall{
 				{call: "ls-remote --heads https://TOKEN@github.com/dest/repo", output: "dest-sha refs/heads/branch"},
-				{call: "init"},
-				{call: "remote get-url org-repo"},
 				{call: "ls-remote --heads org-repo", output: "source-sha refs/heads/branch"},
 				{call: "fetch --tags org-repo branch --depth=2"},
 				{
@@ -557,13 +506,11 @@ func TestMirror(t *testing.T) {
 			},
 		},
 		{
-			description: "warm cache, destination needs to merge with source -> retries exceeded, then perform merge after fetching --unshallow, merge fails and performs merge --abort",
+			description: "destination needs to merge with source -> retries exceeded, merge fails and performs merge --abort",
 			src:         location{org: org, repo: repo, branch: branch},
 			dst:         location{org: destOrg, repo: repo, branch: branch},
 			expectedGitCalls: []mockGitCall{
 				{call: "ls-remote --heads https://TOKEN@github.com/dest/repo", output: "dest-sha refs/heads/branch"},
-				{call: "init"},
-				{call: "remote get-url org-repo"},
 				{call: "ls-remote --heads org-repo", output: "source-sha refs/heads/branch"},
 				{call: "fetch --tags org-repo branch --depth=2"},
 				{
@@ -628,8 +575,6 @@ func TestMirror(t *testing.T) {
 			dst:         location{org: destOrg, repo: repo, branch: branch},
 			expectedGitCalls: []mockGitCall{
 				{call: "ls-remote --heads https://TOKEN@github.com/dest/repo"},
-				{call: "init"},
-				{call: "remote get-url org-repo"},
 				{call: "ls-remote --heads org-repo", output: "source-sha refs/heads/branch"},
 				{call: "fetch --tags org-repo branch"},
 				{
@@ -666,6 +611,81 @@ hint: See the 'Note about fast-forwards' in 'git push --help' for details.
 				failOnNonexistentDst: tc.failOnNonexistentDst,
 			}
 			err := m.mirror("repo-dir", tc.src, tc.dst)
+			if err == nil && tc.expectError {
+				t.Error("expected error, got nil")
+			}
+			if err != nil && !tc.expectError {
+				t.Errorf("unexpected error: %v", err)
+			}
+			if err = git.check(); err != nil {
+				t.Errorf("bad git operation: %v", err)
+			}
+		})
+	}
+}
+
+func TestInitRepo(t *testing.T) {
+	token := "TOKEN"
+	testCases := []struct {
+		description      string
+		org, repo        string
+		expectedGitCalls []mockGitCall
+		expectError      bool
+	}{
+		{
+			description: "cold cache -> init and add remote",
+			org:         "org",
+			repo:        "repo",
+			expectedGitCalls: []mockGitCall{
+				{call: "init"},
+				{call: "remote get-url org-repo", exitCode: 1},
+				{call: "remote add org-repo https://TOKEN@github.com/org/repo"},
+			},
+		},
+		{
+			description: "warm cache -> init, remote already exists",
+			org:         "org",
+			repo:        "repo",
+			expectedGitCalls: []mockGitCall{
+				{call: "init"},
+				{call: "remote get-url org-repo"},
+			},
+		},
+		{
+			description: "init fails -> error",
+			org:         "org",
+			repo:        "repo",
+			expectedGitCalls: []mockGitCall{
+				{call: "init", exitCode: 1},
+			},
+			expectError: true,
+		},
+		{
+			description: "remote add fails -> error",
+			org:         "org",
+			repo:        "repo",
+			expectedGitCalls: []mockGitCall{
+				{call: "init"},
+				{call: "remote get-url org-repo", exitCode: 1},
+				{call: "remote add org-repo https://TOKEN@github.com/org/repo", exitCode: 1},
+			},
+			expectError: true,
+		},
+	}
+	for _, tc := range testCases {
+		t.Run(tc.description, func(t *testing.T) {
+			git := mockGit{
+				expected: tc.expectedGitCalls,
+				t:        t,
+			}
+			s := gitSyncer{
+				logger: logrus.WithField("test", tc.description),
+				prefix: defaultPrefix,
+				token:  token,
+				root:   "git-dir",
+				git:    git.exec,
+			}
+			err := s.initRepo("repo-dir", tc.org, tc.repo)
 			if err == nil && tc.expectError {
 				t.Error("expected error, got nil")
 			}

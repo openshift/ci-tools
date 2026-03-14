@@ -88,10 +88,9 @@ func TestReleaseRpms(t *testing.T) {
 		expectedError error
 	}{
 		{
-			name: "envvar additional envvar generated for template",
+			name: "envvar generated for non-origin repo",
 			generator: NewCiOperatorPodSpecGenerator().Add(
 				Targets("tgt"),
-				Template("template", "kommand", "", "tgt", api.ClusterProfileAWS),
 				ReleaseRpms("3.11", meta),
 			),
 		},
@@ -380,47 +379,6 @@ func TestPromotion(t *testing.T) {
 				t.Fatalf("Unexpected error: %v", err)
 			}
 			testhelper.CompareWithFixture(t, podspec)
-		})
-	}
-}
-
-func TestTemplate(t *testing.T) {
-	t.Parallel()
-	cp := api.ClusterProfileAWS
-	tests := []struct {
-		name          string
-		g             CiOperatorPodSpecGenerator
-		expectedError error
-	}{
-		{
-			name: "template with command",
-			g:    NewCiOperatorPodSpecGenerator().Add(Template("cluster-launch-installer-upi-e2e", "make things", "", "t", cp), Targets("t")),
-		},
-		{
-			name: "template with different command",
-			g:    NewCiOperatorPodSpecGenerator().Add(Template("cluster-launch-installer-upi-e2e", "make different things", "", "t", cp), Targets("t")),
-		},
-		{
-			name: "different template with command",
-			g:    NewCiOperatorPodSpecGenerator().Add(Template("cluster-launch-installer-libvirt-e2e", "make things", "", "t", cp)),
-		},
-		{
-			name: "template with a custom test image",
-			g:    NewCiOperatorPodSpecGenerator().Add(Template("cluster-launch-installer-upi-e2e", "make things", "custom-image", "t", cp), Targets("t")),
-		},
-	}
-	for _, tc := range tests {
-		tc := tc
-		t.Run(tc.name, func(t *testing.T) {
-			t.Parallel()
-			podspec, err := tc.g.Build()
-			if diff := cmp.Diff(tc.expectedError, err, testhelper.EquateErrorMessage); diff != "" {
-				t.Errorf("Error differs from expected:\n%s", diff)
-			}
-			if tc.expectedError == nil {
-				testhelper.CompareWithFixture(t, podspec)
-			}
-
 		})
 	}
 }

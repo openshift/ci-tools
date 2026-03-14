@@ -258,9 +258,13 @@ const startDepth = 1
 const maxExpDepth = 6 // means we do at most `--depth=64`, then fallback to `--unshallow`
 const unshallow = maxExpDepth + 1
 
-func makeFetch(logger *logrus.Entry, repoDir string, git gitFunc, remote, branch string, expDepth int) func() error {
+func makeFetch(logger *logrus.Entry, repoDir string, git gitFunc, remote, branch string, expDepth int, withTags bool) func() error {
 	return func() error {
-		fetch := []string{"fetch", "--tags", remote, branch}
+		fetch := []string{"fetch"}
+		if withTags {
+			fetch = append(fetch, "--tags")
+		}
+		fetch = append(fetch, remote, branch)
 
 		depthArg := "full fetch" // no depth arg is used when doing a full fetch
 		if expDepth != fullFetch {
@@ -446,7 +450,7 @@ func (g gitSyncer) mirror(repoDir string, src, dst location) error {
 			return nil, nil
 		case "true":
 			depth++
-			return makeFetch(logger, repoDir, g.git, srcRemote, src.branch, depth), nil
+			return makeFetch(logger, repoDir, g.git, srcRemote, src.branch, depth, false), nil
 		default:
 			message := "failed to push to destination, no retry possible (cannot determine whether our git repo is shallow)"
 			logger.Error(message)
@@ -455,7 +459,7 @@ func (g gitSyncer) mirror(repoDir string, src, dst location) error {
 		}
 	}
 
-	fetch := makeFetch(logger, repoDir, g.git, srcRemote, src.branch, depth)
+	fetch := makeFetch(logger, repoDir, g.git, srcRemote, src.branch, depth, true)
 	for fetch != nil {
 		err := fetch()
 		if err != nil {

@@ -255,13 +255,18 @@ type gitSyncer struct {
 
 const fullFetch = 0
 const startDepth = 1
-const maxExpDepth = 6 // means we do at most `--depth=64`, then fallback to `--unshallow`
+const maxExpDepth = 6 // means we deepen at most to 64 commits total, then fallback to `--unshallow`
 const unshallow = maxExpDepth + 1
 
-func makeFetch(logger *logrus.Entry, repoDir string, git gitFunc, remote, branch string, expDepth int, withTags bool) func() error {
+type fetchOptions struct {
+	withTags  bool
+	useDeepen bool
+}
+
+func makeFetch(logger *logrus.Entry, repoDir string, git gitFunc, remote, branch string, expDepth int, opts fetchOptions) func() error {
 	return func() error {
 		fetch := []string{"fetch"}
-		if withTags {
+		if opts.withTags {
 			fetch = append(fetch, "--tags")
 		}
 		fetch = append(fetch, remote, branch)
@@ -270,7 +275,12 @@ func makeFetch(logger *logrus.Entry, repoDir string, git gitFunc, remote, branch
 		if expDepth != fullFetch {
 			depthArg = "--unshallow"
 			if expDepth < unshallow {
-				depthArg = fmt.Sprintf("--depth=%d", int(math.Exp2(float64(expDepth))))
+				if opts.useDeepen {
+					deepenBy := int(math.Exp2(float64(expDepth - 1)))
+					depthArg = fmt.Sprintf("--deepen=%d", deepenBy)
+				} else {
+					depthArg = fmt.Sprintf("--depth=%d", int(math.Exp2(float64(expDepth))))
+				}
 			}
 
 			fetch = append(fetch, depthArg)
@@ -450,16 +460,16 @@ func (g gitSyncer) mirror(repoDir string, src, dst location) error {
 			return nil, nil
 		case "true":
 			depth++
-			return makeFetch(logger, repoDir, g.git, srcRemote, src.branch, depth, false), nil
+			return makeFetch(logger, repoDir, g.git, srcRemote, src.branch, depth, fetchOptions{useDeepen: true}), nil
 		default:
 			message := "failed to push to destination, no retry possible (cannot determine whether our git repo is shallow)"
 			logger.Error(message)
-			logger.Error("`rev-parse --is-shallow-repo` likely not supported by used git")
+			logger.Error("`rev-parse --is-shallow-repository` likely not supported by used git")
 			return nil, fmt.Errorf("%s", message)
 		}
 	}
 
-	fetch := makeFetch(logger, repoDir, g.git, srcRemote, src.branch, depth, true)
+	fetch := makeFetch(logger, repoDir, g.git, srcRemote, src.branch, depth, fetchOptions{withTags: true})
 	for fetch != nil {
 		err := fetch()
 		if err != nil {

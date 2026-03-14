@@ -1,6 +1,7 @@
 package prowgen
 
 import (
+	"path"
 	"time"
 
 	utilpointer "k8s.io/utils/pointer"
@@ -20,8 +21,13 @@ type prowJobBaseBuilder struct {
 	testName string
 }
 
-// If any included buildRoot uses from_repository we must not skip cloning
+// If the sparse checkout files list is empty, it means that the configuration does not require cloning the repository
 func skipCloning(configSpec *cioperatorapi.ReleaseBuildConfiguration) bool {
+	res := sparseCheckoutFiles(configSpec)
+	return len(res) == 0
+}
+
+func fromRepositorySet(configSpec *cioperatorapi.ReleaseBuildConfiguration) bool {
 	buildRoots := configSpec.BuildRootImages
 	if buildRoots == nil {
 		buildRoots = make(map[string]cioperatorapi.BuildRootImageConfiguration)
@@ -31,11 +37,38 @@ func skipCloning(configSpec *cioperatorapi.ReleaseBuildConfiguration) bool {
 	}
 	for _, buildRoot := range buildRoots {
 		if buildRoot.FromRepository {
-			return false
+			return true
 		}
 	}
+	return false
+}
 
-	return true
+// sparseCheckoutFiles returns the list of files to include in a sparse checkout
+// when the configuration requires cloning. This includes the in-repo ci-operator
+// configuration file and any Dockerfiles that need to be built.
+// Returns an empty slice if no sparse checkout is needed.
+func sparseCheckoutFiles(configSpec *cioperatorapi.ReleaseBuildConfiguration) []string {
+	var sparseCheckoutFiles []string
+	if fromRepositorySet(configSpec) {
+		sparseCheckoutFiles = append(sparseCheckoutFiles, cioperatorapi.CIOperatorInrepoConfigFileName)
+	}
+	for _, image := range configSpec.Images {
+		if image.DockerfileLiteral != nil {
+			continue
+		}
+		if image.Ref != "" {
+			continue
+		}
+		dockerfilePath := image.DockerfilePath
+		if dockerfilePath == "" {
+			dockerfilePath = "Dockerfile"
+		}
+		if image.ContextDir != "" {
+			dockerfilePath = path.Join(image.ContextDir, dockerfilePath)
+		}
+		sparseCheckoutFiles = append(sparseCheckoutFiles, dockerfilePath)
+	}
+	return sparseCheckoutFiles
 }
 
 func hasNoBuilds(c *cioperatorapi.ReleaseBuildConfiguration, info *ProwgenInfo) bool {
@@ -63,16 +96,20 @@ func NewProwJobBaseBuilder(configSpec *cioperatorapi.ReleaseBuildConfiguration, 
 			Agent:  string(prowv1.KubernetesAgent),
 			Labels: map[string]string{},
 			UtilityConfig: prowconfig.UtilityConfig{
-				Decorate: utilpointer.Bool(true),
+				Decorate:         utilpointer.Bool(true),
+				DecorationConfig: &prowv1.DecorationConfig{},
 			},
 		},
 	}
 
 	if skipCloning(configSpec) {
-		b.base.UtilityConfig.DecorationConfig = &prowv1.DecorationConfig{SkipCloning: utilpointer.Bool(true)}
+		b.base.UtilityConfig.DecorationConfig.SkipCloning = utilpointer.Bool(true)
 	} else if info.Config.Private {
-		b.base.UtilityConfig.DecorationConfig = &prowv1.DecorationConfig{OauthTokenSecret: &prowv1.OauthTokenSecret{Key: cioperatorapi.OauthTokenSecretKey, Name: cioperatorapi.OauthTokenSecretName}}
+		b.base.UtilityConfig.DecorationConfig.OauthTokenSecret = &prowv1.OauthTokenSecret{Key: cioperatorapi.OauthTokenSecretKey, Name: cioperatorapi.OauthTokenSecretName}
 	}
+
+	sparseFiles := sparseCheckoutFiles(configSpec)
+	b.base.UtilityConfig.DecorationConfig.SparseCheckoutFiles = sparseFiles
 
 	if len(info.Variant) > 0 {
 		b.base.Labels[jc.ProwJobLabelVariant] = info.Variant

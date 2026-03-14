@@ -811,6 +811,195 @@ func TestGenerateJobs(t *testing.T) {
 				Branch: "branch",
 			}},
 		},
+		{
+			id:   "slack reporter from ci-operator config with defaults",
+			keep: true,
+			config: &ciop.ReleaseBuildConfiguration{
+				Tests: []ciop.TestStepConfiguration{
+					{
+						As: "e2e",
+						SlackReporter: &ciop.SlackReporter{
+							Channel: "#test-channel",
+						},
+						ContainerTestConfiguration: &ciop.ContainerTestConfiguration{From: "bin"},
+					},
+				},
+			},
+			repoInfo: &ProwgenInfo{Metadata: ciop.Metadata{
+				Org:    "organization",
+				Repo:   "repository",
+				Branch: "branch",
+			}},
+		},
+		{
+			id:   "slack reporter from ci-operator config with explicit values",
+			keep: true,
+			config: &ciop.ReleaseBuildConfiguration{
+				Tests: []ciop.TestStepConfiguration{
+					{
+						As: "e2e",
+						SlackReporter: &ciop.SlackReporter{
+							Channel:           "#custom-channel",
+							JobStatesToReport: []prowv1.ProwJobState{"success", "failure"},
+							ReportTemplate:    "custom template",
+						},
+						ContainerTestConfiguration: &ciop.ContainerTestConfiguration{From: "bin"},
+					},
+				},
+			},
+			repoInfo: &ProwgenInfo{Metadata: ciop.Metadata{
+				Org:    "organization",
+				Repo:   "repository",
+				Branch: "branch",
+			}},
+		},
+		{
+			id:   "slack reporter from ci-operator config takes precedence over prowgen config",
+			keep: true,
+			config: &ciop.ReleaseBuildConfiguration{
+				Tests: []ciop.TestStepConfiguration{
+					{
+						As: "e2e",
+						SlackReporter: &ciop.SlackReporter{
+							Channel: "#from-ci-operator",
+						},
+						ContainerTestConfiguration: &ciop.ContainerTestConfiguration{From: "bin"},
+					},
+				},
+			},
+			repoInfo: &ProwgenInfo{
+				Metadata: ciop.Metadata{
+					Org:    "organization",
+					Repo:   "repository",
+					Branch: "branch",
+				},
+				Config: config.Prowgen{
+					SlackReporterConfigs: []config.SlackReporterConfig{
+						{
+							Channel:           "#from-prowgen",
+							JobStatesToReport: []prowv1.ProwJobState{"error"},
+							ReportTemplate:    "prowgen template",
+							JobNames:          []string{"e2e"},
+						},
+					},
+				},
+			},
+		},
+		{
+			id: "disable rehearsal from ci-operator config per-test",
+			config: &ciop.ReleaseBuildConfiguration{
+				Tests: []ciop.TestStepConfiguration{
+					{As: "unit", ContainerTestConfiguration: &ciop.ContainerTestConfiguration{From: "bin"}},
+					{As: "e2e", DisableRehearsal: true, ContainerTestConfiguration: &ciop.ContainerTestConfiguration{From: "bin"}},
+				},
+			},
+			repoInfo: &ProwgenInfo{Metadata: ciop.Metadata{
+				Org:    "organization",
+				Repo:   "repository",
+				Branch: "branch",
+			}},
+		},
+		{
+			id: "disable all rehearsals from ci-operator prowgen config",
+			config: &ciop.ReleaseBuildConfiguration{
+				Prowgen: &ciop.ProwgenExtras{DisableRehearsals: true},
+				Tests: []ciop.TestStepConfiguration{
+					{As: "unit", ContainerTestConfiguration: &ciop.ContainerTestConfiguration{From: "bin"}},
+					{As: "e2e", ContainerTestConfiguration: &ciop.ContainerTestConfiguration{From: "bin"}},
+				},
+			},
+			repoInfo: &ProwgenInfo{Metadata: ciop.Metadata{
+				Org:    "organization",
+				Repo:   "repository",
+				Branch: "branch",
+			}},
+		},
+		{
+			id: "skip operator presubmits from ci-operator config",
+			config: &ciop.ReleaseBuildConfiguration{
+				Operator: &ciop.OperatorStepConfiguration{
+					SkipPresubmits: true,
+					Bundles:        []ciop.Bundle{{As: "my-bundle"}},
+				},
+			},
+			repoInfo: &ProwgenInfo{Metadata: ciop.Metadata{
+				Org:    "organization",
+				Repo:   "repository",
+				Branch: "branch",
+			}},
+		},
+		{
+			id:   "private from ci-operator prowgen config",
+			keep: true,
+			config: &ciop.ReleaseBuildConfiguration{
+				Prowgen: &ciop.ProwgenExtras{Private: true},
+				Tests: []ciop.TestStepConfiguration{
+					{As: "unit", ContainerTestConfiguration: &ciop.ContainerTestConfiguration{From: "bin"}},
+				},
+			},
+			repoInfo: &ProwgenInfo{Metadata: ciop.Metadata{
+				Org:    "organization",
+				Repo:   "repository",
+				Branch: "branch",
+			}},
+		},
+		{
+			id:   "private with expose from ci-operator prowgen config",
+			keep: true,
+			config: &ciop.ReleaseBuildConfiguration{
+				Prowgen: &ciop.ProwgenExtras{Private: true, Expose: true},
+				Tests: []ciop.TestStepConfiguration{
+					{As: "unit", ContainerTestConfiguration: &ciop.ContainerTestConfiguration{From: "bin"}},
+				},
+			},
+			repoInfo: &ProwgenInfo{Metadata: ciop.Metadata{
+				Org:    "organization",
+				Repo:   "repository",
+				Branch: "branch",
+			}},
+		},
+		{
+			id:   "openshift-priv org defaults to private",
+			keep: true,
+			config: &ciop.ReleaseBuildConfiguration{
+				Tests: []ciop.TestStepConfiguration{
+					{As: "unit", ContainerTestConfiguration: &ciop.ContainerTestConfiguration{From: "bin"}},
+				},
+			},
+			repoInfo: &ProwgenInfo{Metadata: ciop.Metadata{
+				Org:    "openshift-priv",
+				Repo:   "repository",
+				Branch: "branch",
+			}},
+		},
+		{
+			id:   "postsubmit with custom max_concurrency",
+			keep: true,
+			config: &ciop.ReleaseBuildConfiguration{
+				Tests: []ciop.TestStepConfiguration{
+					{As: "publish", Postsubmit: true, MaxConcurrency: intPointer(4), ContainerTestConfiguration: &ciop.ContainerTestConfiguration{From: "bin"}},
+				},
+			},
+			repoInfo: &ProwgenInfo{Metadata: ciop.Metadata{
+				Org:    "organization",
+				Repo:   "repository",
+				Branch: "branch",
+			}},
+		},
+		{
+			id:   "periodic with custom max_concurrency",
+			keep: true,
+			config: &ciop.ReleaseBuildConfiguration{
+				Tests: []ciop.TestStepConfiguration{
+					{As: "nightly", Cron: utilpointer.String(cron), MaxConcurrency: intPointer(2), ContainerTestConfiguration: &ciop.ContainerTestConfiguration{From: "bin"}},
+				},
+			},
+			repoInfo: &ProwgenInfo{Metadata: ciop.Metadata{
+				Org:    "organization",
+				Repo:   "repository",
+				Branch: "branch",
+			}},
+		},
 	}
 
 	for _, tc := range tests {

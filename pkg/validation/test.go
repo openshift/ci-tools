@@ -192,9 +192,13 @@ func (v *Validator) validateTestStepConfiguration(
 		if (test.Cron != nil || test.Interval != nil || test.MinimumInterval != nil) && !test.Presubmit && (test.RunIfChanged != "" || test.SkipIfOnlyChanged != "" || test.Optional) {
 			validationErrors = append(validationErrors, fmt.Errorf("%s: `cron`/`interval`/`minimum_interval` are mutually exclusive with `run_if_changed`/`skip_if_only_changed`/`optional`", fieldRootN))
 		}
-		if test.RunIfChanged != "" && test.SkipIfOnlyChanged != "" {
-			validationErrors = append(validationErrors, fmt.Errorf("%s: `run_if_changed` and `skip_if_only_changed` are mutually exclusive", fieldRootN))
-		}
+		validationErrors = append(validationErrors, validateRunIfChangedExclusivity(
+			test.RunIfChanged, test.SkipIfOnlyChanged,
+			test.PipelineRunIfChanged, test.PipelineSkipIfOnlyChanged,
+			func(format string, args ...interface{}) error {
+				return fmt.Errorf("%s: %s", fieldRootN, fmt.Sprintf(format, args...))
+			},
+		)...)
 
 		if test.Interval != nil {
 			if _, err := time.ParseDuration(*test.Interval); err != nil {

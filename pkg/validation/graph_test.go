@@ -101,9 +101,9 @@ func TestIsValidGraph_Names(t *testing.T) {
 		name: "duplicate image build",
 		config: api.ReleaseBuildConfiguration{
 			InputConfiguration: input,
-			Images: []api.ProjectDirectoryImageBuildStepConfiguration{{
+			Images: api.ImageConfiguration{Items: []api.ProjectDirectoryImageBuildStepConfiguration{{
 				To: "duplicate",
-			}},
+			}}},
 			Tests: tests("duplicate"),
 		},
 		expected: errs("duplicate"),
@@ -294,9 +294,9 @@ func TestIsValidGraph_ContainerTestFrom(t *testing.T) {
 	}, {
 		name: "from image",
 		config: api.ReleaseBuildConfiguration{
-			Images: []api.ProjectDirectoryImageBuildStepConfiguration{
+			Images: api.ImageConfiguration{Items: []api.ProjectDirectoryImageBuildStepConfiguration{
 				{To: "from"},
-			},
+			}},
 			Tests: tests("from"),
 		},
 	}, {

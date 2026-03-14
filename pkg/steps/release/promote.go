@@ -484,7 +484,7 @@ func PromotedTagsWithRequiredImages(configuration *api.ReleaseBuildConfiguration
 	}
 
 	for _, target := range api.PromotionTargets(configuration.PromotionConfiguration) {
-		tags, names := toPromote(target, configuration.Images, opts.requiredImages)
+		tags, names := toPromote(target, configuration.Images.Items, opts.requiredImages)
 		requiredImages.Insert(names.UnsortedList()...)
 		for dst, src := range tags {
 			var tag api.ImageStreamTagReference

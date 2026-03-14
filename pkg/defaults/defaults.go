@@ -213,7 +213,7 @@ func fromConfig(ctx context.Context, cfg *Config) ([]api.Step, []api.Step, error
 			step = steps.InputImageTagStep(&conf, cfg.kubeClient, cfg.JobSpec)
 			inputImages[conf.InputImage] = struct{}{}
 		} else if rawStep.PipelineImageCacheStepConfiguration != nil {
-			skippedBinaries := filterRequiredBinariesFromSkipped(cfg.CIConfig.Images, cfg.SkippedImages)
+			skippedBinaries := filterRequiredBinariesFromSkipped(cfg.CIConfig.Images.Items, cfg.SkippedImages)
 			step = steps.PipelineImageCacheStep(*rawStep.PipelineImageCacheStepConfiguration, cfg.CIConfig.Resources, cfg.buildClient, cfg.podClient, cfg.JobSpec, cfg.PullSecret, cfg.MetricsAgent, skippedBinaries)
 		} else if rawStep.SourceStepConfiguration != nil {
 			step = steps.SourceStep(*rawStep.SourceStepConfiguration, cfg.CIConfig.Resources, cfg.buildClient, cfg.podClient, cfg.JobSpec, cfg.CloneAuthConfig, cfg.PullSecret, cfg.MetricsAgent)
@@ -765,8 +765,8 @@ func FromConfigStatic(config *api.ReleaseBuildConfiguration) api.GraphConfigurat
 		}})
 	}
 
-	for i := range config.Images {
-		image := &config.Images[i]
+	for i := range config.Images.Items {
+		image := &config.Images.Items[i]
 		stableImageTag := string(image.To)
 		if image.Ref != "" {
 			stableImageTag = strings.TrimSuffix(stableImageTag, fmt.Sprintf("-%s", image.Ref))
@@ -975,8 +975,8 @@ func runtimeStepConfigsForBuild(
 	buildSteps = append(buildSteps, getSourceStepsForJobSpec(jobSpec, injectedTest)...)
 
 	// Detect Dockerfile inputs for project images and add InputImageTagStepConfiguration entries
-	dockerfileInputSteps, images := detectDockerfileInputs(config.Images, config.BaseImages, readFile)
-	config.Images = images
+	dockerfileInputSteps, images := detectDockerfileInputs(config.Images.Items, config.BaseImages, readFile)
+	config.Images.Items = images
 	buildSteps = append(buildSteps, dockerfileInputSteps...)
 
 	return buildSteps, nil

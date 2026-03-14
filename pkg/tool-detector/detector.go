@@ -372,7 +372,7 @@ func (d *Detector) getAffectedToolsByImageChanges(changedFiles []string) sets.Se
 		return affected
 	}
 
-	for _, image := range d.config.Images {
+	for _, image := range d.config.Images.Items {
 		if image.ContextDir == "" {
 			continue
 		}

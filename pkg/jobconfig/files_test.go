@@ -428,6 +428,41 @@ func TestMergePresubmits(t *testing.T) {
 			new:      &prowconfig.Presubmit{RegexpChangeMatcher: prowconfig.RegexpChangeMatcher{SkipIfOnlyChanged: "new"}},
 			expected: prowconfig.Presubmit{RegexpChangeMatcher: prowconfig.RegexpChangeMatcher{SkipIfOnlyChanged: "new"}},
 		},
+		{
+			name: "images job: old manual skip_if_only_changed is preserved when new has no filter",
+			old: &prowconfig.Presubmit{
+				JobBase:             prowconfig.JobBase{Name: "pull-ci-org-repo-branch-images"},
+				RegexpChangeMatcher: prowconfig.RegexpChangeMatcher{SkipIfOnlyChanged: "^docs/"},
+				AlwaysRun:           false,
+			},
+			new: &prowconfig.Presubmit{
+				JobBase:   prowconfig.JobBase{Name: "pull-ci-org-repo-branch-images"},
+				AlwaysRun: true,
+			},
+			expected: prowconfig.Presubmit{
+				JobBase:             prowconfig.JobBase{Name: "pull-ci-org-repo-branch-images"},
+				RegexpChangeMatcher: prowconfig.RegexpChangeMatcher{SkipIfOnlyChanged: "^docs/"},
+				AlwaysRun:           false,
+			},
+		},
+		{
+			name: "images job: prowgen-generated skip_if_only_changed takes precedence over old manual value",
+			old: &prowconfig.Presubmit{
+				JobBase:             prowconfig.JobBase{Name: "pull-ci-org-repo-branch-images"},
+				RegexpChangeMatcher: prowconfig.RegexpChangeMatcher{SkipIfOnlyChanged: "old-manual"},
+				AlwaysRun:           false,
+			},
+			new: &prowconfig.Presubmit{
+				JobBase:             prowconfig.JobBase{Name: "pull-ci-org-repo-branch-images"},
+				RegexpChangeMatcher: prowconfig.RegexpChangeMatcher{SkipIfOnlyChanged: "new-from-ci-operator-config"},
+				AlwaysRun:           false,
+			},
+			expected: prowconfig.Presubmit{
+				JobBase:             prowconfig.JobBase{Name: "pull-ci-org-repo-branch-images"},
+				RegexpChangeMatcher: prowconfig.RegexpChangeMatcher{SkipIfOnlyChanged: "new-from-ci-operator-config"},
+				AlwaysRun:           false,
+			},
+		},
 	}
 	for _, testCase := range testCases {
 		t.Run(testCase.name, func(t *testing.T) {

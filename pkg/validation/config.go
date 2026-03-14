@@ -154,13 +154,13 @@ func (v *Validator) validateConfiguration(ctx *configContext, config *api.Releas
 	}
 	validationErrors = append(validationErrors, validateReleaseBuildConfiguration(config, org, repo, mergedConfig)...)
 	if config.InputConfiguration.BuildRootImage != nil {
-		validationErrors = append(validationErrors, validateBuildRootImageConfiguration(ctx.AddField("build_root"), config.InputConfiguration.BuildRootImage, len(config.Images) > 0, "")...)
+		validationErrors = append(validationErrors, validateBuildRootImageConfiguration(ctx.AddField("build_root"), config.InputConfiguration.BuildRootImage, len(config.Images.Items) > 0, "")...)
 	} else if len(config.InputConfiguration.BuildRootImages) > 0 {
 		if !mergedConfig {
 			validationErrors = append(validationErrors, errors.New("it is not permissible to directly set: ‘build_roots’ directly in the config"))
 		}
 		for ref, buildRoot := range config.InputConfiguration.BuildRootImages {
-			validationErrors = append(validationErrors, validateBuildRootImageConfiguration(ctx.AddField("build_roots"), &buildRoot, len(config.Images) > 0, ref)...)
+			validationErrors = append(validationErrors, validateBuildRootImageConfiguration(ctx.AddField("build_roots"), &buildRoot, len(config.Images.Items) > 0, ref)...)
 		}
 	}
 
@@ -188,7 +188,8 @@ func (v *Validator) validateConfiguration(ctx *configContext, config *api.Releas
 	}
 
 	validationErrors = append(validationErrors, validateReleases("releases", config.Releases, config.ReleaseTagConfiguration != nil)...)
-	validationErrors = append(validationErrors, ValidateImages(ctx.AddField("images"), config.Images)...)
+	validationErrors = append(validationErrors, validateImageConfiguration(ctx.AddField("images"), config.Images)...)
+	validationErrors = append(validationErrors, ValidateImages(ctx.AddField("images"), config.Images.Items)...)
 	validationErrors = append(validationErrors, v.ValidateTestStepConfiguration(ctx, config, resolved)...)
 	// this validation brings together a large amount of data from separate
 	// parts of the configuration, so it's written as a standalone method
@@ -257,7 +258,7 @@ func (v *Validator) ValidateTestStepConfiguration(ctx *configContext, config *ap
 
 	if tests := config.Tests; len(tests) != 0 {
 		images := sets.New[string]()
-		for _, i := range config.Images {
+		for _, i := range config.Images.Items {
 			images.Insert(string(i.To))
 		}
 		validationErrors = append(validationErrors, v.validateTestStepConfiguration(ctx, "tests", config.Tests, config.ReleaseTagConfiguration, &config.Metadata, releases, images, resolved)...)
@@ -302,6 +303,25 @@ func validateBuildRootImageStreamTag(ctx *configContext, buildRoot api.ImageStre
 		validationErrors = append(validationErrors, ctx.AddField("tag").errorf("value required but not provided"))
 	}
 	return validationErrors
+}
+
+func validateRunIfChangedExclusivity(runIfChanged, skipIfOnlyChanged, pipelineRunIfChanged, pipelineSkipIfOnlyChanged string, errFunc func(format string, args ...interface{}) error) []error {
+	var validationErrors []error
+	if runIfChanged != "" && skipIfOnlyChanged != "" {
+		validationErrors = append(validationErrors, errFunc("`run_if_changed` and `skip_if_only_changed` are mutually exclusive"))
+	}
+	if pipelineRunIfChanged != "" && pipelineSkipIfOnlyChanged != "" {
+		validationErrors = append(validationErrors, errFunc("`pipeline_run_if_changed` and `pipeline_skip_if_only_changed` are mutually exclusive"))
+	}
+	return validationErrors
+}
+
+func validateImageConfiguration(ctx *configContext, images api.ImageConfiguration) []error {
+	return validateRunIfChangedExclusivity(
+		images.RunIfChanged, images.SkipIfOnlyChanged,
+		images.PipelineRunIfChanged, images.PipelineSkipIfOnlyChanged,
+		ctx.errorf,
+	)
 }
 
 func ValidateImages(ctx *configContext, images []api.ProjectDirectoryImageBuildStepConfiguration) []error {
@@ -539,7 +559,7 @@ func validateReleaseBuildConfiguration(input *api.ReleaseBuildConfiguration, org
 	var validationErrors []error
 
 	// Third conjunct is a corner case, the config can e.g. promote its `src`
-	if len(input.Tests) == 0 && len(input.Images) == 0 && (input.PromotionConfiguration == nil || len(input.PromotionConfiguration.Targets) == 0) {
+	if len(input.Tests) == 0 && len(input.Images.Items) == 0 && (input.PromotionConfiguration == nil || len(input.PromotionConfiguration.Targets) == 0) {
 		validationErrors = append(validationErrors, errors.New("you must define at least one test or image build in 'tests' or 'images'"))
 	}
 

@@ -697,7 +697,7 @@ var parsedConfig = &api.ReleaseBuildConfiguration{
 	RpmBuildCommands:        "make build-rpms",
 	RpmBuildLocation:        "",
 	CanonicalGoRepository:   pointer.StringPtr("github.com/openshift/origin"),
-	Images: []api.ProjectDirectoryImageBuildStepConfiguration{{
+	Images: api.ImageConfiguration{Items: []api.ProjectDirectoryImageBuildStepConfiguration{{
 		From: "base",
 		To:   "template-service-broker",
 		ProjectDirectoryImageBuildInputs: api.ProjectDirectoryImageBuildInputs{
@@ -763,7 +763,7 @@ var parsedConfig = &api.ReleaseBuildConfiguration{
 				"machine-os-content-base": {As: []string{"registry.svc.ci.openshift.org/openshift/origin-v4.0:machine-os-content"}},
 			},
 		},
-	}},
+	}}},
 	RawSteps: []api.StepConfiguration{{
 		PipelineImageCacheStepConfiguration: &api.PipelineImageCacheStepConfiguration{
 			From:     "bin",

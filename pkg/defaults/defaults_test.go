@@ -90,8 +90,14 @@ func TestStepConfigsForBuild(t *testing.T) {
 			output: []api.StepConfiguration{{
 				SourceStepConfiguration: addCloneRefs(&api.SourceStepConfiguration{
 					From: api.PipelineImageStreamTagReferenceRoot,
-					To:   api.PipelineImageStreamTagReferenceSource,
+					To:   api.PipelineImageStreamTagReferenceScratchSource,
 				}),
+			}, {
+				SrcAssemblyStepConfiguration: &api.SrcAssemblyStepConfiguration{
+					From:              api.PipelineImageStreamTagReferenceRoot,
+					ScratchSourceFrom: api.PipelineImageStreamTagReferenceScratchSource,
+					To:                api.PipelineImageStreamTagReferenceSource,
+				},
 			}, {
 				InputImageTagStepConfiguration: &api.InputImageTagStepConfiguration{
 					InputImage: api.InputImage{
@@ -135,8 +141,14 @@ func TestStepConfigsForBuild(t *testing.T) {
 			output: []api.StepConfiguration{{
 				SourceStepConfiguration: addCloneRefs(&api.SourceStepConfiguration{
 					From: api.PipelineImageStreamTagReferenceRoot,
-					To:   api.PipelineImageStreamTagReferenceSource,
+					To:   api.PipelineImageStreamTagReferenceScratchSource,
 				}),
+			}, {
+				SrcAssemblyStepConfiguration: &api.SrcAssemblyStepConfiguration{
+					From:              api.PipelineImageStreamTagReferenceRoot,
+					ScratchSourceFrom: api.PipelineImageStreamTagReferenceScratchSource,
+					To:                api.PipelineImageStreamTagReferenceSource,
+				},
 			}, {
 				InputImageTagStepConfiguration: &api.InputImageTagStepConfiguration{
 					InputImage: api.InputImage{
@@ -172,8 +184,14 @@ func TestStepConfigsForBuild(t *testing.T) {
 			output: []api.StepConfiguration{{
 				SourceStepConfiguration: addCloneRefs(&api.SourceStepConfiguration{
 					From: api.PipelineImageStreamTagReferenceRoot,
-					To:   api.PipelineImageStreamTagReferenceSource,
+					To:   api.PipelineImageStreamTagReferenceScratchSource,
 				}),
+			}, {
+				SrcAssemblyStepConfiguration: &api.SrcAssemblyStepConfiguration{
+					From:              api.PipelineImageStreamTagReferenceRoot,
+					ScratchSourceFrom: api.PipelineImageStreamTagReferenceScratchSource,
+					To:                api.PipelineImageStreamTagReferenceSource,
+				},
 			}, {
 				InputImageTagStepConfiguration: &api.InputImageTagStepConfiguration{
 					InputImage: api.InputImage{
@@ -226,8 +244,14 @@ func TestStepConfigsForBuild(t *testing.T) {
 			output: []api.StepConfiguration{{
 				SourceStepConfiguration: addCloneRefs(&api.SourceStepConfiguration{
 					From: api.PipelineImageStreamTagReferenceRoot,
-					To:   api.PipelineImageStreamTagReferenceSource,
+					To:   api.PipelineImageStreamTagReferenceScratchSource,
 				}),
+			}, {
+				SrcAssemblyStepConfiguration: &api.SrcAssemblyStepConfiguration{
+					From:              api.PipelineImageStreamTagReferenceRoot,
+					ScratchSourceFrom: api.PipelineImageStreamTagReferenceScratchSource,
+					To:                api.PipelineImageStreamTagReferenceSource,
+				},
 			}, {
 				InputImageTagStepConfiguration: &api.InputImageTagStepConfiguration{
 					InputImage: api.InputImage{
@@ -277,8 +301,14 @@ func TestStepConfigsForBuild(t *testing.T) {
 			output: []api.StepConfiguration{{
 				SourceStepConfiguration: addCloneRefs(&api.SourceStepConfiguration{
 					From: api.PipelineImageStreamTagReferenceRoot,
-					To:   api.PipelineImageStreamTagReferenceSource,
+					To:   api.PipelineImageStreamTagReferenceScratchSource,
 				}),
+			}, {
+				SrcAssemblyStepConfiguration: &api.SrcAssemblyStepConfiguration{
+					From:              api.PipelineImageStreamTagReferenceRoot,
+					ScratchSourceFrom: api.PipelineImageStreamTagReferenceScratchSource,
+					To:                api.PipelineImageStreamTagReferenceSource,
+				},
 			}, {
 				InputImageTagStepConfiguration: &api.InputImageTagStepConfiguration{
 					InputImage: api.InputImage{
@@ -326,8 +356,14 @@ func TestStepConfigsForBuild(t *testing.T) {
 			output: []api.StepConfiguration{{
 				SourceStepConfiguration: addCloneRefs(&api.SourceStepConfiguration{
 					From: api.PipelineImageStreamTagReferenceRoot,
-					To:   api.PipelineImageStreamTagReferenceSource,
+					To:   api.PipelineImageStreamTagReferenceScratchSource,
 				}),
+			}, {
+				SrcAssemblyStepConfiguration: &api.SrcAssemblyStepConfiguration{
+					From:              api.PipelineImageStreamTagReferenceRoot,
+					ScratchSourceFrom: api.PipelineImageStreamTagReferenceScratchSource,
+					To:                api.PipelineImageStreamTagReferenceSource,
+				},
 			}, {
 				InputImageTagStepConfiguration: &api.InputImageTagStepConfiguration{
 					InputImage: api.InputImage{
@@ -384,8 +420,14 @@ func TestStepConfigsForBuild(t *testing.T) {
 			output: []api.StepConfiguration{{
 				SourceStepConfiguration: addCloneRefs(&api.SourceStepConfiguration{
 					From: api.PipelineImageStreamTagReferenceRoot,
-					To:   api.PipelineImageStreamTagReferenceSource,
+					To:   api.PipelineImageStreamTagReferenceScratchSource,
 				}),
+			}, {
+				SrcAssemblyStepConfiguration: &api.SrcAssemblyStepConfiguration{
+					From:              api.PipelineImageStreamTagReferenceRoot,
+					ScratchSourceFrom: api.PipelineImageStreamTagReferenceScratchSource,
+					To:                api.PipelineImageStreamTagReferenceSource,
+				},
 			}, {
 				InputImageTagStepConfiguration: &api.InputImageTagStepConfiguration{
 					InputImage: api.InputImage{
@@ -437,8 +479,14 @@ func TestStepConfigsForBuild(t *testing.T) {
 			output: []api.StepConfiguration{{
 				SourceStepConfiguration: addCloneRefs(&api.SourceStepConfiguration{
 					From: api.PipelineImageStreamTagReferenceRoot,
-					To:   api.PipelineImageStreamTagReferenceSource,
+					To:   api.PipelineImageStreamTagReferenceScratchSource,
 				}),
+			}, {
+				SrcAssemblyStepConfiguration: &api.SrcAssemblyStepConfiguration{
+					From:              api.PipelineImageStreamTagReferenceRoot,
+					ScratchSourceFrom: api.PipelineImageStreamTagReferenceScratchSource,
+					To:                api.PipelineImageStreamTagReferenceSource,
+				},
 			}, {
 				InputImageTagStepConfiguration: &api.InputImageTagStepConfiguration{
 					InputImage: api.InputImage{
@@ -495,8 +543,14 @@ func TestStepConfigsForBuild(t *testing.T) {
 			output: []api.StepConfiguration{{
 				SourceStepConfiguration: addCloneRefs(&api.SourceStepConfiguration{
 					From: api.PipelineImageStreamTagReferenceRoot,
-					To:   api.PipelineImageStreamTagReferenceSource,
+					To:   api.PipelineImageStreamTagReferenceScratchSource,
 				}),
+			}, {
+				SrcAssemblyStepConfiguration: &api.SrcAssemblyStepConfiguration{
+					From:              api.PipelineImageStreamTagReferenceRoot,
+					ScratchSourceFrom: api.PipelineImageStreamTagReferenceScratchSource,
+					To:                api.PipelineImageStreamTagReferenceSource,
+				},
 			}, {
 				InputImageTagStepConfiguration: &api.InputImageTagStepConfiguration{
 					InputImage: api.InputImage{
@@ -572,8 +626,15 @@ func TestStepConfigsForBuild(t *testing.T) {
 				{
 					SourceStepConfiguration: addCloneRefs(&api.SourceStepConfiguration{
 						From: api.PipelineImageStreamTagReferenceRoot,
-						To:   api.PipelineImageStreamTagReferenceSource,
+						To:   api.PipelineImageStreamTagReferenceScratchSource,
 					}),
+				},
+				{
+					SrcAssemblyStepConfiguration: &api.SrcAssemblyStepConfiguration{
+						From:              api.PipelineImageStreamTagReferenceRoot,
+						ScratchSourceFrom: api.PipelineImageStreamTagReferenceScratchSource,
+						To:                api.PipelineImageStreamTagReferenceSource,
+					},
 				},
 				{
 					InputImageTagStepConfiguration: &api.InputImageTagStepConfiguration{
@@ -629,8 +690,14 @@ func TestStepConfigsForBuild(t *testing.T) {
 			output: []api.StepConfiguration{{
 				SourceStepConfiguration: addCloneRefs(&api.SourceStepConfiguration{
 					From: api.PipelineImageStreamTagReferenceRoot,
-					To:   api.PipelineImageStreamTagReferenceSource,
+					To:   api.PipelineImageStreamTagReferenceScratchSource,
 				}),
+			}, {
+				SrcAssemblyStepConfiguration: &api.SrcAssemblyStepConfiguration{
+					From:              api.PipelineImageStreamTagReferenceRoot,
+					ScratchSourceFrom: api.PipelineImageStreamTagReferenceScratchSource,
+					To:                api.PipelineImageStreamTagReferenceSource,
+				},
 			}, {
 				InputImageTagStepConfiguration: &api.InputImageTagStepConfiguration{
 					InputImage: api.InputImage{
@@ -735,9 +802,15 @@ func TestStepConfigsForBuild(t *testing.T) {
 				}).WithBundleImage(true),
 			}, {
 				SourceStepConfiguration: addCloneRefs(&api.SourceStepConfiguration{
-					From: "root",
-					To:   "src",
+					From: api.PipelineImageStreamTagReferenceRoot,
+					To:   api.PipelineImageStreamTagReferenceScratchSource,
 				}),
+			}, {
+				SrcAssemblyStepConfiguration: &api.SrcAssemblyStepConfiguration{
+					From:              api.PipelineImageStreamTagReferenceRoot,
+					ScratchSourceFrom: api.PipelineImageStreamTagReferenceScratchSource,
+					To:                api.PipelineImageStreamTagReferenceSource,
+				},
 			}},
 		},
 		{
@@ -815,9 +888,15 @@ func TestStepConfigsForBuild(t *testing.T) {
 				}).WithBundleImage(true),
 			}, {
 				SourceStepConfiguration: addCloneRefs(&api.SourceStepConfiguration{
-					From: "root",
-					To:   "src",
+					From: api.PipelineImageStreamTagReferenceRoot,
+					To:   api.PipelineImageStreamTagReferenceScratchSource,
 				}),
+			}, {
+				SrcAssemblyStepConfiguration: &api.SrcAssemblyStepConfiguration{
+					From:              api.PipelineImageStreamTagReferenceRoot,
+					ScratchSourceFrom: api.PipelineImageStreamTagReferenceScratchSource,
+					To:                api.PipelineImageStreamTagReferenceSource,
+				},
 			}},
 		},
 		{
@@ -845,8 +924,14 @@ func TestStepConfigsForBuild(t *testing.T) {
 			output: []api.StepConfiguration{{
 				SourceStepConfiguration: addCloneRefs(&api.SourceStepConfiguration{
 					From: api.PipelineImageStreamTagReferenceRoot,
-					To:   api.PipelineImageStreamTagReferenceSource,
+					To:   api.PipelineImageStreamTagReferenceScratchSource,
 				}),
+			}, {
+				SrcAssemblyStepConfiguration: &api.SrcAssemblyStepConfiguration{
+					From:              api.PipelineImageStreamTagReferenceRoot,
+					ScratchSourceFrom: api.PipelineImageStreamTagReferenceScratchSource,
+					To:                api.PipelineImageStreamTagReferenceSource,
+				},
 			}, {
 				InputImageTagStepConfiguration: &api.InputImageTagStepConfiguration{
 
@@ -929,14 +1014,27 @@ func TestStepConfigsForBuild(t *testing.T) {
 				{
 					SourceStepConfiguration: addCloneRefs(&api.SourceStepConfiguration{
 						From: api.PipelineImageStreamTagReferenceRoot,
-						To:   api.PipelineImageStreamTagReferenceSource,
+						To:   api.PipelineImageStreamTagReferenceScratchSource,
 					}),
+				}, {
+					SrcAssemblyStepConfiguration: &api.SrcAssemblyStepConfiguration{
+						From:              api.PipelineImageStreamTagReferenceRoot,
+						ScratchSourceFrom: api.PipelineImageStreamTagReferenceScratchSource,
+						To:                api.PipelineImageStreamTagReferenceSource,
+					},
 				}, {
 					SourceStepConfiguration: addCloneRefs(&api.SourceStepConfiguration{
 						From: api.PipelineImageStreamTagReference(fmt.Sprintf("%s-org.other-repo", api.PipelineImageStreamTagReferenceRoot)),
-						To:   api.PipelineImageStreamTagReference(fmt.Sprintf("%s-org.other-repo", api.PipelineImageStreamTagReferenceSource)),
+						To:   api.PipelineImageStreamTagReference(fmt.Sprintf("%s-org.other-repo", api.PipelineImageStreamTagReferenceScratchSource)),
 						Ref:  "org.other-repo",
 					}),
+				}, {
+					SrcAssemblyStepConfiguration: &api.SrcAssemblyStepConfiguration{
+						From:              api.PipelineImageStreamTagReference(fmt.Sprintf("%s-org.other-repo", api.PipelineImageStreamTagReferenceRoot)),
+						ScratchSourceFrom: api.PipelineImageStreamTagReference(fmt.Sprintf("%s-org.other-repo", api.PipelineImageStreamTagReferenceScratchSource)),
+						To:                api.PipelineImageStreamTagReference(fmt.Sprintf("%s-org.other-repo", api.PipelineImageStreamTagReferenceSource)),
+						Ref:               "org.other-repo",
+					},
 				}, {
 					InputImageTagStepConfiguration: &api.InputImageTagStepConfiguration{
 						InputImage: api.InputImage{
@@ -1089,15 +1187,29 @@ func TestStepConfigsForBuild(t *testing.T) {
 				{
 					SourceStepConfiguration: addCloneRefs(&api.SourceStepConfiguration{
 						From: api.PipelineImageStreamTagReference(fmt.Sprintf("%s-org.repo", api.PipelineImageStreamTagReferenceRoot)),
-						To:   api.PipelineImageStreamTagReference(fmt.Sprintf("%s-org.repo", api.PipelineImageStreamTagReferenceSource)),
+						To:   api.PipelineImageStreamTagReference(fmt.Sprintf("%s-org.repo", api.PipelineImageStreamTagReferenceScratchSource)),
 						Ref:  "org.repo",
 					}),
 				}, {
+					SrcAssemblyStepConfiguration: &api.SrcAssemblyStepConfiguration{
+						From:              api.PipelineImageStreamTagReference(fmt.Sprintf("%s-org.repo", api.PipelineImageStreamTagReferenceRoot)),
+						ScratchSourceFrom: api.PipelineImageStreamTagReference(fmt.Sprintf("%s-org.repo", api.PipelineImageStreamTagReferenceScratchSource)),
+						To:                api.PipelineImageStreamTagReference(fmt.Sprintf("%s-org.repo", api.PipelineImageStreamTagReferenceSource)),
+						Ref:               "org.repo",
+					},
+				}, {
 					SourceStepConfiguration: addCloneRefs(&api.SourceStepConfiguration{
 						From: api.PipelineImageStreamTagReference(fmt.Sprintf("%s-org.other-repo", api.PipelineImageStreamTagReferenceRoot)),
-						To:   api.PipelineImageStreamTagReference(fmt.Sprintf("%s-org.other-repo", api.PipelineImageStreamTagReferenceSource)),
+						To:   api.PipelineImageStreamTagReference(fmt.Sprintf("%s-org.other-repo", api.PipelineImageStreamTagReferenceScratchSource)),
 						Ref:  "org.other-repo",
 					}),
+				}, {
+					SrcAssemblyStepConfiguration: &api.SrcAssemblyStepConfiguration{
+						From:              api.PipelineImageStreamTagReference(fmt.Sprintf("%s-org.other-repo", api.PipelineImageStreamTagReferenceRoot)),
+						ScratchSourceFrom: api.PipelineImageStreamTagReference(fmt.Sprintf("%s-org.other-repo", api.PipelineImageStreamTagReferenceScratchSource)),
+						To:                api.PipelineImageStreamTagReference(fmt.Sprintf("%s-org.other-repo", api.PipelineImageStreamTagReferenceSource)),
+						Ref:               "org.other-repo",
+					},
 				}, {
 					InputImageTagStepConfiguration: &api.InputImageTagStepConfiguration{
 						InputImage: api.InputImage{
@@ -1253,7 +1365,7 @@ func TestFromConfig(t *testing.T) {
 			"base_image", "base_rpm_image-without-rpms", "rpms",
 			"base_rpm_image-org.repo1-without-rpms", "base_rpm_image-org.repo2-without-rpms",
 			"rpms-org.repo1", "rpms-org.repo2",
-			"src", "bin", "to",
+			"scratch-source", "src", "bin", "to",
 			"ci-bundle0", "ci-index",
 			"machine-os-content",
 			"tool1", "tool2", "tool3",
@@ -1365,9 +1477,10 @@ func TestFromConfig(t *testing.T) {
 	}, {
 		name:          "source build",
 		refs:          &prowapi.Refs{Org: "org", Repo: "repo"},
-		expectedSteps: []string{"src", "[output-images]", "[images]"},
+		expectedSteps: []string{"scratch-source", "src", "[output-images]", "[images]"},
 		expectedParams: map[string]string{
-			"LOCAL_IMAGE_SRC": "public_docker_image_repository:src",
+			"LOCAL_IMAGE_SCRATCH_SOURCE": "public_docker_image_repository:scratch-source",
+			"LOCAL_IMAGE_SRC":            "public_docker_image_repository:src",
 		},
 	}, {
 		name: "bundle source",
@@ -2011,8 +2124,15 @@ func TestGetSourceStepsForJobSpec(t *testing.T) {
 				{
 					SourceStepConfiguration: addCloneRefs(&api.SourceStepConfiguration{
 						From: api.PipelineImageStreamTagReferenceRoot,
-						To:   api.PipelineImageStreamTagReferenceSource,
+						To:   api.PipelineImageStreamTagReferenceScratchSource,
 					}),
+				},
+				{
+					SrcAssemblyStepConfiguration: &api.SrcAssemblyStepConfiguration{
+						From:              api.PipelineImageStreamTagReferenceRoot,
+						ScratchSourceFrom: api.PipelineImageStreamTagReferenceScratchSource,
+						To:                api.PipelineImageStreamTagReferenceSource,
+					},
 				},
 			},
 		},
@@ -2031,8 +2151,15 @@ func TestGetSourceStepsForJobSpec(t *testing.T) {
 				{
 					SourceStepConfiguration: addCloneRefs(&api.SourceStepConfiguration{
 						From: api.PipelineImageStreamTagReferenceRoot,
-						To:   api.PipelineImageStreamTagReferenceSource,
+						To:   api.PipelineImageStreamTagReferenceScratchSource,
 					}),
+				},
+				{
+					SrcAssemblyStepConfiguration: &api.SrcAssemblyStepConfiguration{
+						From:              api.PipelineImageStreamTagReferenceRoot,
+						ScratchSourceFrom: api.PipelineImageStreamTagReferenceScratchSource,
+						To:                api.PipelineImageStreamTagReferenceSource,
+					},
 				},
 			},
 		},
@@ -2048,8 +2175,15 @@ func TestGetSourceStepsForJobSpec(t *testing.T) {
 				{
 					SourceStepConfiguration: addCloneRefs(&api.SourceStepConfiguration{
 						From: api.PipelineImageStreamTagReferenceRoot,
-						To:   api.PipelineImageStreamTagReferenceSource,
+						To:   api.PipelineImageStreamTagReferenceScratchSource,
 					}),
+				},
+				{
+					SrcAssemblyStepConfiguration: &api.SrcAssemblyStepConfiguration{
+						From:              api.PipelineImageStreamTagReferenceRoot,
+						ScratchSourceFrom: api.PipelineImageStreamTagReferenceScratchSource,
+						To:                api.PipelineImageStreamTagReferenceSource,
+					},
 				},
 			},
 		},
@@ -2070,23 +2204,47 @@ func TestGetSourceStepsForJobSpec(t *testing.T) {
 				{
 					SourceStepConfiguration: addCloneRefs(&api.SourceStepConfiguration{
 						From: api.PipelineImageStreamTagReference(fmt.Sprintf("%s-openshift.repo", api.PipelineImageStreamTagReferenceRoot)),
-						To:   api.PipelineImageStreamTagReference(fmt.Sprintf("%s-openshift.repo", api.PipelineImageStreamTagReferenceSource)),
+						To:   api.PipelineImageStreamTagReference(fmt.Sprintf("%s-openshift.repo", api.PipelineImageStreamTagReferenceScratchSource)),
 						Ref:  "openshift.repo",
 					}),
 				},
 				{
+					SrcAssemblyStepConfiguration: &api.SrcAssemblyStepConfiguration{
+						From:              api.PipelineImageStreamTagReference(fmt.Sprintf("%s-openshift.repo", api.PipelineImageStreamTagReferenceRoot)),
+						ScratchSourceFrom: api.PipelineImageStreamTagReference(fmt.Sprintf("%s-openshift.repo", api.PipelineImageStreamTagReferenceScratchSource)),
+						To:                api.PipelineImageStreamTagReference(fmt.Sprintf("%s-openshift.repo", api.PipelineImageStreamTagReferenceSource)),
+						Ref:               "openshift.repo",
+					},
+				},
+				{
 					SourceStepConfiguration: addCloneRefs(&api.SourceStepConfiguration{
 						From: api.PipelineImageStreamTagReference(fmt.Sprintf("%s-openshift.other-repo", api.PipelineImageStreamTagReferenceRoot)),
-						To:   api.PipelineImageStreamTagReference(fmt.Sprintf("%s-openshift.other-repo", api.PipelineImageStreamTagReferenceSource)),
+						To:   api.PipelineImageStreamTagReference(fmt.Sprintf("%s-openshift.other-repo", api.PipelineImageStreamTagReferenceScratchSource)),
 						Ref:  "openshift.other-repo",
 					}),
 				},
 				{
+					SrcAssemblyStepConfiguration: &api.SrcAssemblyStepConfiguration{
+						From:              api.PipelineImageStreamTagReference(fmt.Sprintf("%s-openshift.other-repo", api.PipelineImageStreamTagReferenceRoot)),
+						ScratchSourceFrom: api.PipelineImageStreamTagReference(fmt.Sprintf("%s-openshift.other-repo", api.PipelineImageStreamTagReferenceScratchSource)),
+						To:                api.PipelineImageStreamTagReference(fmt.Sprintf("%s-openshift.other-repo", api.PipelineImageStreamTagReferenceSource)),
+						Ref:               "openshift.other-repo",
+					},
+				},
+				{
 					SourceStepConfiguration: addCloneRefs(&api.SourceStepConfiguration{
 						From: api.PipelineImageStreamTagReference(fmt.Sprintf("%s-openshift.repo-three", api.PipelineImageStreamTagReferenceRoot)),
-						To:   api.PipelineImageStreamTagReference(fmt.Sprintf("%s-openshift.repo-three", api.PipelineImageStreamTagReferenceSource)),
+						To:   api.PipelineImageStreamTagReference(fmt.Sprintf("%s-openshift.repo-three", api.PipelineImageStreamTagReferenceScratchSource)),
 						Ref:  "openshift.repo-three",
 					}),
+				},
+				{
+					SrcAssemblyStepConfiguration: &api.SrcAssemblyStepConfiguration{
+						From:              api.PipelineImageStreamTagReference(fmt.Sprintf("%s-openshift.repo-three", api.PipelineImageStreamTagReferenceRoot)),
+						ScratchSourceFrom: api.PipelineImageStreamTagReference(fmt.Sprintf("%s-openshift.repo-three", api.PipelineImageStreamTagReferenceScratchSource)),
+						To:                api.PipelineImageStreamTagReference(fmt.Sprintf("%s-openshift.repo-three", api.PipelineImageStreamTagReferenceSource)),
+						Ref:               "openshift.repo-three",
+					},
 				},
 			},
 		},
@@ -2107,22 +2265,45 @@ func TestGetSourceStepsForJobSpec(t *testing.T) {
 				{
 					SourceStepConfiguration: addCloneRefs(&api.SourceStepConfiguration{
 						From: api.PipelineImageStreamTagReferenceRoot,
-						To:   api.PipelineImageStreamTagReferenceSource,
+						To:   api.PipelineImageStreamTagReferenceScratchSource,
 					}),
+				},
+				{
+					SrcAssemblyStepConfiguration: &api.SrcAssemblyStepConfiguration{
+						From:              api.PipelineImageStreamTagReferenceRoot,
+						ScratchSourceFrom: api.PipelineImageStreamTagReferenceScratchSource,
+						To:                api.PipelineImageStreamTagReferenceSource,
+					},
 				},
 				{
 					SourceStepConfiguration: addCloneRefs(&api.SourceStepConfiguration{
 						From: api.PipelineImageStreamTagReference(fmt.Sprintf("%s-openshift.other-repo", api.PipelineImageStreamTagReferenceRoot)),
-						To:   api.PipelineImageStreamTagReference(fmt.Sprintf("%s-openshift.other-repo", api.PipelineImageStreamTagReferenceSource)),
+						To:   api.PipelineImageStreamTagReference(fmt.Sprintf("%s-openshift.other-repo", api.PipelineImageStreamTagReferenceScratchSource)),
 						Ref:  "openshift.other-repo",
 					}),
 				},
 				{
+					SrcAssemblyStepConfiguration: &api.SrcAssemblyStepConfiguration{
+						From:              api.PipelineImageStreamTagReference(fmt.Sprintf("%s-openshift.other-repo", api.PipelineImageStreamTagReferenceRoot)),
+						ScratchSourceFrom: api.PipelineImageStreamTagReference(fmt.Sprintf("%s-openshift.other-repo", api.PipelineImageStreamTagReferenceScratchSource)),
+						To:                api.PipelineImageStreamTagReference(fmt.Sprintf("%s-openshift.other-repo", api.PipelineImageStreamTagReferenceSource)),
+						Ref:               "openshift.other-repo",
+					},
+				},
+				{
 					SourceStepConfiguration: addCloneRefs(&api.SourceStepConfiguration{
 						From: api.PipelineImageStreamTagReference(fmt.Sprintf("%s-openshift.repo-three", api.PipelineImageStreamTagReferenceRoot)),
-						To:   api.PipelineImageStreamTagReference(fmt.Sprintf("%s-openshift.repo-three", api.PipelineImageStreamTagReferenceSource)),
+						To:   api.PipelineImageStreamTagReference(fmt.Sprintf("%s-openshift.repo-three", api.PipelineImageStreamTagReferenceScratchSource)),
 						Ref:  "openshift.repo-three",
 					}),
+				},
+				{
+					SrcAssemblyStepConfiguration: &api.SrcAssemblyStepConfiguration{
+						From:              api.PipelineImageStreamTagReference(fmt.Sprintf("%s-openshift.repo-three", api.PipelineImageStreamTagReferenceRoot)),
+						ScratchSourceFrom: api.PipelineImageStreamTagReference(fmt.Sprintf("%s-openshift.repo-three", api.PipelineImageStreamTagReferenceScratchSource)),
+						To:                api.PipelineImageStreamTagReference(fmt.Sprintf("%s-openshift.repo-three", api.PipelineImageStreamTagReferenceSource)),
+						Ref:               "openshift.repo-three",
+					},
 				},
 			},
 		},
@@ -2131,7 +2312,19 @@ func TestGetSourceStepsForJobSpec(t *testing.T) {
 		t.Run(tc.name, func(t *testing.T) {
 			result := getSourceStepsForJobSpec(&tc.jobSpec, tc.injectedTest)
 			less := func(a, b api.StepConfiguration) bool {
-				return a.SourceStepConfiguration.Ref < b.SourceStepConfiguration.Ref
+				refA := ""
+				if a.SourceStepConfiguration != nil {
+					refA = a.SourceStepConfiguration.Ref
+				} else if a.SrcAssemblyStepConfiguration != nil {
+					refA = a.SrcAssemblyStepConfiguration.Ref
+				}
+				refB := ""
+				if b.SourceStepConfiguration != nil {
+					refB = b.SourceStepConfiguration.Ref
+				} else if b.SrcAssemblyStepConfiguration != nil {
+					refB = b.SrcAssemblyStepConfiguration.Ref
+				}
+				return refA < refB
 			}
 			if diff := cmp.Diff(tc.expected, result, cmpopts.SortSlices(less)); diff != "" {
 				t.Errorf("%s: result didn't match expected, diff: %v", tc.name, diff)

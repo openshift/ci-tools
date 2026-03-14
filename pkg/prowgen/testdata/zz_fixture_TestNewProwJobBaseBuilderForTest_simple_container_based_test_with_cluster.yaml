@@ -5,6 +5,7 @@ decoration_config:
   skip_cloning: true
 labels:
   ci-operator.openshift.io/cluster: build01
+  presets.ci.openshift.io/registry-pull: "true"
 name: prefix-ci-o-r-b-simple
 spec:
   containers:
@@ -36,9 +37,6 @@ spec:
     - mountPath: /secrets/manifest-tool
       name: manifest-tool-local-pusher
       readOnly: true
-    - mountPath: /etc/pull-secret
-      name: pull-secret
-      readOnly: true
     - mountPath: /etc/report
       name: result-aggregator
       readOnly: true
@@ -47,9 +45,6 @@ spec:
   - name: manifest-tool-local-pusher
     secret:
       secretName: manifest-tool-local-pusher
-  - name: pull-secret
-    secret:
-      secretName: registry-pull-credentials
   - name: result-aggregator
     secret:
       secretName: result-aggregator

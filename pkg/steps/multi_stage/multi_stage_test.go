@@ -58,6 +58,23 @@ func TestRequires(t *testing.T) {
 			api.ReleaseImagesLink(api.LatestReleaseName),
 		},
 	}, {
+		name: "cluster profile with tag_specification should require release payload",
+		config: api.ReleaseBuildConfiguration{
+			InputConfiguration: api.InputConfiguration{
+				ReleaseTagConfiguration: &api.ReleaseTagConfiguration{
+					Namespace: "ocp",
+					Name:      "4.20",
+				},
+			},
+		},
+		steps: api.MultiStageTestConfigurationLiteral{
+			ClusterProfile: api.ClusterProfileAWS,
+		},
+		req: []api.StepLink{
+			api.ReleasePayloadImageLink(api.LatestReleaseName),
+			api.ImagesReadyLink(),
+		},
+	}, {
 		name: "step needs release images, should have ReleaseImagesLink",
 		steps: api.MultiStageTestConfigurationLiteral{
 			Test: []api.LiteralTestStep{{From: "from-release"}},

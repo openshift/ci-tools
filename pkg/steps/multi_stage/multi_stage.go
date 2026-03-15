@@ -364,12 +364,13 @@ func (s *multiStageTestStep) Requires() (ret []api.StepLink) {
 	}
 	if s.profile != "" {
 		_, hasLatestRelease := s.config.Releases[api.LatestReleaseName]
-		if hasLatestRelease {
+		hasReleaseTagConfig := s.config.ReleaseTagConfiguration != nil
+		if hasLatestRelease || hasReleaseTagConfig {
 			needsReleasePayload = true
 		}
 		for _, env := range envForProfile {
 			if link, ok := utils.LinkForEnv(env); ok {
-				if hasLatestRelease {
+				if hasLatestRelease || hasReleaseTagConfig {
 					ret = append(ret, link)
 				}
 			}

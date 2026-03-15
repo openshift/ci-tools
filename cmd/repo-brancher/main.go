@@ -236,7 +236,7 @@ func pushBranch(logger *logrus.Entry, remote *url.URL, futureBranch string, gitC
 }
 
 func fetchDeeper(logger *logrus.Entry, remote *url.URL, gitCmd gitCmd, repoInfo *config.Info, depth int) error {
-	command := []string{"fetch", "--depth", strconv.Itoa(depth), remote.String(), repoInfo.Branch}
+	command := []string{"fetch", "--deepen", strconv.Itoa(depth), remote.String(), repoInfo.Branch}
 	if err := gitCmd(logger, command...); err != nil {
 		return err
 	}

@@ -32,7 +32,14 @@ func TestRequires(t *testing.T) {
 		leaseProxyServerAvailable bool
 		req                       []api.StepLink
 	}{{
-		name: "step has a cluster profile and requires a release image, should not have ReleaseImagesLink",
+		name: "step has a cluster profile with releases configured and requires a release image",
+		config: api.ReleaseBuildConfiguration{
+			InputConfiguration: api.InputConfiguration{
+				Releases: map[string]api.UnresolvedRelease{
+					api.LatestReleaseName: {Release: &api.Release{Channel: api.ReleaseChannelStable, Version: "4.20"}},
+				},
+			},
+		},
 		steps: api.MultiStageTestConfigurationLiteral{
 			ClusterProfile: api.ClusterProfileAWS,
 			Test:           []api.LiteralTestStep{{From: "from-release"}},
@@ -40,6 +47,15 @@ func TestRequires(t *testing.T) {
 		req: []api.StepLink{
 			api.ReleasePayloadImageLink(api.LatestReleaseName),
 			api.ImagesReadyLink(),
+		},
+	}, {
+		name: "step has a cluster profile without releases configured, should not require release payload",
+		steps: api.MultiStageTestConfigurationLiteral{
+			ClusterProfile: api.ClusterProfileAWS,
+			Test:           []api.LiteralTestStep{{From: "from-release"}},
+		},
+		req: []api.StepLink{
+			api.ReleaseImagesLink(api.LatestReleaseName),
 		},
 	}, {
 		name: "step needs release images, should have ReleaseImagesLink",

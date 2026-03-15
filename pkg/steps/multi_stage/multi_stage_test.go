@@ -58,6 +58,12 @@ func TestRequires(t *testing.T) {
 			api.ReleaseImagesLink(api.LatestReleaseName),
 		},
 	}, {
+		name: "cluster profile only without releases should not require any release links",
+		steps: api.MultiStageTestConfigurationLiteral{
+			ClusterProfile: api.ClusterProfileAWS,
+		},
+		req: nil,
+	}, {
 		name: "cluster profile with tag_specification should require release payload",
 		config: api.ReleaseBuildConfiguration{
 			InputConfiguration: api.InputConfiguration{

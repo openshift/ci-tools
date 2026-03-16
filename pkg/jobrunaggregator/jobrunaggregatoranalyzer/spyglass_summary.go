@@ -6,6 +6,7 @@ import (
 	"fmt"
 	"html/template"
 	"regexp"
+	"sort"
 	"strings"
 	"time"
 
@@ -35,6 +36,23 @@ var (
 				"isSuccess":        func() testCaseFilterFunc { return isSuccess },
 				"infoForTestSuite": infoForTestSuite,
 				"toLower":          strings.ToLower,
+				"getJobRunNumber": func(jobRunIDToNumber map[string]int, jobRunID string) int {
+					return jobRunIDToNumber[jobRunID]
+				},
+				"dict": func(values ...interface{}) (map[string]interface{}, error) {
+					if len(values)%2 != 0 {
+						return nil, fmt.Errorf("dict requires an even number of arguments")
+					}
+					dict := make(map[string]interface{}, len(values)/2)
+					for i := 0; i < len(values); i += 2 {
+						key, ok := values[i].(string)
+						if !ok {
+							return nil, fmt.Errorf("dict keys must be strings")
+						}
+						dict[key] = values[i+1]
+					}
+					return dict, nil
+				},
 				"mapHasKey": func(value map[string]string, key string) bool {
 					_, found := value[key]
 					return found
@@ -145,14 +163,23 @@ var (
 
 // if someone has the HTML skills, making this a mini-test grid would be awesome.
 func htmlForTestRuns(jobName string, suite *junit.TestSuite) (string, error) {
+	// Collect and number all job runs
+	allJobRunIDs := collectAllJobRunIDs(suite)
+	jobRunIDToNumber := make(map[string]int)
+	for i, jobRunID := range allJobRunIDs {
+		jobRunIDToNumber[jobRunID] = i + 1
+	}
+
 	data := struct {
-		JobName        string
-		Suite          *junit.TestSuite
-		InitialParents []string
+		JobName          string
+		Suite            *junit.TestSuite
+		InitialParents   []string
+		JobRunIDToNumber map[string]int
 	}{
-		JobName:        jobName,
-		Suite:          suite,
-		InitialParents: []string{},
+		JobName:          jobName,
+		Suite:            suite,
+		InitialParents:   []string{},
+		JobRunIDToNumber: jobRunIDToNumber,
 	}
 	buff := bytes.Buffer{}
 	err := htmlTemplate.Execute(&buff, data)
@@ -264,4 +291,42 @@ func infoForTestCase(jobName string, parents []string, testCase *junit.TestCase,
 	}
 
 	return &testInfo
+}
+
+// collectAllJobRunIDs traverses the test suite tree and collects all unique JobRunIDs
+func collectAllJobRunIDs(suite *junit.TestSuite) []string {
+	jobRunIDSet := sets.Set[string]{}
+	collectJobRunIDsFromSuite(suite, jobRunIDSet)
+
+	// Sort alphabetically for stable ordering
+	jobRunIDs := sets.List(jobRunIDSet)
+	sort.Strings(jobRunIDs)
+
+	return jobRunIDs
+}
+
+// collectJobRunIDsFromSuite recursively extracts JobRunIDs from test cases
+func collectJobRunIDsFromSuite(suite *junit.TestSuite, jobRunIDs sets.Set[string]) {
+	// Extract JobRunIDs from test case details (passes, failures, skips)
+	for _, testCase := range suite.TestCases {
+		currDetails := &jobrunaggregatorlib.TestCaseDetails{}
+		if len(testCase.SystemOut) > 0 {
+			_ = yaml.Unmarshal([]byte(testCase.SystemOut), currDetails)
+		}
+
+		for _, failure := range currDetails.Failures {
+			jobRunIDs.Insert(failure.JobRunID)
+		}
+		for _, pass := range currDetails.Passes {
+			jobRunIDs.Insert(pass.JobRunID)
+		}
+		for _, skip := range currDetails.Skips {
+			jobRunIDs.Insert(skip.JobRunID)
+		}
+	}
+
+	// Recursively process child suites
+	for _, child := range suite.Children {
+		collectJobRunIDsFromSuite(child, jobRunIDs)
+	}
 }

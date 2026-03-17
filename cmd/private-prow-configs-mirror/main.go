@@ -101,7 +101,7 @@ func loadProwPlugins(pluginsPath string) (*plugins.Configuration, error) {
 	return agent.Config(), nil
 }
 
-func updateProwConfig(configFile string, config prowconfig.ProwConfig) error {
+func updateProwConfig(configFile string, config *prowconfig.Config) error {
 	data, err := yaml.Marshal(config)
 	if err != nil {
 		return fmt.Errorf("could not marshal Prow configuration: %w", err)
@@ -133,7 +133,7 @@ func getOrgReposWithOfficialImages(configDir string, whitelist map[string][]stri
 	for org, repos := range whitelist {
 		for _, repo := range repos {
 			if _, ok := ret[org]; !ok {
-				ret[org] = sets.New[string](repo)
+				ret[org] = sets.New(repo)
 			} else if reposInOpenShiftPrivOrg.Has(repo) {
 				ret[org].Insert(repo)
 			} else {
@@ -154,7 +154,7 @@ func getOrgReposWithOfficialImages(configDir string, whitelist map[string][]stri
 		}
 
 		if _, ok := ret[i.Org]; !ok {
-			ret[i.Org] = sets.New[string](i.Repo)
+			ret[i.Org] = sets.New(i.Repo)
 		} else if reposInOpenShiftPrivOrg.Has(i.Repo) {
 			ret[i.Org].Insert(i.Repo)
 		} else {
@@ -214,7 +214,7 @@ func setPrivateReposTideQueries(tideQueries []prowconfig.TideQuery, orgRepos org
 	logrus.Info("Processing...")
 
 	for index, tideQuery := range tideQueries {
-		repos := sets.New[string](tideQuery.Repos...)
+		repos := sets.New(tideQuery.Repos...)
 
 		for _, orgRepo := range tideQuery.Repos {
 			if orgRepos.isOfficialRepoFull(orgRepo) {
@@ -313,7 +313,7 @@ func injectPrivateApprovePlugin(approves []plugins.Approve, orgRepos orgReposWit
 	logrus.Info("Processing...")
 
 	for index, approve := range approves {
-		repos := sets.New[string](approve.Repos...)
+		repos := sets.New(approve.Repos...)
 
 		for _, orgRepo := range approve.Repos {
 			if orgRepos.isOfficialRepoFull(orgRepo) {
@@ -332,7 +332,7 @@ func injectPrivateLGTMPlugin(lgtms []plugins.Lgtm, orgRepos orgReposWithOfficial
 	logrus.Info("Processing...")
 
 	for index, lgtm := range lgtms {
-		repos := sets.New[string](lgtm.Repos...)
+		repos := sets.New(lgtm.Repos...)
 
 		for _, orgRepo := range lgtm.Repos {
 			if orgRepos.isOfficialRepoFull(orgRepo) {
@@ -382,7 +382,7 @@ func injectPrivatePlugins(prowPlugins plugins.Plugins, orgRepos orgReposWithOffi
 
 	commonPlugins := getCommonPlugins(privateRepoPlugins)
 	for repo, values := range privateRepoPlugins {
-		repoLevelPlugins := sets.New[string](values...)
+		repoLevelPlugins := sets.New(values...)
 
 		repoLevelPlugins = repoLevelPlugins.Difference(commonPlugins)
 
@@ -401,7 +401,7 @@ func injectPrivatePlugins(prowPlugins plugins.Plugins, orgRepos orgReposWithOffi
 func getCommonPlugins(privateRepoPlugins map[string][]string) sets.Set[string] {
 	var ret sets.Set[string]
 	for _, values := range privateRepoPlugins {
-		valuesSet := sets.New[string](values...)
+		valuesSet := sets.New(values...)
 
 		if ret == nil {
 			ret = valuesSet
@@ -457,7 +457,10 @@ func main() {
 	if err != nil {
 		logrus.WithError(err).Fatal("couldn't get the prow and ci-operator configs")
 	}
-	prowConfig := configs.Prow.ProwConfig
+	prowConfig := configs.Prow
+	prowConfig.PresubmitsStatic = nil
+	prowConfig.PostsubmitsStatic = nil
+	prowConfig.Periodics = nil
 
 	pluginsConfigFile := filepath.Join(o.releaseRepoPath, config.PluginConfigInRepoPath)
 	pluginsConfig, err := loadProwPlugins(pluginsConfigFile)

@@ -1,23 +1,26 @@
 package main
 
 import (
+	"os"
+	"path/filepath"
 	"reflect"
 	"testing"
 
+	"github.com/ghodss/yaml"
 	"github.com/google/go-cmp/cmp"
 
+	corev1 "k8s.io/api/core/v1"
 	"k8s.io/apimachinery/pkg/util/sets"
-	utilpointer "k8s.io/utils/pointer"
+	"k8s.io/utils/ptr"
 	prowapi "sigs.k8s.io/prow/pkg/apis/prowjobs/v1"
 	prowconfig "sigs.k8s.io/prow/pkg/config"
 	"sigs.k8s.io/prow/pkg/git/types"
 	"sigs.k8s.io/prow/pkg/plugins"
-	prowplugins "sigs.k8s.io/prow/pkg/plugins"
 )
 
 var orgRepos = orgReposWithOfficialImages{
-	"openshift": sets.New[string]("testRepo1", "testRepo2"),
-	"testshift": sets.New[string]("testRepo3", "testRepo4"),
+	"openshift": sets.New("testRepo1", "testRepo2"),
+	"testshift": sets.New("testRepo3", "testRepo4"),
 }
 
 func pBool(b bool) *bool {
@@ -325,24 +328,24 @@ func TestInjectPrivatePlankDefaultDecorationConfigs(t *testing.T) {
 		{
 			id: "no changes expected",
 			defaultDecorationConfigs: map[string]*prowapi.DecorationConfig{
-				"openshift":              {GCSCredentialsSecret: utilpointer.StringPtr("gcs_secret"), SkipCloning: pBool(true)},
-				"openshift/anotherRepo1": {GCSCredentialsSecret: utilpointer.StringPtr("gcs_secret2"), SkipCloning: pBool(false)},
+				"openshift":              {GCSCredentialsSecret: ptr.To("gcs_secret"), SkipCloning: pBool(true)},
+				"openshift/anotherRepo1": {GCSCredentialsSecret: ptr.To("gcs_secret2"), SkipCloning: pBool(false)},
 			},
 			expected: map[string]*prowapi.DecorationConfig{
-				"openshift":              {GCSCredentialsSecret: utilpointer.StringPtr("gcs_secret"), SkipCloning: pBool(true)},
-				"openshift/anotherRepo1": {GCSCredentialsSecret: utilpointer.StringPtr("gcs_secret2"), SkipCloning: pBool(false)},
+				"openshift":              {GCSCredentialsSecret: ptr.To("gcs_secret"), SkipCloning: pBool(true)},
+				"openshift/anotherRepo1": {GCSCredentialsSecret: ptr.To("gcs_secret2"), SkipCloning: pBool(false)},
 			},
 		},
 		{
 			id: "changes expected",
 			defaultDecorationConfigs: map[string]*prowapi.DecorationConfig{
-				"openshift":           {GCSCredentialsSecret: utilpointer.StringPtr("gcs_secret"), SkipCloning: pBool(true)},
-				"openshift/testRepo1": {GCSCredentialsSecret: utilpointer.StringPtr("gcs_secret2"), SkipCloning: pBool(false)},
+				"openshift":           {GCSCredentialsSecret: ptr.To("gcs_secret"), SkipCloning: pBool(true)},
+				"openshift/testRepo1": {GCSCredentialsSecret: ptr.To("gcs_secret2"), SkipCloning: pBool(false)},
 			},
 			expected: map[string]*prowapi.DecorationConfig{
-				"openshift":                {GCSCredentialsSecret: utilpointer.StringPtr("gcs_secret"), SkipCloning: pBool(true)},
-				"openshift/testRepo1":      {GCSCredentialsSecret: utilpointer.StringPtr("gcs_secret2"), SkipCloning: pBool(false)},
-				"openshift-priv/testRepo1": {GCSCredentialsSecret: utilpointer.StringPtr("gcs_secret2"), SkipCloning: pBool(false)},
+				"openshift":                {GCSCredentialsSecret: ptr.To("gcs_secret"), SkipCloning: pBool(true)},
+				"openshift/testRepo1":      {GCSCredentialsSecret: ptr.To("gcs_secret2"), SkipCloning: pBool(false)},
+				"openshift-priv/testRepo1": {GCSCredentialsSecret: ptr.To("gcs_secret2"), SkipCloning: pBool(false)},
 			},
 		},
 	}
@@ -601,33 +604,33 @@ func TestInjectPrivateBugzillaPlugin(t *testing.T) {
 func TestInjectPrivatePlugins(t *testing.T) {
 	testCases := []struct {
 		id       string
-		plugins  map[string]prowplugins.OrgPlugins
-		expected map[string]prowplugins.OrgPlugins
+		plugins  map[string]plugins.OrgPlugins
+		expected map[string]plugins.OrgPlugins
 	}{
 		{
 			id:       "no changes expected",
-			plugins:  map[string]prowplugins.OrgPlugins{"openshift/anotherRepo1": {Plugins: []string{"approve", "lgtm", "cat", "dog"}}},
-			expected: map[string]prowplugins.OrgPlugins{"openshift/anotherRepo1": {Plugins: []string{"approve", "lgtm", "cat", "dog"}}},
+			plugins:  map[string]plugins.OrgPlugins{"openshift/anotherRepo1": {Plugins: []string{"approve", "lgtm", "cat", "dog"}}},
+			expected: map[string]plugins.OrgPlugins{"openshift/anotherRepo1": {Plugins: []string{"approve", "lgtm", "cat", "dog"}}},
 		},
 		{
 			id: "changes expected",
-			plugins: map[string]prowplugins.OrgPlugins{
+			plugins: map[string]plugins.OrgPlugins{
 				"openshift/testRepo1": {Plugins: []string{"approve", "lgtm", "cat", "dog"}},
 			},
-			expected: map[string]prowplugins.OrgPlugins{
+			expected: map[string]plugins.OrgPlugins{
 				"openshift-priv/testRepo1": {Plugins: []string{"approve", "cat", "dog", "lgtm"}},
 				"openshift/testRepo1":      {Plugins: []string{"approve", "lgtm", "cat", "dog"}},
 			},
 		},
 		{
 			id: "changes expected, multiple org/repos",
-			plugins: map[string]prowplugins.OrgPlugins{
+			plugins: map[string]plugins.OrgPlugins{
 				"openshift":           {Plugins: []string{"lgtm", "cat", "dog", "hold"}},
 				"testshift":           {Plugins: []string{"lgtm", "milestone", "label", "hold"}},
 				"openshift/testRepo1": {Plugins: []string{"approve"}},
 				"testshift/testRepo3": {Plugins: []string{"approve", "trigger"}},
 			},
-			expected: map[string]prowplugins.OrgPlugins{
+			expected: map[string]plugins.OrgPlugins{
 				"openshift":           {Plugins: []string{"lgtm", "cat", "dog", "hold"}},
 				"testshift":           {Plugins: []string{"lgtm", "milestone", "label", "hold"}},
 				"openshift/testRepo1": {Plugins: []string{"approve"}},
@@ -649,6 +652,57 @@ func TestInjectPrivatePlugins(t *testing.T) {
 				t.Fatal(cmp.Diff(tc.plugins, tc.expected))
 			}
 		})
+	}
+}
+
+func TestUpdateProwConfigPreservesJobConfig(t *testing.T) {
+	tempDir := t.TempDir()
+	configFile := filepath.Join(tempDir, "_config.yaml")
+
+	original := &prowconfig.Config{
+		ProwConfig: prowconfig.ProwConfig{
+			Tide: prowconfig.Tide{
+				TideGitHubConfig: prowconfig.TideGitHubConfig{
+					Queries: []prowconfig.TideQuery{
+						{
+							Repos:  []string{"openshift/testRepo1"},
+							Labels: []string{"lgtm"},
+						},
+					},
+				},
+			},
+		},
+		JobConfig: prowconfig.JobConfig{
+			Presets: []prowconfig.Preset{
+				{
+					Labels: map[string]string{"presets.ci.openshift.io/registry-pull": "true"},
+					Env:    []corev1.EnvVar{{Name: "TEST_VAR", Value: "test_value"}},
+					VolumeMounts: []corev1.VolumeMount{
+						{Name: "pull-secret", MountPath: "/etc/pull-secret", ReadOnly: true},
+					},
+					Volumes: []corev1.Volume{
+						{Name: "pull-secret", VolumeSource: corev1.VolumeSource{
+							Secret: &corev1.SecretVolumeSource{SecretName: "registry-pull-credentials"},
+						}},
+					},
+				},
+			},
+		},
+	}
+
+	if err := updateProwConfig(configFile, original); err != nil {
+		t.Fatalf("failed to write config: %v", err)
+	}
+	data, err := os.ReadFile(configFile)
+	if err != nil {
+		t.Fatalf("failed to read config file: %v", err)
+	}
+	var updated prowconfig.Config
+	if err := yaml.Unmarshal(data, &updated); err != nil {
+		t.Fatalf("failed to unmarshal config: %v", err)
+	}
+	if cmp.Diff(original, &updated) != "" {
+		t.Fatalf("original config was modified: %s", cmp.Diff(original, &updated))
 	}
 }
 

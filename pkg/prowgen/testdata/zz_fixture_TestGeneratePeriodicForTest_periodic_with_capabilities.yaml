@@ -13,5 +13,4 @@ labels:
   capability/rce: rce
   capability/sshd-bastion: sshd-bastion
   pj-rehearse.openshift.io/can-be-rehearsed: "true"
-  presets.ci.openshift.io/registry-pull: "true"
 name: periodic-ci-org-repo-branch-testname

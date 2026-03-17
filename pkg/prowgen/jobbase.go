@@ -60,10 +60,8 @@ func NewProwJobBaseBuilder(configSpec *cioperatorapi.ReleaseBuildConfiguration, 
 	b := &prowJobBaseBuilder{
 		PodSpec: podSpecGenerator,
 		base: prowconfig.JobBase{
-			Agent: string(prowv1.KubernetesAgent),
-			Labels: map[string]string{
-				cioperatorapi.PresetRegistryPullLabel: "true",
-			},
+			Agent:  string(prowv1.KubernetesAgent),
+			Labels: map[string]string{},
 			UtilityConfig: prowconfig.UtilityConfig{
 				Decorate: utilpointer.Bool(true),
 			},

@@ -4,5 +4,4 @@ presubmits:
     labels:
       capability/arm64: arm64
       pj-rehearse.openshift.io/can-be-rehearsed: "true"
-      presets.ci.openshift.io/registry-pull: "true"
     name: pull-ci-organization-repository-branch-unit

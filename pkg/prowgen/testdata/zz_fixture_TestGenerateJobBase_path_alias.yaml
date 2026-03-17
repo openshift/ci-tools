@@ -4,5 +4,6 @@ decoration_config:
   skip_cloning: true
 labels:
   ci-operator.openshift.io/variant: whatever
+  presets.ci.openshift.io/registry-pull: "true"
 name: pull-ci-org-repo-branch-whatever-test
 path_alias: /some/where

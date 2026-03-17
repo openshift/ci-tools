@@ -86,7 +86,6 @@ presubmits:
     labels:
       ci.openshift.io/generator: prowgen
       pj-rehearse.openshift.io/can-be-rehearsed: "true"
-      presets.ci.openshift.io/registry-pull: "true"
     name: pull-ci-super-trooper-master-images
     rerun_command: /test images
     spec:
@@ -111,6 +110,9 @@ presubmits:
         - mountPath: /secrets/manifest-tool
           name: manifest-tool-local-pusher
           readOnly: true
+        - mountPath: /etc/pull-secret
+          name: pull-secret
+          readOnly: true
         - mountPath: /etc/report
           name: result-aggregator
           readOnly: true
@@ -119,6 +121,9 @@ presubmits:
       - name: manifest-tool-local-pusher
         secret:
           secretName: manifest-tool-local-pusher
+      - name: pull-secret
+        secret:
+          secretName: registry-pull-credentials
       - name: result-aggregator
         secret:
           secretName: result-aggregator
@@ -164,7 +169,6 @@ presubmits:
     labels:
       ci.openshift.io/generator: prowgen
       pj-rehearse.openshift.io/can-be-rehearsed: "true"
-      presets.ci.openshift.io/registry-pull: "true"
     name: pull-ci-super-trooper-master-multistage
     rerun_command: /test multistage
     spec:
@@ -197,6 +201,9 @@ presubmits:
         - mountPath: /secrets/manifest-tool
           name: manifest-tool-local-pusher
           readOnly: true
+        - mountPath: /etc/pull-secret
+          name: pull-secret
+          readOnly: true
         - mountPath: /etc/report
           name: result-aggregator
           readOnly: true
@@ -205,6 +212,9 @@ presubmits:
       - name: manifest-tool-local-pusher
         secret:
           secretName: manifest-tool-local-pusher
+      - name: pull-secret
+        secret:
+          secretName: registry-pull-credentials
       - name: result-aggregator
         secret:
           secretName: result-aggregator
@@ -221,7 +231,6 @@ presubmits:
     labels:
       ci.openshift.io/generator: prowgen
       pj-rehearse.openshift.io/can-be-rehearsed: "true"
-      presets.ci.openshift.io/registry-pull: "true"
     name: pull-ci-super-trooper-master-multistage2
     rerun_command: /test multistage2
     spec:
@@ -254,6 +263,9 @@ presubmits:
         - mountPath: /secrets/manifest-tool
           name: manifest-tool-local-pusher
           readOnly: true
+        - mountPath: /etc/pull-secret
+          name: pull-secret
+          readOnly: true
         - mountPath: /etc/report
           name: result-aggregator
           readOnly: true
@@ -262,6 +274,9 @@ presubmits:
       - name: manifest-tool-local-pusher
         secret:
           secretName: manifest-tool-local-pusher
+      - name: pull-secret
+        secret:
+          secretName: registry-pull-credentials
       - name: result-aggregator
         secret:
           secretName: result-aggregator
@@ -280,7 +295,6 @@ presubmits:
       ci-operator.openshift.io/cloud-cluster-profile: azure4
       ci.openshift.io/generator: prowgen
       pj-rehearse.openshift.io/can-be-rehearsed: "true"
-      presets.ci.openshift.io/registry-pull: "true"
     name: pull-ci-super-trooper-master-multistage3
     rerun_command: /test multistage3
     spec:
@@ -317,6 +331,9 @@ presubmits:
         - mountPath: /secrets/manifest-tool
           name: manifest-tool-local-pusher
           readOnly: true
+        - mountPath: /etc/pull-secret
+          name: pull-secret
+          readOnly: true
         - mountPath: /etc/report
           name: result-aggregator
           readOnly: true
@@ -331,6 +348,9 @@ presubmits:
       - name: manifest-tool-local-pusher
         secret:
           secretName: manifest-tool-local-pusher
+      - name: pull-secret
+        secret:
+          secretName: registry-pull-credentials
       - name: result-aggregator
         secret:
           secretName: result-aggregator
@@ -347,7 +367,6 @@ presubmits:
     labels:
       ci.openshift.io/generator: prowgen
       pj-rehearse.openshift.io/can-be-rehearsed: "true"
-      presets.ci.openshift.io/registry-pull: "true"
     name: pull-ci-super-trooper-master-multistage4
     rerun_command: /test multistage4
     spec:
@@ -380,6 +399,9 @@ presubmits:
         - mountPath: /secrets/manifest-tool
           name: manifest-tool-local-pusher
           readOnly: true
+        - mountPath: /etc/pull-secret
+          name: pull-secret
+          readOnly: true
         - mountPath: /etc/report
           name: result-aggregator
           readOnly: true
@@ -388,6 +410,9 @@ presubmits:
       - name: manifest-tool-local-pusher
         secret:
           secretName: manifest-tool-local-pusher
+      - name: pull-secret
+        secret:
+          secretName: registry-pull-credentials
       - name: result-aggregator
         secret:
           secretName: result-aggregator
@@ -404,7 +429,6 @@ presubmits:
     labels:
       ci.openshift.io/generator: prowgen
       pj-rehearse.openshift.io/can-be-rehearsed: "true"
-      presets.ci.openshift.io/registry-pull: "true"
     name: pull-ci-super-trooper-master-unit
     rerun_command: /test unit
     spec:
@@ -437,6 +461,9 @@ presubmits:
         - mountPath: /secrets/manifest-tool
           name: manifest-tool-local-pusher
           readOnly: true
+        - mountPath: /etc/pull-secret
+          name: pull-secret
+          readOnly: true
         - mountPath: /etc/report
           name: result-aggregator
           readOnly: true
@@ -445,6 +472,9 @@ presubmits:
       - name: manifest-tool-local-pusher
         secret:
           secretName: manifest-tool-local-pusher
+      - name: pull-secret
+        secret:
+          secretName: registry-pull-credentials
       - name: result-aggregator
         secret:
           secretName: result-aggregator

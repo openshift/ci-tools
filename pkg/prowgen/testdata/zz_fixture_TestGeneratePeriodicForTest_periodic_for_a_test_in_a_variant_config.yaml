@@ -10,5 +10,4 @@ extra_refs:
 labels:
   ci-operator.openshift.io/variant: also
   pj-rehearse.openshift.io/can-be-rehearsed: "true"
-  presets.ci.openshift.io/registry-pull: "true"
 name: periodic-ci-org-repo-branch-also-testname

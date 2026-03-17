@@ -37,9 +37,6 @@ const (
 	NoBuildsLabel = "ci.openshift.io/no-builds"
 	NoBuildsValue = "true"
 
-	// PresetRegistryPullLabel is the label to include registry-pull Prow preset in a job to provide volume boilerplate
-	PresetRegistryPullLabel = "presets.ci.openshift.io/registry-pull"
-
 	// HiveCluster is the cluster where Hive is deployed
 	HiveCluster = ClusterHive
 

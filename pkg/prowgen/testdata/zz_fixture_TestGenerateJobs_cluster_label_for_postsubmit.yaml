@@ -4,6 +4,5 @@ postsubmits:
     cluster: build01
     labels:
       ci-operator.openshift.io/cluster: build01
-      presets.ci.openshift.io/registry-pull: "true"
     max_concurrency: 1
     name: branch-ci-organization-repository-branch-unit

@@ -91,7 +91,6 @@ func ValidateSecretName(secretName string) bool {
 // Rules:
 //   - `.` → `--dot--` (dots not allowed in GSM secret names)
 //
-// Example: "aws_creds" → "aws--u--creds"
 // Example: ".dockerconfigjson" → "--dot--dockerconfigjson"
 func NormalizeName(name string) string {
 	// Encode in specific order to avoid conflicts

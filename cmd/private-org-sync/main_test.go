@@ -4,6 +4,7 @@ import (
 	"fmt"
 	"net/url"
 	"strings"
+	"sync"
 	"testing"
 	"time"
 
@@ -219,6 +220,7 @@ type mockGitCall struct {
 }
 
 type mockGit struct {
+	mu       sync.Mutex
 	next     int
 	expected []mockGitCall
 
@@ -226,14 +228,29 @@ type mockGit struct {
 }
 
 func (m *mockGit) exec(_ *logrus.Entry, _ string, command ...string) (string, int, error) {
+	m.mu.Lock()
+	defer m.mu.Unlock()
 	cmd := strings.Join(command, " ")
 	if m.next >= len(m.expected) {
 		m.t.Fatalf("unexpected git call: %s", cmd)
 		return "", 0, nil
 	}
-	if m.expected[m.next].call != cmd {
-		m.t.Fatalf("unexpected git call:\n  expected: %s\n  called:   %s", m.expected[m.next].call, cmd)
-		return "", 0, nil
+	// Try strict match first; if that fails, search ahead for a match.
+	// This handles non-deterministic ordering from concurrent goroutines.
+	idx := m.next
+	if m.expected[idx].call != cmd {
+		found := false
+		for i := idx + 1; i < len(m.expected); i++ {
+			if m.expected[i].call == cmd {
+				m.expected[idx], m.expected[i] = m.expected[i], m.expected[idx]
+				found = true
+				break
+			}
+		}
+		if !found {
+			m.t.Fatalf("unexpected git call:\n  expected: %s\n  called:   %s", m.expected[m.next].call, cmd)
+			return "", 0, nil
+		}
 	}
 
 	out := m.expected[m.next].output
@@ -243,7 +260,7 @@ func (m *mockGit) exec(_ *logrus.Entry, _ string, command ...string) (string, in
 	return out, exitCode, nil
 }
 
-func (m mockGit) check() error {
+func (m *mockGit) check() error {
 	if m.next != len(m.expected) {
 		return fmt.Errorf("unexpected number of git calls: expected %d, done %d", len(m.expected), m.next)
 	}
@@ -716,7 +733,9 @@ func TestSyncRepo(t *testing.T) {
 				{call: "init"},
 				{call: "remote get-url org-repo", exitCode: 1},
 				{call: "remote add org-repo https://TOKEN@github.com/org/repo"},
+				// both ls-remote calls run in parallel
 				{call: "ls-remote --heads https://TOKEN@github.com/dest/repo", exitCode: 1},
+				{call: "ls-remote --heads org-repo", output: "aaa refs/heads/main\naaa refs/heads/release-4.18\n"},
 			},
 			expectedErrors: 2,
 		},
@@ -728,7 +747,9 @@ func TestSyncRepo(t *testing.T) {
 				{call: "init"},
 				{call: "remote get-url org-repo", exitCode: 1},
 				{call: "remote add org-repo https://TOKEN@github.com/org/repo"},
+				// both ls-remote calls run in parallel
 				{call: "ls-remote --heads https://TOKEN@github.com/dest/repo", exitCode: 1},
+				{call: "ls-remote --heads org-repo", output: "aaa refs/heads/main\naaa refs/heads/release-4.18\n"},
 			},
 			expectedErrors: 0,
 		},

@@ -423,7 +423,7 @@ func (g gitSyncer) syncRepo(org, repo, targetOrg, dstRepo string, branches []loc
 		return errs
 	}
 
-	// ls-remote destination once per repo
+	// ls-remote source and destination in parallel
 	destUrlRaw := fmt.Sprintf("%s/%s/%s", g.prefix, targetOrg, dstRepo)
 	destUrl, err := url.Parse(destUrlRaw)
 	if err != nil {
@@ -437,8 +437,27 @@ func (g gitSyncer) syncRepo(org, repo, targetOrg, dstRepo string, branches []loc
 		destUrl.User = url.User(g.token)
 	}
 
-	dstHeads, err := getRemoteBranchHeads(repoLogger, g.git, gitDir, destUrl.String())
-	if err != nil {
+	srcRemote := fmt.Sprintf("%s-%s", org, repo)
+
+	type lsRemoteResult struct {
+		heads RemoteBranchHeads
+		err   error
+	}
+	dstResult := make(chan lsRemoteResult, 1)
+	srcResult := make(chan lsRemoteResult, 1)
+	go func() {
+		heads, err := getRemoteBranchHeads(repoLogger, g.git, gitDir, destUrl.String())
+		dstResult <- lsRemoteResult{heads, err}
+	}()
+	go func() {
+		heads, err := getRemoteBranchHeads(repoLogger, withRetryOnNonzero(g.git, 5), gitDir, srcRemote)
+		srcResult <- lsRemoteResult{heads, err}
+	}()
+
+	dst := <-dstResult
+	src := <-srcResult
+
+	if dst.err != nil {
 		message := "destination repository does not exist or we cannot access it"
 		if g.failOnNonexistentDst {
 			repoLogger.Errorf("%s", message)
@@ -451,16 +470,16 @@ func (g gitSyncer) syncRepo(org, repo, targetOrg, dstRepo string, branches []loc
 		return errs
 	}
 
-	// ls-remote source once per repo
-	srcRemote := fmt.Sprintf("%s-%s", org, repo)
-	srcHeads, err := getRemoteBranchHeads(repoLogger, withRetryOnNonzero(g.git, 5), gitDir, srcRemote)
-	if err != nil {
-		repoLogger.WithError(err).Error("Failed to determine branch HEADs in source")
+	if src.err != nil {
+		repoLogger.WithError(src.err).Error("Failed to determine branch HEADs in source")
 		for _, source := range branches {
 			errs = append(errs, fmt.Errorf("%s: failed to determine branch HEADs in source", source.String()))
 		}
 		return errs
 	}
+
+	dstHeads := dst.heads
+	srcHeads := src.heads
 
 	for _, source := range branches {
 		g.logger = config.LoggerForInfo(config.Info{

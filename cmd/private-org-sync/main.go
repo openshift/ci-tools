@@ -287,7 +287,16 @@ func makeFetch(logger *logrus.Entry, repoDir string, git gitFunc, remote, branch
 		}
 
 		logger.Infof("Fetching from source (%s)", depthArg)
-		if out, exitCode, err := git(logger, repoDir, fetch...); err != nil || exitCode != 0 {
+		const shallowRetries = 3
+		for attempt := 1; attempt <= shallowRetries; attempt++ {
+			out, exitCode, err := git(logger, repoDir, fetch...)
+			if err == nil && exitCode == 0 {
+				return nil
+			}
+			if attempt < shallowRetries && strings.Contains(out, "shallow file has changed since we read it") {
+				logger.Infof("Shallow file changed during fetch, retrying (%d/%d)", attempt, shallowRetries)
+				continue
+			}
 			logger.WithError(err).WithField("exit-code", exitCode).WithField("output", out).Error("Failed to fetch from source")
 			return fmt.Errorf("failed to fetch from source")
 		}

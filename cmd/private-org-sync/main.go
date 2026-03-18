@@ -170,6 +170,27 @@ func withRetryOnNonzero(f gitFunc, retries int) gitFunc {
 	}
 }
 
+func withRetryOnTransientError(f gitFunc, retries int) gitFunc {
+	return func(logger *logrus.Entry, dir string, command ...string) (string, int, error) {
+		var out string
+		var exitCode int
+		var commandErr error
+		for attempt := 1; attempt <= retries; attempt++ {
+			out, exitCode, commandErr = f(logger, dir, command...)
+			if commandErr == nil && exitCode == 0 {
+				return out, exitCode, nil
+			}
+			if attempt < retries && isTransientNetworkError(out) {
+				logger.Infof("Transient network error, retrying git command (%d/%d)", attempt, retries)
+				time.Sleep(5 * time.Second)
+				continue
+			}
+			break
+		}
+		return out, exitCode, commandErr
+	}
+}
+
 func gitExec(logger *logrus.Entry, dir string, command ...string) (string, int, error) {
 	cmdLogger := logger.WithField("command", fmt.Sprintf("git %s", strings.Join(command, " ")))
 	cmd := exec.Command("git", command...)
@@ -313,6 +334,23 @@ func maybeTooShallow(pushOutput string) bool {
 	}
 	for _, item := range patterns {
 		if strings.Contains(pushOutput, item) {
+			return true
+		}
+	}
+	return false
+}
+
+func isTransientNetworkError(output string) bool {
+	patterns := []string{
+		"Could not resolve host",
+		"Failed to connect to",
+		"Connection timed out",
+		"Connection refused",
+		"Connection reset by peer",
+		"The requested URL returned error: 5",
+	}
+	for _, pattern := range patterns {
+		if strings.Contains(output, pattern) {
 			return true
 		}
 	}
@@ -690,7 +728,7 @@ func main() {
 		token:                token,
 		root:                 o.gitDir,
 		confirm:              o.confirm,
-		git:                  gitExec,
+		git:                  withRetryOnTransientError(gitExec, 3),
 		failOnNonexistentDst: o.failOnNonexistentDst,
 		gitName:              o.gitName,
 		gitEmail:             o.gitEmail,

@@ -415,8 +415,9 @@ func sendNextWeeksRoleDigest(client *pagerduty.Client, slackClient *slack.Client
 }
 
 func getIssuesNeedingApproval(jiraClient *jiraapi.Client) ([]slack.Block, error) {
-	issues, response, err := jiraClient.Issue.Search(fmt.Sprintf(`project=%s AND status=Review AND issuetype!=Sub-task`, jira.ProjectDPTP), nil)
-	if err := jirautil.HandleJiraError(response, err); err != nil {
+	jql := fmt.Sprintf(`project=%s AND status=Review AND issuetype!=Sub-task`, jira.ProjectDPTP)
+	issues, err := searchIssuesByJQL(context.Background(), jiraClient, jql, 0, []string{"*navigable"})
+	if err != nil {
 		return nil, fmt.Errorf("could not query for Jira issues: %w", err)
 	}
 
@@ -445,7 +446,7 @@ func getIssuesNeedingApproval(jiraClient *jiraapi.Client) ([]slack.Block, error)
 	for _, issue := range issues {
 		assigneeDisplayName := jiraUnassignedAssigneeDisplayName
 		assigneeAvatarUrl := jiraUnassignedAssigneeAvatarUrl
-		if issue.Fields.Assignee != nil {
+		if issue.Fields != nil && issue.Fields.Assignee != nil {
 			assigneeDisplayName = issue.Fields.Assignee.DisplayName
 			assigneeAvatarUrl = issue.Fields.Assignee.AvatarUrls.Four8X48
 		}
@@ -527,9 +528,9 @@ func postBlocks(slackClient *slack.Client, blocks []slack.Block) error {
 }
 
 func assignAndSendIntakeDigest(slackClient *slack.Client, jiraClient *jiraapi.Client, user user) error {
-	opts := jiraapi.SearchOptions{Fields: []string{"*navigable", "comment"}}
-	issues, response, err := jiraClient.Issue.Search(fmt.Sprintf(`project=%s AND (labels is EMPTY OR NOT (labels=ready OR labels=no-intake)) AND created >= -30d AND status = "To Do" AND issuetype != Sub-task AND assignee is EMPTY`, jira.ProjectDPTP), &opts)
-	if err := jirautil.HandleJiraError(response, err); err != nil {
+	jql := fmt.Sprintf(`project=%s AND (labels is EMPTY OR NOT (labels=ready OR labels=no-intake)) AND created >= -30d AND status = "To Do" AND issuetype != Sub-task AND assignee is EMPTY`, jira.ProjectDPTP)
+	issues, err := searchIssuesByJQL(context.Background(), jiraClient, jql, 0, []string{"*navigable", "comment"})
+	if err != nil {
 		return fmt.Errorf("could not query for Jira issues: %w", err)
 	}
 
@@ -692,25 +693,40 @@ func sendTriageBuild02Upgrade(slackClient *slack.Client, version, stableDuration
 const dateFormat = "Mon, 02 Jan 2006"
 
 func blockForIssue(issue jiraapi.Issue) slack.Block {
-	// we really don't want these things to line wrap, so truncate the summary
 	cutoff := 85
-	summary := issue.Fields.Summary
-	if len(summary) > cutoff {
-		summary = summary[0:cutoff-3] + "..."
+	key := strings.TrimSpace(issue.Key)
+	if key == "" {
+		key = strings.TrimSpace(issue.ID)
 	}
-	created := time.Time(issue.Fields.Created).Format(dateFormat)
-	updated := time.Time(issue.Fields.Updated).Format(dateFormat)
+	if key == "" {
+		key = "unknown"
+	}
+	summary := ""
+	createdStr := "—"
+	updatedStr := "—"
+	if issue.Fields != nil {
+		summary = issue.Fields.Summary
+		if len(summary) > cutoff {
+			summary = summary[0:cutoff-3] + "..."
+		}
+		if t := time.Time(issue.Fields.Created); !t.IsZero() {
+			createdStr = t.Format(dateFormat)
+		}
+		if t := time.Time(issue.Fields.Updated); !t.IsZero() {
+			updatedStr = t.Format(dateFormat)
+		}
+	}
 	return &slack.ContextBlock{
 		Type: slack.MBTContext,
 		ContextElements: slack.ContextElements{
 			Elements: []slack.MixedElement{
 				&slack.TextBlockObject{
 					Type: slack.MarkdownType,
-					Text: fmt.Sprintf("<https://issues.redhat.com/browse/%s|*%s*>: %s \n", issue.Key, issue.Key, summary),
+					Text: fmt.Sprintf("<https://issues.redhat.com/browse/%s|*%s*>: %s \n", key, key, summary),
 				},
 				&slack.TextBlockObject{
 					Type: slack.PlainTextType,
-					Text: fmt.Sprintf("Created on: %s  Last updated: %s", created, updated),
+					Text: fmt.Sprintf("Created on: %s  Last updated: %s", createdStr, updatedStr),
 				},
 			},
 		},

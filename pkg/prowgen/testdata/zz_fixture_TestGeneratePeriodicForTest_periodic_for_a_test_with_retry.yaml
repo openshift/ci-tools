@@ -9,6 +9,7 @@ extra_refs:
   repo: repo
 labels:
   pj-rehearse.openshift.io/can-be-rehearsed: "true"
+  presets.ci.openshift.io/registry-pull: "true"
 name: periodic-ci-org-repo-branch-testname
 retry:
   attempts: 2

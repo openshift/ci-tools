@@ -10,6 +10,7 @@ periodics:
     repo: repository
   labels:
     ci-operator.openshift.io/is-promotion: "true"
+    presets.ci.openshift.io/registry-pull: "true"
   max_concurrency: 1
   name: periodic-ci-organization-repository-branch-images
   spec:
@@ -36,9 +37,6 @@ periodics:
       - mountPath: /secrets/manifest-tool
         name: manifest-tool-local-pusher
         readOnly: true
-      - mountPath: /etc/pull-secret
-        name: pull-secret
-        readOnly: true
       - mountPath: /etc/push-secret
         name: push-secret
         readOnly: true
@@ -50,9 +48,6 @@ periodics:
     - name: manifest-tool-local-pusher
       secret:
         secretName: manifest-tool-local-pusher
-    - name: pull-secret
-      secret:
-        secretName: registry-pull-credentials
     - name: push-secret
       secret:
         secretName: registry-push-credentials-ci-central
@@ -64,6 +59,7 @@ postsubmits:
   - always_run: true
     labels:
       ci-operator.openshift.io/is-promotion: "true"
+      presets.ci.openshift.io/registry-pull: "true"
     max_concurrency: 1
     name: branch-ci-organization-repository-branch-images
 presubmits:
@@ -71,4 +67,5 @@ presubmits:
   - always_run: false
     labels:
       pj-rehearse.openshift.io/can-be-rehearsed: "true"
+      presets.ci.openshift.io/registry-pull: "true"
     name: pull-ci-organization-repository-branch-images

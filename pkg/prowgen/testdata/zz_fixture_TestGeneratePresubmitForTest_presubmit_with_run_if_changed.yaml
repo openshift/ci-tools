@@ -9,6 +9,7 @@ decoration_config:
   skip_cloning: true
 labels:
   pj-rehearse.openshift.io/can-be-rehearsed: "true"
+  presets.ci.openshift.io/registry-pull: "true"
 name: pull-ci-org-repo-branch-testname
 rerun_command: /test testname
 run_if_changed: ^README.md$

@@ -53,9 +53,6 @@
         - mountPath: /secrets/manifest-tool
           name: manifest-tool-local-pusher
           readOnly: true
-        - mountPath: /etc/pull-secret
-          name: pull-secret
-          readOnly: true
         - mountPath: /etc/report
           name: result-aggregator
           readOnly: true
@@ -64,9 +61,6 @@
       - name: manifest-tool-local-pusher
         secret:
           secretName: manifest-tool-local-pusher
-      - name: pull-secret
-        secret:
-          secretName: registry-pull-credentials
       - name: result-aggregator
         secret:
           secretName: result-aggregator
@@ -155,9 +149,6 @@
         - mountPath: /secrets/manifest-tool
           name: manifest-tool-local-pusher
           readOnly: true
-        - mountPath: /etc/pull-secret
-          name: pull-secret
-          readOnly: true
         - mountPath: /etc/report
           name: result-aggregator
           readOnly: true
@@ -166,9 +157,6 @@
       - name: manifest-tool-local-pusher
         secret:
           secretName: manifest-tool-local-pusher
-      - name: pull-secret
-        secret:
-          secretName: registry-pull-credentials
       - name: result-aggregator
         secret:
           secretName: result-aggregator
@@ -254,9 +242,6 @@
         - mountPath: /secrets/manifest-tool
           name: manifest-tool-local-pusher
           readOnly: true
-        - mountPath: /etc/pull-secret
-          name: pull-secret
-          readOnly: true
         - mountPath: /etc/report
           name: result-aggregator
           readOnly: true
@@ -265,9 +250,6 @@
       - name: manifest-tool-local-pusher
         secret:
           secretName: manifest-tool-local-pusher
-      - name: pull-secret
-        secret:
-          secretName: registry-pull-credentials
       - name: result-aggregator
         secret:
           secretName: result-aggregator

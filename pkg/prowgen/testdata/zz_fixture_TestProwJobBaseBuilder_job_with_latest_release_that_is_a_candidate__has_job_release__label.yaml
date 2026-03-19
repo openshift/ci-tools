@@ -4,4 +4,5 @@ decoration_config:
   skip_cloning: true
 labels:
   job-release: THIS
+  presets.ci.openshift.io/registry-pull: "true"
 name: default-ci-org-repo-branch-

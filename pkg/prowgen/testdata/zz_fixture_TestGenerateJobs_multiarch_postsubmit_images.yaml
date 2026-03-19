@@ -5,6 +5,7 @@ postsubmits:
       capability/arm64: arm64
       capability/ppc64-le: ppc64-le
       ci-operator.openshift.io/is-promotion: "true"
+      presets.ci.openshift.io/registry-pull: "true"
     max_concurrency: 1
     name: branch-ci-organization-repository-branch-images
 presubmits:
@@ -14,4 +15,5 @@ presubmits:
       capability/arm64: arm64
       capability/ppc64-le: ppc64-le
       pj-rehearse.openshift.io/can-be-rehearsed: "true"
+      presets.ci.openshift.io/registry-pull: "true"
     name: pull-ci-organization-repository-branch-images

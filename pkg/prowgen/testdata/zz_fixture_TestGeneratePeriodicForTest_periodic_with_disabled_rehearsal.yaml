@@ -7,4 +7,6 @@ extra_refs:
 - base_ref: branch
   org: org
   repo: repo
+labels:
+  presets.ci.openshift.io/registry-pull: "true"
 name: periodic-ci-org-repo-branch-testname

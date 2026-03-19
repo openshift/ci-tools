@@ -9,6 +9,7 @@ import (
 	"os/exec"
 	"path/filepath"
 	"strings"
+	"sync"
 	"time"
 
 	"github.com/sirupsen/logrus"
@@ -65,6 +66,7 @@ type options struct {
 	confirm              bool
 	failOnNonexistentDst bool
 	debug                bool
+	parallelism          int
 }
 
 const defaultPrefix = "https://github.com"
@@ -144,6 +146,7 @@ func gatherOptions() options {
 	fs.BoolVar(&o.failOnNonexistentDst, "fail-on-missing-destination", false, "Set true to make the tool to consider missing sync destination as an error")
 
 	fs.BoolVar(&o.debug, "debug", false, "Set true to enable debug logging level")
+	fs.IntVar(&o.parallelism, "parallelism", 4, "Number of repos to sync in parallel")
 
 	o.Options.Bind(fs)
 	o.WhitelistOptions.Bind(fs)
@@ -361,6 +364,8 @@ func isTransientNetworkError(output string) bool {
 type location struct {
 	org, repo, branch string
 }
+
+type repoKey struct{ org, repo string }
 
 func (l location) String() string {
 	return fmt.Sprintf("%s/%s@%s", l.org, l.repo, l.branch)
@@ -773,7 +778,6 @@ func main() {
 	}
 
 	// Group locations by (org, repo) so we can initialize each repo once
-	type repoKey struct{ org, repo string }
 	grouped := make(map[repoKey][]location)
 	for source := range locations {
 		key := repoKey{org: source.org, repo: source.repo}
@@ -786,16 +790,40 @@ func main() {
 		flattenedOrgs.Insert(o.org)
 	}
 
-	for key, branches := range grouped {
-		syncer.logger = logrus.WithFields(logrus.Fields{"org": key.org, "repo": key.repo})
-
-		dstRepo := key.repo
-		if !flattenedOrgs.Has(key.org) {
-			dstRepo = fmt.Sprintf("%s-%s", key.org, key.repo)
-		}
-
-		errs = append(errs, syncer.syncRepo(key.org, key.repo, o.targetOrg, dstRepo, branches)...)
+	type repoWork struct {
+		key      repoKey
+		branches []location
 	}
+	work := make(chan repoWork)
+	var errsMu sync.Mutex
+	var wg sync.WaitGroup
+
+	for i := 0; i < o.parallelism; i++ {
+		wg.Add(1)
+		go func() {
+			defer wg.Done()
+			for item := range work {
+				repoSyncer := syncer
+				repoSyncer.logger = logrus.WithFields(logrus.Fields{"org": item.key.org, "repo": item.key.repo})
+				dstRepo := item.key.repo
+				if !flattenedOrgs.Has(item.key.org) {
+					dstRepo = fmt.Sprintf("%s-%s", item.key.org, item.key.repo)
+				}
+				repoErrs := repoSyncer.syncRepo(item.key.org, item.key.repo, o.targetOrg, dstRepo, item.branches)
+				if len(repoErrs) > 0 {
+					errsMu.Lock()
+					errs = append(errs, repoErrs...)
+					errsMu.Unlock()
+				}
+			}
+		}()
+	}
+
+	for key, branches := range grouped {
+		work <- repoWork{key: key, branches: branches}
+	}
+	close(work)
+	wg.Wait()
 
 	if len(errs) > 0 {
 		logrus.WithError(utilerrors.NewAggregate(errs)).Fatal("There were failures")

@@ -311,6 +311,31 @@ func TestMirror(t *testing.T) {
 			expectError: true,
 		},
 		{
+			description: "fetch fails with shallow file changed -> retries and succeeds",
+			src:         location{org: org, repo: repo, branch: branch},
+			dst:         location{org: destOrg, repo: repo, branch: branch},
+			expectedGitCalls: []mockGitCall{
+				{call: "ls-remote --heads https://TOKEN@github.com/dest/repo", output: "dest-sha refs/heads/branch"},
+				{call: "ls-remote --heads org-repo", output: "source-sha refs/heads/branch"},
+				{call: "fetch --tags org-repo branch --depth=2", exitCode: 128, output: "fatal: shallow file has changed since we read it\n"},
+				{call: "fetch --tags org-repo branch --depth=2"},
+				{call: "push --tags --dry-run https://TOKEN@github.com/dest/repo FETCH_HEAD:refs/heads/branch"},
+			},
+		},
+		{
+			description: "fetch fails with shallow file changed repeatedly -> error after retries exhausted",
+			src:         location{org: org, repo: repo, branch: branch},
+			dst:         location{org: destOrg, repo: repo, branch: branch},
+			expectedGitCalls: []mockGitCall{
+				{call: "ls-remote --heads https://TOKEN@github.com/dest/repo", output: "dest-sha refs/heads/branch"},
+				{call: "ls-remote --heads org-repo", output: "source-sha refs/heads/branch"},
+				{call: "fetch --tags org-repo branch --depth=2", exitCode: 128, output: "fatal: shallow file has changed since we read it\n"},
+				{call: "fetch --tags org-repo branch --depth=2", exitCode: 128, output: "fatal: shallow file has changed since we read it\n"},
+				{call: "fetch --tags org-repo branch --depth=2", exitCode: 128, output: "fatal: shallow file has changed since we read it\n"},
+			},
+			expectError: true,
+		},
+		{
 			description: "no confirm, fails to push -> error",
 			src:         location{org: org, repo: repo, branch: branch},
 			dst:         location{org: destOrg, repo: repo, branch: branch},

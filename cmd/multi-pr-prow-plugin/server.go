@@ -363,6 +363,9 @@ func (s *server) generateProwJob(jr jobRun) (*prowv1.ProwJob, error) {
 		} else {
 			requestedTestName = testJobMetadata.JobName(jobconfig.PresubmitPrefix, test.As)
 		}
+		if test.ShardCount != nil && *test.ShardCount > 1 {
+			requestedTestName = fmt.Sprintf("%s-1of%d", requestedTestName, *test.ShardCount)
+		}
 		cluster, err := s.clusterForJob(requestedTestName)
 		if err != nil {
 			return nil, err

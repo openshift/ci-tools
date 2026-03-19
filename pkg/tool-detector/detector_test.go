@@ -454,6 +454,219 @@ func TestDetector_getAffectedToolsByImageChanges(t *testing.T) {
 	}
 }
 
+func TestDetector_getAffectedToolsByBinaryInputs(t *testing.T) {
+	makePaths := func(paths ...string) []api.ImageSourcePath {
+		var result []api.ImageSourcePath
+		for _, p := range paths {
+			result = append(result, api.ImageSourcePath{SourcePath: p})
+		}
+		return result
+	}
+
+	tests := []struct {
+		name            string
+		config          *api.ReleaseBuildConfiguration
+		alreadyAffected sets.Set[string]
+		expected        sets.Set[string]
+	}{
+		{
+			name:            "nil config returns empty",
+			config:          nil,
+			alreadyAffected: sets.New("private-prow-configs-mirror"),
+			expected:        sets.New[string](),
+		},
+		{
+			name: "no images with bin inputs",
+			config: &api.ReleaseBuildConfiguration{
+				Images: []api.ProjectDirectoryImageBuildStepConfiguration{
+					{
+						To: "some-image",
+						ProjectDirectoryImageBuildInputs: api.ProjectDirectoryImageBuildInputs{
+							ContextDir: "images/some-image",
+						},
+					},
+				},
+			},
+			alreadyAffected: sets.New("some-tool"),
+			expected:        sets.New[string](),
+		},
+		{
+			name: "bundle image affected when one of its binaries is affected",
+			config: &api.ReleaseBuildConfiguration{
+				Images: []api.ProjectDirectoryImageBuildStepConfiguration{
+					{
+						To: "auto-config-brancher",
+						ProjectDirectoryImageBuildInputs: api.ProjectDirectoryImageBuildInputs{
+							ContextDir: "images/auto-config-brancher",
+							Inputs: map[string]api.ImageBuildInputs{
+								"bin": {
+									Paths: makePaths(
+										"/go/bin/auto-config-brancher",
+										"/go/bin/private-prow-configs-mirror",
+										"/go/bin/config-brancher",
+									),
+								},
+							},
+						},
+					},
+				},
+			},
+			alreadyAffected: sets.New("private-prow-configs-mirror"),
+			expected:        sets.New("auto-config-brancher"),
+		},
+		{
+			name: "bundle image not affected when none of its binaries are affected",
+			config: &api.ReleaseBuildConfiguration{
+				Images: []api.ProjectDirectoryImageBuildStepConfiguration{
+					{
+						To: "auto-config-brancher",
+						ProjectDirectoryImageBuildInputs: api.ProjectDirectoryImageBuildInputs{
+							ContextDir: "images/auto-config-brancher",
+							Inputs: map[string]api.ImageBuildInputs{
+								"bin": {
+									Paths: makePaths(
+										"/go/bin/auto-config-brancher",
+										"/go/bin/private-prow-configs-mirror",
+									),
+								},
+							},
+						},
+					},
+				},
+			},
+			alreadyAffected: sets.New("ci-operator"),
+			expected:        sets.New[string](),
+		},
+		{
+			name: "multiple bundle images, only matching one is affected",
+			config: &api.ReleaseBuildConfiguration{
+				Images: []api.ProjectDirectoryImageBuildStepConfiguration{
+					{
+						To: "auto-config-brancher",
+						ProjectDirectoryImageBuildInputs: api.ProjectDirectoryImageBuildInputs{
+							ContextDir: "images/auto-config-brancher",
+							Inputs: map[string]api.ImageBuildInputs{
+								"bin": {
+									Paths: makePaths(
+										"/go/bin/auto-config-brancher",
+										"/go/bin/private-prow-configs-mirror",
+									),
+								},
+							},
+						},
+					},
+					{
+						To: "prow-job-dispatcher",
+						ProjectDirectoryImageBuildInputs: api.ProjectDirectoryImageBuildInputs{
+							ContextDir: "images/prow-job-dispatcher",
+							Inputs: map[string]api.ImageBuildInputs{
+								"bin": {
+									Paths: makePaths(
+										"/go/bin/prow-job-dispatcher",
+										"/go/bin/sanitize-prow-jobs",
+									),
+								},
+							},
+						},
+					},
+				},
+			},
+			alreadyAffected: sets.New("private-prow-configs-mirror"),
+			expected:        sets.New("auto-config-brancher"),
+		},
+		{
+			name: "multiple bundle images both affected",
+			config: &api.ReleaseBuildConfiguration{
+				Images: []api.ProjectDirectoryImageBuildStepConfiguration{
+					{
+						To: "auto-config-brancher",
+						ProjectDirectoryImageBuildInputs: api.ProjectDirectoryImageBuildInputs{
+							ContextDir: "images/auto-config-brancher",
+							Inputs: map[string]api.ImageBuildInputs{
+								"bin": {
+									Paths: makePaths(
+										"/go/bin/auto-config-brancher",
+										"/go/bin/sanitize-prow-jobs",
+									),
+								},
+							},
+						},
+					},
+					{
+						To: "prow-job-dispatcher",
+						ProjectDirectoryImageBuildInputs: api.ProjectDirectoryImageBuildInputs{
+							ContextDir: "images/prow-job-dispatcher",
+							Inputs: map[string]api.ImageBuildInputs{
+								"bin": {
+									Paths: makePaths(
+										"/go/bin/prow-job-dispatcher",
+										"/go/bin/sanitize-prow-jobs",
+									),
+								},
+							},
+						},
+					},
+				},
+			},
+			alreadyAffected: sets.New("sanitize-prow-jobs"),
+			expected:        sets.New("auto-config-brancher", "prow-job-dispatcher"),
+		},
+		{
+			name: "already affected image not double-counted",
+			config: &api.ReleaseBuildConfiguration{
+				Images: []api.ProjectDirectoryImageBuildStepConfiguration{
+					{
+						To: "auto-config-brancher",
+						ProjectDirectoryImageBuildInputs: api.ProjectDirectoryImageBuildInputs{
+							ContextDir: "images/auto-config-brancher",
+							Inputs: map[string]api.ImageBuildInputs{
+								"bin": {
+									Paths: makePaths(
+										"/go/bin/auto-config-brancher",
+										"/go/bin/private-prow-configs-mirror",
+									),
+								},
+							},
+						},
+					},
+				},
+			},
+			alreadyAffected: sets.New("auto-config-brancher", "private-prow-configs-mirror"),
+			expected:        sets.New("auto-config-brancher"),
+		},
+		{
+			name: "image with no matching input key is skipped",
+			config: &api.ReleaseBuildConfiguration{
+				Images: []api.ProjectDirectoryImageBuildStepConfiguration{
+					{
+						To: "some-image",
+						ProjectDirectoryImageBuildInputs: api.ProjectDirectoryImageBuildInputs{
+							ContextDir: "images/some-image",
+							Inputs: map[string]api.ImageBuildInputs{
+								"src": {
+									Paths: makePaths("/go/bin/some-tool"),
+								},
+							},
+						},
+					},
+				},
+			},
+			alreadyAffected: sets.New("some-tool"),
+			expected:        sets.New[string](),
+		},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			d := New(nil, tt.config)
+			result := d.getAffectedToolsByBinaryInputs(tt.alreadyAffected)
+			if diff := cmp.Diff(tt.expected, result); diff != "" {
+				t.Errorf("getAffectedToolsByBinaryInputs() mismatch (-want +got):\n%s", diff)
+			}
+		})
+	}
+}
+
 func TestExtractBeforeSHAFromCompareURL(t *testing.T) {
 	tests := []struct {
 		name        string

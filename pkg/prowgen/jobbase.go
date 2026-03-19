@@ -60,11 +60,8 @@ func NewProwJobBaseBuilder(configSpec *cioperatorapi.ReleaseBuildConfiguration, 
 	b := &prowJobBaseBuilder{
 		PodSpec: podSpecGenerator,
 		base: prowconfig.JobBase{
-			Agent: string(prowv1.KubernetesAgent),
-			Labels: map[string]string{
-				// TODO(muller): inline for now to avoid triggering all image build, move to a named constant later
-				"presets.ci.openshift.io/registry-pull": "true",
-			},
+			Agent:  string(prowv1.KubernetesAgent),
+			Labels: map[string]string{},
 			UtilityConfig: prowconfig.UtilityConfig{
 				Decorate: utilpointer.Bool(true),
 			},

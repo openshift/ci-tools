@@ -1,8 +1,6 @@
 postsubmits:
   organization/repository:
   - always_run: true
-    labels:
-      presets.ci.openshift.io/registry-pull: "true"
     max_concurrency: 1
     name: branch-ci-organization-repository-branch-leTest
 presubmits:
@@ -10,5 +8,4 @@ presubmits:
   - always_run: false
     labels:
       pj-rehearse.openshift.io/can-be-rehearsed: "true"
-      presets.ci.openshift.io/registry-pull: "true"
     name: pull-ci-organization-repository-branch-derTest

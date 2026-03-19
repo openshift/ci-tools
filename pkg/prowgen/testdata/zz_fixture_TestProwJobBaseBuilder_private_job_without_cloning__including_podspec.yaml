@@ -3,8 +3,6 @@ decorate: true
 decoration_config:
   skip_cloning: true
 hidden: true
-labels:
-  presets.ci.openshift.io/registry-pull: "true"
 name: default-ci-vorg-vrepo-vbranch-
 spec:
   containers:
@@ -31,6 +29,9 @@ spec:
     - mountPath: /secrets/manifest-tool
       name: manifest-tool-local-pusher
       readOnly: true
+    - mountPath: /etc/pull-secret
+      name: pull-secret
+      readOnly: true
     - mountPath: /etc/report
       name: result-aggregator
       readOnly: true
@@ -42,6 +43,9 @@ spec:
   - name: manifest-tool-local-pusher
     secret:
       secretName: manifest-tool-local-pusher
+  - name: pull-secret
+    secret:
+      secretName: registry-pull-credentials
   - name: result-aggregator
     secret:
       secretName: result-aggregator

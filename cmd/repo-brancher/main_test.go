@@ -1,12 +1,18 @@
 package main
 
 import (
+	"errors"
 	"flag"
+	"fmt"
+	"net/url"
 	"reflect"
+	"strings"
 	"testing"
 
+	"github.com/sirupsen/logrus"
 	"sigs.k8s.io/prow/pkg/flagutil"
 
+	"github.com/openshift/ci-tools/pkg/api"
 	"github.com/openshift/ci-tools/pkg/config"
 	"github.com/openshift/ci-tools/pkg/promotion"
 )
@@ -101,6 +107,134 @@ func TestOptions_Bind(t *testing.T) {
 			}
 			if actual, expected := o, expected; !reflect.DeepEqual(actual, expected) {
 				t.Errorf("%s: got incorrect options: expected %#v, got %#v", testCase.name, expected, actual)
+			}
+		})
+	}
+}
+
+func TestPushBranch(t *testing.T) {
+	remote, _ := url.Parse("https://github.com/org/repo")
+	logger := logrus.NewEntry(logrus.StandardLogger())
+
+	testCases := []struct {
+		name          string
+		gitErr        error
+		expectedRetry bool
+		expectedErr   bool
+	}{
+		{
+			name:          "successful push",
+			gitErr:        nil,
+			expectedRetry: false,
+			expectedErr:   false,
+		},
+		{
+			name:          "too shallow error triggers retry",
+			gitErr:        fmt.Errorf("Updates were rejected because the remote contains work that you do"),
+			expectedRetry: true,
+			expectedErr:   false,
+		},
+		{
+			name:          "other push error is fatal",
+			gitErr:        fmt.Errorf("permission denied"),
+			expectedRetry: false,
+			expectedErr:   true,
+		},
+	}
+
+	for _, tc := range testCases {
+		t.Run(tc.name, func(t *testing.T) {
+			mockGit := func(_ *logrus.Entry, args ...string) error {
+				if args[0] != "push" {
+					t.Errorf("expected push command, got %v", args)
+				}
+				return tc.gitErr
+			}
+			retry, err := pushBranch(logger, remote, "release-4.18", mockGit)
+			if retry != tc.expectedRetry {
+				t.Errorf("expected retry=%v, got %v", tc.expectedRetry, retry)
+			}
+			if (err != nil) != tc.expectedErr {
+				t.Errorf("expected error=%v, got %v", tc.expectedErr, err)
+			}
+		})
+	}
+}
+
+func TestFetchDeeper(t *testing.T) {
+	remote, _ := url.Parse("https://github.com/org/repo")
+	logger := logrus.NewEntry(logrus.StandardLogger())
+	repoInfo := &config.Info{Metadata: api.Metadata{Branch: "main"}}
+
+	testCases := []struct {
+		name        string
+		deepenBy    int
+		gitErr      error
+		expectedErr bool
+	}{
+		{
+			name:     "successful deepen",
+			deepenBy: 4,
+		},
+		{
+			name:        "fetch error propagated",
+			deepenBy:    8,
+			gitErr:      errors.New("network error"),
+			expectedErr: true,
+		},
+	}
+
+	for _, tc := range testCases {
+		t.Run(tc.name, func(t *testing.T) {
+			mockGit := func(_ *logrus.Entry, args ...string) error {
+				expected := fmt.Sprintf("fetch --deepen %d %s main", tc.deepenBy, remote.String())
+				got := strings.Join(args, " ")
+				if got != expected {
+					t.Errorf("expected command %q, got %q", expected, got)
+				}
+				return tc.gitErr
+			}
+			err := fetchDeeper(logger, remote, mockGit, repoInfo, tc.deepenBy)
+			if (err != nil) != tc.expectedErr {
+				t.Errorf("expected error=%v, got %v", tc.expectedErr, err)
+			}
+		})
+	}
+}
+
+func TestFetchUnshallow(t *testing.T) {
+	remote, _ := url.Parse("https://github.com/org/repo")
+	logger := logrus.NewEntry(logrus.StandardLogger())
+	repoInfo := &config.Info{Metadata: api.Metadata{Branch: "main"}}
+
+	testCases := []struct {
+		name        string
+		gitErr      error
+		expectedErr bool
+	}{
+		{
+			name: "successful unshallow",
+		},
+		{
+			name:        "fetch error propagated",
+			gitErr:      errors.New("network error"),
+			expectedErr: true,
+		},
+	}
+
+	for _, tc := range testCases {
+		t.Run(tc.name, func(t *testing.T) {
+			mockGit := func(_ *logrus.Entry, args ...string) error {
+				expected := fmt.Sprintf("fetch --unshallow %s main", remote.String())
+				got := strings.Join(args, " ")
+				if got != expected {
+					t.Errorf("expected command %q, got %q", expected, got)
+				}
+				return tc.gitErr
+			}
+			err := fetchUnshallow(logger, remote, mockGit, repoInfo)
+			if (err != nil) != tc.expectedErr {
+				t.Errorf("expected error=%v, got %v", tc.expectedErr, err)
 			}
 		})
 	}

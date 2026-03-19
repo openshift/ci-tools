@@ -46,7 +46,7 @@ function find_tests() {
         echo "${selected_tests[@]}"
     fi
 }
-tests=( $(find_tests "${1:-.*}") )
+tests=( $(find_tests ${1:-.*}) )
 
 os::cleanup::tmpdir
 

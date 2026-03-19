@@ -460,7 +460,6 @@
       created-by-prow: "true"
       pj-rehearse.openshift.io/can-be-rehearsed: "true"
       pj-rehearse.openshift.io/source-type: changedCiopConfig
-      presets.ci.openshift.io/registry-pull: "true"
       prow.k8s.io/context: periodic-ci-super-trooper-master-changed-periodic
       prow.k8s.io/job: rehearse-1234-periodic-ci-super-trooper-master-changed-periodic
       prow.k8s.io/refs.base_ref: master
@@ -530,6 +529,9 @@
         - mountPath: /secrets/manifest-tool
           name: manifest-tool-local-pusher
           readOnly: true
+        - mountPath: /etc/pull-secret
+          name: pull-secret
+          readOnly: true
         - mountPath: /etc/report
           name: result-aggregator
           readOnly: true
@@ -538,6 +540,9 @@
       - name: manifest-tool-local-pusher
         secret:
           secretName: manifest-tool-local-pusher
+      - name: pull-secret
+        secret:
+          secretName: registry-pull-credentials
       - name: result-aggregator
         secret:
           secretName: result-aggregator
@@ -662,7 +667,6 @@
       created-by-prow: "true"
       pj-rehearse.openshift.io/can-be-rehearsed: "true"
       pj-rehearse.openshift.io/source-type: changedCiopConfig
-      presets.ci.openshift.io/registry-pull: "true"
       prow.k8s.io/context: images
       prow.k8s.io/job: rehearse-1234-pull-ci-super-duper-ciop-cfg-change-images
       prow.k8s.io/refs.base_ref: master
@@ -725,6 +729,9 @@
         - mountPath: /secrets/manifest-tool
           name: manifest-tool-local-pusher
           readOnly: true
+        - mountPath: /etc/pull-secret
+          name: pull-secret
+          readOnly: true
         - mountPath: /etc/report
           name: result-aggregator
           readOnly: true
@@ -733,6 +740,9 @@
       - name: manifest-tool-local-pusher
         secret:
           secretName: manifest-tool-local-pusher
+      - name: pull-secret
+        secret:
+          secretName: registry-pull-credentials
       - name: result-aggregator
         secret:
           secretName: result-aggregator
@@ -1055,7 +1065,6 @@
       created-by-prow: "true"
       pj-rehearse.openshift.io/can-be-rehearsed: "true"
       pj-rehearse.openshift.io/source-type: changedRegistryContent
-      presets.ci.openshift.io/registry-pull: "true"
       prow.k8s.io/context: multistage
       prow.k8s.io/job: rehearse-1234-pull-ci-super-trooper-master-multistage
       prow.k8s.io/refs.base_ref: master
@@ -1125,6 +1134,9 @@
         - mountPath: /secrets/manifest-tool
           name: manifest-tool-local-pusher
           readOnly: true
+        - mountPath: /etc/pull-secret
+          name: pull-secret
+          readOnly: true
         - mountPath: /etc/report
           name: result-aggregator
           readOnly: true
@@ -1133,6 +1145,9 @@
       - name: manifest-tool-local-pusher
         secret:
           secretName: manifest-tool-local-pusher
+      - name: pull-secret
+        secret:
+          secretName: registry-pull-credentials
       - name: result-aggregator
         secret:
           secretName: result-aggregator
@@ -1167,7 +1182,6 @@
       created-by-prow: "true"
       pj-rehearse.openshift.io/can-be-rehearsed: "true"
       pj-rehearse.openshift.io/source-type: changedRegistryContent
-      presets.ci.openshift.io/registry-pull: "true"
       prow.k8s.io/context: multistage2
       prow.k8s.io/job: rehearse-1234-pull-ci-super-trooper-master-multistage2
       prow.k8s.io/refs.base_ref: master
@@ -1237,6 +1251,9 @@
         - mountPath: /secrets/manifest-tool
           name: manifest-tool-local-pusher
           readOnly: true
+        - mountPath: /etc/pull-secret
+          name: pull-secret
+          readOnly: true
         - mountPath: /etc/report
           name: result-aggregator
           readOnly: true
@@ -1245,6 +1262,9 @@
       - name: manifest-tool-local-pusher
         secret:
           secretName: manifest-tool-local-pusher
+      - name: pull-secret
+        secret:
+          secretName: registry-pull-credentials
       - name: result-aggregator
         secret:
           secretName: result-aggregator
@@ -1281,7 +1301,6 @@
       created-by-prow: "true"
       pj-rehearse.openshift.io/can-be-rehearsed: "true"
       pj-rehearse.openshift.io/source-type: changedRegistryContent
-      presets.ci.openshift.io/registry-pull: "true"
       prow.k8s.io/context: multistage3
       prow.k8s.io/job: rehearse-1234-pull-ci-super-trooper-master-multistage3
       prow.k8s.io/refs.base_ref: master
@@ -1355,6 +1374,9 @@
         - mountPath: /secrets/manifest-tool
           name: manifest-tool-local-pusher
           readOnly: true
+        - mountPath: /etc/pull-secret
+          name: pull-secret
+          readOnly: true
         - mountPath: /etc/report
           name: result-aggregator
           readOnly: true
@@ -1369,6 +1391,9 @@
       - name: manifest-tool-local-pusher
         secret:
           secretName: manifest-tool-local-pusher
+      - name: pull-secret
+        secret:
+          secretName: registry-pull-credentials
       - name: result-aggregator
         secret:
           secretName: result-aggregator
@@ -1403,7 +1428,6 @@
       created-by-prow: "true"
       pj-rehearse.openshift.io/can-be-rehearsed: "true"
       pj-rehearse.openshift.io/source-type: changedPresubmit
-      presets.ci.openshift.io/registry-pull: "true"
       prow.k8s.io/context: multistage5
       prow.k8s.io/job: rehearse-1234-pull-ci-super-trooper-master-multistage5
       prow.k8s.io/refs.base_ref: master
@@ -1473,6 +1497,9 @@
         - mountPath: /secrets/manifest-tool
           name: manifest-tool-local-pusher
           readOnly: true
+        - mountPath: /etc/pull-secret
+          name: pull-secret
+          readOnly: true
         - mountPath: /etc/report
           name: result-aggregator
           readOnly: true
@@ -1481,6 +1508,9 @@
       - name: manifest-tool-local-pusher
         secret:
           secretName: manifest-tool-local-pusher
+      - name: pull-secret
+        secret:
+          secretName: registry-pull-credentials
       - name: result-aggregator
         secret:
           secretName: result-aggregator
@@ -1515,7 +1545,6 @@
       created-by-prow: "true"
       pj-rehearse.openshift.io/can-be-rehearsed: "true"
       pj-rehearse.openshift.io/source-type: changedCiopConfig
-      presets.ci.openshift.io/registry-pull: "true"
       prow.k8s.io/context: unit
       prow.k8s.io/job: rehearse-1234-pull-ci-super-trooper-master-unit
       prow.k8s.io/refs.base_ref: master
@@ -1585,6 +1614,9 @@
         - mountPath: /secrets/manifest-tool
           name: manifest-tool-local-pusher
           readOnly: true
+        - mountPath: /etc/pull-secret
+          name: pull-secret
+          readOnly: true
         - mountPath: /etc/report
           name: result-aggregator
           readOnly: true
@@ -1593,6 +1625,9 @@
       - name: manifest-tool-local-pusher
         secret:
           secretName: manifest-tool-local-pusher
+      - name: pull-secret
+        secret:
+          secretName: registry-pull-credentials
       - name: result-aggregator
         secret:
           secretName: result-aggregator
@@ -1627,7 +1662,6 @@
       created-by-prow: "true"
       pj-rehearse.openshift.io/can-be-rehearsed: "true"
       pj-rehearse.openshift.io/source-type: changedRegistryContent
-      presets.ci.openshift.io/registry-pull: "true"
       prow.k8s.io/context: test-with-changed-observer
       prow.k8s.io/job: rehearse-1234-pull-ci-uses-observer-master-test-with-changed-ob
       prow.k8s.io/refs.base_ref: master
@@ -1697,6 +1731,9 @@
         - mountPath: /secrets/manifest-tool
           name: manifest-tool-local-pusher
           readOnly: true
+        - mountPath: /etc/pull-secret
+          name: pull-secret
+          readOnly: true
         - mountPath: /etc/report
           name: result-aggregator
           readOnly: true
@@ -1705,6 +1742,9 @@
       - name: manifest-tool-local-pusher
         secret:
           secretName: manifest-tool-local-pusher
+      - name: pull-secret
+        secret:
+          secretName: registry-pull-credentials
       - name: result-aggregator
         secret:
           secretName: result-aggregator
@@ -1739,7 +1779,6 @@
       created-by-prow: "true"
       pj-rehearse.openshift.io/can-be-rehearsed: "true"
       pj-rehearse.openshift.io/source-type: changedRegistryContent
-      presets.ci.openshift.io/registry-pull: "true"
       prow.k8s.io/context: test-with-changed-observer-com
       prow.k8s.io/job: rehearse-1234-pull-ci-uses-observer-master-test-with-changed-ob
       prow.k8s.io/refs.base_ref: master
@@ -1809,6 +1848,9 @@
         - mountPath: /secrets/manifest-tool
           name: manifest-tool-local-pusher
           readOnly: true
+        - mountPath: /etc/pull-secret
+          name: pull-secret
+          readOnly: true
         - mountPath: /etc/report
           name: result-aggregator
           readOnly: true
@@ -1817,6 +1859,9 @@
       - name: manifest-tool-local-pusher
         secret:
           secretName: manifest-tool-local-pusher
+      - name: pull-secret
+        secret:
+          secretName: registry-pull-credentials
       - name: result-aggregator
         secret:
           secretName: result-aggregator
@@ -1851,7 +1896,6 @@
       created-by-prow: "true"
       pj-rehearse.openshift.io/can-be-rehearsed: "true"
       pj-rehearse.openshift.io/source-type: changedRegistryContent
-      presets.ci.openshift.io/registry-pull: "true"
       prow.k8s.io/context: test-with-changed-observer-wor
       prow.k8s.io/job: rehearse-1234-pull-ci-uses-observer-master-test-with-changed-ob
       prow.k8s.io/refs.base_ref: master
@@ -1921,6 +1965,9 @@
         - mountPath: /secrets/manifest-tool
           name: manifest-tool-local-pusher
           readOnly: true
+        - mountPath: /etc/pull-secret
+          name: pull-secret
+          readOnly: true
         - mountPath: /etc/report
           name: result-aggregator
           readOnly: true
@@ -1929,6 +1976,9 @@
       - name: manifest-tool-local-pusher
         secret:
           secretName: manifest-tool-local-pusher
+      - name: pull-secret
+        secret:
+          secretName: registry-pull-credentials
       - name: result-aggregator
         secret:
           secretName: result-aggregator

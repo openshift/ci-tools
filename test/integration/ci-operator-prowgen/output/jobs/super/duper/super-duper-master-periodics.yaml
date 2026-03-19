@@ -11,7 +11,6 @@ periodics:
   labels:
     ci.openshift.io/generator: prowgen
     pj-rehearse.openshift.io/can-be-rehearsed: "true"
-    presets.ci.openshift.io/registry-pull: "true"
   name: periodic-ci-super-duper-master-e2e-aws-nightly
   spec:
     containers:
@@ -55,6 +54,9 @@ periodics:
       - mountPath: /secrets/manifest-tool
         name: manifest-tool-local-pusher
         readOnly: true
+      - mountPath: /etc/pull-secret
+        name: pull-secret
+        readOnly: true
       - mountPath: /etc/report
         name: result-aggregator
         readOnly: true
@@ -66,6 +68,9 @@ periodics:
     - name: manifest-tool-local-pusher
       secret:
         secretName: manifest-tool-local-pusher
+    - name: pull-secret
+      secret:
+        secretName: registry-pull-credentials
     - name: result-aggregator
       secret:
         secretName: result-aggregator
@@ -81,7 +86,6 @@ periodics:
   labels:
     ci.openshift.io/generator: prowgen
     pj-rehearse.openshift.io/can-be-rehearsed: "true"
-    presets.ci.openshift.io/registry-pull: "true"
   name: periodic-ci-super-duper-master-e2e-aws-nightly-interval
   spec:
     containers:
@@ -125,6 +129,9 @@ periodics:
       - mountPath: /secrets/manifest-tool
         name: manifest-tool-local-pusher
         readOnly: true
+      - mountPath: /etc/pull-secret
+        name: pull-secret
+        readOnly: true
       - mountPath: /etc/report
         name: result-aggregator
         readOnly: true
@@ -136,6 +143,9 @@ periodics:
     - name: manifest-tool-local-pusher
       secret:
         secretName: manifest-tool-local-pusher
+    - name: pull-secret
+      secret:
+        secretName: registry-pull-credentials
     - name: result-aggregator
       secret:
         secretName: result-aggregator
@@ -151,7 +161,6 @@ periodics:
   labels:
     ci.openshift.io/generator: prowgen
     pj-rehearse.openshift.io/can-be-rehearsed: "true"
-    presets.ci.openshift.io/registry-pull: "true"
   name: periodic-ci-super-duper-master-e2e-nightly
   spec:
     containers:
@@ -195,6 +204,9 @@ periodics:
       - mountPath: /secrets/manifest-tool
         name: manifest-tool-local-pusher
         readOnly: true
+      - mountPath: /etc/pull-secret
+        name: pull-secret
+        readOnly: true
       - mountPath: /etc/report
         name: result-aggregator
         readOnly: true
@@ -206,6 +218,9 @@ periodics:
     - name: manifest-tool-local-pusher
       secret:
         secretName: manifest-tool-local-pusher
+    - name: pull-secret
+      secret:
+        secretName: registry-pull-credentials
     - name: result-aggregator
       secret:
         secretName: result-aggregator
@@ -222,7 +237,6 @@ periodics:
     ci-operator.openshift.io/release-controller: "true"
     ci.openshift.io/generator: prowgen
     pj-rehearse.openshift.io/can-be-rehearsed: "true"
-    presets.ci.openshift.io/registry-pull: "true"
   name: periodic-ci-super-duper-master-informer
   spec:
     containers:
@@ -254,6 +268,9 @@ periodics:
       - mountPath: /secrets/manifest-tool
         name: manifest-tool-local-pusher
         readOnly: true
+      - mountPath: /etc/pull-secret
+        name: pull-secret
+        readOnly: true
       - mountPath: /etc/report
         name: result-aggregator
         readOnly: true
@@ -262,6 +279,9 @@ periodics:
     - name: manifest-tool-local-pusher
       secret:
         secretName: manifest-tool-local-pusher
+    - name: pull-secret
+      secret:
+        secretName: registry-pull-credentials
     - name: result-aggregator
       secret:
         secretName: result-aggregator

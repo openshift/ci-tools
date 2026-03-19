@@ -10,6 +10,7 @@ decoration_config:
 labels:
   ci-operator.openshift.io/variant: also
   pj-rehearse.openshift.io/can-be-rehearsed: "true"
+  presets.ci.openshift.io/registry-pull: "true"
 name: pull-ci-org-repo-branch-also-testname
 rerun_command: /test also-testname
 trigger: (?m)^/test( | .* )also-testname,?($|\s.*)

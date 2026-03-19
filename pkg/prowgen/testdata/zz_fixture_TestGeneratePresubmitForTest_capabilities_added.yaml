@@ -13,6 +13,7 @@ labels:
   capability/rce: rce
   capability/sshd-bastion: sshd-bastion
   pj-rehearse.openshift.io/can-be-rehearsed: "true"
+  presets.ci.openshift.io/registry-pull: "true"
 name: pull-ci-org-repo-branch-testname
 rerun_command: /test testname
 trigger: (?m)^/test( | .* )testname,?($|\s.*)

@@ -5,5 +5,7 @@ branches:
 decorate: true
 decoration_config:
   skip_cloning: true
+labels:
+  presets.ci.openshift.io/registry-pull: "true"
 name: branch-ci-organization-repository-branch-postsubmit
 skip_if_only_changed: ^README.md$

@@ -205,7 +205,7 @@ func main() {
 						appendFailedConfig(configuration)
 						return nil
 					}
-				} else if err := fetchDeeper(logger, remote, gitCmd, repoInfo, int(math.Exp2(float64(depth)))); err != nil {
+				} else if err := fetchDeeper(logger, remote, gitCmd, repoInfo, int(math.Exp2(float64(depth-1)))); err != nil {
 					appendFailedConfig(configuration)
 					return nil
 				}
@@ -241,8 +241,8 @@ func pushBranch(logger *logrus.Entry, remote *url.URL, futureBranch string, gitC
 	return false, nil
 }
 
-func fetchDeeper(logger *logrus.Entry, remote *url.URL, gitCmd gitCmd, repoInfo *config.Info, depth int) error {
-	command := []string{"fetch", "--deepen", strconv.Itoa(depth), remote.String(), repoInfo.Branch}
+func fetchDeeper(logger *logrus.Entry, remote *url.URL, gitCmd gitCmd, repoInfo *config.Info, deepenBy int) error {
+	command := []string{"fetch", "--deepen", strconv.Itoa(deepenBy), remote.String(), repoInfo.Branch}
 	if err := gitCmd(logger, command...); err != nil {
 		return err
 	}

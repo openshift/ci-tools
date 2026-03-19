@@ -10,6 +10,7 @@ import (
 	"testing"
 
 	"github.com/sirupsen/logrus"
+
 	"sigs.k8s.io/prow/pkg/flagutil"
 
 	"github.com/openshift/ci-tools/pkg/api"

@@ -516,6 +516,8 @@ func bindOptions(flag *flag.FlagSet) *options {
 	flag.StringVar(&opt.impersonateUser, "as", "", "Username to impersonate")
 	flag.BoolVar(&opt.restrictNetworkAccess, "restrict-network-access", false, "Restrict network access to 10.0.0.0/8 (RedHat intranet).")
 	flag.BoolVar(&opt.enableSecretsStoreCSIDriver, "enable-secrets-store-csi-driver", false, "Use Secrets Store CSI driver for accessing multi-stage credentials.")
+
+	// Google Secret Manager flags
 	flag.StringVar(&opt.gsmConfigPath, "gsm-config", "", "Path to the gsm secrets config file.")
 	flag.StringVar(&opt.gsmProjectConfigPath, "gsm-project-config", "", "Path to the GSM project config file.")
 	flag.StringVar(&opt.gsmCredentialsFile, "gsm-credentials-file", "", "Path to GCP service account credentials.")

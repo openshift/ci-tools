@@ -557,7 +557,6 @@ func (s *multiStageTestStep) addCredentialsToCensoring(secretVolumes []coreapi.V
 			}
 			seenCredentials[fullSecretName] = true
 			volumeName := fmt.Sprintf("censor-cred-%d", i)
-			readOnly := true
 
 			// Create individual SPC name for censoring - each credential
 			// had its SPC already created in init.go's createSPCs function
@@ -567,18 +566,7 @@ func (s *multiStageTestStep) addCredentialsToCensoring(secretVolumes []coreapi.V
 			individualCredentials := []api.CredentialReference{censoredCredential}
 			spcName := getSPCName(s.jobSpec.Namespace(), individualCredentials)
 
-			secretVolumes = append(secretVolumes, coreapi.Volume{
-				Name: volumeName,
-				VolumeSource: coreapi.VolumeSource{
-					CSI: &coreapi.CSIVolumeSource{
-						Driver:   "secrets-store.csi.k8s.io",
-						ReadOnly: &readOnly,
-						VolumeAttributes: map[string]string{
-							"secretProviderClass": spcName,
-						},
-					},
-				},
-			})
+			secretVolumes = append(secretVolumes, BuildCSIVolume(volumeName, spcName))
 			secretVolumeMounts = append(secretVolumeMounts, coreapi.VolumeMount{
 				Name:      volumeName,
 				MountPath: getMountPath(fullSecretName),

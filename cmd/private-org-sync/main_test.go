@@ -666,6 +666,126 @@ func TestInitRepo(t *testing.T) {
 	}
 }
 
+func TestSyncRepo(t *testing.T) {
+	second = time.Millisecond
+	token := "TOKEN"
+	org, repo := "org", "repo"
+	targetOrg := "dest"
+	branches := []location{
+		{org: org, repo: repo, branch: "main"},
+		{org: org, repo: repo, branch: "release-4.18"},
+	}
+
+	testCases := []struct {
+		description          string
+		branches             []location
+		failOnNonexistentDst bool
+		expectedGitCalls     []mockGitCall
+		expectedErrors       int
+	}{
+		{
+			description: "all branches in sync -> init, ls-remote, no fetch/push",
+			branches:    branches,
+			expectedGitCalls: []mockGitCall{
+				{call: "init"},
+				{call: "remote get-url org-repo", exitCode: 1},
+				{call: "remote add org-repo https://TOKEN@github.com/org/repo"},
+				{call: "ls-remote --heads https://TOKEN@github.com/dest/repo", output: "aaa refs/heads/main\naaa refs/heads/release-4.18\n"},
+				{call: "ls-remote --heads org-repo", output: "aaa refs/heads/main\naaa refs/heads/release-4.18\n"},
+			},
+		},
+		{
+			description: "one branch needs sync -> fetches and pushes that branch only",
+			branches:    branches,
+			expectedGitCalls: []mockGitCall{
+				{call: "init"},
+				{call: "remote get-url org-repo", exitCode: 1},
+				{call: "remote add org-repo https://TOKEN@github.com/org/repo"},
+				{call: "ls-remote --heads https://TOKEN@github.com/dest/repo", output: "aaa refs/heads/main\nbbb refs/heads/release-4.18\n"},
+				{call: "ls-remote --heads org-repo", output: "aaa refs/heads/main\naaa refs/heads/release-4.18\n"},
+				// only release-4.18 needs sync (bbb != aaa)
+				{call: "fetch --tags org-repo release-4.18 --depth=2"},
+				{call: "push --tags --dry-run https://TOKEN@github.com/dest/repo FETCH_HEAD:refs/heads/release-4.18"},
+			},
+		},
+		{
+			description:          "dst ls-remote fails, failOnNonexistentDst=true -> errors for all branches",
+			branches:             branches,
+			failOnNonexistentDst: true,
+			expectedGitCalls: []mockGitCall{
+				{call: "init"},
+				{call: "remote get-url org-repo", exitCode: 1},
+				{call: "remote add org-repo https://TOKEN@github.com/org/repo"},
+				{call: "ls-remote --heads https://TOKEN@github.com/dest/repo", exitCode: 1},
+			},
+			expectedErrors: 2,
+		},
+		{
+			description:          "dst ls-remote fails, failOnNonexistentDst=false -> no errors (skip)",
+			branches:             branches,
+			failOnNonexistentDst: false,
+			expectedGitCalls: []mockGitCall{
+				{call: "init"},
+				{call: "remote get-url org-repo", exitCode: 1},
+				{call: "remote add org-repo https://TOKEN@github.com/org/repo"},
+				{call: "ls-remote --heads https://TOKEN@github.com/dest/repo", exitCode: 1},
+			},
+			expectedErrors: 0,
+		},
+		{
+			description: "src ls-remote fails -> errors for all branches",
+			branches:    branches,
+			expectedGitCalls: []mockGitCall{
+				{call: "init"},
+				{call: "remote get-url org-repo", exitCode: 1},
+				{call: "remote add org-repo https://TOKEN@github.com/org/repo"},
+				{call: "ls-remote --heads https://TOKEN@github.com/dest/repo", output: "aaa refs/heads/main\n"},
+				// src ls-remote fails with retries (withRetryOnNonzero does 5 retries)
+				{call: "ls-remote --heads org-repo", exitCode: 1},
+				{call: "ls-remote --heads org-repo", exitCode: 1},
+				{call: "ls-remote --heads org-repo", exitCode: 1},
+				{call: "ls-remote --heads org-repo", exitCode: 1},
+				{call: "ls-remote --heads org-repo", exitCode: 1},
+			},
+			expectedErrors: 2,
+		},
+		{
+			description: "init fails -> errors for all branches",
+			branches:    branches,
+			expectedGitCalls: []mockGitCall{
+				{call: "init", exitCode: 1},
+			},
+			expectedErrors: 2,
+		},
+	}
+	for _, tc := range testCases {
+		t.Run(tc.description, func(t *testing.T) {
+			git := mockGit{
+				expected: tc.expectedGitCalls,
+				t:        t,
+			}
+			s := gitSyncer{
+				logger:               logrus.WithField("test", tc.description),
+				prefix:               defaultPrefix,
+				token:                token,
+				root:                 "git-dir",
+				git:                  git.exec,
+				confirm:              false,
+				failOnNonexistentDst: tc.failOnNonexistentDst,
+				gitName:              "openshift-bot",
+				gitEmail:             "openshift-bot@redhat.com",
+			}
+			errs := s.syncRepo(org, repo, targetOrg, repo, tc.branches)
+			if len(errs) != tc.expectedErrors {
+				t.Errorf("expected %d errors, got %d: %v", tc.expectedErrors, len(errs), errs)
+			}
+			if err := git.check(); err != nil {
+				t.Errorf("bad git operation: %v", err)
+			}
+		})
+	}
+}
+
 func TestDestinationNaming(t *testing.T) {
 	testCases := []struct {
 		name         string

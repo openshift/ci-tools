@@ -364,6 +364,85 @@ func (g gitSyncer) initRepo(repoDir, org, repo string) error {
 	return nil
 }
 
+// syncRepo initializes a local git repo, fetches branch heads from both source
+// and destination via ls-remote, and mirrors each branch that needs syncing.
+func (g gitSyncer) syncRepo(org, repo, targetOrg, dstRepo string, branches []location) []error {
+	var errs []error
+	repoLogger := g.logger
+
+	gitDir, err := g.makeGitDir(org, repo)
+	if err != nil {
+		for _, source := range branches {
+			errs = append(errs, fmt.Errorf("%s: %w", source.String(), err))
+		}
+		return errs
+	}
+
+	if err := g.initRepo(gitDir, org, repo); err != nil {
+		for _, source := range branches {
+			errs = append(errs, fmt.Errorf("%s: %w", source.String(), err))
+		}
+		return errs
+	}
+
+	// ls-remote destination once per repo
+	destUrlRaw := fmt.Sprintf("%s/%s/%s", g.prefix, targetOrg, dstRepo)
+	destUrl, err := url.Parse(destUrlRaw)
+	if err != nil {
+		repoLogger.WithField("remote-url", destUrlRaw).WithError(err).Error("Failed to construct URL for the destination remote")
+		for _, source := range branches {
+			errs = append(errs, fmt.Errorf("%s: failed to construct URL for the destination remote", source.String()))
+		}
+		return errs
+	}
+	if g.token != "" {
+		destUrl.User = url.User(g.token)
+	}
+
+	dstHeads, err := getRemoteBranchHeads(repoLogger, g.git, gitDir, destUrl.String())
+	if err != nil {
+		message := "destination repository does not exist or we cannot access it"
+		if g.failOnNonexistentDst {
+			repoLogger.Errorf("%s", message)
+			for _, source := range branches {
+				errs = append(errs, fmt.Errorf("%s: %s", source.String(), message))
+			}
+		} else {
+			repoLogger.Warn(message)
+		}
+		return errs
+	}
+
+	// ls-remote source once per repo
+	srcRemote := fmt.Sprintf("%s-%s", org, repo)
+	srcHeads, err := getRemoteBranchHeads(repoLogger, withRetryOnNonzero(g.git, 5), gitDir, srcRemote)
+	if err != nil {
+		repoLogger.WithError(err).Error("Failed to determine branch HEADs in source")
+		for _, source := range branches {
+			errs = append(errs, fmt.Errorf("%s: failed to determine branch HEADs in source", source.String()))
+		}
+		return errs
+	}
+
+	for _, source := range branches {
+		g.logger = config.LoggerForInfo(config.Info{
+			Metadata: api.Metadata{
+				Org:    source.org,
+				Repo:   source.repo,
+				Branch: source.branch,
+			},
+		})
+
+		destination := location{org: targetOrg, repo: dstRepo, branch: source.branch}
+
+		if err := g.mirror(gitDir, source, destination, srcHeads, dstHeads, destUrl); err != nil {
+			errs = append(errs, fmt.Errorf("%s->%s: %w", source.String(), destination.String(), err))
+		}
+	}
+
+	return errs
+}
+
 // mirror syncs a single branch from source to destination, using pre-fetched
 // branch head information. The `repoDir` must have been previously initialized
 // with git init and remote setup. The `srcHeads` and `dstHeads` must have been
@@ -651,83 +730,14 @@ func main() {
 	}
 
 	for key, branches := range grouped {
-		repoLogger := logrus.WithFields(logrus.Fields{"org": key.org, "repo": key.repo})
-		syncer.logger = repoLogger
+		syncer.logger = logrus.WithFields(logrus.Fields{"org": key.org, "repo": key.repo})
 
 		dstRepo := key.repo
 		if !flattenedOrgs.Has(key.org) {
 			dstRepo = fmt.Sprintf("%s-%s", key.org, key.repo)
 		}
 
-		gitDir, err := syncer.makeGitDir(key.org, key.repo)
-		if err != nil {
-			for _, source := range branches {
-				errs = append(errs, fmt.Errorf("%s: %w", source.String(), err))
-			}
-			continue
-		}
-
-		if err := syncer.initRepo(gitDir, key.org, key.repo); err != nil {
-			for _, source := range branches {
-				errs = append(errs, fmt.Errorf("%s: %w", source.String(), err))
-			}
-			continue
-		}
-
-		// ls-remote destination once per repo
-		destUrlRaw := fmt.Sprintf("%s/%s/%s", syncer.prefix, o.targetOrg, dstRepo)
-		destUrl, err := url.Parse(destUrlRaw)
-		if err != nil {
-			repoLogger.WithField("remote-url", destUrlRaw).WithError(err).Error("Failed to construct URL for the destination remote")
-			for _, source := range branches {
-				errs = append(errs, fmt.Errorf("%s: failed to construct URL for the destination remote", source.String()))
-			}
-			continue
-		}
-		if syncer.token != "" {
-			destUrl.User = url.User(syncer.token)
-		}
-
-		dstHeads, err := getRemoteBranchHeads(repoLogger, syncer.git, gitDir, destUrl.String())
-		if err != nil {
-			message := "destination repository does not exist or we cannot access it"
-			if syncer.failOnNonexistentDst {
-				repoLogger.Errorf("%s", message)
-				for _, source := range branches {
-					errs = append(errs, fmt.Errorf("%s: %s", source.String(), message))
-				}
-			} else {
-				repoLogger.Warn(message)
-			}
-			continue
-		}
-
-		// ls-remote source once per repo
-		srcRemote := fmt.Sprintf("%s-%s", key.org, key.repo)
-		srcHeads, err := getRemoteBranchHeads(repoLogger, withRetryOnNonzero(syncer.git, 5), gitDir, srcRemote)
-		if err != nil {
-			repoLogger.WithError(err).Error("Failed to determine branch HEADs in source")
-			for _, source := range branches {
-				errs = append(errs, fmt.Errorf("%s: failed to determine branch HEADs in source", source.String()))
-			}
-			continue
-		}
-
-		for _, source := range branches {
-			syncer.logger = config.LoggerForInfo(config.Info{
-				Metadata: api.Metadata{
-					Org:    source.org,
-					Repo:   source.repo,
-					Branch: source.branch,
-				},
-			})
-
-			destination := location{org: o.targetOrg, repo: dstRepo, branch: source.branch}
-
-			if err := syncer.mirror(gitDir, source, destination, srcHeads, dstHeads, destUrl); err != nil {
-				errs = append(errs, fmt.Errorf("%s->%s: %w", source.String(), destination.String(), err))
-			}
-		}
+		errs = append(errs, syncer.syncRepo(key.org, key.repo, o.targetOrg, dstRepo, branches)...)
 	}
 
 	if len(errs) > 0 {

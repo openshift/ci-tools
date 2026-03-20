@@ -566,20 +566,7 @@ func addCredentials(credentials []api.CredentialReference, pod *coreapi.Pod, use
 			mountPath := credentials[0].MountPath
 
 			csiVolumeName := getCSIVolumeName(pod.Namespace, credentials)
-
-			readOnly := true
-			csiVolume := coreapi.Volume{
-				Name: csiVolumeName,
-				VolumeSource: coreapi.VolumeSource{
-					CSI: &coreapi.CSIVolumeSource{
-						Driver:   "secrets-store.csi.k8s.io",
-						ReadOnly: &readOnly,
-						VolumeAttributes: map[string]string{
-							"secretProviderClass": getSPCName(pod.Namespace, credentials),
-						},
-					},
-				},
-			}
+			csiVolume := BuildCSIVolume(csiVolumeName, getSPCName(pod.Namespace, credentials))
 			pod.Spec.Volumes = append(pod.Spec.Volumes, csiVolume)
 			pod.Spec.Containers[0].VolumeMounts = append(pod.Spec.Containers[0].VolumeMounts, coreapi.VolumeMount{
 				Name:      csiVolumeName,

@@ -9,7 +9,9 @@ import (
 
 	"github.com/GoogleCloudPlatform/secrets-store-csi-driver-provider-gcp/config"
 
+	coreapi "k8s.io/api/core/v1"
 	meta "k8s.io/apimachinery/pkg/apis/meta/v1"
+	"k8s.io/utils/ptr"
 	csiapi "sigs.k8s.io/secrets-store-csi-driver/apis/v1"
 	"sigs.k8s.io/yaml"
 
@@ -155,6 +157,21 @@ func buildSecretProviderClass(name, namespace, secrets string) *csiapi.SecretPro
 			Parameters: map[string]string{
 				"auth":    "provider-adc",
 				"secrets": secrets,
+			},
+		},
+	}
+}
+
+func BuildCSIVolume(name, spcName string) coreapi.Volume {
+	return coreapi.Volume{
+		Name: name,
+		VolumeSource: coreapi.VolumeSource{
+			CSI: &coreapi.CSIVolumeSource{
+				Driver:   "secrets-store.csi.k8s.io",
+				ReadOnly: ptr.To(true),
+				VolumeAttributes: map[string]string{
+					"secretProviderClass": spcName,
+				},
 			},
 		},
 	}

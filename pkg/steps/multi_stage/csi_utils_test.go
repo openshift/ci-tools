@@ -7,10 +7,12 @@ import (
 	"github.com/GoogleCloudPlatform/secrets-store-csi-driver-provider-gcp/config"
 	"github.com/google/go-cmp/cmp"
 
+	coreapi "k8s.io/api/core/v1"
 	"sigs.k8s.io/yaml"
 
 	"github.com/openshift/ci-tools/pkg/api"
 	gsmvalidation "github.com/openshift/ci-tools/pkg/gsm-validation"
+	"github.com/openshift/ci-tools/pkg/testhelper"
 )
 
 func TestGroupCredentialsByCollectionGroupAndMountPath(t *testing.T) {
@@ -504,6 +506,40 @@ func TestReplaceForbiddenSymbolsInCredentialName(t *testing.T) {
 			if result != tc.expected {
 				t.Errorf("secret name is '%v', want '%v'", result, tc.expected)
 			}
+		})
+	}
+}
+
+func TestBuildCSIVolume(t *testing.T) {
+	readOnly := true
+	testCases := []struct {
+		name           string
+		volumeName     string
+		spcName        string
+		expectedVolume coreapi.Volume
+	}{
+		{
+			name:       "simple case",
+			volumeName: "volume-name",
+			spcName:    "spc-name",
+			expectedVolume: coreapi.Volume{
+				Name: "volume-name",
+				VolumeSource: coreapi.VolumeSource{
+					CSI: &coreapi.CSIVolumeSource{
+						Driver:   "secrets-store.csi.k8s.io",
+						ReadOnly: &readOnly,
+						VolumeAttributes: map[string]string{
+							"secretProviderClass": "spc-name",
+						},
+					},
+				},
+			},
+		},
+	}
+	for _, tc := range testCases {
+		t.Run(tc.name, func(t *testing.T) {
+			actual := BuildCSIVolume(tc.volumeName, tc.spcName)
+			testhelper.Diff(t, tc.name, actual, tc.expectedVolume)
 		})
 	}
 }

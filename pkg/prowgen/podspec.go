@@ -13,6 +13,7 @@ import (
 
 	"github.com/openshift/ci-tools/pkg/api"
 	cioperatorapi "github.com/openshift/ci-tools/pkg/api"
+	"github.com/openshift/ci-tools/pkg/steps/multi_stage"
 	"github.com/openshift/ci-tools/pkg/steps/utils"
 )
 
@@ -605,12 +606,24 @@ var (
 		MountPath: cioperatorapi.GSMConfigMountPath,
 		ReadOnly:  true,
 	}
-	gsmConfigParameter = cioperatorapi.GSMConfigFileParameter
+	gsmCredentialsVolume = multi_stage.BuildCSIVolume(
+		cioperatorapi.GSMCredentialsVolumeMount,
+		cioperatorapi.GSMCiOperatorSPCName)
+	gsmCredentialsVolumeMount = corev1.VolumeMount{
+		Name:      cioperatorapi.GSMCredentialsVolumeMount,
+		MountPath: cioperatorapi.GSMCredentialsMountPath,
+		ReadOnly:  true,
+	}
 )
 
 // GSMConfig mounts the gsm-config ConfigMap and configures ci-operator to use
-// it via the --gsm-config flag. This mapping file defines how GSM secrets are
-// bundled and consumed, supporting bundle references and auto-discovery of fields.
+// it via the --gsm-config and --gsm-project-config flags.
+//
+// --gsm-config: This file defines how Google Secret Manager (GSM) secrets are bundled and consumed by ci-operator.
+//
+// --gsm-project-config: This file contains gcp project IDs so that we can correctly set up GSM client inside ci-operator.
+//
+// --gsm-credentials-file: This file contains the service account key ci-operator uses to authenticate to GSM.
 func GSMConfig() PodSpecMutator {
 	return func(spec *corev1.PodSpec) error {
 		container := &spec.Containers[0]
@@ -620,7 +633,16 @@ func GSMConfig() PodSpecMutator {
 		if err := addVolumeMount(container, gsmConfigVolumeMount); err != nil {
 			return err
 		}
-		addUniqueParameter(container, gsmConfigParameter)
+		if err := addVolume(spec, gsmCredentialsVolume); err != nil {
+			return err
+		}
+		if err := addVolumeMount(container, gsmCredentialsVolumeMount); err != nil {
+			return err
+		}
+		addUniqueParameter(container, cioperatorapi.EnableCSIFlag)
+		addUniqueParameter(container, cioperatorapi.GSMConfigFileParameter)
+		addUniqueParameter(container, cioperatorapi.GSMProjectConfigParameter)
+		addUniqueParameter(container, cioperatorapi.GSMCredentialsParameter)
 		return nil
 	}
 }

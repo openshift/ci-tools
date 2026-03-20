@@ -218,10 +218,12 @@ func processPodEvent(
 	if podJobIsOK(pod) {
 		logrus.Debugf("Pod %s succeeded after %s", pod.Name, podDuration(pod).Truncate(time.Second))
 		podClient.MetricsAgent().StorePodLifecycleMetrics(pod.Name, pod.Namespace, corev1.PodSucceeded)
+		podClient.MetricsAgent().StoreMachinesSnapshot(pod)
 		return true, nil
 	}
 	if podJobIsFailed(pod) {
 		podClient.MetricsAgent().StorePodLifecycleMetrics(pod.Name, pod.Namespace, corev1.PodFailed)
+		podClient.MetricsAgent().StoreMachinesSnapshot(pod)
 		return true, AppendLogToError(fmt.Errorf("the pod %s/%s failed after %s (failed containers: %s): %s", pod.Namespace, pod.Name, podDuration(pod).Truncate(time.Second), strings.Join(failedContainerNames(pod), ", "), podReason(pod)), podMessages(pod))
 	}
 	return false, nil

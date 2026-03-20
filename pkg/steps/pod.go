@@ -129,6 +129,8 @@ func (s *podStep) run(ctx context.Context) error {
 		}
 	}()
 
+	s.client.MetricsAgent().StoreMachinesSnapshot(pod)
+
 	pod, err = util.CreateOrRestartPod(ctx, s.client, pod)
 	if err != nil {
 		return fmt.Errorf("failed to create or restart %s pod: %w", s.name, err)
@@ -433,6 +435,8 @@ func getSecretVolumeMountFromSecret(secretMountPath string, secretIndex int) []c
 // This pod will not be able to gather artifacts, nor will it report log messages
 // unless it fails.
 func RunPod(ctx context.Context, podClient kubernetes.PodClient, pod *coreapi.Pod, skipLogs bool) (*coreapi.Pod, error) {
+	podClient.MetricsAgent().StoreMachinesSnapshot(pod)
+
 	pod, err := util.CreateOrRestartPod(ctx, podClient, pod)
 	if err != nil {
 		return pod, err

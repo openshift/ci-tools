@@ -152,7 +152,6 @@ func NewProwJobBaseBuilderForTest(configSpec *cioperatorapi.ReleaseBuildConfigur
 		}
 		if info.Config.EnableSecretsStoreCSIDriver {
 			p.PodSpec.Add(
-				Arg("enable-secrets-store-csi-driver", "true"),
 				GSMConfig(),
 			)
 		}
@@ -167,7 +166,6 @@ func NewProwJobBaseBuilderForTest(configSpec *cioperatorapi.ReleaseBuildConfigur
 		}
 		if info.Config.EnableSecretsStoreCSIDriver {
 			p.PodSpec.Add(
-				Arg("enable-secrets-store-csi-driver", "true"),
 				GSMConfig(),
 			)
 		}

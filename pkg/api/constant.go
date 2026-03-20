@@ -18,9 +18,16 @@ const (
 	ManifestToolLocalPusherSecret          = "manifest-tool-local-pusher"
 	ManifestToolLocalPusherSecretMountPath = "/secrets/manifest-tool"
 
-	GSMConfigConfigMap     = "gsm-config"
-	GSMConfigMountPath     = "/etc/gsm-config"
-	GSMConfigFileParameter = "--gsm-config=/etc/gsm-config/gsm-config.yaml"
+	//Google Secret Manager
+	GSMConfigConfigMap        = "gsm-config"
+	GSMConfigMountPath        = "/etc/gsm-config"
+	GSMConfigFileParameter    = "--gsm-config=/etc/gsm-config/gsm-config.yaml"
+	GSMProjectConfigParameter = "--gsm-project-config=/etc/gsm-config/gsm-project-config.yaml"
+	EnableCSIFlag             = "--enable-secrets-store-csi-driver=true"
+	GSMCredentialsVolumeMount = "gsm-sa-key"
+	GSMCredentialsMountPath   = "/etc/gsm-credentials"
+	GSMCredentialsParameter   = "--gsm-credentials-file=/etc/gsm-credentials/key.json"
+	GSMCiOperatorSPCName      = "ci-operator-sa-key-spc"
 
 	PromotionQuayTaggerKubeconfigSecret = "promotion-quay-tagger-kubeconfig"
 

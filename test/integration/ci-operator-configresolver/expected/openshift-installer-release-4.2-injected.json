@@ -23,12 +23,14 @@
       "tag": "golang-1.10"
     }
   },
-  "images": [
-    {
-      "from": "base",
-      "to": "installer"
-    }
-  ],
+  "images": {
+    "items": [
+      {
+        "from": "base",
+        "to": "installer"
+      }
+    ]
+  },
   "tests": [
     {
       "as": "e2e",

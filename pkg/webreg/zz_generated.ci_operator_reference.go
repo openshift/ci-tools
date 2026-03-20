@@ -33,10 +33,6 @@ const ciOperatorReferenceYaml = "# The list of base images describe\n" +
 	"binary_build_commands_list:\n" +
 	"    - commands: ' '\n" +
 	"      ref: ' '\n" +
-	"# BuildImagesIfAffected means images are only built if their corresponding cmd tools are affected by code changes.\n" +
-	"# When enabled, the tool-detector package analyzes git changes to determine which images should be built.\n" +
-	"# The image name (To field) should match the cmd tool name for this to work correctly.\n" +
-	"build_images_if_affected: true\n" +
 	"# BuildRootImage supports two ways to get the image that\n" +
 	"# the pipeline will caches on. The one way is to take the reference\n" +
 	"# from an image stream, and the other from a dockerfile.\n" +
@@ -184,56 +180,74 @@ const ciOperatorReferenceYaml = "# The list of base images describe\n" +
 	"# process. The name of each image is its \"to\" value\n" +
 	"# and can be used to build only a specific image.\n" +
 	"images:\n" +
-	"    - # AdditionalArchitectures is a list of additional architectures to build for. AMD64 architecture is included by default.\n" +
-	"      additional_architectures:\n" +
-	"        - \"\"\n" +
-	"      # BuildArgs contains build arguments that will be resolved in the Dockerfile.\n" +
-	"      # See https://docs.docker.com/engine/reference/builder/#/arg for more details.\n" +
-	"      build_args:\n" +
-	"        - # Name of the build arg.\n" +
-	"          name: ' '\n" +
-	"          # Value of the build arg.\n" +
-	"          value: ' '\n" +
-	"      # ContextDir is the directory in the project\n" +
-	"      # from which this build should be run.\n" +
-	"      context_dir: ' '\n" +
-	"      # DockerfileLiteral can be used to provide an inline Dockerfile.\n" +
-	"      # Mutually exclusive with DockerfilePath.\n" +
-	"      dockerfile_literal: \"\"\n" +
-	"      # DockerfilePath is the path to a Dockerfile in the\n" +
-	"      # project to run relative to the context_dir.\n" +
-	"      dockerfile_path: ' '\n" +
-	"      from: ' '\n" +
-	"      # Inputs is a map of tag reference name to image input changes\n" +
-	"      # that will populate the build context for the Dockerfile or\n" +
-	"      # alter the input image for a multi-stage build.\n" +
-	"      inputs:\n" +
-	"        \"\":\n" +
-	"            # As is a list of multi-stage step names or image names that will\n" +
-	"            # be replaced by the image reference from this step. For instance,\n" +
-	"            # if the Dockerfile defines FROM nginx:latest AS base, specifying\n" +
-	"            # either \"nginx:latest\" or \"base\" in this array will replace that\n" +
-	"            # image with the pipeline input.\n" +
-	"            as:\n" +
-	"                - \"\"\n" +
-	"            # Paths is a list of paths to copy out of this image and into the\n" +
-	"            # context directory.\n" +
-	"            paths:\n" +
-	"                - # DestinationDir is the directory in the destination image to copy\n" +
-	"                  # to.\n" +
-	"                  destination_dir: ' '\n" +
-	"                  # SourcePath is a file or directory in the source image to copy from.\n" +
-	"                  source_path: ' '\n" +
-	"      # MultiArch means the build step is built for multiple architectures if available. Defaults to false.\n" +
-	"      # DEPRECATED: use AdditionalArchitectures instead\n" +
-	"      multi_arch: true\n" +
-	"      # Optional means the build step is not built, published, or\n" +
-	"      # promoted unless explicitly targeted. Use for builds which\n" +
-	"      # are invoked only when testing certain parts of the repo.\n" +
-	"      optional: true\n" +
-	"      # Ref is an optional string linking to the extra_ref in \"org.repo\" format that this belongs to\n" +
-	"      ref: ' '\n" +
-	"      to: ' '\n" +
+	"    # BuildIfAffected means images are only built if their corresponding cmd tools are affected by code changes.\n" +
+	"    # When enabled, the tool-detector package analyzes git changes to determine which images should be built.\n" +
+	"    # The image name (To field) should match the cmd tool name for this to work correctly.\n" +
+	"    build_if_affected: true\n" +
+	"    # Items is the list of images to build.\n" +
+	"    items:\n" +
+	"        - # AdditionalArchitectures is a list of additional architectures to build for. AMD64 architecture is included by default.\n" +
+	"          additional_architectures:\n" +
+	"            - \"\"\n" +
+	"          # BuildArgs contains build arguments that will be resolved in the Dockerfile.\n" +
+	"          # See https://docs.docker.com/engine/reference/builder/#/arg for more details.\n" +
+	"          build_args:\n" +
+	"            - # Name of the build arg.\n" +
+	"              name: ' '\n" +
+	"              # Value of the build arg.\n" +
+	"              value: ' '\n" +
+	"          # ContextDir is the directory in the project\n" +
+	"          # from which this build should be run.\n" +
+	"          context_dir: ' '\n" +
+	"          # DockerfileLiteral can be used to provide an inline Dockerfile.\n" +
+	"          # Mutually exclusive with DockerfilePath.\n" +
+	"          dockerfile_literal: \"\"\n" +
+	"          # DockerfilePath is the path to a Dockerfile in the\n" +
+	"          # project to run relative to the context_dir.\n" +
+	"          dockerfile_path: ' '\n" +
+	"          from: ' '\n" +
+	"          # Inputs is a map of tag reference name to image input changes\n" +
+	"          # that will populate the build context for the Dockerfile or\n" +
+	"          # alter the input image for a multi-stage build.\n" +
+	"          inputs:\n" +
+	"            \"\":\n" +
+	"                # As is a list of multi-stage step names or image names that will\n" +
+	"                # be replaced by the image reference from this step. For instance,\n" +
+	"                # if the Dockerfile defines FROM nginx:latest AS base, specifying\n" +
+	"                # either \"nginx:latest\" or \"base\" in this array will replace that\n" +
+	"                # image with the pipeline input.\n" +
+	"                as:\n" +
+	"                    - \"\"\n" +
+	"                # Paths is a list of paths to copy out of this image and into the\n" +
+	"                # context directory.\n" +
+	"                paths:\n" +
+	"                    - # DestinationDir is the directory in the destination image to copy\n" +
+	"                      # to.\n" +
+	"                      destination_dir: ' '\n" +
+	"                      # SourcePath is a file or directory in the source image to copy from.\n" +
+	"                      source_path: ' '\n" +
+	"          # MultiArch means the build step is built for multiple architectures if available. Defaults to false.\n" +
+	"          # DEPRECATED: use AdditionalArchitectures instead\n" +
+	"          multi_arch: true\n" +
+	"          # Optional means the build step is not built, published, or\n" +
+	"          # promoted unless explicitly targeted. Use for builds which\n" +
+	"          # are invoked only when testing certain parts of the repo.\n" +
+	"          optional: true\n" +
+	"          # Ref is an optional string linking to the extra_ref in \"org.repo\" format that this belongs to\n" +
+	"          ref: ' '\n" +
+	"          to: ' '\n" +
+	"    # PipelineRunIfChanged is a regex that will cause the auto-generated images\n" +
+	"    # presubmit to only run in the second stage of the pipeline if a matching file is changed.\n" +
+	"    pipeline_run_if_changed: ' '\n" +
+	"    # PipelineSkipIfOnlyChanged is a regex that will cause the auto-generated images\n" +
+	"    # presubmit to be skipped in the second stage of the pipeline if all changed files match the regex.\n" +
+	"    pipeline_skip_if_only_changed: ' '\n" +
+	"    # RunIfChanged is a regex that will cause the auto-generated images\n" +
+	"    # presubmit and postsubmit to only run if a file matching the regex is changed.\n" +
+	"    run_if_changed: ' '\n" +
+	"    # SkipIfOnlyChanged is a regex that will cause the auto-generated images\n" +
+	"    # presubmit and postsubmit to be skipped if all changed files match the regex.\n" +
+	"    skip_if_only_changed: ' '\n" +
 	"# Operator describes the operator bundle(s) that is built by the project\n" +
 	"operator:\n" +
 	"    # Bundles define a dockerfile and build context to build a bundle\n" +

@@ -4,14 +4,15 @@ build_root:
     namespace: openshift
     tag: golang-1.13
 images:
-- context_dir: images/blocking-issue-creator/
-  from: os
-  inputs:
-    bin:
-      paths:
-      - destination_dir: .
-        source_path: /go/bin/blocking-issue-creator
-  to: blocking-issue-creator
+  items:
+  - context_dir: images/blocking-issue-creator/
+    from: os
+    inputs:
+      bin:
+        paths:
+        - destination_dir: .
+          source_path: /go/bin/blocking-issue-creator
+    to: blocking-issue-creator
 promotion:
   to:
   - namespace: ci

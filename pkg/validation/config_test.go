@@ -513,6 +513,71 @@ func TestValidateReleaseTagConfiguration(t *testing.T) {
 	}
 }
 
+func TestValidateImageConfiguration(t *testing.T) {
+	var testCases = []struct {
+		name   string
+		input  api.ImageConfiguration
+		output []error
+	}{{
+		name: "run_if_changed and skip_if_only_changed are mutually exclusive",
+		input: api.ImageConfiguration{
+			RunIfChanged:      `^src/`,
+			SkipIfOnlyChanged: `^docs/`,
+		},
+		output: []error{
+			errors.New("images: `run_if_changed`, `skip_if_only_changed`, `pipeline_run_if_changed`, and `pipeline_skip_if_only_changed` are mutually exclusive"),
+		},
+	}, {
+		name: "pipeline_run_if_changed and pipeline_skip_if_only_changed are mutually exclusive",
+		input: api.ImageConfiguration{
+			PipelineRunIfChanged:      `^src/`,
+			PipelineSkipIfOnlyChanged: `^docs/`,
+		},
+		output: []error{
+			errors.New("images: `run_if_changed`, `skip_if_only_changed`, `pipeline_run_if_changed`, and `pipeline_skip_if_only_changed` are mutually exclusive"),
+		},
+	}, {
+		name: "run_if_changed with pipeline_skip_if_only_changed are mutually exclusive",
+		input: api.ImageConfiguration{
+			RunIfChanged:              `^src/`,
+			PipelineSkipIfOnlyChanged: `^docs/`,
+		},
+		output: []error{
+			errors.New("images: `run_if_changed`, `skip_if_only_changed`, `pipeline_run_if_changed`, and `pipeline_skip_if_only_changed` are mutually exclusive"),
+		},
+	}, {
+		name: "run_if_changed alone is valid",
+		input: api.ImageConfiguration{
+			RunIfChanged: `^src/`,
+		},
+	}, {
+		name: "skip_if_only_changed alone is valid",
+		input: api.ImageConfiguration{
+			SkipIfOnlyChanged: `^docs/`,
+		},
+	}, {
+		name: "pipeline_run_if_changed alone is valid",
+		input: api.ImageConfiguration{
+			PipelineRunIfChanged: `^src/`,
+		},
+	}, {
+		name: "pipeline_skip_if_only_changed alone is valid",
+		input: api.ImageConfiguration{
+			PipelineSkipIfOnlyChanged: `^docs/`,
+		},
+	}}
+
+	for _, testCase := range testCases {
+		t.Run(testCase.name, func(t *testing.T) {
+			if actual, expected := validateImageConfiguration(NewConfigContext().AddField("images"), testCase.input), testCase.output; !reflect.DeepEqual(actual, expected) {
+				t.Errorf("%s: got incorrect errors: %s", testCase.name, cmp.Diff(expected, actual, cmp.Comparer(func(x, y error) bool {
+					return x.Error() == y.Error()
+				})))
+			}
+		})
+	}
+}
+
 func TestValidateImages(t *testing.T) {
 	var testCases = []struct {
 		name   string
@@ -575,9 +640,9 @@ func TestValidateImages(t *testing.T) {
 	for _, testCase := range testCases {
 		t.Run(testCase.name, func(t *testing.T) {
 			config := &api.ReleaseBuildConfiguration{
-				Images: testCase.input,
+				Images: api.ImageConfiguration{Items: testCase.input},
 			}
-			if actual, expected := ValidateImages(NewConfigContext().AddField("images"), config.Images), testCase.output; !reflect.DeepEqual(actual, expected) {
+			if actual, expected := ValidateImages(NewConfigContext().AddField("images"), config.Images.Items), testCase.output; !reflect.DeepEqual(actual, expected) {
 				t.Errorf("%s: got incorrect errors: %s", testCase.name, cmp.Diff(actual, expected, cmp.Comparer(func(x, y error) bool {
 					return x.Error() == y.Error()
 				})))
@@ -782,9 +847,9 @@ func TestReleaseBuildConfiguration_validateImages(t *testing.T) {
 		name: "valid",
 		config: api.ReleaseBuildConfiguration{
 			InputConfiguration: input,
-			Images: []api.ProjectDirectoryImageBuildStepConfiguration{
+			Images: api.ImageConfiguration{Items: []api.ProjectDirectoryImageBuildStepConfiguration{
 				{To: "image"},
-			},
+			}},
 			Tests: []api.TestStepConfiguration{{
 				As:       "test",
 				Commands: "commands",
@@ -798,9 +863,9 @@ func TestReleaseBuildConfiguration_validateImages(t *testing.T) {
 		name: "image and test cannot have the same name",
 		config: api.ReleaseBuildConfiguration{
 			InputConfiguration: input,
-			Images: []api.ProjectDirectoryImageBuildStepConfiguration{
+			Images: api.ImageConfiguration{Items: []api.ProjectDirectoryImageBuildStepConfiguration{
 				{To: "duplicated"},
-			},
+			}},
 			Tests: []api.TestStepConfiguration{{
 				As:       "duplicated",
 				Commands: "commands",
@@ -819,9 +884,9 @@ func TestReleaseBuildConfiguration_validateImages(t *testing.T) {
 				"org.repo": root,
 			},
 			},
-			Images: []api.ProjectDirectoryImageBuildStepConfiguration{
+			Images: api.ImageConfiguration{Items: []api.ProjectDirectoryImageBuildStepConfiguration{
 				{To: "image"},
-			},
+			}},
 			Tests: []api.TestStepConfiguration{{
 				As:       "test",
 				Commands: "commands",
@@ -840,9 +905,9 @@ func TestReleaseBuildConfiguration_validateImages(t *testing.T) {
 				"org.repo": root,
 			},
 			},
-			Images: []api.ProjectDirectoryImageBuildStepConfiguration{
+			Images: api.ImageConfiguration{Items: []api.ProjectDirectoryImageBuildStepConfiguration{
 				{To: "image"},
-			},
+			}},
 			Tests: []api.TestStepConfiguration{{
 				As:       "test",
 				Commands: "commands",
@@ -882,7 +947,7 @@ func TestReleaseBuildConfiguration_validateTestStepDependencies(t *testing.T) {
 					},
 				},
 				BinaryBuildCommands: "whoa",
-				Images:              []api.ProjectDirectoryImageBuildStepConfiguration{{To: "image"}},
+				Images:              api.ImageConfiguration{Items: []api.ProjectDirectoryImageBuildStepConfiguration{{To: "image"}}},
 				Operator: &api.OperatorStepConfiguration{
 					Bundles: []api.Bundle{{
 						DockerfilePath: "bundle.Dockerfile",
@@ -1018,7 +1083,7 @@ func TestReleaseBuildConfiguration_ImageStreamFor(t *testing.T) {
 		},
 		{
 			name:     "explicit, is a known built image",
-			config:   &api.ReleaseBuildConfiguration{Images: []api.ProjectDirectoryImageBuildStepConfiguration{{To: "myimage"}}},
+			config:   &api.ReleaseBuildConfiguration{Images: api.ImageConfiguration{Items: []api.ProjectDirectoryImageBuildStepConfiguration{{To: "myimage"}}}},
 			image:    "myimage",
 			expected: api.PipelineImageStream,
 			explicit: true,
@@ -1151,13 +1216,14 @@ func TestPipelineImages(t *testing.T) {
 			Requests: api.ResourceList{"cpu": "1"},
 		},
 	}
-	makeImages := func(names ...api.PipelineImageStreamTagReference) (ret []api.ProjectDirectoryImageBuildStepConfiguration) {
+	makeImages := func(names ...api.PipelineImageStreamTagReference) api.ImageConfiguration {
+		var ret []api.ProjectDirectoryImageBuildStepConfiguration
 		for _, x := range names {
 			ret = append(ret, api.ProjectDirectoryImageBuildStepConfiguration{
 				To: x,
 			})
 		}
-		return
+		return api.ImageConfiguration{Items: ret}
 	}
 	for _, tc := range []struct {
 		name     string

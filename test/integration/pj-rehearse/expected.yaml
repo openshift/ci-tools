@@ -64,7 +64,7 @@
         - name: TEST_COMMAND
           value: make test-e2e
         - name: CONFIG_SPEC
-          value: H4sIAAAAAAAC/4SRQWrsMAyG9zmFdgMPNGTgvY3v8M4QNI7iuDhWKildzOmLnbaUMtCVLX3Sb+n3nYynvFFiCwNAC9sJUGnjAKI55Ypvf6/jV9Z2ig3tXG3Ni3fglELvHu5HLvOkIt6EuvRkrkzb1Iq+iSsXbh2/CycpVBPerrdx+BwWYVHZPh4FcAngbI6dP6NxpZoYbZWjzBjpMEbllUmNCsqCVAq+yN3QV3Js2NdsGJc0KJscGk+TLn8u5xolb9ntvAPE/Qjwbxz/555Qfj3YfuBbo05psp1jXnIkz1JbyTO/n5ryeEyJKys5z9PGTjM59b9TqnENELPsbWg8Fx4ARFMAO3bWoc21S4C5R+8BAAD//+xJUh7+AQAA
+          value: H4sIAAAAAAAC/4RRzWrkMAy+5yl0G1jwkIHdi99hnyFoHMXR4lhZSelhnr7YKW0pU3qKpO8nn6w7Gk28YSaLA0Br2xeg4kYRRDlzDS+/r+P71HZMDdqp2sqLd8Axx64e7geXeVIRb0bdejJXwm1qpE/mSoWa4mfjLAVrDrfrbRw+wrLT1osAi8r29v8ukghO5qGTv2OkFWumYKscZQ4JD6OgtBKqYQmyBCwl/JO7BV/RQ4N9ZQtpyYOSyaHpDHL5dTn3Kryx21kDpP2I8Gcc/3IfKP0/yL7At4Y65sl2SrxwQmepjfLsAE9f6fGYMlVSdJqnjRxndOzHVKxpjZBY9hY6nAsPAKI5gh076dBy7RJh7t1rAAAA//9gkRqgDwIAAA==
         image: quay-proxy.ci.openshift.org/openshift/ci:ci_ci-operator_latest
         imagePullPolicy: Always
         name: ""
@@ -404,7 +404,7 @@
         - ci-operator
         env:
         - name: CONFIG_SPEC
-          value: H4sIAAAAAAAC/4SQQWr0MAyF9zmFdgM/ZMjA343v0DMYjUfxCGLLlZQu5vTFTltKGegqefqkJz9d0ShywUwWJoAu+xegYqEAopy5zu//z8t31RqmjhpVu/PqAzjmMKan687bLaqId6NhHc2VsMTe9MNcaaM+8bdxlg1rni/nyzJ9PXaGVaV8LgVwCeBkPg8+KZnsmo5Up3+nY+/Ghd2Of4DU9gAvy/LKo6D0tpP9wpdOHXO0RolXTugstbc8O9DTFI9HzFRJ0ekWCzne0HEcW7Gme4CC5qQTgGgOYHsbQqn1SCrS9UcAAAD//wzMfwOoAQAA
+          value: H4sIAAAAAAAC/4RQTWorMQzezym0CzyYMIHXje/QMxjF0TiCseVKmi5y+mJPaUsJdGV9+n4s6YpGkQtmsjABdNhfgIqFAohy5jq//z8vX11rmDrVqNqdVx+EYw7DPV133m5RRbwHjehoroQldtGPcKWNuuPv4Cwb1jxfzpdl+h6WncooZlhVyuf/wyQBnMznIZ6UTHZNh+v073QMsXFht6MGSG0P8LIsrzwaSm872S/60lnHHK1R4pUTOkvtkmfXerrS4xEzVVJ0usVCjjd0HJdXrOkeoKA56QQgmgPY3gZQan0lFen4IwAA//9TwyLatQEAAA==
         image: quay-proxy.ci.openshift.org/openshift/ci:ci_ci-operator_latest
         imagePullPolicy: Always
         name: ""
@@ -512,7 +512,7 @@
             fieldRef:
               fieldPath: status.podIP
         - name: CONFIG_SPEC
-          value: H4sIAAAAAAAC/8RUTWvbQBC961cMuRgKG5TQXvbUHNKeAiX1XYyl8XphvzozcnDojy8rycYOwaWX9LS7b96+efOQdoNCnY/oSGwDUI91BUgYyUJm73wy+8+37QmVgn0tFUqy81udCorOTrebzejD0HHOWoUm6U6UCWNXSWfiTIHqjb8LuxwwOXN3e9c2R7MGtpzj0hRAswUlUTPVGybJI/fzVKtPq7lv8NGrzHuAvowWvrTtk58Apl8jyZvyXa0quk4K9X7re1SfU6W8F9C7U+gsagDFQr/D5GgwhdjnwfcNQM85WVh9PRByOKyaalOJMXSiVBY7fRhFibvCeesDWbi5mfCSRWfGrO+LNwMVznsvPicTR1HjUHfEx7FyjJgGsfB7QQAuCHOsPoliCCf0ItAjdBnYWWhtG8/ASDHzwcL9d3/F6tn+itVTrmaJBAYS5Xz4MPeF6W3iSzvDG+yveBfSsUwkc/8fwj66XNZ/Cnm5A8YkevkW0C1cSvujIwMDbXEMakF3Xl5Qlo/9JDv/MuvHn+vux8Pzw9Pj+vH5Q3J4fe0cJWJUGrpIigMqTu8dY+p3FiLWKRuAzM6CjGU6MJX6qnDO9fwnAAD//8MYT3wrBQAA
+          value: H4sIAAAAAAAC/8RUzW7bPBC86ykWuRj4AAZK8PXCU3NIewpQpL4La2ktE+Bfd1cOHPThC1KyaweBi17SE8nZ2eHsQOIGhToXcCSxDUA5lhUgYiALid3ootn/f9ueUMnYl1KmKDu31VpQHG3tbjaT80PHKWkRqtKdKBOGrpDOxJk8lY4/C4/JYxzN3e1d2/w265RC3RjYcgrL/bUpWVASNZXcMEmauJ+7Vv+tZhPeBacy7wH6PFn41LZPrgJMPyaSN+W7UlUcO8nUu63rUV2KhfJeWu+OpLOoARQL/Q7jSIPJxC4Nrm8Aek7RwurzgZD9YdUUm0qMvhOlvNjp/SRK3GVOW+fJws1NxXMSnRmzvsvODJQ57Z24FE2YRM2IuiM+jpVCwDiIhZ8LAnBBmIN1URS9P6EXgR6hy8DOQmvbcAYGCokPFu6/uitWz/ZXrJ5yNUskMJAop8OHuc9MbxNfrjO8wf6KdyGdciWZ+38Q9tHlsv5VyEsPGBPp5YvHceFS3B8dGRhoi5NXC7pz8oKyfOwn2fmXWT9+X3ffHp4fnh7Xj88fksPrazdSJEaloQukOKBiffwYY7+zELBM2QAkHi3IlOuBKZdXhVMq518BAAD//2vkxSA4BQAA
         image: quay-proxy.ci.openshift.org/openshift/ci:ci_ci-operator_latest
         imagePullPolicy: Always
         name: ""
@@ -626,7 +626,7 @@
         - ci-operator
         env:
         - name: CONFIG_SPEC
-          value: H4sIAAAAAAAC/4SRQWrsMAyG9zmFdgMPNGTgvY3v8M4QNI7iuDhWKildzOmLnbaUMtCVLX3Sb+n3nYynvFFiCwNAC9sJUGnjAKI55Ypvf6/jV9Z2ig3tXG3Ni3fglELvHu5HLvOkIt6EuvRkrkzb1Iq+iSsXbh2/CycpVBPerrdx+BwWYVHZPh4FcAngbI6dP6NxpZoYbZWjzBjpMEbllUmNCsqCVAq+yN3QV3Js2NdsGJc0KJscGk+TLn8u5xolb9ntvAPE/Qjwbxz/555Qfj3YfuBbo05psp1jXnIkz1JbyTO/n5ryeEyJKys5z9PGTjM59b9TqnENELPsbWg8Fx4ARFMAO3bWoc21S4C5R+8BAAD//+xJUh7+AQAA
+          value: H4sIAAAAAAAC/4RRzWrkMAy+5yl0G1jwkIHdi99hnyFoHMXR4lhZSelhnr7YKW0pU3qKpO8nn6w7Gk28YSaLA0Br2xeg4kYRRDlzDS+/r+P71HZMDdqp2sqLd8Axx64e7geXeVIRb0bdejJXwm1qpE/mSoWa4mfjLAVrDrfrbRw+wrLT1osAi8r29v8ukghO5qGTv2OkFWumYKscZQ4JD6OgtBKqYQmyBCwl/JO7BV/RQ4N9ZQtpyYOSyaHpDHL5dTn3Kryx21kDpP2I8Gcc/3IfKP0/yL7At4Y65sl2SrxwQmepjfLsAE9f6fGYMlVSdJqnjRxndOzHVKxpjZBY9hY6nAsPAKI5gh076dBy7RJh7t1rAAAA//9gkRqgDwIAAA==
         image: quay-proxy.ci.openshift.org/openshift/ci:ci_ci-operator_latest
         imagePullPolicy: Always
         name: ""
@@ -715,7 +715,7 @@
         - ci-operator
         env:
         - name: CONFIG_SPEC
-          value: H4sIAAAAAAAC/4SRQWrsMAyG9zmFdgMPNGTgvY3v8M4QNI7iuDhWKildzOmLnbaUMtCVLX3Sb+n3nYynvFFiCwNAC9sJUGnjAKI55Ypvf6/jV9Z2ig3tXG3Ni3fglELvHu5HLvOkIt6EuvRkrkzb1Iq+iSsXbh2/CycpVBPerrdx+BwWYVHZPh4FcAngbI6dP6NxpZoYbZWjzBjpMEbllUmNCsqCVAq+yN3QV3Js2NdsGJc0KJscGk+TLn8u5xolb9ntvAPE/Qjwbxz/555Qfj3YfuBbo05psp1jXnIkz1JbyTO/n5ryeEyJKys5z9PGTjM59b9TqnENELPsbWg8Fx4ARFMAO3bWoc21S4C5R+8BAAD//+xJUh7+AQAA
+          value: H4sIAAAAAAAC/4RRzWrkMAy+5yl0G1jwkIHdi99hnyFoHMXR4lhZSelhnr7YKW0pU3qKpO8nn6w7Gk28YSaLA0Br2xeg4kYRRDlzDS+/r+P71HZMDdqp2sqLd8Axx64e7geXeVIRb0bdejJXwm1qpE/mSoWa4mfjLAVrDrfrbRw+wrLT1osAi8r29v8ukghO5qGTv2OkFWumYKscZQ4JD6OgtBKqYQmyBCwl/JO7BV/RQ4N9ZQtpyYOSyaHpDHL5dTn3Kryx21kDpP2I8Gcc/3IfKP0/yL7At4Y65sl2SrxwQmepjfLsAE9f6fGYMlVSdJqnjRxndOzHVKxpjZBY9hY6nAsPAKI5gh076dBy7RJh7t1rAAAA//9gkRqgDwIAAA==
         image: quay-proxy.ci.openshift.org/openshift/ci:ci_ci-operator_latest
         imagePullPolicy: Always
         name: ""
@@ -822,7 +822,7 @@
         - ci-operator
         env:
         - name: CONFIG_SPEC
-          value: H4sIAAAAAAAC/4SQTWr0MAyG9zmFdgMfZEjg68Z36BmMxlE8gvinktzFnL7YaUspA13Zrx7p1c8NlTwnjKRuAuiyvwAZEzkowpHz/P7/unxHtWLoqFLWO+82gGF0o3q6NT42L6VYNxrWXk0Ik+9JP8yFDuoVfxvHcmCO83pdl+lr2Bl2KemzKYAVB0Zq8+CTkJYm4dzq8u9y9j04sen5Bwi1OXhZllceAaG3RvoLr50aRq+VAu8c0LjknvLsQE+3eDx8pEyCRptPZLih4Ti2YA53BwnVSCaAItGBtjqEUC0OtqE+AgAA//+xbuMcpgEAAA==
+          value: H4sIAAAAAAAC/4RQS2r0MAze5xTaDfyQIYG/G9+hZzAaR/EI4kcluYs5fbFT2lIGurI+fQ9LuqGS54SR1E0AHfYXIGMiB0U4cp7f/1+Xr65WDJ2qlPXOuw3CMLrhnm6Nj81LKdaDRrRXE8Lku+hHuNBB3fF3cCwH5jiv13WZvodlozSKGXYp6fP/YSoOjNTmIZ6EtDQJp+vy73IOcXBi07MGCLU5eFmWVx4NobdG+oteO2sYvVYKvHNA45K75Nm1nq70ePhImQSNNp/IcEPDcXnBHO4OEqqRTABFogNtdQChWhxsA30EAAD//+tt2PezAQAA
         image: quay-proxy.ci.openshift.org/openshift/ci:ci_ci-operator_latest
         imagePullPolicy: Always
         name: ""
@@ -915,7 +915,7 @@
         - name: TEST_COMMAND
           value: changed command
         - name: CONFIG_SPEC
-          value: H4sIAAAAAAAC/4SQTWr0MAyG9zmFdgMfZEjg68Z36BmMxlE8gvinktzFnL7YaUspA13Zrx7p1c8NlTwnjKRuAuiyvwAZEzkowpHz/P7/unxHtWLoqFLWO+82gGF0o3q6NT42L6VYNxrWXk0Ik+9JP8yFDuoVfxvHcmCO83pdl+lr2Bl2KemzKYAVB0Zq8+CTkJYm4dzq8u9y9j04sen5Bwi1OXhZllceAaG3RvoLr50aRq+VAu8c0LjknvLsQE+3eDx8pEyCRptPZLih4Ti2YA53BwnVSCaAItGBtjqEUC0OtqE+AgAA//+xbuMcpgEAAA==
+          value: H4sIAAAAAAAC/4RQS2r0MAze5xTaDfyQIYG/G9+hZzAaR/EI4kcluYs5fbFT2lIGurI+fQ9LuqGS54SR1E0AHfYXIGMiB0U4cp7f/1+Xr65WDJ2qlPXOuw3CMLrhnm6Nj81LKdaDRrRXE8Lku+hHuNBB3fF3cCwH5jiv13WZvodlozSKGXYp6fP/YSoOjNTmIZ6EtDQJp+vy73IOcXBi07MGCLU5eFmWVx4NobdG+oteO2sYvVYKvHNA45K75Nm1nq70ePhImQSNNp/IcEPDcXnBHO4OEqqRTABFogNtdQChWhxsA30EAAD//+tt2PezAQAA
         image: quay-proxy.ci.openshift.org/openshift/ci:ci_ci-operator_latest
         imagePullPolicy: Always
         name: ""
@@ -1016,7 +1016,7 @@
         - name: TEST_COMMAND
           value: changed command
         - name: CONFIG_SPEC
-          value: H4sIAAAAAAAC/4SQQWr0MAyF9zmFdgM/ZMjA343v0DMYjUfxCGLLlZQu5vTFTltKGegqefqkJz9d0ShywUwWJoAu+xegYqEAopy5zu//z8t31RqmjhpVu/PqAzjmMKan687bLaqId6NhHc2VsMTe9MNcaaM+8bdxlg1rni/nyzJ9PXaGVaV8LgVwCeBkPg8+KZnsmo5Up3+nY+/Ghd2Of4DU9gAvy/LKo6D0tpP9wpdOHXO0RolXTugstbc8O9DTFI9HzFRJ0ekWCzne0HEcW7Gme4CC5qQTgGgOYHsbQqn1SCrS9UcAAAD//wzMfwOoAQAA
+          value: H4sIAAAAAAAC/4RQTWorMQzezym0CzyYMIHXje/QMxjF0TiCseVKmi5y+mJPaUsJdGV9+n4s6YpGkQtmsjABdNhfgIqFAohy5jq//z8vX11rmDrVqNqdVx+EYw7DPV133m5RRbwHjehoroQldtGPcKWNuuPv4Cwb1jxfzpdl+h6WncooZlhVyuf/wyQBnMznIZ6UTHZNh+v073QMsXFht6MGSG0P8LIsrzwaSm872S/60lnHHK1R4pUTOkvtkmfXerrS4xEzVVJ0usVCjjd0HJdXrOkeoKA56QQgmgPY3gZQan0lFen4IwAA//9TwyLatQEAAA==
         image: quay-proxy.ci.openshift.org/openshift/ci:ci_ci-operator_latest
         imagePullPolicy: Always
         name: ""
@@ -1117,7 +1117,7 @@
             fieldRef:
               fieldPath: status.podIP
         - name: CONFIG_SPEC
-          value: H4sIAAAAAAAC/8SUT2sbPRDG7/4UQy6BFxTW5u1lbzm4PQVK6vsy3h3LovrXmVkXh374Iu3a2GlwKZT0JOmZ0cxPj5C2KNS5gJakXQCUZRkBIgZqIbGzLprD/w/NWZWMfQllirJ3O60BRdvW3Yvt6PzQcUpaCtXSnSgThq4kXRRn8lR2/L6wTR6jNcuHZbM4wRrYcQpzUwBNLSiJmhpfMEkauZ9Odf/f/dTXu+BUpjlAn8cWPjTNk6sC07eR5FV4WaKKtpNMvdu5HtWlWFLeMujNU+hU1ABKC2H06kQLYsFRYvSdKOW5be9HUeIuc9o5Ty3c3VU9J9EpY6rjsjMDZU4HJy5FE0ZRY1H3xCf8FALGQVr4MSsAVwmTfS6Kovdn9cq4k3RtzIU5TRMuxEAh8bGF1Sd3A/VifgP17J+ZLYGBRDkd340+M712fG5neIv9DXYhHXNNMqt/YPaJch7/yOR5DxgT6ftHj3bOpXg4ERkYaIej1+nBQUbGQNMNVf1cfnoim/WXTff58fnxab1ZP7+bH4Xt8v5oRb84EfArgYtKluu7voILx/kv+btsLy+dpUiMSkMXSHFAxfr3MsZ+X6DKTSwAEtsWZMx1wZTLD8cplfXPAAAA//+y/2KitwUAAA==
+          value: H4sIAAAAAAAC/8SUT2sbMRDF7/4UQy6BgsLGtJe95eD2FCip78t4dyyL6l9nZl0c+uGLtGvXToNLoaSnlZ5mnn77hLRBoc4FtCTtAqBMyxcgYqAWEjvrotm/v2tOqmTsy1KmKDu31bqgaNvavdiMzg8dp6TFqFp3okwYulJ0Zs7kqXT82dgmj9Ga+7v7ZvEL1imFOjCw5RTm/WtTakFJ1NTiBZOkkfup6/bd7QThXXAq0xigz2MLH5rm0VWB6dtI8mL5vqwq2k4y9W7relSXYil5La1Xf0knUwMoLYTRqxMtiAVHidF3opTnbXs/ihJ3mdPWeWrh5qbqOYlOFZOPy84MlDntnbgUTRhFjUXdER/xUwgYB2nhx6wAXBRMAbooit6f1IvgjtJlMGfhNE04EwOFxIcWlp/cFdSz8RXUU35mjgQGEuV0eDP6zPQy8Xk7wxvsr7AL6ZhrkVn+h7CPlPP3r0Kee8CYSN8/erRzLcX9kcjAQFscvU4XDjIyBppOqOon++mKrFdf1t3nh6eHx9V69fRmeRS28/OjJf2WRMCvBC4qWa73+gIuHOa35N+yPT93liIxKg1dIMUBFetDzBj7XYEqJ7EASGxbkDHXCVMuLxynVOY/AwAA//9tV36UxAUAAA==
         image: quay-proxy.ci.openshift.org/openshift/ci:ci_ci-operator_latest
         imagePullPolicy: Always
         name: ""
@@ -1234,7 +1234,7 @@
             fieldRef:
               fieldPath: status.podIP
         - name: CONFIG_SPEC
-          value: H4sIAAAAAAAC/8SUT2sbPRDG7/sphlwCLyhszNvL3nJIewqU1PdlvDuWRfWvM7MuDv3wRdq1sdPgUijpSdIzo5mfHiFtUKh3AS1J1wCUZRkBIgbqILGzLpr9/3ftSZWMQwllirJzW60BRdvV3c1mcn7sOSUthWrpXpQJQ1+SzoozeSo7fl/YJo/Rmvu7+7Y5whrYcgpLUwBNHSiJmhpvmCRNPMynuv3vdu7rXXAq8xxgyFMHH9r2yVWB6dtE8ip8X6KKtpdMg9u6AdWlWFLeMujNU+hc1ABKB2Hy6kTR0qopPEqMvhelvPQd/CRK3GdOW+epg5ubquckOmfMhVx2ZqTMae/EpWjCJGos6o74yJ9CwDhKBz8WBeAiYfbPRVH0/qReOHeULp05c6dtw5kYKCQ+dLD65K6gns2voJ4MNIslMJIop8O70Wem144v7QxvcLjCLqRTrklm9Q/MPlIu4x+ZvOwBYyJ9/+jRLrkU90ciAyNtcfI6vzjIyBhovqGqn8rPb2T9+GXdf354fnh6XD8+v5sfhe38/mhFvzgR8CuBi0qW68O+gAuH5TP5u2wvL72lSIxKYx9IcUTF+vkyxmFXoMpNNACJbQcy5bpgyuWL45TK+mcAAAD///ilu7C4BQAA
+          value: H4sIAAAAAAAC/8SUT2sbMRDF7/sphlwCBYWNaS97yyHtKVDS3Jfx7lgW1b/OzLo49MMXadeunQaXQklPKz3NPP32CWmNQr0LaEm6BqBMyxcgYqAOEjvrotm9v2mPqmQcylKmKFu30bqgaLva3awn58eeU9JiVK17USYMfSk6MWfyVDr+bGyTx2jN7c1t2/yCdUqhDgxsOIVl/9qUOlASNbW4YZI08TB3Xb+7niG8C05lHgMMeergQ9s+uCowfZtIXizfllVF20umwW3cgOpSLCWvpfXqL+lsagClgzB5daJoadUUHiVG34tSXvYd/CRK3GdOG+epg6urquckOlfMRi47M1LmtHPiUjRhEjUWdUt84E8hYBylgx+LAnBWMCfooih6f1TPkjtI58mcpNO24UQMFBLvO1h9chdQT8YXUI8BmiUSGEmU0/7N6DPTy8SX7QyvcbjALqRTrkVm9R/CPlAu378KeekBYyJ9/+jRLrUUdwciAyNtcPI63zjIyBhoPqGqH+3nO/J0/+Wp/3z3ePdw/3T/+GZ5FLbT86MV/ZZEwK8ELipZrhf7DC7sl8fk37I9P/eWIjEqjX0gxREV60vMGIdtgSon0QAkth3IlOuEKZcnjlMq858BAAD//xV24abFBQAA
         image: quay-proxy.ci.openshift.org/openshift/ci:ci_ci-operator_latest
         imagePullPolicy: Always
         name: ""
@@ -1354,7 +1354,7 @@
             fieldRef:
               fieldPath: status.podIP
         - name: CONFIG_SPEC
-          value: H4sIAAAAAAAC/8RUTWsbMRC976+YW6CgsHbTy95ycHsKlNT3Zbw7lkX11ZlZF5v++KLdtbHT4FIoyUnSm6c3T09IGxRqXUBL0lQAZVlGgIiBGkjsrItm/3Bfn1HJ2JVSpig7t9WxoGibcXe1GZzvW05Ji9Ao3YoyYWgL6UKcyVPZ8XdhmzxGaxb3i7o6mTWw5RTmpgCaGlASNWO9YpI0cDed6u7D3dTXu+BUpjlAl4cGPtX1kxsBph8DyYvyolQVbSuZOrd1HapLsVBeC+jVU+gkagClgTB4daJo6WNV/Cgx+laU8ty384MocZs5bZ2nBvA4MD2MtZxEJ9Yk5rIzPWVOeycuRRMGUWNRd8SnM6QQMPbSwK8ZAbgiTBm6KIren9Gr9E7QdToXCdV1uAADhcSHBpZf3A2rF/MbVs8hmjkW6EmU0+HN3Geml4nP7QxvsLvhXUiHPJLM8h3CPrmcx38Ked4DxkT6+dmjnbkU9ydHBnra4uB1enWQkTHQdEMjfpaf3sl69W3dfn18fnxarVfPb5ZH8XZ5f7SkP5II+J3ARSXL4+O+MhcO84fyf70dj62lSIxKfRtIsUfF8QNmjN2umCo3UQEktg3IkMcFUy7fHKdU1r8DAAD//6N08j28BQAA
+          value: H4sIAAAAAAAC/8RUTWsbMRC976+YW6CgsHbTy95ycHsKlNT3Zbw7lkX11dHIxaY/vki7du00uBRKepL05s3T0xPSBhP1xqGm1DUAZVlGAI+OOghstPFq/3DfntEUcSilSD7tzFZqQVB3tbvZZGPHnkOQIlSl+yRM6PpCuhBnslQ6/iysg0Wv1eJ+0Ta/zBohVycKthzcvH9tCh0IJVGV3DClkHmYuu7e3U0mrHFG0jQHGGLu4EPbPpkKMH3LlF6UF6UqqPsUaTBbM6CY4AvltbRePZJMogowdeCyFZMENb1vih8hRtsnoTjvO9ichLiPHLbGUgd4zEwPtRZDkok1iZlo1EiRw94kE7xyOYnSKDvi0xmCc+jH1MGPGQG4IkwpGp8ErT2jV+mdoOt0LhJqW3cBOnKBDx0sP5kbVi/mN6yeQ1RzLDBSEg6HN3MfmV4mPm+neIPDDe+JJMdKUsv/EPbJ5Tz+VchzDyjl6ftHi3rmkt+fHCkYaYvZyvTqICKjo+mGKn6Wn97JevVl3X9+fH58Wq1Xz2+WR/F2eX+0pN+ScPiVwHghzfVxX5lzh/lD+bfejsdekydGobF3JDiiYP2NGf2wK6bKTTQAgXUHKce6YIrlm+MQyvpnAAAA//+gZqgiyQUAAA==
         image: quay-proxy.ci.openshift.org/openshift/ci:ci_ci-operator_latest
         imagePullPolicy: Always
         name: ""
@@ -1480,7 +1480,7 @@
             fieldRef:
               fieldPath: status.podIP
         - name: CONFIG_SPEC
-          value: H4sIAAAAAAAC/4RSzcrbQAy8+ynEd/mg4OCE5rIv0FOfYVFsebN0/yrJheTpy+46JSmB72RrRhqNxr6gkPURHYkZAGpZnwAJIxnI7J1P45/vh+kfKgXnShVKcvWrNkLRmTY9XDYfFss5axVq0laUCaOtTU/iTIHqxNfCLgdMbjwejtPwMDvCyjnuSwE0G1ASHRs/MEneeO5XfX777HuDj16lvwPMZTNwnqafvgFMvzeS/+hjZRWdlUKzX/2M6nOqLe8CenuFdtERUAzELagXRUfnofpRYgxWlMq+dw6bKLEtnFcfyMDHR8+BRHtHF6ITPXzmGDEtVRx/Efik5LjZ3Bt6TvG2R9PBl4Ae0GsATyFMU3wCI8XMNwOnH364362jRIxKi42kuKBi+5UY03ytpuo9A0BmZ0C20gqmUj8Y51zrvwEAAP//gGLavoYCAAA=
+          value: H4sIAAAAAAAC/4RSS27dMAzc+xRENgEKOPALmo0u0FXPIDA2rRDVryRdIDl9Iclp3yse0JXF4XA0HOsVlTwnDKRuAmhl+wJkTOSgCAfO86+vT8sfVCuurVUp6xvv1huGwfXp6fXguHkpxZpQl/ZqQph8I12JC0VqE/8XDiViDvPl6bJMf82yUeqHGXYp6by/DxUHRmpzJ09CWg5Zx9Tjl8dhInJi03EGWOvh4GVZvnMHhH4epP+0L61rGLxWWnnnFY1LbpR7ad1dyYboDKgO0hGN1TDQy9T8GAlGr0b1vHeNhxqJr1J2juTg4WHsR2qDMYTomT59lpQwb00cfxBwNgrSbZ6EkVR6P6MZ4E1An9BtAFchLEu6AhOlIu8Onr/x9PHhA2USNNp8IsMNDfu7EszrWzPV9pkAigQHetReCNX2w6SUVv8OAAD//zYnV6uTAgAA
         image: quay-proxy.ci.openshift.org/openshift/ci:ci_ci-operator_latest
         imagePullPolicy: Always
         name: ""
@@ -1597,7 +1597,7 @@
             fieldRef:
               fieldPath: status.podIP
         - name: CONFIG_SPEC
-          value: H4sIAAAAAAAC/4SRwUo0MQzH7/MUuS18MMssfF56ExW96CuUbCfbDU7bMcl42KeXtioiC55mkn/yS/7pEZU8J4ykbgCoYf0CZEzkoAhHzuP7//30ndUVQ5VWynrmkzXBMLrWPRw3XmYvpVgFNbRXE8Lka9EPuNBCteNvcCwL5jge9odp+Fp2hJOU9DkUwIoDI7Wx6YOQlk1Cd7X7t+tzF05s2v8Bwro5uJmmZ24JobeN9Jd8qKph9LpS4BMHNC65llw70FUX1qEjoDrYMldfoaSEeVYHCV+pZeHu6fbl8eG+qdmQM0lfpftUCcPl4iNlEjSafSLDGQ3buwnmcK40NZIBoEh0oNvaAqG1XkdKqfFHAAAA//8+ibzv8wEAAA==
+          value: H4sIAAAAAAAC/4SRwUo0MQzH7/MUuS18MMssfF56ExW96CuUbCfbDU7bMcl42KeXtqIiC54myT//3yTpEZU8J4ykbgCoaf0CZEzkoAhHzuP7//30VdUVQ5VWynrmkzXBMLrmHo4bL7OXUqyCGtqrCWHytekHXGih6vgbHMuCOY6H/WEavodlo9SCEU5S0uf/m6k4MFIbW/MgpGWT0F27f7s+xMKJTXsMENbNwc00PXMrCL1tpL/kQ1UNo9eVAp84oHHJteXata6uZB06AqqDLXNdMpSUMM/qIOErtSrcPd2+PD7cNzUbcibpo/RNVcJwufhImQSNZp/IcEbD9oiCOZwrTY1kACgSHei2tkRordeRUmr+EQAA//9cm2huAAIAAA==
         image: quay-proxy.ci.openshift.org/openshift/ci:ci_ci-operator_latest
         imagePullPolicy: Always
         name: ""

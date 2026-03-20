@@ -9,12 +9,13 @@ build_root:
     namespace: openshift
     tag: golang-1.10
 images:
+  build_if_affected: true
   items:
   - from: base
     to: test-image
 promotion:
   to:
-  - name: "4.5"
+  - name: other
     namespace: ocp
 resources:
   '*':
@@ -31,6 +32,7 @@ tests:
   container:
     from: src
 zz_generated_metadata:
-  branch: official
-  org: foo
-  repo: barry-white
+  branch: master
+  org: super
+  repo: duper
+  variant: images-build-affected

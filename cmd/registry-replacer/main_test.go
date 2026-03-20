@@ -39,13 +39,13 @@ func TestReplacer(t *testing.T) {
 		{
 			name: "No dockerfile, does nothing",
 			config: &api.ReleaseBuildConfiguration{
-				Images: []api.ProjectDirectoryImageBuildStepConfiguration{{}},
+				Images: api.ImageConfiguration{Items: []api.ProjectDirectoryImageBuildStepConfiguration{{}}},
 			},
 		},
 		{
 			name: "Default to dockerfile",
 			config: &api.ReleaseBuildConfiguration{
-				Images: []api.ProjectDirectoryImageBuildStepConfiguration{{}},
+				Images: api.ImageConfiguration{Items: []api.ProjectDirectoryImageBuildStepConfiguration{{}}},
 			},
 			files:       map[string][]byte{"Dockerfile": []byte("FROM registry.svc.ci.openshift.org/org/repo:tag")},
 			expectWrite: true,
@@ -53,7 +53,7 @@ func TestReplacer(t *testing.T) {
 		{
 			name: "Use dockerfile_literal if present",
 			config: &api.ReleaseBuildConfiguration{
-				Images: []api.ProjectDirectoryImageBuildStepConfiguration{{ProjectDirectoryImageBuildInputs: api.ProjectDirectoryImageBuildInputs{DockerfileLiteral: ptr.To("FROM registry.svc.ci.openshift.org/org/repo:tag")}}},
+				Images: api.ImageConfiguration{Items: []api.ProjectDirectoryImageBuildStepConfiguration{{ProjectDirectoryImageBuildInputs: api.ProjectDirectoryImageBuildInputs{DockerfileLiteral: ptr.To("FROM registry.svc.ci.openshift.org/org/repo:tag")}}}},
 			},
 			expectWrite: true,
 		},
@@ -65,7 +65,7 @@ func TestReplacer(t *testing.T) {
 						"org_repo_tag": {Namespace: "other_org", Name: "other_repo", Tag: "other_tag"},
 					},
 				},
-				Images: []api.ProjectDirectoryImageBuildStepConfiguration{{}},
+				Images: api.ImageConfiguration{Items: []api.ProjectDirectoryImageBuildStepConfiguration{{}}},
 			},
 			files:       map[string][]byte{"Dockerfile": []byte("FROM registry.svc.ci.openshift.org/org/repo:tag")},
 			expectWrite: true,
@@ -73,7 +73,7 @@ func TestReplacer(t *testing.T) {
 		{
 			name: "ContextDir is respected",
 			config: &api.ReleaseBuildConfiguration{
-				Images: []api.ProjectDirectoryImageBuildStepConfiguration{{ProjectDirectoryImageBuildInputs: api.ProjectDirectoryImageBuildInputs{ContextDir: "my-dir"}}},
+				Images: api.ImageConfiguration{Items: []api.ProjectDirectoryImageBuildStepConfiguration{{ProjectDirectoryImageBuildInputs: api.ProjectDirectoryImageBuildInputs{ContextDir: "my-dir"}}}},
 			},
 			files:       map[string][]byte{"my-dir/Dockerfile": []byte("FROM registry.svc.ci.openshift.org/org/repo:tag")},
 			expectWrite: true,
@@ -81,20 +81,20 @@ func TestReplacer(t *testing.T) {
 		{
 			name: "Existing replace is respected",
 			config: &api.ReleaseBuildConfiguration{
-				Images: []api.ProjectDirectoryImageBuildStepConfiguration{{ProjectDirectoryImageBuildInputs: api.ProjectDirectoryImageBuildInputs{
+				Images: api.ImageConfiguration{Items: []api.ProjectDirectoryImageBuildStepConfiguration{{ProjectDirectoryImageBuildInputs: api.ProjectDirectoryImageBuildInputs{
 					Inputs: map[string]api.ImageBuildInputs{"some-image": {As: []string{"registry.svc.ci.openshift.org/org/repo:tag"}}}}},
-				},
+				}},
 			},
 			files: map[string][]byte{"Dockerfile": []byte("FROM registry.svc.ci.openshift.org/org/repo:tag")},
 		},
 		{
 			name: "Replaces with tag",
 			config: &api.ReleaseBuildConfiguration{
-				Images: []api.ProjectDirectoryImageBuildStepConfiguration{{
+				Images: api.ImageConfiguration{Items: []api.ProjectDirectoryImageBuildStepConfiguration{{
 					ProjectDirectoryImageBuildInputs: api.ProjectDirectoryImageBuildInputs{
 						DockerfilePath: "dockerfile",
 					},
-				}},
+				}}},
 			},
 			files:       map[string][]byte{"dockerfile": []byte("FROM registry.svc.ci.openshift.org/org/repo:tag")},
 			expectWrite: true,
@@ -102,11 +102,11 @@ func TestReplacer(t *testing.T) {
 		{
 			name: "Replaces without tag",
 			config: &api.ReleaseBuildConfiguration{
-				Images: []api.ProjectDirectoryImageBuildStepConfiguration{{
+				Images: api.ImageConfiguration{Items: []api.ProjectDirectoryImageBuildStepConfiguration{{
 					ProjectDirectoryImageBuildInputs: api.ProjectDirectoryImageBuildInputs{
 						DockerfilePath: "dockerfile",
 					},
-				}},
+				}}},
 			},
 			files:       map[string][]byte{"dockerfile": []byte("FROM registry.svc.ci.openshift.org/org/repo")},
 			expectWrite: true,
@@ -114,11 +114,11 @@ func TestReplacer(t *testing.T) {
 		{
 			name: "Replaces Copy --from",
 			config: &api.ReleaseBuildConfiguration{
-				Images: []api.ProjectDirectoryImageBuildStepConfiguration{{
+				Images: api.ImageConfiguration{Items: []api.ProjectDirectoryImageBuildStepConfiguration{{
 					ProjectDirectoryImageBuildInputs: api.ProjectDirectoryImageBuildInputs{
 						DockerfilePath: "dockerfile",
 					},
-				}},
+				}}},
 			},
 			files:       map[string][]byte{"dockerfile": []byte("COPY --from=registry.svc.ci.openshift.org/org/repo")},
 			expectWrite: true,
@@ -126,23 +126,23 @@ func TestReplacer(t *testing.T) {
 		{
 			name: "Different registry, does nothing",
 			config: &api.ReleaseBuildConfiguration{
-				Images: []api.ProjectDirectoryImageBuildStepConfiguration{{
+				Images: api.ImageConfiguration{Items: []api.ProjectDirectoryImageBuildStepConfiguration{{
 					ProjectDirectoryImageBuildInputs: api.ProjectDirectoryImageBuildInputs{
 						DockerfilePath: "dockerfile",
 					},
-				}},
+				}}},
 			},
 			files: map[string][]byte{"dockerfile": []byte("FROM registry.svc2.ci.openshift.org/org/repo")},
 		},
 		{
 			name: "Build APIs replacement is executed first",
 			config: &api.ReleaseBuildConfiguration{
-				Images: []api.ProjectDirectoryImageBuildStepConfiguration{{
+				Images: api.ImageConfiguration{Items: []api.ProjectDirectoryImageBuildStepConfiguration{{
 					From: "base",
 					ProjectDirectoryImageBuildInputs: api.ProjectDirectoryImageBuildInputs{
 						DockerfilePath: "dockerfile",
 					},
-				}},
+				}}},
 			},
 			files:       map[string][]byte{"dockerfile": []byte("FROM registry.svc.ci.openshift.org/org/repo as repo\nFROM registry.svc.ci.openshift.org/org/repo2")},
 			expectWrite: true,
@@ -150,7 +150,7 @@ func TestReplacer(t *testing.T) {
 		{
 			name: "No pruning on empty Dockerfile",
 			config: &api.ReleaseBuildConfiguration{
-				Images: []api.ProjectDirectoryImageBuildStepConfiguration{{
+				Images: api.ImageConfiguration{Items: []api.ProjectDirectoryImageBuildStepConfiguration{{
 					From: "base",
 					ProjectDirectoryImageBuildInputs: api.ProjectDirectoryImageBuildInputs{
 						DockerfilePath: "dockerfile",
@@ -158,20 +158,20 @@ func TestReplacer(t *testing.T) {
 							"root": {As: []string{"builder"}},
 						},
 					},
-				}},
+				}}},
 			},
 			pruneUnusedReplacementsEnabled: true,
 		},
 		{
 			name: "OCP builder pruning happens",
 			config: &api.ReleaseBuildConfiguration{
-				Images: []api.ProjectDirectoryImageBuildStepConfiguration{{
+				Images: api.ImageConfiguration{Items: []api.ProjectDirectoryImageBuildStepConfiguration{{
 					ProjectDirectoryImageBuildInputs: api.ProjectDirectoryImageBuildInputs{
 						Inputs: map[string]api.ImageBuildInputs{
 							"root": {As: []string{"ocp/builder:something"}},
 						},
 					},
-				}},
+				}}},
 				PromotionConfiguration: &api.PromotionConfiguration{
 					Targets: []api.PromotionTarget{{Namespace: "ocp", Tag: "4.8"}},
 				},
@@ -182,13 +182,13 @@ func TestReplacer(t *testing.T) {
 		{
 			name: "OCP builder pruning skips when ocp promotion is disabled",
 			config: &api.ReleaseBuildConfiguration{
-				Images: []api.ProjectDirectoryImageBuildStepConfiguration{{
+				Images: api.ImageConfiguration{Items: []api.ProjectDirectoryImageBuildStepConfiguration{{
 					ProjectDirectoryImageBuildInputs: api.ProjectDirectoryImageBuildInputs{
 						Inputs: map[string]api.ImageBuildInputs{
 							"root": {As: []string{"ocp/builder:something"}},
 						},
 					},
-				}},
+				}}},
 				PromotionConfiguration: &api.PromotionConfiguration{
 					Targets: []api.PromotionTarget{{Namespace: "ocp", Tag: "4.8", Disabled: true}},
 				},
@@ -199,13 +199,13 @@ func TestReplacer(t *testing.T) {
 		{
 			name: "OCP builder pruning skips config which does not promote to ocp",
 			config: &api.ReleaseBuildConfiguration{
-				Images: []api.ProjectDirectoryImageBuildStepConfiguration{{
+				Images: api.ImageConfiguration{Items: []api.ProjectDirectoryImageBuildStepConfiguration{{
 					ProjectDirectoryImageBuildInputs: api.ProjectDirectoryImageBuildInputs{
 						Inputs: map[string]api.ImageBuildInputs{
 							"root": {As: []string{"ocp/builder:something"}},
 						},
 					},
-				}},
+				}}},
 				PromotionConfiguration: &api.PromotionConfiguration{
 					Targets: []api.PromotionTarget{{Namespace: "notocp", Tag: "4.8"}},
 				},
@@ -216,14 +216,14 @@ func TestReplacer(t *testing.T) {
 		{
 			name: "Dockerfile gets fixed up",
 			config: &api.ReleaseBuildConfiguration{
-				Images: []api.ProjectDirectoryImageBuildStepConfiguration{{
+				Images: api.ImageConfiguration{Items: []api.ProjectDirectoryImageBuildStepConfiguration{{
 					ProjectDirectoryImageBuildInputs: api.ProjectDirectoryImageBuildInputs{
 						Inputs: map[string]api.ImageBuildInputs{
 							"root": {As: []string{"ocp/builder:something"}},
 						},
 					},
 					To: "promotionTarget",
-				}},
+				}}},
 				PromotionConfiguration: &api.PromotionConfiguration{Targets: []api.PromotionTarget{{Namespace: "ocp", Name: majorMinor.String()}}},
 				Metadata:               api.Metadata{Branch: "master"},
 			},
@@ -234,14 +234,14 @@ func TestReplacer(t *testing.T) {
 		{
 			name: "Config for non-master branch is ignored",
 			config: &api.ReleaseBuildConfiguration{
-				Images: []api.ProjectDirectoryImageBuildStepConfiguration{{
+				Images: api.ImageConfiguration{Items: []api.ProjectDirectoryImageBuildStepConfiguration{{
 					ProjectDirectoryImageBuildInputs: api.ProjectDirectoryImageBuildInputs{
 						Inputs: map[string]api.ImageBuildInputs{
 							"root": {As: []string{"ocp/builder:something"}},
 						},
 					},
 					To: "promotionTarget",
-				}},
+				}}},
 				PromotionConfiguration: &api.PromotionConfiguration{Targets: []api.PromotionTarget{{Namespace: "ocp", Name: majorMinor.String()}}}},
 			ensureCorrectPromotionDockerfile:   true,
 			promotionTargetToDockerfileMapping: map[string]dockerfileLocation{fmt.Sprintf("registry.svc.ci.openshift.org/ocp/%s:promotionTarget", majorMinor.String()): {dockerfile: "Dockerfile.rhel"}},
@@ -249,7 +249,7 @@ func TestReplacer(t *testing.T) {
 		{
 			name: "Dockerfile is correct, nothing to do",
 			config: &api.ReleaseBuildConfiguration{
-				Images: []api.ProjectDirectoryImageBuildStepConfiguration{{
+				Images: api.ImageConfiguration{Items: []api.ProjectDirectoryImageBuildStepConfiguration{{
 					ProjectDirectoryImageBuildInputs: api.ProjectDirectoryImageBuildInputs{
 						DockerfilePath: "Dockerfile.rhel",
 						Inputs: map[string]api.ImageBuildInputs{
@@ -257,7 +257,7 @@ func TestReplacer(t *testing.T) {
 						},
 					},
 					To: "promotionTarget",
-				}},
+				}}},
 				PromotionConfiguration: &api.PromotionConfiguration{Targets: []api.PromotionTarget{{Namespace: "ocp", Name: majorMinor.String()}}},
 				Metadata:               api.Metadata{Branch: "master"},
 			},
@@ -267,7 +267,7 @@ func TestReplacer(t *testing.T) {
 		{
 			name: "Context dir gets fixed up",
 			config: &api.ReleaseBuildConfiguration{
-				Images: []api.ProjectDirectoryImageBuildStepConfiguration{{
+				Images: api.ImageConfiguration{Items: []api.ProjectDirectoryImageBuildStepConfiguration{{
 					ProjectDirectoryImageBuildInputs: api.ProjectDirectoryImageBuildInputs{
 						ContextDir:     "some-dir",
 						DockerfilePath: "Dockerfile.rhel",
@@ -276,7 +276,7 @@ func TestReplacer(t *testing.T) {
 						},
 					},
 					To: "promotionTarget",
-				}},
+				}}},
 				PromotionConfiguration: &api.PromotionConfiguration{Targets: []api.PromotionTarget{{Namespace: "ocp", Name: majorMinor.String()}}},
 				Metadata:               api.Metadata{Branch: "master"},
 			},
@@ -287,7 +287,7 @@ func TestReplacer(t *testing.T) {
 		{
 			name: "Context dir is ncorrect, but ignored",
 			config: &api.ReleaseBuildConfiguration{
-				Images: []api.ProjectDirectoryImageBuildStepConfiguration{{
+				Images: api.ImageConfiguration{Items: []api.ProjectDirectoryImageBuildStepConfiguration{{
 					ProjectDirectoryImageBuildInputs: api.ProjectDirectoryImageBuildInputs{
 						ContextDir:     "some-dir",
 						DockerfilePath: "Dockerfile.rhel",
@@ -296,7 +296,7 @@ func TestReplacer(t *testing.T) {
 						},
 					},
 					To: "promotionTarget",
-				}},
+				}}},
 				PromotionConfiguration: &api.PromotionConfiguration{Targets: []api.PromotionTarget{{Namespace: "ocp", Name: majorMinor.String()}}},
 				Metadata:               api.Metadata{Branch: "master", Org: "org", Repo: "repo"},
 			},
@@ -307,7 +307,7 @@ func TestReplacer(t *testing.T) {
 		{
 			name: "Dockerfile+Context dir is correct, nothing to do",
 			config: &api.ReleaseBuildConfiguration{
-				Images: []api.ProjectDirectoryImageBuildStepConfiguration{{
+				Images: api.ImageConfiguration{Items: []api.ProjectDirectoryImageBuildStepConfiguration{{
 					ProjectDirectoryImageBuildInputs: api.ProjectDirectoryImageBuildInputs{
 						ContextDir:     "some_dir",
 						DockerfilePath: "Dockerfile.rhel",
@@ -316,7 +316,7 @@ func TestReplacer(t *testing.T) {
 						},
 					},
 					To: "promotionTarget",
-				}},
+				}}},
 				PromotionConfiguration: &api.PromotionConfiguration{Targets: []api.PromotionTarget{{Namespace: "ocp", Name: majorMinor.String()}}},
 				Metadata:               api.Metadata{Branch: "master"},
 			},
@@ -326,7 +326,7 @@ func TestReplacer(t *testing.T) {
 		{
 			name: "Username+Password get passed on",
 			config: &api.ReleaseBuildConfiguration{
-				Images: []api.ProjectDirectoryImageBuildStepConfiguration{{
+				Images: api.ImageConfiguration{Items: []api.ProjectDirectoryImageBuildStepConfiguration{{
 					ProjectDirectoryImageBuildInputs: api.ProjectDirectoryImageBuildInputs{
 						ContextDir:     "some_dir",
 						DockerfilePath: "Dockerfile.rhel",
@@ -335,7 +335,7 @@ func TestReplacer(t *testing.T) {
 						},
 					},
 					To: "promotionTarget",
-				}},
+				}}},
 				PromotionConfiguration: &api.PromotionConfiguration{Targets: []api.PromotionTarget{{Namespace: "ocp", Name: majorMinor.String()}}},
 				Metadata:               api.Metadata{Branch: "master"},
 			},
@@ -366,14 +366,14 @@ func TestReplacer(t *testing.T) {
 						},
 					},
 				},
-				Images: []api.ProjectDirectoryImageBuildStepConfiguration{{
+				Images: api.ImageConfiguration{Items: []api.ProjectDirectoryImageBuildStepConfiguration{{
 					ProjectDirectoryImageBuildInputs: api.ProjectDirectoryImageBuildInputs{
 						Inputs: map[string]api.ImageBuildInputs{
 							"image": {As: []string{"org/image"}},
 						},
 					},
 					To: "cool_image",
-				}},
+				}}},
 				Tests: []api.TestStepConfiguration{{
 					MultiStageTestConfigurationLiteral: &api.MultiStageTestConfigurationLiteral{
 						Test: []api.LiteralTestStep{{
@@ -444,14 +444,14 @@ func TestReplacer(t *testing.T) {
 						},
 					},
 				},
-				Images: []api.ProjectDirectoryImageBuildStepConfiguration{{
+				Images: api.ImageConfiguration{Items: []api.ProjectDirectoryImageBuildStepConfiguration{{
 					ProjectDirectoryImageBuildInputs: api.ProjectDirectoryImageBuildInputs{
 						Inputs: map[string]api.ImageBuildInputs{
 							"image": {As: []string{"registry.svc.ci.openshift.org/org/image"}},
 						},
 					},
 					To: "cool_image",
-				}},
+				}}},
 				Operator: &api.OperatorStepConfiguration{
 					Bundles: []api.Bundle{
 						{BaseIndex: "operator_bundle_image"},
@@ -509,11 +509,11 @@ func TestReplacer(t *testing.T) {
 					Org:  "openshift",
 					Repo: "cluster-api-operator",
 				},
-				Images: []api.ProjectDirectoryImageBuildStepConfiguration{{
+				Images: api.ImageConfiguration{Items: []api.ProjectDirectoryImageBuildStepConfiguration{{
 					ProjectDirectoryImageBuildInputs: api.ProjectDirectoryImageBuildInputs{
 						DockerfilePath: "Dockerfile",
 					},
-				}},
+				}}},
 			},
 			files:       map[string][]byte{"Dockerfile": []byte("FROM registry.ci.openshift.org/ocp/4.19:base")},
 			ignoreRepos: sets.New("openshift/cluster-api-operator"),
@@ -526,11 +526,11 @@ func TestReplacer(t *testing.T) {
 					Org:  "openshift",
 					Repo: "cluster-api-operator",
 				},
-				Images: []api.ProjectDirectoryImageBuildStepConfiguration{{
+				Images: api.ImageConfiguration{Items: []api.ProjectDirectoryImageBuildStepConfiguration{{
 					ProjectDirectoryImageBuildInputs: api.ProjectDirectoryImageBuildInputs{
 						DockerfilePath: "Dockerfile",
 					},
-				}},
+				}}},
 			},
 			files:       map[string][]byte{"Dockerfile": []byte("FROM registry.ci.openshift.org/ocp/4.19:base")},
 			ignoreOrgs:  sets.New("openshift"),
@@ -678,146 +678,146 @@ func TestPruneUnusedReplacements(t *testing.T) {
 		{
 			name: "All replacements are valid",
 			in: &api.ReleaseBuildConfiguration{
-				Images: []api.ProjectDirectoryImageBuildStepConfiguration{{
+				Images: api.ImageConfiguration{Items: []api.ProjectDirectoryImageBuildStepConfiguration{{
 					ProjectDirectoryImageBuildInputs: api.ProjectDirectoryImageBuildInputs{
 						Inputs: map[string]api.ImageBuildInputs{
 							"builder": {As: []string{"some-image"}},
 						},
 					},
-				}},
+				}}},
 			},
 			allSourceImages: sets.New[string]("some-image"),
 			expected: &api.ReleaseBuildConfiguration{
-				Images: []api.ProjectDirectoryImageBuildStepConfiguration{{
+				Images: api.ImageConfiguration{Items: []api.ProjectDirectoryImageBuildStepConfiguration{{
 					ProjectDirectoryImageBuildInputs: api.ProjectDirectoryImageBuildInputs{
 						Inputs: map[string]api.ImageBuildInputs{
 							"builder": {As: []string{"some-image"}},
 						},
 					}},
-				},
+				}},
 			},
 		},
 		{
 			name: "One As gets removed",
 			in: &api.ReleaseBuildConfiguration{
-				Images: []api.ProjectDirectoryImageBuildStepConfiguration{{
+				Images: api.ImageConfiguration{Items: []api.ProjectDirectoryImageBuildStepConfiguration{{
 					ProjectDirectoryImageBuildInputs: api.ProjectDirectoryImageBuildInputs{
 						Inputs: map[string]api.ImageBuildInputs{
 							"builder": {As: []string{"some-image", "superfluous"}},
 						},
 					}},
-				},
+				}},
 			},
 			allSourceImages: sets.New[string]("some-image"),
 			expected: &api.ReleaseBuildConfiguration{
-				Images: []api.ProjectDirectoryImageBuildStepConfiguration{{
+				Images: api.ImageConfiguration{Items: []api.ProjectDirectoryImageBuildStepConfiguration{{
 					ProjectDirectoryImageBuildInputs: api.ProjectDirectoryImageBuildInputs{
 						Inputs: map[string]api.ImageBuildInputs{
 							"builder": {As: []string{"some-image"}},
 						},
 					}},
-				},
+				}},
 			},
 		},
 		{
 			name: "One input is empty and gets removed",
 			in: &api.ReleaseBuildConfiguration{
-				Images: []api.ProjectDirectoryImageBuildStepConfiguration{{
+				Images: api.ImageConfiguration{Items: []api.ProjectDirectoryImageBuildStepConfiguration{{
 					ProjectDirectoryImageBuildInputs: api.ProjectDirectoryImageBuildInputs{
 						Inputs: map[string]api.ImageBuildInputs{
 							"builder":   {As: []string{"some-image"}},
 							"architect": {As: []string{"who-needs-this"}},
 						},
 					}},
-				},
+				}},
 			},
 			allSourceImages: sets.New[string]("some-image"),
 			expected: &api.ReleaseBuildConfiguration{
-				Images: []api.ProjectDirectoryImageBuildStepConfiguration{{
+				Images: api.ImageConfiguration{Items: []api.ProjectDirectoryImageBuildStepConfiguration{{
 					ProjectDirectoryImageBuildInputs: api.ProjectDirectoryImageBuildInputs{
 						Inputs: map[string]api.ImageBuildInputs{
 							"builder": {As: []string{"some-image"}},
 						},
 					}},
-				},
+				}},
 			},
 		},
 		{
 			name: "Whole image is empty and gets removed",
 			in: &api.ReleaseBuildConfiguration{
-				Images: []api.ProjectDirectoryImageBuildStepConfiguration{{
+				Images: api.ImageConfiguration{Items: []api.ProjectDirectoryImageBuildStepConfiguration{{
 					ProjectDirectoryImageBuildInputs: api.ProjectDirectoryImageBuildInputs{
 						Inputs: map[string]api.ImageBuildInputs{
 							"builder": {As: []string{"some-image"}},
 						},
 					}},
-				},
+				}},
 			},
 			expected: &api.ReleaseBuildConfiguration{},
 		},
 		{
 			name: "Whole image is empty but has paths directives",
 			in: &api.ReleaseBuildConfiguration{
-				Images: []api.ProjectDirectoryImageBuildStepConfiguration{{
+				Images: api.ImageConfiguration{Items: []api.ProjectDirectoryImageBuildStepConfiguration{{
 					ProjectDirectoryImageBuildInputs: api.ProjectDirectoryImageBuildInputs{
 						Inputs: map[string]api.ImageBuildInputs{
 							"builder": {As: []string{"some-image"}, Paths: []api.ImageSourcePath{{}}},
 						},
 					}},
-				},
+				}},
 			},
 			expected: &api.ReleaseBuildConfiguration{
-				Images: []api.ProjectDirectoryImageBuildStepConfiguration{{
+				Images: api.ImageConfiguration{Items: []api.ProjectDirectoryImageBuildStepConfiguration{{
 					ProjectDirectoryImageBuildInputs: api.ProjectDirectoryImageBuildInputs{
 						Inputs: map[string]api.ImageBuildInputs{
 							"builder": {Paths: []api.ImageSourcePath{{}}},
 						},
 					}},
-				},
+				}},
 			},
 		},
 		{
 			name: "Whole image is empty but has from",
 			in: &api.ReleaseBuildConfiguration{
-				Images: []api.ProjectDirectoryImageBuildStepConfiguration{{
+				Images: api.ImageConfiguration{Items: []api.ProjectDirectoryImageBuildStepConfiguration{{
 					From: "some-where",
 					ProjectDirectoryImageBuildInputs: api.ProjectDirectoryImageBuildInputs{
 						Inputs: map[string]api.ImageBuildInputs{
 							"builder": {As: []string{"some-image"}},
 						},
 					}},
-				},
+				}},
 			},
 			expected: &api.ReleaseBuildConfiguration{
-				Images: []api.ProjectDirectoryImageBuildStepConfiguration{{
+				Images: api.ImageConfiguration{Items: []api.ProjectDirectoryImageBuildStepConfiguration{{
 					From:                             "some-where",
 					ProjectDirectoryImageBuildInputs: api.ProjectDirectoryImageBuildInputs{}},
-				},
+				}},
 			},
 		},
 		{
 			name: "Whole image is empty but has to",
 			in: &api.ReleaseBuildConfiguration{
-				Images: []api.ProjectDirectoryImageBuildStepConfiguration{{
+				Images: api.ImageConfiguration{Items: []api.ProjectDirectoryImageBuildStepConfiguration{{
 					To: "some-when",
 					ProjectDirectoryImageBuildInputs: api.ProjectDirectoryImageBuildInputs{
 						Inputs: map[string]api.ImageBuildInputs{
 							"builder": {As: []string{"some-image"}},
 						},
 					}},
-				},
+				}},
 			},
 			expected: &api.ReleaseBuildConfiguration{
-				Images: []api.ProjectDirectoryImageBuildStepConfiguration{{
+				Images: api.ImageConfiguration{Items: []api.ProjectDirectoryImageBuildStepConfiguration{{
 					To: "some-when",
-				}},
+				}}},
 			},
 		},
 		{
 			name:            "cnc",
 			allSourceImages: sets.New[string]("scratch", "centos:7", "builder"),
 			in: &api.ReleaseBuildConfiguration{
-				Images: []api.ProjectDirectoryImageBuildStepConfiguration{{
+				Images: api.ImageConfiguration{Items: []api.ProjectDirectoryImageBuildStepConfiguration{{
 					From: "base",
 					To:   "snc",
 					ProjectDirectoryImageBuildInputs: api.ProjectDirectoryImageBuildInputs{
@@ -826,10 +826,10 @@ func TestPruneUnusedReplacements(t *testing.T) {
 							"root": {As: []string{"builder"}},
 						},
 					}},
-				},
+				}},
 			},
 			expected: &api.ReleaseBuildConfiguration{
-				Images: []api.ProjectDirectoryImageBuildStepConfiguration{{
+				Images: api.ImageConfiguration{Items: []api.ProjectDirectoryImageBuildStepConfiguration{{
 					From: "base",
 					To:   "snc",
 					ProjectDirectoryImageBuildInputs: api.ProjectDirectoryImageBuildInputs{
@@ -838,7 +838,7 @@ func TestPruneUnusedReplacements(t *testing.T) {
 							"root": {As: []string{"builder"}},
 						},
 					}},
-				},
+				}},
 			},
 		},
 	}
@@ -864,34 +864,34 @@ func TestPruneOCPBuilderReplacements(t *testing.T) {
 		{
 			name: "Non-OCP builder replacement is left",
 			in: &api.ReleaseBuildConfiguration{
-				Images: []api.ProjectDirectoryImageBuildStepConfiguration{{
+				Images: api.ImageConfiguration{Items: []api.ProjectDirectoryImageBuildStepConfiguration{{
 					ProjectDirectoryImageBuildInputs: api.ProjectDirectoryImageBuildInputs{
 						Inputs: map[string]api.ImageBuildInputs{
 							"root": {As: []string{"builder"}},
 						},
 					}},
-				},
+				}},
 			},
 			expected: &api.ReleaseBuildConfiguration{
-				Images: []api.ProjectDirectoryImageBuildStepConfiguration{{
+				Images: api.ImageConfiguration{Items: []api.ProjectDirectoryImageBuildStepConfiguration{{
 					ProjectDirectoryImageBuildInputs: api.ProjectDirectoryImageBuildInputs{
 						Inputs: map[string]api.ImageBuildInputs{
 							"root": {As: []string{"builder"}},
 						},
 					}},
-				},
+				}},
 			},
 		},
 		{
 			name: "OCP builder replacement is removed",
 			in: &api.ReleaseBuildConfiguration{
-				Images: []api.ProjectDirectoryImageBuildStepConfiguration{{
+				Images: api.ImageConfiguration{Items: []api.ProjectDirectoryImageBuildStepConfiguration{{
 					ProjectDirectoryImageBuildInputs: api.ProjectDirectoryImageBuildInputs{
 						Inputs: map[string]api.ImageBuildInputs{
 							"root": {As: []string{"ocp/builder:blub"}},
 						},
 					}},
-				},
+				}},
 				PromotionConfiguration: &api.PromotionConfiguration{
 					Targets: []api.PromotionTarget{{
 						Namespace: "ocp",
@@ -918,13 +918,13 @@ func TestPruneOCPBuilderReplacements(t *testing.T) {
 						Tag:       "go-1.13",
 					}},
 				},
-				Images: []api.ProjectDirectoryImageBuildStepConfiguration{{
+				Images: api.ImageConfiguration{Items: []api.ProjectDirectoryImageBuildStepConfiguration{{
 					ProjectDirectoryImageBuildInputs: api.ProjectDirectoryImageBuildInputs{
 						Inputs: map[string]api.ImageBuildInputs{
 							"ocp_builder_go-1.13": {As: []string{"registry.svc.ci.openshift.org/ocp/builder:go-1.13"}},
 						},
 					}},
-				},
+				}},
 			},
 			expected: &api.ReleaseBuildConfiguration{
 				InputConfiguration: api.InputConfiguration{
@@ -934,13 +934,13 @@ func TestPruneOCPBuilderReplacements(t *testing.T) {
 						Tag:       "go-1.13",
 					}},
 				},
-				Images: []api.ProjectDirectoryImageBuildStepConfiguration{{
+				Images: api.ImageConfiguration{Items: []api.ProjectDirectoryImageBuildStepConfiguration{{
 					ProjectDirectoryImageBuildInputs: api.ProjectDirectoryImageBuildInputs{
 						Inputs: map[string]api.ImageBuildInputs{
 							"ocp_builder_go-1.13": {As: []string{"registry.svc.ci.openshift.org/ocp/builder:go-1.13"}},
 						},
 					}},
-				},
+				}},
 			},
 		},
 	}

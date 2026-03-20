@@ -38,8 +38,9 @@ build_root:
     namespace: openshift
     tag: golang-1.10
 images:
-- from: base
-  to: service-serving-cert-signer
+  items:
+  - from: base
+    to: service-serving-cert-signer
 resources:
   '*':
     limits:
@@ -77,8 +78,9 @@ build_root:
     namespace: openshift
     tag: golang-1.10
 images:
-- from: base
-  to: service-serving-cert-signer
+  items:
+  - from: base
+    to: service-serving-cert-signer
 resources:
   '*':
     limits:
@@ -133,8 +135,9 @@ tests:
     namespace: openshift
     tag: base
 images:
-- from: base
-  to: service-serving-cert-signer
+  items:
+  - from: base
+    to: service-serving-cert-signer
 resources:
   '*':
     limits:
@@ -193,8 +196,9 @@ tests:
     namespace: openshift
     tag: base
 images:
-- from: base
-  to: service-serving-cert-signer
+  items:
+  - from: base
+    to: service-serving-cert-signer
 resources:
   '*':
     limits:

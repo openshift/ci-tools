@@ -4,6 +4,7 @@ base_images:
     namespace: ocp
     tag: '9'
 images:
+  items:
   - from: os
     to: another-os
 build_root:

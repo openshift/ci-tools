@@ -32,17 +32,19 @@
       }
     }
   },
-  "images": [
-    {
-      "from": "base",
-      "to": "installer"
-    },
-    {
-      "from": "base-openshift.console",
-      "to": "console-openshift.console",
-      "ref": "openshift.console"
-    }
-  ],
+  "images": {
+    "items": [
+      {
+        "from": "base",
+        "to": "installer"
+      },
+      {
+        "from": "base-openshift.console",
+        "to": "console-openshift.console",
+        "ref": "openshift.console"
+      }
+    ]
+  },
   "tests": [
     {
       "as": "unit",

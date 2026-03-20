@@ -80,7 +80,14 @@ func GetChangedCiopConfigs(masterConfig, prConfig config.DataByFilename, logger 
 					if test.IsPeriodic() {
 						prefix = jobconfig.PeriodicPrefix
 					}
-					restrictNetworkAccessFalseJobs = append(restrictNetworkAccessFalseJobs, newConfig.Info.JobName(prefix, as))
+					baseName := newConfig.Info.JobName(prefix, as)
+					if test.ShardCount != nil && *test.ShardCount > 1 {
+						for i := 1; i <= *test.ShardCount; i++ {
+							restrictNetworkAccessFalseJobs = append(restrictNetworkAccessFalseJobs, fmt.Sprintf("%s-%dof%d", baseName, i, *test.ShardCount))
+						}
+					} else {
+						restrictNetworkAccessFalseJobs = append(restrictNetworkAccessFalseJobs, baseName)
+					}
 				}
 				jobs.Insert(as)
 			}

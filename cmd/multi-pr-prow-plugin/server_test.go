@@ -789,6 +789,7 @@ func TestGenerateProwJob(t *testing.T) {
 	testCases := []struct {
 		name          string
 		jobRun        jobRun
+		shardCount    *int
 		expectedError error
 	}{
 		{
@@ -882,6 +883,46 @@ func TestGenerateProwJob(t *testing.T) {
 			},
 		},
 		{
+			name:       "sharded test looks up first shard in dispatcher",
+			shardCount: ptr.To(3),
+			jobRun: jobRun{
+				JobMetadata: api.MetadataWithTest{
+					Metadata: api.Metadata{
+						Org:    "openshift",
+						Repo:   "ci-tools",
+						Branch: "main",
+					},
+					Test: "unit",
+				},
+				OriginPR: github.PullRequest{
+					Base: github.PullRequestBranch{
+						Repo: github.Repo{
+							Owner: github.User{Login: "openshift"},
+							Name:  "ci-tools",
+						},
+						Ref: "main",
+					},
+					Number: 999,
+					User:   github.User{Login: "developer"},
+					Head:   github.PullRequestBranch{SHA: "A_SHA"},
+				},
+				AdditionalPRs: []github.PullRequest{
+					{
+						Base: github.PullRequestBranch{
+							Repo: github.Repo{
+								Owner: github.User{Login: "openshift"},
+								Name:  "ci-tools",
+							},
+							Ref: "main",
+						},
+						Number: 123,
+						User:   github.User{Login: "other-dev"},
+						Head:   github.PullRequestBranch{SHA: "SOME_SHA"},
+					},
+				},
+			},
+		},
+		{
 			name: "cluster not found for job",
 			jobRun: jobRun{
 				JobMetadata: api.MetadataWithTest{
@@ -964,13 +1005,13 @@ func TestGenerateProwJob(t *testing.T) {
 	}
 	for _, tc := range testCases {
 		t.Run(tc.name, func(t *testing.T) {
+			testConfig := api.TestStepConfiguration{
+				As:         tc.jobRun.JobMetadata.Test,
+				ShardCount: tc.shardCount,
+			}
 			ciopConfigs := map[api.Metadata]*api.ReleaseBuildConfiguration{
 				tc.jobRun.JobMetadata.Metadata: {
-					Tests: []api.TestStepConfiguration{
-						{
-							As: tc.jobRun.JobMetadata.Test,
-						},
-					},
+					Tests: []api.TestStepConfiguration{testConfig},
 				},
 			}
 			addCIOpConfigsFromPRs(ciopConfigs, tc.jobRun.AdditionalPRs)

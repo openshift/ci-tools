@@ -597,6 +597,19 @@ type presubmitsByRepo map[string][]prowconfig.Presubmit
 type periodicsByName map[string]prowconfig.Periodic
 type presubmitsByName map[string]prowconfig.Presubmit
 
+// physicalJobNames expands a base job name into all physical job names,
+// accounting for sharding. For unsharded tests it returns the base name as-is.
+func physicalJobNames(baseName string, shardCount *int) []string {
+	if shardCount == nil || *shardCount <= 1 {
+		return []string{baseName}
+	}
+	names := make([]string, *shardCount)
+	for i := 1; i <= *shardCount; i++ {
+		names[i-1] = fmt.Sprintf("%s-%dof%d", baseName, i, *shardCount)
+	}
+	return names
+}
+
 // selectJobsForRegistryStep returns all jobs affected by the provided registry node.
 func selectJobsForRegistryStep(node registry.Node, configs []*config.DataWithInfo, allPresubmits presubmitsByName, allPeriodics periodicsByName, skipJobs sets.Set[string], logger *logrus.Entry) (presubmitsByRepo, periodicsByRepo) {
 	selectedPresubmits := make(map[string][]prowconfig.Presubmit)
@@ -619,10 +632,18 @@ func selectJobsForRegistryStep(node registry.Node, configs []*config.DataWithInf
 				continue // We do not handle postsubmits
 			case test.IsPeriodic():
 				jobName = cfg.Info.JobName(jobconfig.PeriodicPrefix, test.As)
-				if periodic, ok := allPeriodics[jobName]; ok {
+				var matched []prowconfig.Periodic
+				for _, n := range physicalJobNames(jobName, test.ShardCount) {
+					if p, ok := allPeriodics[n]; ok {
+						matched = append(matched, p)
+					}
+				}
+				if len(matched) > 0 {
 					selectJob = func() {
-						testLogger.WithField("job-name", jobName).Trace("Periodic job uses the node: selecting for rehearse")
-						selectedPeriodics[orgRepo] = append(selectedPeriodics[orgRepo], periodic)
+						for _, p := range matched {
+							testLogger.WithField("job-name", p.Name).Trace("Periodic job uses the node: selecting for rehearse")
+							selectedPeriodics[orgRepo] = append(selectedPeriodics[orgRepo], p)
+						}
 					}
 				} else {
 					testLogger.WithField("job-name", jobName).Trace("Could not find a periodic job for test")
@@ -630,10 +651,18 @@ func selectJobsForRegistryStep(node registry.Node, configs []*config.DataWithInf
 				}
 			default: // Everything else is a presubmit
 				jobName = cfg.Info.JobName(jobconfig.PresubmitPrefix, test.As)
-				if presubmit, ok := allPresubmits[jobName]; ok {
+				var matched []prowconfig.Presubmit
+				for _, n := range physicalJobNames(jobName, test.ShardCount) {
+					if p, ok := allPresubmits[n]; ok {
+						matched = append(matched, p)
+					}
+				}
+				if len(matched) > 0 {
 					selectJob = func() {
-						testLogger.WithField("job-name", jobName).Trace("Presubmit job uses the node: selecting for rehearse")
-						selectedPresubmits[orgRepo] = append(selectedPresubmits[orgRepo], presubmit)
+						for _, p := range matched {
+							testLogger.WithField("job-name", p.Name).Trace("Presubmit job uses the node: selecting for rehearse")
+							selectedPresubmits[orgRepo] = append(selectedPresubmits[orgRepo], p)
+						}
 					}
 				} else {
 					testLogger.WithField("job-name", jobName).Trace("Could not find a presubmit job for test")

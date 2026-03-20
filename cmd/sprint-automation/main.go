@@ -4,6 +4,7 @@ import (
 	"context"
 	"flag"
 	"fmt"
+	"net/url"
 	"os"
 	"strings"
 	"time"
@@ -89,7 +90,10 @@ func addSchemes() error {
 }
 
 func main() {
-	logrusutil.ComponentInit()
+	logrusutil.Init(&logrusutil.DefaultFieldsFormatter{
+		PrintLineNumber: true,
+		DefaultFields:   logrus.Fields{"component": "sprint-automation"},
+	})
 
 	o := gatherOptions(flag.NewFlagSet(os.Args[0], flag.ExitOnError), os.Args[1:]...)
 	if err := o.Validate(); err != nil {
@@ -181,6 +185,8 @@ func main() {
 			Info("Skipped checking if build02 needs an upgrade")
 	}
 }
+
+var sprintAutomationJiraSearchFields = []string{"summary", "assignee", "created", "updated"}
 
 const (
 	primaryOnCallQuery                = "DPTP Primary On-Call"
@@ -416,7 +422,7 @@ func sendNextWeeksRoleDigest(client *pagerduty.Client, slackClient *slack.Client
 
 func getIssuesNeedingApproval(jiraClient *jiraapi.Client) ([]slack.Block, error) {
 	jql := fmt.Sprintf(`project=%s AND status=Review AND issuetype!=Sub-task`, jira.ProjectDPTP)
-	issues, err := searchIssuesByJQL(context.Background(), jiraClient, jql, 0, []string{"*navigable"})
+	issues, err := searchIssuesByJQL(context.Background(), jiraClient, jql, 0, sprintAutomationJiraSearchFields)
 	if err != nil {
 		return nil, fmt.Errorf("could not query for Jira issues: %w", err)
 	}
@@ -529,7 +535,7 @@ func postBlocks(slackClient *slack.Client, blocks []slack.Block) error {
 
 func assignAndSendIntakeDigest(slackClient *slack.Client, jiraClient *jiraapi.Client, user user) error {
 	jql := fmt.Sprintf(`project=%s AND (labels is EMPTY OR NOT (labels=ready OR labels=no-intake)) AND created >= -30d AND status = "To Do" AND issuetype != Sub-task AND assignee is EMPTY`, jira.ProjectDPTP)
-	issues, err := searchIssuesByJQL(context.Background(), jiraClient, jql, 0, []string{"*navigable", "comment"})
+	issues, err := searchIssuesByJQL(context.Background(), jiraClient, jql, 0, sprintAutomationJiraSearchFields)
 	if err != nil {
 		return fmt.Errorf("could not query for Jira issues: %w", err)
 	}
@@ -556,7 +562,11 @@ func assignAndSendIntakeDigest(slackClient *slack.Client, jiraClient *jiraapi.Cl
 		},
 	}
 
-	jiraUsers, userResponse, userErr := jiraClient.User.Find("", jiraapi.WithUsername(user.email))
+	email := strings.TrimSpace(user.email)
+	if email == "" {
+		return fmt.Errorf("intake role has no email for Jira user lookup")
+	}
+	jiraUsers, userResponse, userErr := jiraClient.User.Find(url.QueryEscape(email), jiraapi.WithMaxResults(20))
 	if err := jirautil.HandleJiraError(userResponse, userErr); err != nil {
 		return fmt.Errorf("could not find jira user: %w", err)
 	}

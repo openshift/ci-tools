@@ -5,6 +5,7 @@ import (
 	"errors"
 	"fmt"
 	"reflect"
+	"sort"
 	"testing"
 
 	"github.com/google/go-cmp/cmp"
@@ -554,4 +555,133 @@ func TestAcquireLeases(t *testing.T) {
 			}
 		})
 	}
+}
+
+// TestLeaseProvidesCapturesBehavior is a focused unit test that verifies the closure
+// capture behavior in Provides(). This test directly exercises the core bug: closures
+// must return the correct resources even after s.leases is mutated/reordered.
+func TestLeaseProvidesCapturesBehavior(t *testing.T) {
+	// Create a lease step with multiple distinct env values and resources
+	step := &stepNeedsLease{}
+	withLease := LeaseStep(nil, []api.StepLease{
+		{Env: "ENV_A", ResourceType: "type-z"},
+		{Env: "ENV_B", ResourceType: "type-y"},
+		{Env: "ENV_C", ResourceType: "type-x"},
+	}, step, emptyNamespace, nil, nil, nil).(*leaseStep)
+
+	// Populate resources for each lease
+	withLease.leases[0].resources = []string{"resource-A"}
+	withLease.leases[1].resources = []string{"resource-B"}
+	withLease.leases[2].resources = []string{"resource-C"}
+
+	// Call Provides() to obtain the parameter map (closures)
+	provides := withLease.Provides()
+
+	// Verify closures return correct values BEFORE mutation
+	if val, _ := provides["ENV_A"](); val != "resource-A" {
+		t.Errorf("Before mutation: ENV_A = %q, want %q", val, "resource-A")
+	}
+	if val, _ := provides["ENV_B"](); val != "resource-B" {
+		t.Errorf("Before mutation: ENV_B = %q, want %q", val, "resource-B")
+	}
+	if val, _ := provides["ENV_C"](); val != "resource-C" {
+		t.Errorf("Before mutation: ENV_C = %q, want %q", val, "resource-C")
+	}
+
+	// Mutate s.leases by sorting (simulates what acquireLeases does)
+	sort.Slice(withLease.leases, func(i, j int) bool {
+		return withLease.leases[i].ResourceType < withLease.leases[j].ResourceType
+	})
+
+	// After sort, the slice order is now: type-x (ENV_C), type-y (ENV_B), type-z (ENV_A)
+	// Verify each closure still returns the correct resource for its original Env
+	testCases := []struct {
+		env      string
+		expected string
+	}{
+		{"ENV_A", "resource-A"},
+		{"ENV_B", "resource-B"},
+		{"ENV_C", "resource-C"},
+	}
+
+	for _, tc := range testCases {
+		val, err := provides[tc.env]()
+		if err != nil {
+			t.Errorf("After sort: error getting %s: %v", tc.env, err)
+		}
+		if val != tc.expected {
+			t.Errorf("After sort: %s = %q, want %q (closure captured wrong lease after slice reorder)",
+				tc.env, val, tc.expected)
+		}
+	}
+
+	t.Log("✓ Closures correctly return resources for their original Env despite slice reordering")
+}
+
+// TestLeaseSortDoesNotAffectEnvMapping verifies that sorting leases by ResourceType
+// doesn't cause environment variables to be mapped to the wrong lease resources.
+// This is an end-to-end regression test for the bug where closures captured pointers
+// to slice elements that were later reordered by sort.Slice() in acquireLeases().
+func TestLeaseSortDoesNotAffectEnvMapping(t *testing.T) {
+	// Simulate the scenario from the bug report: two leases where alphabetical
+	// sorting by ResourceType would reverse their order.
+	leases := []api.StepLease{
+		{Env: "LEASED_RESOURCE", ResourceType: "vsphere-dis-2-quota-slice", Count: 1},
+		{Env: "VSPHERE_BASTION_LEASED_RESOURCE", ResourceType: "vsphere-connected-2-quota-slice", Count: 1},
+	}
+
+	// Create a lease client that returns predictable resources
+	// The resources map key format is: acquireWaitWithPriority_{resourceType}_free_leased_random
+	resources := map[string]*common.Resource{
+		"acquireWaitWithPriority_vsphere-dis-2-quota-slice_free_leased_random": {
+			Name: "bcr01a.dal12.990",
+		},
+		"acquireWaitWithPriority_vsphere-connected-2-quota-slice_free_leased_random": {
+			Name: "bcr01a.dal12.1148",
+		},
+	}
+	var calls []string
+	client := lease.NewFakeClient("owner", "url", 1, nil, &calls, resources)
+
+	// Create the lease step
+	step := &stepNeedsLease{}
+	withLease := LeaseStep(&client, leases, step, emptyNamespace, nil, nil, nil).(*leaseStep)
+
+	// Get the Provides() map BEFORE running (before sort happens)
+	provides := withLease.Provides()
+
+	// Run the step - this triggers acquireLeases() which sorts the slice
+	ctx := context.Background()
+	if err := withLease.Run(ctx); err != nil {
+		t.Fatalf("unexpected error running lease step: %v", err)
+	}
+
+	// Now evaluate the closures - they should return the correct resources
+	// despite the slice having been sorted
+	leased, err := provides["LEASED_RESOURCE"]()
+	if err != nil {
+		t.Fatalf("error getting LEASED_RESOURCE: %v", err)
+	}
+
+	bastion, err := provides["VSPHERE_BASTION_LEASED_RESOURCE"]()
+	if err != nil {
+		t.Fatalf("error getting VSPHERE_BASTION_LEASED_RESOURCE: %v", err)
+	}
+
+	// Verify the env vars map to the correct resources
+	expectedLeased := "bcr01a.dal12.990"
+	expectedBastion := "bcr01a.dal12.1148"
+
+	if leased != expectedLeased {
+		t.Errorf("LEASED_RESOURCE = %q, expected %q (got vsphere-connected resource instead of vsphere-dis)",
+			leased, expectedLeased)
+	}
+
+	if bastion != expectedBastion {
+		t.Errorf("VSPHERE_BASTION_LEASED_RESOURCE = %q, expected %q (got vsphere-dis resource instead of vsphere-connected)",
+			bastion, expectedBastion)
+	}
+
+	t.Logf("✓ LEASED_RESOURCE correctly maps to %s (vsphere-dis)", leased)
+	t.Logf("✓ VSPHERE_BASTION_LEASED_RESOURCE correctly maps to %s (vsphere-connected)", bastion)
 }

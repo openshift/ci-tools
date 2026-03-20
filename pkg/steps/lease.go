@@ -93,15 +93,27 @@ func (s *leaseStep) Provides() api.ParameterMap {
 	parameters[api.ClusterProfileParam] = func() (string, error) { return s.clusterProfileName, nil }
 
 	for i := range s.leases {
-		l := &s.leases[i]
+		// Capture the env name to look up the lease later, rather than capturing
+		// a pointer to the slice element. This ensures the closure reads from the
+		// correct lease even after the slice is sorted in acquireLeases().
+		envName := s.leases[i].Env
 		// nolint:unparam
-		parameters[l.Env] = func() (string, error) {
-			if len(l.resources) == 0 {
+		parameters[envName] = func() (string, error) {
+			// Look up the lease by env name instead of using a captured pointer
+			var leaseResources []string
+			for j := range s.leases {
+				if s.leases[j].Env == envName {
+					leaseResources = s.leases[j].resources
+					break
+				}
+			}
+
+			if len(leaseResources) == 0 {
 				return "", nil
 			}
 
 			values := func(yield func(resource string) bool) {
-				for _, res := range l.resources {
+				for _, res := range leaseResources {
 					val := res
 					parts := strings.Split(res, "--")
 					switch {

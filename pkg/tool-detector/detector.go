@@ -76,7 +76,8 @@ func (d *Detector) AffectedTools() (sets.Set[string], error) {
 	}
 
 	if len(goFiles) == 0 {
-		return affectedByImageChanges, nil
+		combined := affectedByImageChanges.Union(d.getAffectedToolsByBinaryInputs(affectedByImageChanges))
+		return combined, nil
 	}
 
 	changedPackages, err := d.loadChangedPackages(goFiles)
@@ -86,7 +87,8 @@ func (d *Detector) AffectedTools() (sets.Set[string], error) {
 
 	logrus.WithField("count", len(changedPackages)).WithField("packages", sets.List(changedPackages)).Info("Detected changed packages")
 	if len(changedPackages) == 0 {
-		return affectedByImageChanges, nil
+		combined := affectedByImageChanges.Union(d.getAffectedToolsByBinaryInputs(affectedByImageChanges))
+		return combined, nil
 	}
 
 	cmdTools, allPackages, err := d.loadCmdTools()
@@ -96,12 +98,16 @@ func (d *Detector) AffectedTools() (sets.Set[string], error) {
 
 	affectedByPackages := d.findAffectedToolsFromPackages(cmdTools, allPackages, changedPackages, baseRef)
 
+	combined := affectedByPackages.Union(affectedByImageChanges)
+	affectedByBinaryInputs := d.getAffectedToolsByBinaryInputs(combined)
+
 	logrus.WithField("affectedByPackages", sets.List(affectedByPackages)).
 		WithField("affectedByImages", sets.List(affectedByImageChanges)).
-		WithField("total", affectedByPackages.Union(affectedByImageChanges).Len()).
+		WithField("affectedByBinaryInputs", sets.List(affectedByBinaryInputs)).
+		WithField("total", combined.Union(affectedByBinaryInputs).Len()).
 		Info("Detected affected tools")
 
-	return affectedByPackages.Union(affectedByImageChanges), nil
+	return combined.Union(affectedByBinaryInputs), nil
 }
 
 func (d *Detector) getChangedFiles(baseRef string) ([]string, error) {
@@ -361,6 +367,31 @@ func (d *Detector) hasModuleDependencyChanges(baseRef string) bool {
 		}
 	}
 	return false
+}
+
+// getAffectedToolsByBinaryInputs propagates binary-level dependencies: if a tool binary is
+// already in alreadyAffected, any image that bundles that binary via inputs["bin"].
+func (d *Detector) getAffectedToolsByBinaryInputs(alreadyAffected sets.Set[string]) sets.Set[string] {
+	affected := sets.New[string]()
+
+	if d.config == nil {
+		return affected
+	}
+
+	for _, image := range d.config.Images {
+		binInputs, ok := image.Inputs["bin"]
+		if !ok {
+			continue
+		}
+		for _, p := range binInputs.Paths {
+			if alreadyAffected.Has(filepath.Base(p.SourcePath)) {
+				affected.Insert(string(image.To))
+				break
+			}
+		}
+	}
+
+	return affected
 }
 
 // getAffectedToolsByImageChanges checks if any files in image context directories changed

@@ -3,7 +3,7 @@ package prowgen
 import (
 	"time"
 
-	utilpointer "k8s.io/utils/pointer"
+	"k8s.io/utils/ptr"
 	prowv1 "sigs.k8s.io/prow/pkg/apis/prowjobs/v1"
 	prowconfig "sigs.k8s.io/prow/pkg/config"
 
@@ -18,6 +18,36 @@ type prowJobBaseBuilder struct {
 
 	info     *ProwgenInfo
 	testName string
+}
+
+// isPrivate returns true if the repo is private, checking ci-operator config,
+// .config.prowgen, and the org name (openshift-priv is always private).
+func isPrivate(configSpec *cioperatorapi.ReleaseBuildConfiguration, info *ProwgenInfo) bool {
+	if configSpec.Prowgen != nil && configSpec.Prowgen.Private != nil {
+		return *configSpec.Prowgen.Private
+	}
+	if info.Config.Private {
+		return true
+	}
+	return info.Org == "openshift-priv"
+}
+
+// isExposed returns true if jobs should be visible in Deck despite being private,
+// checking both ci-operator config and .config.prowgen.
+func isExposed(configSpec *cioperatorapi.ReleaseBuildConfiguration, info *ProwgenInfo) bool {
+	if configSpec.Prowgen != nil && configSpec.Prowgen.Expose != nil {
+		return *configSpec.Prowgen.Expose
+	}
+	return info.Config.Expose
+}
+
+// isSecretsStoreCSIDriverEnabled returns true if CSI Secrets Store should be used,
+// checking both ci-operator config and .config.prowgen.
+func isSecretsStoreCSIDriverEnabled(configSpec *cioperatorapi.ReleaseBuildConfiguration, info *ProwgenInfo) bool {
+	if configSpec.Prowgen != nil && configSpec.Prowgen.EnableSecretsStoreCSIDriver != nil {
+		return *configSpec.Prowgen.EnableSecretsStoreCSIDriver
+	}
+	return info.Config.EnableSecretsStoreCSIDriver
 }
 
 // If any included buildRoot uses from_repository we must not skip cloning
@@ -63,14 +93,17 @@ func NewProwJobBaseBuilder(configSpec *cioperatorapi.ReleaseBuildConfiguration, 
 			Agent:  string(prowv1.KubernetesAgent),
 			Labels: map[string]string{},
 			UtilityConfig: prowconfig.UtilityConfig{
-				Decorate: utilpointer.Bool(true),
+				Decorate: ptr.To(true),
 			},
 		},
 	}
 
+	private := isPrivate(configSpec, info)
+	exposed := isExposed(configSpec, info)
+
 	if skipCloning(configSpec) {
-		b.base.UtilityConfig.DecorationConfig = &prowv1.DecorationConfig{SkipCloning: utilpointer.Bool(true)}
-	} else if info.Config.Private {
+		b.base.UtilityConfig.DecorationConfig = &prowv1.DecorationConfig{SkipCloning: ptr.To(true)}
+	} else if private {
 		b.base.UtilityConfig.DecorationConfig = &prowv1.DecorationConfig{OauthTokenSecret: &prowv1.OauthTokenSecret{Key: cioperatorapi.OauthTokenSecretKey, Name: cioperatorapi.OauthTokenSecretName}}
 	}
 
@@ -89,7 +122,7 @@ func NewProwJobBaseBuilder(configSpec *cioperatorapi.ReleaseBuildConfiguration, 
 	}
 
 	b.PodSpec.Add(Variant(info.Variant))
-	if info.Config.Private {
+	if private {
 		// We can reuse Prow's volume with the token if ProwJob itself is cloning the code
 		b.PodSpec.Add(GitHubToken(!skipCloning(configSpec)))
 	}
@@ -98,7 +131,7 @@ func NewProwJobBaseBuilder(configSpec *cioperatorapi.ReleaseBuildConfiguration, 
 		b.base.UtilityConfig.PathAlias = *configSpec.CanonicalGoRepository
 	}
 
-	if info.Config.Private && !info.Config.Expose {
+	if private && !exposed {
 		b.base.Hidden = true
 	}
 
@@ -150,7 +183,7 @@ func NewProwJobBaseBuilderForTest(configSpec *cioperatorapi.ReleaseBuildConfigur
 		if configSpec.Releases != nil {
 			p.PodSpec.Add(CIPullSecret())
 		}
-		if info.Config.EnableSecretsStoreCSIDriver {
+		if isSecretsStoreCSIDriverEnabled(configSpec, info) {
 			p.PodSpec.Add(
 				GSMConfig(),
 			)
@@ -164,7 +197,7 @@ func NewProwJobBaseBuilderForTest(configSpec *cioperatorapi.ReleaseBuildConfigur
 		if configSpec.Releases != nil {
 			p.PodSpec.Add(CIPullSecret())
 		}
-		if info.Config.EnableSecretsStoreCSIDriver {
+		if isSecretsStoreCSIDriverEnabled(configSpec, info) {
 			p.PodSpec.Add(
 				GSMConfig(),
 			)

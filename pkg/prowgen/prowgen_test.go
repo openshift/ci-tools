@@ -6,11 +6,10 @@ import (
 	"testing"
 
 	corev1 "k8s.io/api/core/v1"
-	utilpointer "k8s.io/utils/pointer"
+	"k8s.io/utils/ptr"
 	prowv1 "sigs.k8s.io/prow/pkg/apis/prowjobs/v1"
 	prowconfig "sigs.k8s.io/prow/pkg/config"
 
-	"github.com/openshift/ci-tools/pkg/api"
 	ciop "github.com/openshift/ci-tools/pkg/api"
 	"github.com/openshift/ci-tools/pkg/config"
 	"github.com/openshift/ci-tools/pkg/testhelper"
@@ -475,7 +474,7 @@ func TestGenerateJobs(t *testing.T) {
 			config: &ciop.ReleaseBuildConfiguration{
 				Tests:                  []ciop.TestStepConfiguration{},
 				Images:                 []ciop.ProjectDirectoryImageBuildStepConfiguration{{}},
-				PromotionConfiguration: &ciop.PromotionConfiguration{Targets: []api.PromotionTarget{{Namespace: "ci"}}},
+				PromotionConfiguration: &ciop.PromotionConfiguration{Targets: []ciop.PromotionTarget{{Namespace: "ci"}}},
 			},
 			repoInfo: &ProwgenInfo{Metadata: ciop.Metadata{
 				Org:    "organization",
@@ -492,7 +491,7 @@ func TestGenerateJobs(t *testing.T) {
 					{To: "out-2", From: "base"},
 				},
 				PromotionConfiguration: &ciop.PromotionConfiguration{
-					Targets: []api.PromotionTarget{{
+					Targets: []ciop.PromotionTarget{{
 						Namespace: "ci",
 						AdditionalImages: map[string]string{
 							"out": "out-1",
@@ -636,7 +635,7 @@ func TestGenerateJobs(t *testing.T) {
 			id: "cluster label for periodic",
 			config: &ciop.ReleaseBuildConfiguration{
 				Tests: []ciop.TestStepConfiguration{
-					{As: "unit", Cron: utilpointer.String(cron), Cluster: "build01", ContainerTestConfiguration: &ciop.ContainerTestConfiguration{From: "bin"}},
+					{As: "unit", Cron: ptr.To(cron), Cluster: "build01", ContainerTestConfiguration: &ciop.ContainerTestConfiguration{From: "bin"}},
 				},
 			},
 			repoInfo: &ProwgenInfo{Metadata: ciop.Metadata{
@@ -649,7 +648,7 @@ func TestGenerateJobs(t *testing.T) {
 			id: "periodic with presubmit",
 			config: &ciop.ReleaseBuildConfiguration{
 				Tests: []ciop.TestStepConfiguration{
-					{As: "unit", Cron: utilpointer.String(cron), Presubmit: true, Cluster: "build01", ContainerTestConfiguration: &ciop.ContainerTestConfiguration{From: "bin"}},
+					{As: "unit", Cron: ptr.To(cron), Presubmit: true, Cluster: "build01", ContainerTestConfiguration: &ciop.ContainerTestConfiguration{From: "bin"}},
 				},
 			},
 			repoInfo: &ProwgenInfo{Metadata: ciop.Metadata{
@@ -677,8 +676,8 @@ func TestGenerateJobs(t *testing.T) {
 				Tests: []ciop.TestStepConfiguration{
 					{As: "unit", ContainerTestConfiguration: &ciop.ContainerTestConfiguration{From: "bin"}},
 					{As: "lint", ContainerTestConfiguration: &ciop.ContainerTestConfiguration{From: "bin"}},
-					{As: "periodic-unit", Cron: utilpointer.String(cron), ContainerTestConfiguration: &ciop.ContainerTestConfiguration{From: "bin"}},
-					{As: "periodic-lint", Cron: utilpointer.String(cron), ContainerTestConfiguration: &ciop.ContainerTestConfiguration{From: "bin"}},
+					{As: "periodic-unit", Cron: ptr.To(cron), ContainerTestConfiguration: &ciop.ContainerTestConfiguration{From: "bin"}},
+					{As: "periodic-lint", Cron: ptr.To(cron), ContainerTestConfiguration: &ciop.ContainerTestConfiguration{From: "bin"}},
 				},
 			},
 			repoInfo: &ProwgenInfo{
@@ -694,7 +693,7 @@ func TestGenerateJobs(t *testing.T) {
 			config: &ciop.ReleaseBuildConfiguration{
 				Tests: []ciop.TestStepConfiguration{
 					{As: "unit", ContainerTestConfiguration: &ciop.ContainerTestConfiguration{From: "bin"}},
-					{As: "periodic-unit", Cron: utilpointer.String(cron), ContainerTestConfiguration: &ciop.ContainerTestConfiguration{From: "bin"}},
+					{As: "periodic-unit", Cron: ptr.To(cron), ContainerTestConfiguration: &ciop.ContainerTestConfiguration{From: "bin"}},
 				},
 			},
 			repoInfo: &ProwgenInfo{
@@ -776,7 +775,7 @@ func TestGenerateJobs(t *testing.T) {
 			id: "periodic with capabilities",
 			config: &ciop.ReleaseBuildConfiguration{
 				Tests: []ciop.TestStepConfiguration{
-					{As: "unit", Capabilities: []string{"intranet"}, Cron: utilpointer.String(cron), ContainerTestConfiguration: &ciop.ContainerTestConfiguration{From: "bin"}},
+					{As: "unit", Capabilities: []string{"intranet"}, Cron: ptr.To(cron), ContainerTestConfiguration: &ciop.ContainerTestConfiguration{From: "bin"}},
 				},
 			},
 			repoInfo: &ProwgenInfo{Metadata: ciop.Metadata{
@@ -789,7 +788,7 @@ func TestGenerateJobs(t *testing.T) {
 			id: "periodic/presubmit with capabilities",
 			config: &ciop.ReleaseBuildConfiguration{
 				Tests: []ciop.TestStepConfiguration{
-					{As: "unit", Capabilities: []string{"intranet", "arm64", "rce", "sshd-bastion"}, Cron: utilpointer.String(cron), Presubmit: true, ContainerTestConfiguration: &ciop.ContainerTestConfiguration{From: "bin"}}, // rce - release-controller-eligible, sshd-bastion - for multiarch P/Z libvirt jobs
+					{As: "unit", Capabilities: []string{"intranet", "arm64", "rce", "sshd-bastion"}, Cron: ptr.To(cron), Presubmit: true, ContainerTestConfiguration: &ciop.ContainerTestConfiguration{From: "bin"}}, // rce - release-controller-eligible, sshd-bastion - for multiarch P/Z libvirt jobs
 				},
 			},
 			repoInfo: &ProwgenInfo{Metadata: ciop.Metadata{
@@ -803,6 +802,195 @@ func TestGenerateJobs(t *testing.T) {
 			config: &ciop.ReleaseBuildConfiguration{
 				Tests: []ciop.TestStepConfiguration{
 					{As: "unit", ShardCount: intPointer(3), ContainerTestConfiguration: &ciop.ContainerTestConfiguration{From: "bin"}},
+				},
+			},
+			repoInfo: &ProwgenInfo{Metadata: ciop.Metadata{
+				Org:    "organization",
+				Repo:   "repository",
+				Branch: "branch",
+			}},
+		},
+		{
+			id:   "slack reporter from ci-operator config with defaults",
+			keep: true,
+			config: &ciop.ReleaseBuildConfiguration{
+				Tests: []ciop.TestStepConfiguration{
+					{
+						As: "e2e",
+						SlackReporter: &ciop.SlackReporter{
+							Channel: "#test-channel",
+						},
+						ContainerTestConfiguration: &ciop.ContainerTestConfiguration{From: "bin"},
+					},
+				},
+			},
+			repoInfo: &ProwgenInfo{Metadata: ciop.Metadata{
+				Org:    "organization",
+				Repo:   "repository",
+				Branch: "branch",
+			}},
+		},
+		{
+			id:   "slack reporter from ci-operator config with explicit values",
+			keep: true,
+			config: &ciop.ReleaseBuildConfiguration{
+				Tests: []ciop.TestStepConfiguration{
+					{
+						As: "e2e",
+						SlackReporter: &ciop.SlackReporter{
+							Channel:           "#custom-channel",
+							JobStatesToReport: []prowv1.ProwJobState{"success", "failure"},
+							ReportTemplate:    "custom template",
+						},
+						ContainerTestConfiguration: &ciop.ContainerTestConfiguration{From: "bin"},
+					},
+				},
+			},
+			repoInfo: &ProwgenInfo{Metadata: ciop.Metadata{
+				Org:    "organization",
+				Repo:   "repository",
+				Branch: "branch",
+			}},
+		},
+		{
+			id:   "slack reporter from ci-operator config takes precedence over prowgen config",
+			keep: true,
+			config: &ciop.ReleaseBuildConfiguration{
+				Tests: []ciop.TestStepConfiguration{
+					{
+						As: "e2e",
+						SlackReporter: &ciop.SlackReporter{
+							Channel: "#from-ci-operator",
+						},
+						ContainerTestConfiguration: &ciop.ContainerTestConfiguration{From: "bin"},
+					},
+				},
+			},
+			repoInfo: &ProwgenInfo{
+				Metadata: ciop.Metadata{
+					Org:    "organization",
+					Repo:   "repository",
+					Branch: "branch",
+				},
+				Config: config.Prowgen{
+					SlackReporterConfigs: []config.SlackReporterConfig{
+						{
+							Channel:           "#from-prowgen",
+							JobStatesToReport: []prowv1.ProwJobState{"error"},
+							ReportTemplate:    "prowgen template",
+							JobNames:          []string{"e2e"},
+						},
+					},
+				},
+			},
+		},
+		{
+			id: "disable rehearsal from ci-operator config per-test",
+			config: &ciop.ReleaseBuildConfiguration{
+				Tests: []ciop.TestStepConfiguration{
+					{As: "unit", ContainerTestConfiguration: &ciop.ContainerTestConfiguration{From: "bin"}},
+					{As: "e2e", DisableRehearsal: ptr.To(true), ContainerTestConfiguration: &ciop.ContainerTestConfiguration{From: "bin"}},
+				},
+			},
+			repoInfo: &ProwgenInfo{Metadata: ciop.Metadata{
+				Org:    "organization",
+				Repo:   "repository",
+				Branch: "branch",
+			}},
+		},
+		{
+			id: "disable all rehearsals from ci-operator prowgen config",
+			config: &ciop.ReleaseBuildConfiguration{
+				Prowgen: &ciop.ProwgenExtras{DisableRehearsals: ptr.To(true)},
+				Tests: []ciop.TestStepConfiguration{
+					{As: "unit", ContainerTestConfiguration: &ciop.ContainerTestConfiguration{From: "bin"}},
+					{As: "e2e", ContainerTestConfiguration: &ciop.ContainerTestConfiguration{From: "bin"}},
+				},
+			},
+			repoInfo: &ProwgenInfo{Metadata: ciop.Metadata{
+				Org:    "organization",
+				Repo:   "repository",
+				Branch: "branch",
+			}},
+		},
+		{
+			id: "skip operator presubmits from ci-operator config",
+			config: &ciop.ReleaseBuildConfiguration{
+				Operator: &ciop.OperatorStepConfiguration{
+					SkipPresubmits: ptr.To(true),
+					Bundles:        []ciop.Bundle{{As: "my-bundle"}},
+				},
+			},
+			repoInfo: &ProwgenInfo{Metadata: ciop.Metadata{
+				Org:    "organization",
+				Repo:   "repository",
+				Branch: "branch",
+			}},
+		},
+		{
+			id:   "private from ci-operator prowgen config",
+			keep: true,
+			config: &ciop.ReleaseBuildConfiguration{
+				Prowgen: &ciop.ProwgenExtras{Private: ptr.To(true)},
+				Tests: []ciop.TestStepConfiguration{
+					{As: "unit", ContainerTestConfiguration: &ciop.ContainerTestConfiguration{From: "bin"}},
+				},
+			},
+			repoInfo: &ProwgenInfo{Metadata: ciop.Metadata{
+				Org:    "organization",
+				Repo:   "repository",
+				Branch: "branch",
+			}},
+		},
+		{
+			id:   "private with expose from ci-operator prowgen config",
+			keep: true,
+			config: &ciop.ReleaseBuildConfiguration{
+				Prowgen: &ciop.ProwgenExtras{Private: ptr.To(true), Expose: ptr.To(true)},
+				Tests: []ciop.TestStepConfiguration{
+					{As: "unit", ContainerTestConfiguration: &ciop.ContainerTestConfiguration{From: "bin"}},
+				},
+			},
+			repoInfo: &ProwgenInfo{Metadata: ciop.Metadata{
+				Org:    "organization",
+				Repo:   "repository",
+				Branch: "branch",
+			}},
+		},
+		{
+			id:   "openshift-priv org defaults to private",
+			keep: true,
+			config: &ciop.ReleaseBuildConfiguration{
+				Tests: []ciop.TestStepConfiguration{
+					{As: "unit", ContainerTestConfiguration: &ciop.ContainerTestConfiguration{From: "bin"}},
+				},
+			},
+			repoInfo: &ProwgenInfo{Metadata: ciop.Metadata{
+				Org:    "openshift-priv",
+				Repo:   "repository",
+				Branch: "branch",
+			}},
+		},
+		{
+			id:   "postsubmit with custom max_concurrency",
+			keep: true,
+			config: &ciop.ReleaseBuildConfiguration{
+				Tests: []ciop.TestStepConfiguration{
+					{As: "publish", Postsubmit: true, MaxConcurrency: intPointer(4), ContainerTestConfiguration: &ciop.ContainerTestConfiguration{From: "bin"}},
+				},
+			},
+			repoInfo: &ProwgenInfo{Metadata: ciop.Metadata{
+				Org:    "organization",
+				Repo:   "repository",
+				Branch: "branch",
+			}},
+		},
+		{
+			id:   "periodic with custom max_concurrency",
+			keep: true,
+			config: &ciop.ReleaseBuildConfiguration{
+				Tests: []ciop.TestStepConfiguration{
+					{As: "nightly", Cron: ptr.To(cron), MaxConcurrency: intPointer(2), ContainerTestConfiguration: &ciop.ContainerTestConfiguration{From: "bin"}},
 				},
 			},
 			repoInfo: &ProwgenInfo{Metadata: ciop.Metadata{

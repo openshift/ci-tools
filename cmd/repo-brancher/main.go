@@ -132,14 +132,6 @@ func main() {
 
 		logger := config.LoggerForInfo(*repoInfo)
 
-		repoDir := path.Join(gitDir, repoInfo.Org, repoInfo.Repo)
-		if err := os.MkdirAll(repoDir, 0775); err != nil {
-			logger.WithError(err).Fatal("could not ensure git dir existed")
-			return nil
-		}
-
-		gitCmd := gitCmdFunc(repoDir)
-
 		remote, err := url.Parse(fmt.Sprintf("https://github.com/%s/%s", repoInfo.Org, repoInfo.Repo))
 		if err != nil {
 			logger.WithError(err).Error("Could not construct remote URL.")
@@ -149,13 +141,22 @@ func main() {
 		if o.Confirm {
 			remote.User = url.UserPassword(o.username, token)
 		}
-		for _, command := range [][]string{{"init"}, {"fetch", "--depth", "1", remote.String(), repoInfo.Branch}} {
-			if err := gitCmd(logger, command...); err != nil {
-				appendFailedConfig(configuration)
-				return err
-			}
+
+		// Determine which future branches need work by comparing remote refs
+		// in a single ls-remote call instead of fetching and pushing each one.
+		remoteRefs, err := lsRemoteRefs(logger, remote)
+		if err != nil {
+			appendFailedConfig(configuration)
+			return err
+		}
+		currentSHA := remoteRefs[fmt.Sprintf("refs/heads/%s", repoInfo.Branch)]
+		if currentSHA == "" {
+			logger.Error("Current branch not found on remote.")
+			appendFailedConfig(configuration)
+			return nil
 		}
 
+		var branchesNeedingWork []string
 		for _, futureRelease := range o.FutureReleases.Strings() {
 			futureBranch, err := promotion.DetermineReleaseBranch(o.CurrentRelease, futureRelease, repoInfo.Branch)
 			if err != nil {
@@ -167,24 +168,47 @@ func main() {
 				continue
 			}
 
-			// when we're initializing the branch, we just want to make sure
-			// it is in sync with the current branch that is promoting
-			logger := logger.WithField("future-branch", futureBranch)
-			command := []string{"ls-remote", remote.String(), fmt.Sprintf("refs/heads/%s", futureBranch)}
-			if err := gitCmd(logger, command...); err != nil {
-				appendFailedConfig(configuration)
+			futureLogger := logger.WithField("future-branch", futureBranch)
+			futureRef := fmt.Sprintf("refs/heads/%s", futureBranch)
+			if remoteRefs[futureRef] == currentSHA {
+				futureLogger.Debug("Already up to date, skipping.")
 				continue
 			}
 
 			if !o.Confirm {
-				logger.Info("Would create new branch.")
+				futureLogger.Info("Would create new branch.")
 				continue
 			}
 
+			branchesNeedingWork = append(branchesNeedingWork, futureBranch)
+		}
+
+		if !o.Confirm || len(branchesNeedingWork) == 0 {
+			return nil
+		}
+
+		// Only init and fetch if there is actual work to do.
+		repoDir := path.Join(gitDir, repoInfo.Org, repoInfo.Repo)
+		if err := os.MkdirAll(repoDir, 0775); err != nil {
+			logger.WithError(err).Fatal("could not ensure git dir existed")
+			return nil
+		}
+
+		gitCmd := gitCmdFunc(repoDir)
+		for _, command := range [][]string{{"init"}, {"fetch", "--depth", "1", remote.String(), repoInfo.Branch}} {
+			if err := gitCmd(logger, command...); err != nil {
+				appendFailedConfig(configuration)
+				return err
+			}
+		}
+
+		for _, futureBranch := range branchesNeedingWork {
+			futureLogger := logger.WithField("future-branch", futureBranch)
+
 			for depth := 1; depth <= 9; depth += 1 {
-				retry, err := pushBranch(logger, remote, futureBranch, gitCmd)
+				retry, err := pushBranch(futureLogger, remote, futureBranch, gitCmd)
 				if err != nil {
-					logger.WithError(err).Error("Failed to push branch")
+					futureLogger.WithError(err).Error("Failed to push branch")
 					appendFailedConfig(configuration)
 					break
 				}
@@ -194,18 +218,18 @@ func main() {
 				}
 
 				if depth == 9 {
-					logger.Error("Could not push branch even after unshallowing.")
+					futureLogger.Error("Could not push branch even after unshallowing.")
 					appendFailedConfig(configuration)
 					break
 				}
 
 				if depth == 8 {
-					logger.Warn("Progressive deepening was not enough, fetching full history...")
-					if err := fetchUnshallow(logger, remote, gitCmd, repoInfo); err != nil {
+					futureLogger.Warn("Progressive deepening was not enough, fetching full history...")
+					if err := fetchUnshallow(futureLogger, remote, gitCmd, repoInfo); err != nil {
 						appendFailedConfig(configuration)
 						return nil
 					}
-				} else if err := fetchDeeper(logger, remote, gitCmd, repoInfo, int(math.Exp2(float64(depth-1)))); err != nil {
+				} else if err := fetchDeeper(futureLogger, remote, gitCmd, repoInfo, int(math.Exp2(float64(depth-1)))); err != nil {
 					appendFailedConfig(configuration)
 					return nil
 				}
@@ -225,6 +249,36 @@ func main() {
 	if brachingFailure {
 		os.Exit(1)
 	}
+}
+
+// lsRemoteRefs runs git ls-remote and returns a map of ref -> SHA.
+// This does not require a local repo — git ls-remote works without one.
+func lsRemoteRefs(logger *logrus.Entry, remote *url.URL) (map[string]string, error) {
+	refs := map[string]string{}
+	var b []byte
+	var err error
+	sleepyTime := time.Second
+	for i := 0; i < 3; i++ {
+		c := exec.Command("git", "ls-remote", remote.String())
+		b, err = c.CombinedOutput()
+		if err == nil {
+			break
+		}
+		logger.WithError(err).Debugf("ls-remote failed (attempt %d/3), retrying...", i+1)
+		time.Sleep(sleepyTime)
+		sleepyTime *= 2
+	}
+	if err != nil {
+		logger.WithError(err).Error("Failed to run ls-remote after retries.")
+		return nil, fmt.Errorf("ls-remote failed: %w", err)
+	}
+	for _, line := range strings.Split(strings.TrimSpace(string(b)), "\n") {
+		parts := strings.Fields(line)
+		if len(parts) == 2 {
+			refs[parts[1]] = parts[0]
+		}
+	}
+	return refs, nil
 }
 
 func pushBranch(logger *logrus.Entry, remote *url.URL, futureBranch string, gitCmd gitCmd) (bool, error) {

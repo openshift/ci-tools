@@ -464,35 +464,14 @@ func (s *importReleaseStep) getCLIImage(ctx context.Context, target, streamName 
 			},
 		},
 	}
-	key := ctrlruntimeclient.ObjectKeyFromObject(streamTag)
 	if err := retry.RetryOnConflict(retry.DefaultRetry, func() error {
 		return s.client.Update(ctx, streamTag)
 	}); err != nil {
 		return nil, fmt.Errorf("unable to tag the 'cli' image into the stable stream: %w", err)
 	}
 
-	startedWaiting := time.Now()
-	if err := wait.PollImmediate(5*time.Second, 5*time.Minute+5*time.Second, func() (bool, error) {
-		if err := s.client.Get(ctx, key, streamTag); err != nil {
-			if kerrors.IsNotFound(err) {
-				return false, nil
-			}
-			return false, err
-		}
-		populated := streamTag.Tag != nil && streamTag.Tag.Generation != nil && *streamTag.Tag.Generation == streamTag.Generation
-		if streamTag.Tag == nil {
-			logrus.Debug("The 'cli' image in the stable stream is not populated: streamTag.Tag is nil")
-			return false, nil
-		}
-		if !populated {
-			logrus.WithField("streamTag.Tag.Generation", streamTag.Tag.Generation).
-				WithField("streamTag.Generation", streamTag.Generation).
-				Debug("The 'cli' image in the stable stream is not populated")
-		}
-		return populated, nil
-	}); err != nil {
-		duration := time.Since(startedWaiting)
-		return nil, fmt.Errorf("unable to wait for the 'cli' image in the stable stream to populate (waited for %s): %w", duration, err)
+	if err := utils.WaitForImportingISTag(ctx, s.client, s.jobSpec.Namespace(), streamName, nil, sets.New("cli"), 10*time.Minute, s.client.MetricsAgent()); err != nil {
+		return nil, fmt.Errorf("unable to wait for the 'cli' image in the stable stream to populate: %w", err)
 	}
 
 	return &cliImageRef, nil

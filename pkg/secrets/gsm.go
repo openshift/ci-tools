@@ -13,7 +13,8 @@ import (
 )
 
 const (
-	TestPlatformCollection = "test-platform-infra"
+	TestPlatformCollection        = "test-platform-infra"
+	ConstructedDockerconfigsGroup = "dockerconfigs-constructed"
 )
 
 type gsmSyncDecorator struct {
@@ -82,4 +83,10 @@ func (g *gsmSyncDecorator) UpdateIndexSecret(itemName string, payload []byte) er
 		return err
 	}
 	return nil
+}
+
+// GetConstructedDockerconfigFieldName returns the GSM field name for a pre-constructed dockerconfig bundle.
+// The field name encodes both the bundle name and cluster to ensure uniqueness.
+func GetConstructedDockerconfigFieldName(bundleName, cluster string) string {
+	return fmt.Sprintf("%s--%s", bundleName, cluster)
 }

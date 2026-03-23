@@ -4137,6 +4137,7 @@ func TestConstructSecretsFromGSM(t *testing.T) {
 				fakeClient,
 				projectConfig,
 				tc.disabledClusters,
+				true,
 			)
 
 			if tc.expectedError != "" {

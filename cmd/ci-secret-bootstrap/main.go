@@ -508,6 +508,42 @@ func constructDockerConfigJSONFromGSM(secretsCache map[gsmSecretRef]fetchedSecre
 	return b, nil
 }
 
+func uploadConstructedDockerConfig(
+	ctx context.Context,
+	gsmClient gsm.SecretManagerClient,
+	projectConfig gsm.Config,
+	bundleName string,
+	primaryCluster string,
+	dockerconfigJSON []byte,
+) error {
+	field := secrets.GetConstructedDockerconfigFieldName(bundleName, primaryCluster)
+	secretName := gsm.GetGSMSecretName(
+		secrets.TestPlatformCollection,
+		secrets.ConstructedDockerconfigsGroup,
+		field,
+	)
+
+	if err := gsm.CreateOrUpdateSecret(
+		ctx,
+		gsmClient,
+		projectConfig.ProjectIdNumber,
+		secretName,
+		dockerconfigJSON,
+		map[string]string{"source-bundle": bundleName},
+		nil,
+	); err != nil {
+		return fmt.Errorf("failed to upload constructed dockerconfig to GSM (bundle=%s, cluster=%s): %w", bundleName, primaryCluster, err)
+	}
+
+	logrus.WithFields(logrus.Fields{
+		"bundle":  bundleName,
+		"cluster": primaryCluster,
+		"field":   field,
+	}).Info("Successfully uploaded constructed dockerconfig to GSM")
+
+	return nil
+}
+
 func constructSecretsFromVault(config secretbootstrap.Config, client secrets.ReadOnlyClient, prowDisabledClusters sets.Set[string]) (map[string][]*coreapi.Secret, error) {
 	secretsByClusterAndName := map[string]map[types.NamespacedName]coreapi.Secret{}
 	secretsMapLock := &sync.Mutex{}
@@ -1211,7 +1247,7 @@ func reconcileSecrets(o options, vaultClient secrets.ReadOnlyClient, gsmClient *
 	if o.enableGsm && gsmClient != nil && len(o.gsmConfig.Bundles) > 0 {
 		ctx := context.Background()
 		var gsmSecretsMap map[string][]*coreapi.Secret
-		gsmSecretsMap, err = constructSecretsFromGSM(ctx, o.gsmConfig, gsmClient, o.gsmProjectConfig, prowDisabledClusters)
+		gsmSecretsMap, err = constructSecretsFromGSM(ctx, o.gsmConfig, gsmClient, o.gsmProjectConfig, prowDisabledClusters, o.dryRun)
 		if err != nil {
 			errs = append(errs, err)
 		}
@@ -1309,7 +1345,8 @@ func constructSecretsFromGSM(
 	gsmConfig api.GSMConfig,
 	gsmClient gsm.SecretManagerClient,
 	gsmProjectConfig gsm.Config,
-	prowDisabledClusters sets.Set[string]) (map[string][]*coreapi.Secret, error) {
+	prowDisabledClusters sets.Set[string],
+	dryRun bool) (map[string][]*coreapi.Secret, error) {
 	var errs []error
 	uniqueSecretNames := sets.New[gsmSecretRef]()
 	discoveredFields := make(map[collectionGroupKey][]string) // track fields for collection+group pairs when `fields` stanza is empty
@@ -1487,6 +1524,20 @@ func constructSecretsFromGSM(
 				logrus.WithError(err).Errorf("skipping bundle %s: failed to construct dockerconfig", bundle.Name)
 				errs = append(errs, fmt.Errorf("bundle %s: failed to construct dockerconfig: %w", bundle.Name, err))
 				continue
+			}
+
+			if !dryRun && len(bundle.Targets) > 0 {
+				primaryCluster := bundle.Targets[0].Cluster
+				if err := uploadConstructedDockerConfig(ctx, gsmClient, gsmProjectConfig, bundle.Name, primaryCluster, dockerConfigData); err != nil {
+					logrus.WithError(err).WithFields(logrus.Fields{
+						"bundle":  bundle.Name,
+						"cluster": primaryCluster,
+					}).Error("Failed to upload constructed dockerconfig to GSM")
+				}
+			} else if dryRun {
+				logrus.WithFields(logrus.Fields{
+					"bundle": bundle.Name,
+				}).Info("Dry-run: would upload constructed dockerconfig to GSM")
 			}
 
 			dockerConfigName := bundle.DockerConfig.As

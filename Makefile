@@ -273,14 +273,16 @@ check-breaking-changes:
 	test/validate-generation-breaking-changes.sh
 .PHONY: check-breaking-changes
 
+VENDOR_GOFLAGS = $(strip $(GOFLAGS) -mod=vendor)
+
 .PHONY: generate
 generate: imports
-	hack/update-codegen.sh
-	hack/generate-ci-op-reference.sh
+	GOFLAGS="$(VENDOR_GOFLAGS)" hack/update-codegen.sh
+	GOFLAGS="$(VENDOR_GOFLAGS)" hack/generate-ci-op-reference.sh
 
 .PHONY: imports
 imports:
-	go run ./vendor/github.com/openshift-eng/openshift-goimports/ -m github.com/openshift/ci-tools
+	GOFLAGS="$(VENDOR_GOFLAGS)" go run ./vendor/github.com/openshift-eng/openshift-goimports/ -m github.com/openshift/ci-tools
 
 .PHONY: verify-gen
 verify-gen: generate cmd/pod-scaler/frontend/dist/dummy cmd/repo-init/frontend/dist/dummy # we need the dummy file to exist so there's no diff on it

@@ -14,6 +14,7 @@ import (
 
 	"github.com/openshift/ci-tools/pkg/api"
 	"github.com/openshift/ci-tools/pkg/config"
+	"github.com/openshift/ci-tools/pkg/validation/promotion"
 )
 
 const (
@@ -31,6 +32,11 @@ type options struct {
 	templateMigrationAllowedBranches        flagutil.Strings
 	templateMigrationAllowedOrgs            flagutil.Strings
 	templateMigrationAllowedClusterProfiles flagutil.Strings
+	validateMainPromotion                   bool
+	currentRelease                          string
+	prowConfigDir                           string
+	infraPeriodicsPath                      string
+	mainPromotionIgnore                     flagutil.Strings
 }
 
 func (o options) validate() error {
@@ -41,7 +47,9 @@ func (o options) validate() error {
 	if diff := sets.New[string](o.enabledTemplateMigrations.Strings()...).Difference(validTemplateMigrations); len(diff) != 0 {
 		errs = append(errs, fmt.Errorf("invalid values %v for --enabled-template-migration, valid values: %v", sets.List(diff), sets.List(validTemplateMigrations)))
 	}
-
+	if o.validateMainPromotion && o.currentRelease == "" && o.infraPeriodicsPath == "" {
+		errs = append(errs, fmt.Errorf("--validate-main-promotion requires either --current-release or --infra-periodics"))
+	}
 	return utilerrors.NewAggregate(errs)
 }
 
@@ -53,6 +61,11 @@ func gatherOptions() options {
 	flag.Var(&o.templateMigrationAllowedBranches, "template-migration-allowed-branch", "Allowed branches to automigrate templates on. Can be passed multiple times. All branches are allowed if unset.")
 	flag.Var(&o.templateMigrationAllowedOrgs, "template-migration-allowed-org", "Allowed orgs to automigrate templates on. Can be passed multiple times. All orgs are allowed if unset.")
 	flag.Var(&o.templateMigrationAllowedClusterProfiles, "template-migration-allowed-cluster-profile", "Allowed cluster profiles to automigrate templates on. Can be passed multiple times. All cluster profiles are allowed if unset.")
+	flag.BoolVar(&o.validateMainPromotion, "validate-main-promotion", false, "Run main-promotion validation (main/master must promote to current release only; release-X configs must have promotion disabled when in scope). Exit 1 on violations.")
+	flag.StringVar(&o.currentRelease, "current-release", "", "Current development release (e.g. 4.22). Required for --validate-main-promotion unless --infra-periodics is set.")
+	flag.StringVar(&o.prowConfigDir, "prow-config-dir", "", "Path to prow 02_config. Optional; when set, enforces release-X promotion disabled when Prow has openshift-X/release-X in includedBranches.")
+	flag.StringVar(&o.infraPeriodicsPath, "infra-periodics", "", "Path to ci-operator/jobs/infra-periodics.yaml. Optional; when set, current-release is read from periodic-prow-auto-config-brancher job.")
+	flag.Var(&o.mainPromotionIgnore, "main-promotion-ignore", "Org/repo to exclude from main-promotion check (e.g. openshift/gatekeeper). Can be passed multiple times.")
 	flag.Parse()
 
 	return o
@@ -66,6 +79,14 @@ func main() {
 
 	if err := o.ConfirmableOptions.Complete(); err != nil {
 		logrus.Fatalf("Couldn't complete the config options: %v", err)
+	}
+
+	if o.validateMainPromotion {
+		ignore := o.mainPromotionIgnore.StringSet()
+		if err := promotion.Validate(o.ConfigDir, o.currentRelease, o.prowConfigDir, o.infraPeriodicsPath, ignore); err != nil {
+			logrus.Fatalf("Main promotion validation failed: %v", err)
+		}
+		return
 	}
 
 	var migratedCount int

@@ -21,22 +21,13 @@ periodics:
       - --oauth-token-path=/usr/local/github-credentials/oauth
       - --report-credentials-file=/etc/report/credentials
       - --target=e2e-nightly
-      - --template=/usr/local/e2e-nightly
       command:
       - ci-operator
       env:
-      - name: CLUSTER_TYPE
-        value: gcp
       - name: HTTP_SERVER_IP
         valueFrom:
           fieldRef:
             fieldPath: status.podIP
-      - name: JOB_NAME_SAFE
-        value: e2e-nightly
-      - name: RPM_REPO_OPENSHIFT_ORIGIN
-        value: https://artifacts-rpms-openshift-origin-ci-rpms.apps.ci.l2s4.p1.openshiftapps.com/openshift-origin-v4.0/
-      - name: TEST_COMMAND
-        value: make e2e
       image: quay-proxy.ci.openshift.org/openshift/ci:ci_ci-operator_latest
       imagePullPolicy: Always
       name: ""
@@ -53,9 +44,6 @@ periodics:
       - mountPath: /usr/local/github-credentials
         name: github-credentials-openshift-ci-robot-private-git-cloner
         readOnly: true
-      - mountPath: /usr/local/e2e-nightly
-        name: job-definition
-        subPath: cluster-launch-e2e.yaml
       - mountPath: /secrets/manifest-tool
         name: manifest-tool-local-pusher
         readOnly: true
@@ -70,9 +58,6 @@ periodics:
     - name: github-credentials-openshift-ci-robot-private-git-cloner
       secret:
         secretName: github-credentials-openshift-ci-robot-private-git-cloner
-    - configMap:
-        name: prow-job-cluster-launch-e2e
-      name: job-definition
     - name: manifest-tool-local-pusher
       secret:
         secretName: manifest-tool-local-pusher

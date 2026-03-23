@@ -169,32 +169,6 @@ func NewProwJobBaseBuilderForTest(configSpec *cioperatorapi.ReleaseBuildConfigur
 				GSMConfig(),
 			)
 		}
-	case test.OpenshiftAnsibleClusterTestConfiguration != nil:
-		p.PodSpec.Add(
-			Template("cluster-launch-e2e", test.Commands, "", test.As, test.OpenshiftAnsibleClusterTestConfiguration.ClusterProfile),
-			ReleaseRpms(configSpec.ReleaseTagConfiguration.Name, p.info.Metadata),
-		)
-	case test.OpenshiftAnsibleCustomClusterTestConfiguration != nil:
-		p.PodSpec.Add(
-			Template("cluster-launch-e2e-openshift-ansible", test.Commands, "", test.As, test.OpenshiftAnsibleCustomClusterTestConfiguration.ClusterProfile),
-			ReleaseRpms(configSpec.ReleaseTagConfiguration.Name, p.info.Metadata),
-		)
-	case test.OpenshiftInstallerClusterTestConfiguration != nil:
-		if !test.OpenshiftInstallerClusterTestConfiguration.Upgrade {
-			p.PodSpec.Add(Template("cluster-launch-installer-e2e", test.Commands, "", test.As, test.OpenshiftInstallerClusterTestConfiguration.ClusterProfile))
-		}
-		p.PodSpec.Add(LeaseClient())
-	case test.OpenshiftInstallerUPIClusterTestConfiguration != nil:
-		p.PodSpec.Add(
-			Template("cluster-launch-installer-upi-e2e", test.Commands, "", test.As, test.OpenshiftInstallerUPIClusterTestConfiguration.ClusterProfile),
-			LeaseClient(),
-		)
-	case test.OpenshiftInstallerCustomTestImageClusterTestConfiguration != nil:
-		fromImage := test.OpenshiftInstallerCustomTestImageClusterTestConfiguration.From
-		p.PodSpec.Add(
-			Template("cluster-launch-installer-custom-test-image", test.Commands, fromImage, test.As, test.OpenshiftInstallerCustomTestImageClusterTestConfiguration.ClusterProfile),
-			LeaseClient(),
-		)
 	}
 	return p
 }

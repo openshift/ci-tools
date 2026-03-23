@@ -12,6 +12,7 @@ import (
 
 	"github.com/openshift/ci-tools/pkg/api"
 	gsm "github.com/openshift/ci-tools/pkg/gsm-secrets"
+	"github.com/openshift/ci-tools/pkg/secrets"
 	"github.com/openshift/ci-tools/pkg/testhelper"
 )
 
@@ -235,6 +236,131 @@ func TestResolveCredentialReferences(t *testing.T) {
 			},
 		},
 		{
+			name: "bundle with dockerconfig",
+			credentials: []api.CredentialReference{
+				{
+					Bundle:    "ci-pull-credentials",
+					MountPath: "/tmp/docker",
+				},
+			},
+			gsmConfig: &api.GSMConfig{
+				Bundles: []api.GSMBundle{
+					{
+						Name: "ci-pull-credentials",
+						DockerConfig: &api.DockerConfigSpec{
+							Registries: []api.RegistryAuthData{
+								{
+									Collection:  "test-platform-infra",
+									Group:       "ci-pull-credentials",
+									RegistryURL: "quay.io",
+									AuthField:   "token",
+								},
+							},
+						},
+						Targets: []api.TargetSpec{
+							{Cluster: "app.ci", Namespace: "ci"},
+						},
+					},
+				},
+			},
+			expected: []api.CredentialReference{
+				{
+					Collection: secrets.TestPlatformCollection,
+					Group:      secrets.ConstructedDockerconfigsGroup,
+					Field:      "ci-pull-credentials--app.ci",
+					As:         ".dockerconfigjson",
+					MountPath:  "/tmp/docker",
+				},
+			},
+		},
+		{
+			name: "bundle with dockerconfig and custom 'as'",
+			credentials: []api.CredentialReference{
+				{
+					Bundle:    "registry-push-credentials",
+					MountPath: "/tmp/push",
+				},
+			},
+			gsmConfig: &api.GSMConfig{
+				Bundles: []api.GSMBundle{
+					{
+						Name: "registry-push-credentials",
+						DockerConfig: &api.DockerConfigSpec{
+							As: "custom-config.json",
+							Registries: []api.RegistryAuthData{
+								{
+									Collection:  "test-platform-infra",
+									Group:       "push-creds",
+									RegistryURL: "registry.ci.openshift.org",
+									AuthField:   "token",
+								},
+							},
+						},
+						Targets: []api.TargetSpec{
+							{Cluster: "build01", Namespace: "ci"},
+						},
+					},
+				},
+			},
+			expected: []api.CredentialReference{
+				{
+					Collection: secrets.TestPlatformCollection,
+					Group:      secrets.ConstructedDockerconfigsGroup,
+					Field:      "registry-push-credentials--build01",
+					As:         "custom-config.json",
+					MountPath:  "/tmp/push",
+				},
+			},
+		},
+		{
+			name: "bundle with both gsm_secrets and dockerconfig",
+			credentials: []api.CredentialReference{
+				{
+					Bundle:    "mixed-bundle",
+					MountPath: "/tmp/mixed",
+				},
+			},
+			gsmConfig: &api.GSMConfig{
+				Bundles: []api.GSMBundle{
+					{
+						Name: "mixed-bundle",
+						GSMSecrets: []api.GSMSecretRef{
+							{
+								Collection: "my-creds",
+								Group:      "aws",
+								Fields: []api.FieldEntry{
+									{Name: "access-key"},
+								},
+							},
+						},
+						DockerConfig: &api.DockerConfigSpec{
+							Registries: []api.RegistryAuthData{
+								{
+									Collection:  "test-platform-infra",
+									Group:       "docker-creds",
+									RegistryURL: "quay.io",
+									AuthField:   "token",
+								},
+							},
+						},
+						Targets: []api.TargetSpec{
+							{Cluster: "app.ci", Namespace: "ci"},
+						},
+					},
+				},
+			},
+			expected: []api.CredentialReference{
+				{Collection: "my-creds", Group: "aws", Field: "access-key", MountPath: "/tmp/mixed"},
+				{
+					Collection: secrets.TestPlatformCollection,
+					Group:      secrets.ConstructedDockerconfigsGroup,
+					Field:      "mixed-bundle--app.ci",
+					As:         ".dockerconfigjson",
+					MountPath:  "/tmp/mixed",
+				},
+			},
+		},
+		{
 			name: "error: bundle not found in config",
 			credentials: []api.CredentialReference{
 				{Bundle: "non-existent-bundle", MountPath: "/tmp/test"},
@@ -381,6 +507,103 @@ func TestExpandBundle(t *testing.T) {
 				{Collection: "my-creds", Group: "aws", Field: "url"},
 				{Collection: "my-creds", Group: "testing", Field: "key"},
 				{Collection: "my-creds", Group: "testing", Field: "pswd"},
+			},
+		},
+		{
+			name: "bundle with dockerconfig",
+			bundle: &api.GSMBundle{
+				Name: "ci-pull-credentials",
+				DockerConfig: &api.DockerConfigSpec{
+					Registries: []api.RegistryAuthData{
+						{
+							Collection:  "test-platform-infra",
+							Group:       "ci-pull-credentials",
+							RegistryURL: "quay.io",
+							AuthField:   "token",
+						},
+					},
+				},
+				Targets: []api.TargetSpec{
+					{Cluster: "app.ci", Namespace: "ci"},
+				},
+			},
+			discoveredFields: map[collectionGroupKey][]string{},
+			expected: []api.CredentialReference{
+				{
+					Collection: secrets.TestPlatformCollection,
+					Group:      secrets.ConstructedDockerconfigsGroup,
+					Field:      "ci-pull-credentials--app.ci",
+					As:         ".dockerconfigjson",
+				},
+			},
+		},
+		{
+			name: "bundle with dockerconfig and custom 'as'",
+			bundle: &api.GSMBundle{
+				Name: "registry-push-credentials",
+				DockerConfig: &api.DockerConfigSpec{
+					As: "custom-dockerconfig.json",
+					Registries: []api.RegistryAuthData{
+						{
+							Collection:  "test-platform-infra",
+							Group:       "push-creds",
+							RegistryURL: "registry.ci.openshift.org",
+							AuthField:   "token",
+						},
+					},
+				},
+				Targets: []api.TargetSpec{
+					{Cluster: "build01", Namespace: "ci"},
+				},
+			},
+			discoveredFields: map[collectionGroupKey][]string{},
+			expected: []api.CredentialReference{
+				{
+					Collection: secrets.TestPlatformCollection,
+					Group:      secrets.ConstructedDockerconfigsGroup,
+					Field:      "registry-push-credentials--build01",
+					As:         "custom-dockerconfig.json",
+				},
+			},
+		},
+		{
+			name: "bundle with both gsm_secrets and dockerconfig",
+			bundle: &api.GSMBundle{
+				Name: "mixed-bundle",
+				GSMSecrets: []api.GSMSecretRef{
+					{
+						Collection: "my-creds",
+						Group:      "aws",
+						Fields: []api.FieldEntry{
+							{Name: "access-key"},
+							{Name: "secret-key"},
+						},
+					},
+				},
+				DockerConfig: &api.DockerConfigSpec{
+					Registries: []api.RegistryAuthData{
+						{
+							Collection:  "test-platform-infra",
+							Group:       "docker-creds",
+							RegistryURL: "quay.io",
+							AuthField:   "token",
+						},
+					},
+				},
+				Targets: []api.TargetSpec{
+					{Cluster: "app.ci", Namespace: "ci"},
+				},
+			},
+			discoveredFields: map[collectionGroupKey][]string{},
+			expected: []api.CredentialReference{
+				{Collection: "my-creds", Group: "aws", Field: "access-key"},
+				{Collection: "my-creds", Group: "aws", Field: "secret-key"},
+				{
+					Collection: secrets.TestPlatformCollection,
+					Group:      secrets.ConstructedDockerconfigsGroup,
+					Field:      "mixed-bundle--app.ci",
+					As:         ".dockerconfigjson",
+				},
 			},
 		},
 	} {

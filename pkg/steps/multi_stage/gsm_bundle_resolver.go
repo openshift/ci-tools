@@ -10,6 +10,7 @@ import (
 
 	"github.com/openshift/ci-tools/pkg/api"
 	gsm "github.com/openshift/ci-tools/pkg/gsm-secrets"
+	"github.com/openshift/ci-tools/pkg/secrets"
 )
 
 type collectionGroupKey struct {
@@ -217,6 +218,19 @@ func expandBundle(
 				})
 			}
 		}
+	}
+
+	if bundle.DockerConfig != nil {
+		dockerConfigAs := bundle.DockerConfig.As
+		if dockerConfigAs == "" {
+			dockerConfigAs = ".dockerconfigjson"
+		}
+		resolvedCredentials = append(resolvedCredentials, api.CredentialReference{
+			Collection: secrets.TestPlatformCollection,
+			Group:      secrets.ConstructedDockerconfigsGroup,
+			Field:      secrets.GetConstructedDockerconfigFieldName(bundle.Name, bundle.Targets[0].Cluster),
+			As:         dockerConfigAs,
+		})
 	}
 
 	return resolvedCredentials, nil

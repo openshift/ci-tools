@@ -333,6 +333,35 @@ func (c *GSMConfig) Validate() error {
 		}
 	}
 
+	// Validate dockerconfig bundles have targets with valid clusters
+	for _, bundle := range c.Bundles {
+		if bundle.DockerConfig != nil {
+			if len(bundle.Targets) == 0 {
+				errs = append(errs, fmt.Errorf("bundle '%s' has dockerconfig but no targets", bundle.Name))
+				continue
+			}
+
+			if bundle.Targets[0].Cluster == "" {
+				errs = append(errs, fmt.Errorf("bundle '%s' has dockerconfig but first target has no cluster", bundle.Name))
+			}
+		}
+	}
+
+	// Check for bundle name+cluster collisions
+	bundlesByCluster := make(map[string]map[string]bool) // map[bundleName][cluster]bool
+	for _, bundle := range c.Bundles {
+		if bundlesByCluster[bundle.Name] == nil {
+			bundlesByCluster[bundle.Name] = make(map[string]bool)
+		}
+
+		for _, target := range bundle.Targets {
+			if bundlesByCluster[bundle.Name][target.Cluster] {
+				errs = append(errs, fmt.Errorf("duplicate bundle name '%s' targeting cluster '%s'", bundle.Name, target.Cluster))
+			}
+			bundlesByCluster[bundle.Name][target.Cluster] = true
+		}
+	}
+
 	return utilerrors.NewAggregate(errs)
 }
 

@@ -1377,7 +1377,9 @@ const (
 	ClusterProfileAWSPerfScaleQE          ClusterProfile = "aws-perfscale-qe"
 	ClusterProfileAWSPerfScaleLRCQE       ClusterProfile = "aws-perfscale-lrc-qe"
 	ClusterProfileAWSRestrictedQE         ClusterProfile = "aws-restricted-qe"
-	ClusterProfileROSAE2E                 ClusterProfile = "rosa-e2e"
+	ClusterProfileROSAE2E01               ClusterProfile = "rosa-e2e-01"
+	ClusterProfileROSAE2E02               ClusterProfile = "rosa-e2e-02"
+	ClusterProfileROSAE2E03               ClusterProfile = "rosa-e2e-03"
 	ClusterProfileAWSEUSC                 ClusterProfile = "aws-eusc"
 	ClusterProfileAWSOutpostQE            ClusterProfile = "aws-outpost-qe"
 	ClusterProfileAWSChaos                ClusterProfile = "aws-chaos"
@@ -1583,7 +1585,9 @@ func ClusterProfiles() []ClusterProfile {
 		ClusterProfileAWSPerfScaleQE,
 		ClusterProfileAWSPerfScaleLRCQE,
 		ClusterProfileAWSRestrictedQE,
-		ClusterProfileROSAE2E,
+		ClusterProfileROSAE2E01,
+		ClusterProfileROSAE2E02,
+		ClusterProfileROSAE2E03,
 		ClusterProfileAWSEUSC,
 		ClusterProfileAWSChaos,
 		ClusterProfileAWSChinaQE,
@@ -1805,7 +1809,9 @@ func (p ClusterProfile) ClusterType() string {
 		ClusterProfileAWSPerfScaleQE,
 		ClusterProfileAWSPerfScaleLRCQE,
 		ClusterProfileAWSRestrictedQE,
-		ClusterProfileROSAE2E,
+		ClusterProfileROSAE2E01,
+		ClusterProfileROSAE2E02,
+		ClusterProfileROSAE2E03,
 		ClusterProfileAWSServerless,
 		ClusterProfileAWSStackrox,
 		ClusterProfileAWSOutpostQE,
@@ -2127,8 +2133,12 @@ func (p ClusterProfile) LeaseType() string {
 		return "aws-perfscale-lrc-qe-quota-slice"
 	case ClusterProfileAWSRestrictedQE:
 		return "aws-restricted-qe"
-	case ClusterProfileROSAE2E:
-		return "rosa-e2e-quota-slice"
+	case ClusterProfileROSAE2E01:
+		return "rosa-e2e-01-quota-slice"
+	case ClusterProfileROSAE2E02:
+		return "rosa-e2e-02-quota-slice"
+	case ClusterProfileROSAE2E03:
+		return "rosa-e2e-03-quota-slice"
 	case ClusterProfileAWSEUSC:
 		return "aws-eusc-quota-slice"
 	case ClusterProfileAWSManagedCSPIQE:
@@ -2543,7 +2553,7 @@ func LeaseTypeFromClusterType(t string) (string, error) {
 		"hypershift-powervs", "hypershift-powervs-cb", "hypershift-gcp", "aws-mco-qe",
 		"equinix-edge-enablement", "aws-oadp-qe", "azure-oadp-qe", "gcp-oadp-qe", "aws-lp-chaos", "aws-osp-qe",
 		"metal-redhat-gs", "aro-hcp-int", "aro-hcp-stg", "aro-hcp-prod", "aro-hcp-dev", "rosa-regional-platform-int", "hyperfleet-e2e",
-		"aro-classic-int", "aro-classic-stg", "aro-classic-prod", "aro-classic-dev":
+		"aro-classic-int", "aro-classic-stg", "aro-classic-prod", "aro-classic-dev", "rosa-e2e-01", "rosa-e2e-02", "rosa-e2e-03":
 		return t + "-quota-slice", nil
 	default:
 		return "", fmt.Errorf("invalid cluster type %q", t)

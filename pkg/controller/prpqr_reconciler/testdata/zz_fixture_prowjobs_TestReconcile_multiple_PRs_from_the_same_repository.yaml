@@ -1,11 +1,8 @@
-- apiVersion: prow.k8s.io/v1
-  kind: ProwJob
-  metadata:
+- metadata:
     annotations:
       prow.k8s.io/context: ""
       prow.k8s.io/job: test-org-test-repo-100-test-org-test-repo-101-test-name
       releaseJobName: periodic-ci-test-org-test-repo-test-branch-test-name
-    creationTimestamp: null
     labels:
       created-by-prow: "true"
       prow.k8s.io/context: ""

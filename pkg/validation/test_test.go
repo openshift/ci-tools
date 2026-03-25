@@ -11,7 +11,6 @@ import (
 
 	aggerrs "k8s.io/apimachinery/pkg/util/errors"
 	"k8s.io/apimachinery/pkg/util/sets"
-	"k8s.io/utils/diff"
 	prowv1 "sigs.k8s.io/prow/pkg/apis/prowjobs/v1"
 
 	"github.com/openshift/ci-tools/pkg/api"
@@ -1104,7 +1103,7 @@ func TestValidateTestSteps(t *testing.T) {
 				t.Fatalf("Unexpected error %v", ret)
 			}
 			if !errListMessagesEqual(ret, tc.errs) {
-				t.Fatal(diff.ObjectReflectDiff(ret, tc.errs))
+				t.Fatal(cmp.Diff(ret, tc.errs))
 			}
 		})
 	}
@@ -1142,7 +1141,7 @@ func TestValidatePostSteps(t *testing.T) {
 			v := NewValidator(nil, nil)
 			ret := v.validateTestSteps(context, testStagePost, tc.steps, nil)
 			if !errListMessagesEqual(ret, tc.errs) {
-				t.Fatal(diff.ObjectReflectDiff(ret, tc.errs))
+				t.Fatal(cmp.Diff(ret, tc.errs))
 			}
 		})
 	}
@@ -1183,7 +1182,7 @@ func TestValidateParameters(t *testing.T) {
 				},
 				Environment: tc.params,
 			}, nil)
-			if diff := diff.ObjectReflectDiff(err, tc.err); diff != "<no diffs>" {
+			if diff := cmp.Diff(err, tc.err, testhelper.EquateErrorMessage); diff != "" {
 				t.Errorf("incorrect error: %s", diff)
 			}
 		})
@@ -1791,7 +1790,7 @@ func TestValidateLeases(t *testing.T) {
 			}
 			v := NewValidator(nil, nil)
 			err := v.validateTestConfigurationType("tests[0]", test, nil, nil, nil, make(testInputImages), true)
-			if diff := diff.ObjectReflectDiff(tc.err, err); diff != "<no diffs>" {
+			if diff := cmp.Diff(tc.err, err, testhelper.EquateErrorMessage); diff != "" {
 				t.Errorf("unexpected error: %s", diff)
 			}
 		})

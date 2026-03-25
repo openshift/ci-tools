@@ -7,7 +7,7 @@ import (
 	"reflect"
 	"testing"
 
-	"k8s.io/apimachinery/pkg/util/diff"
+	"github.com/google/go-cmp/cmp"
 
 	"github.com/openshift/ci-tools/pkg/api"
 )
@@ -69,10 +69,10 @@ func examineStep(t *testing.T, step api.Step, expected stepExpectation) {
 		t.Errorf("step.Description() returned an empty string")
 	}
 	if reqs := step.Requires(); !reflect.DeepEqual(expected.requires, reqs) {
-		t.Errorf("step.Requires() returned different links:\n%s", diff.ObjectReflectDiff(expected.requires, reqs))
+		t.Errorf("step.Requires() returned different links:\n%s", cmp.Diff(expected.requires, reqs))
 	}
 	if creates := step.Creates(); !reflect.DeepEqual(expected.creates, creates) {
-		t.Errorf("step.Creates() returned different links:\n%s", diff.ObjectReflectDiff(expected.creates, creates))
+		t.Errorf("step.Creates() returned different links:\n%s", cmp.Diff(expected.creates, creates))
 	}
 
 	params := step.Provides()
@@ -92,7 +92,7 @@ func examineStep(t *testing.T, step api.Step, expected stepExpectation) {
 
 	inputs, err := step.Inputs()
 	if !reflect.DeepEqual(expected.inputs.values, inputs) {
-		t.Errorf("step.Inputs returned different inputs\n%s", diff.ObjectReflectDiff(expected.inputs.values, inputs))
+		t.Errorf("step.Inputs returned different inputs\n%s", cmp.Diff(expected.inputs.values, inputs))
 	}
 	errorCheck(t, "step.Inputs", expected.inputs.err, err)
 }

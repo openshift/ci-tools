@@ -1,5 +1,4 @@
 - metadata:
-    creationTimestamp: null
     labels:
       ci.openshift.io/testwith: openshift.ci-tools.999
       prow.k8s.io/refs.org: openshift
@@ -15,7 +14,6 @@
     startTime: "1970-01-01T00:00:00Z"
     state: aborted
 - metadata:
-    creationTimestamp: null
     labels:
       ci.openshift.io/testwith: openshift.ci-tools.999
       prow.k8s.io/refs.org: openshift

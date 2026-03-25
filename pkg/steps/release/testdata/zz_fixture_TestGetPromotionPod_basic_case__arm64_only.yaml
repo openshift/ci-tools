@@ -1,5 +1,4 @@
 metadata:
-  creationTimestamp: null
   labels:
     ci-operator.openshift.io/save-container-logs: "true"
   name: promotion

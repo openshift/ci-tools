@@ -1794,7 +1794,6 @@ data:
   key-name-6: YXR0YWNobWVudC1uYW1lLTMtMi12YWx1ZQ==
 kind: Secret
 metadata:
-  creationTimestamp: null
   labels:
     dptp.openshift.io/requester: ci-secret-bootstrap
   name: prod-secret-1
@@ -1810,7 +1809,6 @@ data:
   key-name-6: YXR0YWNobWVudC1uYW1lLTMtMi12YWx1ZQ==
 kind: Secret
 metadata:
-  creationTimestamp: null
   labels:
     dptp.openshift.io/requester: ci-secret-bootstrap
   name: prod-secret-2

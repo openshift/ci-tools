@@ -29,6 +29,8 @@ Patches:
 - op: add
   path: /spec/priorityClassName
   value: high-priority-nonpreempting
+- op: remove
+  path: /metadata/creationTimestamp
 allowed: true
 patchType: JSONPatch
 uid: ""

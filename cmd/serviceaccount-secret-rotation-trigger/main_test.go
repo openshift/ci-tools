@@ -7,6 +7,7 @@ import (
 
 	corev1 "k8s.io/api/core/v1"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
+	"k8s.io/apimachinery/pkg/runtime"
 	ctrlruntimeclient "sigs.k8s.io/controller-runtime/pkg/client"
 	fakectrlruntimeclient "sigs.k8s.io/controller-runtime/pkg/client/fake"
 )
@@ -107,16 +108,16 @@ func TestClean(t *testing.T) {
 						Name:      "some-sa",
 						Namespace: "default",
 					},
-					Secrets:          []corev1.ObjectReference{{}},
-					ImagePullSecrets: []corev1.LocalObjectReference{{}},
+					Secrets:          []corev1.ObjectReference{{Name: "test-secret"}},
+					ImagePullSecrets: []corev1.LocalObjectReference{{Name: "test-pull-secret"}},
 				},
 				&corev1.ServiceAccount{
 					ObjectMeta: metav1.ObjectMeta{
 						Name:      "some-sa",
 						Namespace: "non-default",
 					},
-					Secrets:          []corev1.ObjectReference{{}},
-					ImagePullSecrets: []corev1.LocalObjectReference{{}},
+					Secrets:          []corev1.ObjectReference{{Name: "test-secret"}},
+					ImagePullSecrets: []corev1.LocalObjectReference{{Name: "test-pull-secret"}},
 				},
 			),
 			namespaces: []string{"default", "non-default"},
@@ -175,9 +176,13 @@ func TestClean(t *testing.T) {
 
 // Always use multiple clients to implicitly verify threadsafety
 func createObjectInMultipleFakeClusters(obj ...ctrlruntimeclient.Object) map[string]ctrlruntimeclient.Client {
+	scheme := runtime.NewScheme()
+	if err := corev1.AddToScheme(scheme); err != nil {
+		panic(err)
+	}
 	return map[string]ctrlruntimeclient.Client{
-		"a": fakectrlruntimeclient.NewClientBuilder().WithObjects(obj...).Build(),
-		"b": fakectrlruntimeclient.NewClientBuilder().WithObjects(obj...).Build(),
+		"a": fakectrlruntimeclient.NewClientBuilder().WithScheme(scheme).WithObjects(obj...).Build(),
+		"b": fakectrlruntimeclient.NewClientBuilder().WithScheme(scheme).WithObjects(obj...).Build(),
 	}
 }
 

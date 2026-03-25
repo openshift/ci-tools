@@ -307,9 +307,17 @@ type ClusterMetadata struct {
 }
 
 type ClusterPlatformMetadata struct {
+	// AWS holds AWS-specific cluster metadata
+	// +optional
+	AWS *aws.Metadata `json:"aws,omitempty"`
+
 	// Azure holds azure-specific cluster metadata
 	// +optional
 	Azure *azure.Metadata `json:"azure,omitempty"`
+
+	// GCP holds GCP-specific cluster metadata
+	// +optional
+	GCP *gcp.Metadata `json:"gcp,omitempty"`
 }
 
 // ClusterDeploymentStatus defines the observed state of ClusterDeployment
@@ -592,7 +600,7 @@ const InitializedConditionReason = "Initialized"
 // +kubebuilder:printcolumn:name="InfraID",type="string",JSONPath=".spec.clusterMetadata.infraID"
 // +kubebuilder:printcolumn:name="Platform",type="string",JSONPath=".metadata.labels.hive\\.openshift\\.io/cluster-platform"
 // +kubebuilder:printcolumn:name="Region",type="string",JSONPath=".metadata.labels.hive\\.openshift\\.io/cluster-region"
-// +kubebuilder:printcolumn:name="Version",type="string",JSONPath=".metadata.labels.hive\\.openshift\\.io/version-major-minor-patch"
+// +kubebuilder:printcolumn:name="Version",type="string",JSONPath=".metadata.labels.hive\\.openshift\\.io/version"
 // +kubebuilder:printcolumn:name="ClusterType",type="string",JSONPath=".metadata.labels.hive\\.openshift\\.io/cluster-type"
 // +kubebuilder:printcolumn:name="ProvisionStatus",type="string",JSONPath=".status.conditions[?(@.type=='Provisioned')].reason"
 // +kubebuilder:printcolumn:name="PowerState",type="string",JSONPath=".status.powerState"

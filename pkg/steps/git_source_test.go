@@ -3,8 +3,9 @@ package steps
 import (
 	"testing"
 
+	"github.com/google/go-cmp/cmp"
+
 	"k8s.io/apimachinery/pkg/api/equality"
-	"k8s.io/apimachinery/pkg/util/diff"
 	prowapi "sigs.k8s.io/prow/pkg/apis/prowjobs/v1"
 
 	"github.com/openshift/ci-tools/pkg/api"
@@ -230,7 +231,7 @@ func TestDetermineRefsWorkdir(t *testing.T) {
 			step := gitSourceStep{config: api.ProjectDirectoryImageBuildInputs{Ref: testCase.ref}}
 			ref := step.determineRefsWorkdir(testCase.refs, testCase.extraRefs)
 			if !equality.Semantic.DeepEqual(ref, testCase.expected) {
-				t.Errorf("Refs are different than expected: %v", diff.ObjectReflectDiff(ref, testCase.expected))
+				t.Errorf("Refs are different than expected: %v", cmp.Diff(ref, testCase.expected))
 			}
 		})
 	}

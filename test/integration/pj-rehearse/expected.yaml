@@ -1,10 +1,7 @@
-- apiVersion: prow.k8s.io/v1
-  kind: ProwJob
-  metadata:
+- metadata:
     annotations:
       prow.k8s.io/context: ci/rehearse/periodic-ci-super-duper-e2e
       prow.k8s.io/job: rehearse-1234-periodic-ci-super-duper-e2e
-    creationTimestamp: null
     labels:
       ci.openshift.io/rehearse: "1234"
       ci.openshift.io/rehearse.context: periodic-ci-super-duper-e2e
@@ -97,13 +94,10 @@
   status:
     startTime: 2020-06-22T22:25:00Z
     state: triggered
-- apiVersion: prow.k8s.io/v1
-  kind: ProwJob
-  metadata:
+- metadata:
     annotations:
       prow.k8s.io/context: ci/rehearse/periodic-ci-super-duper-no-ciop
       prow.k8s.io/job: rehearse-1234-periodic-ci-super-duper-no-ciop
-    creationTimestamp: null
     labels:
       ci.openshift.io/rehearse: "1234"
       ci.openshift.io/rehearse.context: periodic-ci-super-duper-no-ciop
@@ -177,13 +171,10 @@
   status:
     startTime: 2020-06-22T22:25:00Z
     state: triggered
-- apiVersion: prow.k8s.io/v1
-  kind: ProwJob
-  metadata:
+- metadata:
     annotations:
       prow.k8s.io/context: ci/rehearse/periodic-ci-super-duper-periodic-with-unresolved-config
       prow.k8s.io/job: rehearse-1234-periodic-ci-super-duper-periodic-with-unresolved-config
-    creationTimestamp: null
     labels:
       ci.openshift.io/rehearse: "1234"
       ci.openshift.io/rehearse.context: periodic-ci-super-duper-periodic-with-unresolved-config
@@ -260,13 +251,10 @@
   status:
     startTime: 2020-06-22T22:25:00Z
     state: triggered
-- apiVersion: prow.k8s.io/v1
-  kind: ProwJob
-  metadata:
+- metadata:
     annotations:
       prow.k8s.io/context: ci/rehearse/periodic-ci-super-duper-periodic-with-unresolved-config-no-target
       prow.k8s.io/job: rehearse-1234-periodic-ci-super-duper-periodic-with-unresolved-config-no-target
-    creationTimestamp: null
     labels:
       ci.openshift.io/rehearse: "1234"
       ci.openshift.io/rehearse.context: periodic-ci-super-duper-periodic-with-unresolved-config-no-txxx
@@ -342,13 +330,10 @@
   status:
     startTime: 2020-06-22T22:25:00Z
     state: triggered
-- apiVersion: prow.k8s.io/v1
-  kind: ProwJob
-  metadata:
+- metadata:
     annotations:
       prow.k8s.io/context: ci/rehearse/periodic-ci-super-trooper-master-changed-and-uses-changed-workflow
       prow.k8s.io/job: rehearse-1234-periodic-ci-super-trooper-master-changed-and-uses-changed-workflow
-    creationTimestamp: null
     labels:
       ci.openshift.io/rehearse: "1234"
       ci.openshift.io/rehearse.context: periodic-ci-super-trooper-master-changed-and-uses-changed-woxxx
@@ -446,13 +431,10 @@
   status:
     startTime: 2020-06-22T22:25:00Z
     state: triggered
-- apiVersion: prow.k8s.io/v1
-  kind: ProwJob
-  metadata:
+- metadata:
     annotations:
       prow.k8s.io/context: ci/rehearse/periodic-ci-super-trooper-master-changed-periodic
       prow.k8s.io/job: rehearse-1234-periodic-ci-super-trooper-master-changed-periodic
-    creationTimestamp: null
     labels:
       ci.openshift.io/generator: prowgen
       ci.openshift.io/rehearse: "1234"
@@ -573,13 +555,10 @@
   status:
     startTime: 2020-06-22T22:25:00Z
     state: triggered
-- apiVersion: prow.k8s.io/v1
-  kind: ProwJob
-  metadata:
+- metadata:
     annotations:
       prow.k8s.io/context: ci/rehearse/super/duper/ciop-cfg-change/custom
       prow.k8s.io/job: rehearse-1234-pull-ci-super-duper-ciop-cfg-change-custom
-    creationTimestamp: null
     labels:
       ci.openshift.io/rehearse: "1234"
       ci.openshift.io/rehearse.context: custom
@@ -663,13 +642,10 @@
   status:
     startTime: 2020-06-22T22:25:00Z
     state: triggered
-- apiVersion: prow.k8s.io/v1
-  kind: ProwJob
-  metadata:
+- metadata:
     annotations:
       prow.k8s.io/context: ci/rehearse/super/duper/ciop-cfg-change/images
       prow.k8s.io/job: rehearse-1234-pull-ci-super-duper-ciop-cfg-change-images
-    creationTimestamp: null
     labels:
       ci.openshift.io/generator: prowgen
       ci.openshift.io/rehearse: "1234"
@@ -773,13 +749,10 @@
   status:
     startTime: 2020-06-22T22:25:00Z
     state: triggered
-- apiVersion: prow.k8s.io/v1
-  kind: ProwJob
-  metadata:
+- metadata:
     annotations:
       prow.k8s.io/context: ci/rehearse/super/duper/master/cmd
       prow.k8s.io/job: rehearse-1234-pull-ci-super-duper-master-cmd
-    creationTimestamp: null
     labels:
       ci.openshift.io/rehearse: "1234"
       ci.openshift.io/rehearse.context: cmd
@@ -859,13 +832,10 @@
   status:
     startTime: 2020-06-22T22:25:00Z
     state: triggered
-- apiVersion: prow.k8s.io/v1
-  kind: ProwJob
-  metadata:
+- metadata:
     annotations:
       prow.k8s.io/context: ci/rehearse/super/duper/master/e2e-aws
       prow.k8s.io/job: rehearse-1234-pull-ci-super-duper-master-e2e-aws
-    creationTimestamp: null
     labels:
       ci.openshift.io/rehearse: "1234"
       ci.openshift.io/rehearse.context: e2e-aws
@@ -960,13 +930,10 @@
   status:
     startTime: 2020-06-22T22:25:00Z
     state: triggered
-- apiVersion: prow.k8s.io/v1
-  kind: ProwJob
-  metadata:
+- metadata:
     annotations:
       prow.k8s.io/context: ci/rehearse/super/trooper/master/e2e-aws
       prow.k8s.io/job: rehearse-1234-pull-ci-super-trooper-master-e2e-aws
-    creationTimestamp: null
     labels:
       ci.openshift.io/rehearse: "1234"
       ci.openshift.io/rehearse.context: e2e-aws
@@ -1061,13 +1028,10 @@
   status:
     startTime: 2020-06-22T22:25:00Z
     state: triggered
-- apiVersion: prow.k8s.io/v1
-  kind: ProwJob
-  metadata:
+- metadata:
     annotations:
       prow.k8s.io/context: ci/rehearse/super/trooper/master/multistage
       prow.k8s.io/job: rehearse-1234-pull-ci-super-trooper-master-multistage
-    creationTimestamp: null
     labels:
       ci.openshift.io/generator: prowgen
       ci.openshift.io/rehearse: "1234"
@@ -1188,13 +1152,10 @@
   status:
     startTime: 2020-06-22T22:25:00Z
     state: triggered
-- apiVersion: prow.k8s.io/v1
-  kind: ProwJob
-  metadata:
+- metadata:
     annotations:
       prow.k8s.io/context: ci/rehearse/super/trooper/master/multistage2
       prow.k8s.io/job: rehearse-1234-pull-ci-super-trooper-master-multistage2
-    creationTimestamp: null
     labels:
       ci.openshift.io/generator: prowgen
       ci.openshift.io/rehearse: "1234"
@@ -1315,13 +1276,10 @@
   status:
     startTime: 2020-06-22T22:25:00Z
     state: triggered
-- apiVersion: prow.k8s.io/v1
-  kind: ProwJob
-  metadata:
+- metadata:
     annotations:
       prow.k8s.io/context: ci/rehearse/super/trooper/master/multistage3
       prow.k8s.io/job: rehearse-1234-pull-ci-super-trooper-master-multistage3
-    creationTimestamp: null
     labels:
       ci-operator.openshift.io/cloud: azure4
       ci-operator.openshift.io/cloud-cluster-profile: azure4
@@ -1444,13 +1402,10 @@
   status:
     startTime: 2020-06-22T22:25:00Z
     state: triggered
-- apiVersion: prow.k8s.io/v1
-  kind: ProwJob
-  metadata:
+- metadata:
     annotations:
       prow.k8s.io/context: ci/rehearse/super/trooper/master/multistage5
       prow.k8s.io/job: rehearse-1234-pull-ci-super-trooper-master-multistage5
-    creationTimestamp: null
     labels:
       ci.openshift.io/generator: prowgen
       ci.openshift.io/rehearse: "1234"
@@ -1571,13 +1526,10 @@
   status:
     startTime: 2020-06-22T22:25:00Z
     state: triggered
-- apiVersion: prow.k8s.io/v1
-  kind: ProwJob
-  metadata:
+- metadata:
     annotations:
       prow.k8s.io/context: ci/rehearse/super/trooper/master/unit
       prow.k8s.io/job: rehearse-1234-pull-ci-super-trooper-master-unit
-    creationTimestamp: null
     labels:
       ci.openshift.io/generator: prowgen
       ci.openshift.io/rehearse: "1234"
@@ -1688,13 +1640,10 @@
   status:
     startTime: 2020-06-22T22:25:00Z
     state: triggered
-- apiVersion: prow.k8s.io/v1
-  kind: ProwJob
-  metadata:
+- metadata:
     annotations:
       prow.k8s.io/context: ci/rehearse/uses/observer/master/test-with-changed-observer
       prow.k8s.io/job: rehearse-1234-pull-ci-uses-observer-master-test-with-changed-observer
-    creationTimestamp: null
     labels:
       ci.openshift.io/generator: prowgen
       ci.openshift.io/rehearse: "1234"
@@ -1815,13 +1764,10 @@
   status:
     startTime: 2020-06-22T22:25:00Z
     state: triggered
-- apiVersion: prow.k8s.io/v1
-  kind: ProwJob
-  metadata:
+- metadata:
     annotations:
       prow.k8s.io/context: ci/rehearse/uses/observer/master/test-with-changed-observer-commands
       prow.k8s.io/job: rehearse-1234-pull-ci-uses-observer-master-test-with-changed-observer-commands
-    creationTimestamp: null
     labels:
       ci.openshift.io/generator: prowgen
       ci.openshift.io/rehearse: "1234"
@@ -1942,13 +1888,10 @@
   status:
     startTime: 2020-06-22T22:25:00Z
     state: triggered
-- apiVersion: prow.k8s.io/v1
-  kind: ProwJob
-  metadata:
+- metadata:
     annotations:
       prow.k8s.io/context: ci/rehearse/uses/observer/master/test-with-changed-observer-workflow
       prow.k8s.io/job: rehearse-1234-pull-ci-uses-observer-master-test-with-changed-observer-workflow
-    creationTimestamp: null
     labels:
       ci.openshift.io/generator: prowgen
       ci.openshift.io/rehearse: "1234"

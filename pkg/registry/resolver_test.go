@@ -8,7 +8,6 @@ import (
 
 	"github.com/google/go-cmp/cmp"
 
-	"k8s.io/apimachinery/pkg/util/diff"
 	utilerrors "k8s.io/apimachinery/pkg/util/errors"
 
 	"github.com/openshift/ci-tools/pkg/api"
@@ -1583,7 +1582,7 @@ func TestResolve(t *testing.T) {
 				t.Errorf("got incorrect error: %s", cmp.Diff(err, testCase.expectedErr))
 			}
 			if !reflect.DeepEqual(ret, testCase.expectedRes) {
-				t.Errorf("got incorrect output: %s", diff.ObjectReflectDiff(ret, testCase.expectedRes))
+				t.Errorf("got incorrect output: %s", cmp.Diff(ret, testCase.expectedRes))
 			}
 		})
 	}

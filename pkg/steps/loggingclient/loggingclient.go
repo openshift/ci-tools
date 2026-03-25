@@ -175,3 +175,7 @@ func (lc *loggingClient) SubResource(subResource string) ctrlruntimeclient.SubRe
 func (lc *loggingClient) MetricsAgent() *metrics.MetricsAgent {
 	return lc.metricsAgent
 }
+
+func (lc *loggingClient) Apply(ctx context.Context, obj runtime.ApplyConfiguration, opts ...ctrlruntimeclient.ApplyOption) error {
+	return lc.upstream.Apply(ctx, obj, opts...)
+}

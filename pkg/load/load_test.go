@@ -9,8 +9,6 @@ import (
 	"github.com/ghodss/yaml"
 	"github.com/google/go-cmp/cmp"
 
-	"k8s.io/apimachinery/pkg/util/diff"
-
 	"github.com/openshift/ci-tools/pkg/api"
 	"github.com/openshift/ci-tools/pkg/registry"
 )
@@ -223,16 +221,16 @@ func TestRegistry(t *testing.T) {
 				t.Errorf("got error when error wasn't expected: %v", err)
 			}
 			if !reflect.DeepEqual(references, testCase.references) {
-				t.Errorf("output references different from expected: %s", diff.ObjectReflectDiff(references, testCase.references))
+				t.Errorf("output references different from expected: %s", cmp.Diff(references, testCase.references))
 			}
 			if !reflect.DeepEqual(chains, testCase.chains) {
-				t.Errorf("output chains different from expected: %s", diff.ObjectReflectDiff(chains, testCase.chains))
+				t.Errorf("output chains different from expected: %s", cmp.Diff(chains, testCase.chains))
 			}
 			if !reflect.DeepEqual(workflows, testCase.workflows) {
-				t.Errorf("output workflows different from expected: %s", diff.ObjectReflectDiff(workflows, testCase.workflows))
+				t.Errorf("output workflows different from expected: %s", cmp.Diff(workflows, testCase.workflows))
 			}
 			if !reflect.DeepEqual(observers, testCase.observers) {
-				t.Errorf("output observers different from expected: %s", diff.ObjectReflectDiff(observers, testCase.observers))
+				t.Errorf("output observers different from expected: %s", cmp.Diff(observers, testCase.observers))
 			}
 		})
 	}

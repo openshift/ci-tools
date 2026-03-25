@@ -39,6 +39,10 @@ type client struct {
 	jobSpec  *api.JobSpec
 }
 
+func (c *client) Apply(ctx context.Context, obj runtime.ApplyConfiguration, opts ...ctrlruntimeclient.ApplyOption) error {
+	return c.upstream.Apply(ctx, obj, opts...)
+}
+
 func (c *client) Get(ctx context.Context, key ctrlruntimeclient.ObjectKey, obj ctrlruntimeclient.Object, opts ...ctrlruntimeclient.GetOption) error {
 	return c.upstream.Get(ctx, key, obj)
 }

@@ -12,7 +12,6 @@ import (
 	coreapi "k8s.io/api/core/v1"
 	"k8s.io/apimachinery/pkg/api/equality"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
-	"k8s.io/apimachinery/pkg/util/diff"
 	utilerrors "k8s.io/apimachinery/pkg/util/errors"
 	"k8s.io/apimachinery/pkg/util/sets"
 	"k8s.io/apimachinery/pkg/util/wait"
@@ -324,7 +323,7 @@ func TestGeneratePodsEnvironment(t *testing.T) {
 				}
 			}
 			if !reflect.DeepEqual(env, tc.expected) {
-				t.Errorf("incorrect environment:\n%s", diff.ObjectReflectDiff(env, tc.expected))
+				t.Errorf("incorrect environment:\n%s", cmp.Diff(env, tc.expected))
 			}
 		})
 	}

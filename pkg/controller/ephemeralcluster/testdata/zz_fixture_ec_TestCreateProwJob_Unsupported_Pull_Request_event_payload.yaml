@@ -2,7 +2,6 @@ metadata:
   annotations:
     ephemeralcluster.ci.openshift.io/pr-event-headers: '{}'
     ephemeralcluster.ci.openshift.io/pr-event-payload: '{}'
-  creationTimestamp: null
   name: ec
   namespace: ns
   resourceVersion: "1000"

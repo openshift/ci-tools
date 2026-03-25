@@ -4,7 +4,8 @@ import (
 	"reflect"
 	"testing"
 
-	"k8s.io/apimachinery/pkg/util/diff"
+	"github.com/google/go-cmp/cmp"
+
 	"sigs.k8s.io/prow/pkg/plugins"
 
 	"github.com/openshift/ci-tools/pkg/api"
@@ -187,7 +188,7 @@ func TestEditPluginConfig(t *testing.T) {
 		t.Run(testCase.name, func(t *testing.T) {
 			editPluginConfig(testCase.pluginConfig, testCase.config)
 			if actual, expected := testCase.pluginConfig, testCase.expected; !reflect.DeepEqual(actual, expected) {
-				t.Errorf("%s: got incorrect edited Prow plugin config: %v", testCase.name, diff.ObjectReflectDiff(actual, expected))
+				t.Errorf("%s: got incorrect edited Prow plugin config: %v", testCase.name, cmp.Diff(actual, expected))
 			}
 		})
 	}
@@ -689,7 +690,7 @@ func TestGenerateCIOperatorConfig(t *testing.T) {
 	for _, testCase := range testCases {
 		t.Run(testCase.name, func(t *testing.T) {
 			if actual, expected := generateCIOperatorConfig(testCase.config, testCase.originConfig), testCase.expected; !reflect.DeepEqual(actual, expected) {
-				t.Errorf("%s: got incorrect generated CI Operator config: %v", testCase.name, diff.ObjectReflectDiff(actual, expected))
+				t.Errorf("%s: got incorrect generated CI Operator config: %v", testCase.name, cmp.Diff(actual, expected))
 			}
 		})
 	}

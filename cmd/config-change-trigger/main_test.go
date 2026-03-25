@@ -5,9 +5,9 @@ import (
 	"reflect"
 	"testing"
 
+	"github.com/google/go-cmp/cmp"
 	"github.com/pkg/errors"
 
-	"k8s.io/apimachinery/pkg/util/diff"
 	v1 "sigs.k8s.io/prow/pkg/apis/prowjobs/v1"
 	prowconfig "sigs.k8s.io/prow/pkg/config"
 
@@ -174,7 +174,7 @@ func TestJobsFor(t *testing.T) {
 			}
 
 			if !reflect.DeepEqual(actualSpecsNStates, testCase.expected) {
-				t.Errorf("%s: did not get correct job specs: %v", testCase.name, diff.ObjectReflectDiff(actualSpecsNStates, testCase.expected))
+				t.Errorf("%s: did not get correct job specs: %v", testCase.name, cmp.Diff(actualSpecsNStates, testCase.expected))
 			}
 		})
 	}

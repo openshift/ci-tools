@@ -1,5 +1,4 @@
 - metadata:
-    creationTimestamp: null
     name: prpqr-test
     namespace: test-namespace
     resourceVersion: "1000"

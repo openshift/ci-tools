@@ -8,7 +8,6 @@ import (
 
 	"github.com/google/go-cmp/cmp"
 
-	"k8s.io/utils/diff"
 	"k8s.io/utils/ptr"
 
 	"github.com/openshift/ci-tools/pkg/api"
@@ -507,7 +506,7 @@ func TestValidateReleaseTagConfiguration(t *testing.T) {
 	for _, testCase := range testCases {
 		t.Run(testCase.name, func(t *testing.T) {
 			if actual, expected := validateReleaseTagConfiguration("tag_specification", testCase.input), testCase.expected; !reflect.DeepEqual(actual, expected) {
-				t.Errorf("%s: got incorrect errors: %v", testCase.name, diff.ObjectDiff(actual, expected))
+				t.Errorf("%s: got incorrect errors: %v", testCase.name, cmp.Diff(actual, expected))
 			}
 		})
 	}

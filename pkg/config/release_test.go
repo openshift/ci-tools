@@ -11,7 +11,6 @@ import (
 
 	"github.com/google/go-cmp/cmp"
 
-	"k8s.io/apimachinery/pkg/util/diff"
 	"sigs.k8s.io/prow/pkg/plugins"
 
 	"github.com/openshift/ci-tools/pkg/registry"
@@ -70,7 +69,7 @@ git commit --quiet --all --message changes
 		t.Fatal(err)
 	}
 	if !reflect.DeepEqual(expected, changed) {
-		t.Fatal(diff.ObjectDiff(expected, changed))
+		t.Fatal(cmp.Diff(expected, changed))
 	}
 }
 

@@ -44,6 +44,7 @@ MIT License Copyright (c) 2014-2020 Montana Flynn (<a href="https://montanaflynn
 * [func CumulativeSum(input Float64Data) ([]float64, error)](#CumulativeSum)
 * [func Entropy(input Float64Data) (float64, error)](#Entropy)
 * [func EuclideanDistance(dataPointX, dataPointY Float64Data) (distance float64, err error)](#EuclideanDistance)
+* [func ExpGeom(p float64) (exp float64, err error)](#ExpGeom)
 * [func GeometricMean(input Float64Data) (float64, error)](#GeometricMean)
 * [func HarmonicMean(input Float64Data) (float64, error)](#HarmonicMean)
 * [func InterQuartileRange(input Float64Data) (float64, error)](#InterQuartileRange)
@@ -81,6 +82,7 @@ MIT License Copyright (c) 2014-2020 Montana Flynn (<a href="https://montanaflynn
 * [func Percentile(input Float64Data, percent float64) (percentile float64, err error)](#Percentile)
 * [func PercentileNearestRank(input Float64Data, percent float64) (percentile float64, err error)](#PercentileNearestRank)
 * [func PopulationVariance(input Float64Data) (pvar float64, err error)](#PopulationVariance)
+* [func ProbGeom(a int, b int, p float64) (prob float64, err error)](#ProbGeom)
 * [func Round(input float64, places int) (rounded float64, err error)](#Round)
 * [func Sample(input Float64Data, takenum int, replacement bool) ([]float64, error)](#Sample)
 * [func SampleVariance(input Float64Data) (svar float64, err error)](#SampleVariance)
@@ -94,6 +96,7 @@ MIT License Copyright (c) 2014-2020 Montana Flynn (<a href="https://montanaflynn
 * [func StdDevS(input Float64Data) (sdev float64, err error)](#StdDevS)
 * [func Sum(input Float64Data) (sum float64, err error)](#Sum)
 * [func Trimean(input Float64Data) (float64, error)](#Trimean)
+* [func VarGeom(p float64) (exp float64, err error)](#VarGeom)
 * [func VarP(input Float64Data) (sdev float64, err error)](#VarP)
 * [func VarS(input Float64Data) (sdev float64, err error)](#VarS)
 * [func Variance(input Float64Data) (sdev float64, err error)](#Variance)
@@ -129,6 +132,7 @@ MIT License Copyright (c) 2014-2020 Montana Flynn (<a href="https://montanaflynn
   * [func (f Float64Data) PopulationVariance() (float64, error)](#Float64Data.PopulationVariance)
   * [func (f Float64Data) Quartile(d Float64Data) (Quartiles, error)](#Float64Data.Quartile)
   * [func (f Float64Data) QuartileOutliers() (Outliers, error)](#Float64Data.QuartileOutliers)
+  * [func (f Float64Data) Quartiles() (Quartiles, error)](#Float64Data.Quartiles)
   * [func (f Float64Data) Sample(n int, r bool) ([]float64, error)](#Float64Data.Sample)
   * [func (f Float64Data) SampleVariance() (float64, error)](#Float64Data.SampleVariance)
   * [func (f Float64Data) Sigmoid() ([]float64, error)](#Float64Data.Sigmoid)
@@ -155,18 +159,21 @@ MIT License Copyright (c) 2014-2020 Montana Flynn (<a href="https://montanaflynn
 * [Correlation](#example_Correlation)
 * [CumulativeSum](#example_CumulativeSum)
 * [Entropy](#example_Entropy)
+* [ExpGeom](#example_ExpGeom)
 * [LinearRegression](#example_LinearRegression)
 * [LoadRawData](#example_LoadRawData)
 * [Max](#example_Max)
 * [Median](#example_Median)
 * [Min](#example_Min)
+* [ProbGeom](#example_ProbGeom)
 * [Round](#example_Round)
 * [Sigmoid](#example_Sigmoid)
 * [SoftMax](#example_SoftMax)
 * [Sum](#example_Sum)
+* [VarGeom](#example_VarGeom)
 
 #### <a name="pkg-files">Package files</a>
-[correlation.go](/src/github.com/montanaflynn/stats/correlation.go) [cumulative_sum.go](/src/github.com/montanaflynn/stats/cumulative_sum.go) [data.go](/src/github.com/montanaflynn/stats/data.go) [deviation.go](/src/github.com/montanaflynn/stats/deviation.go) [distances.go](/src/github.com/montanaflynn/stats/distances.go) [doc.go](/src/github.com/montanaflynn/stats/doc.go) [entropy.go](/src/github.com/montanaflynn/stats/entropy.go) [errors.go](/src/github.com/montanaflynn/stats/errors.go) [legacy.go](/src/github.com/montanaflynn/stats/legacy.go) [load.go](/src/github.com/montanaflynn/stats/load.go) [max.go](/src/github.com/montanaflynn/stats/max.go) [mean.go](/src/github.com/montanaflynn/stats/mean.go) [median.go](/src/github.com/montanaflynn/stats/median.go) [min.go](/src/github.com/montanaflynn/stats/min.go) [mode.go](/src/github.com/montanaflynn/stats/mode.go) [norm.go](/src/github.com/montanaflynn/stats/norm.go) [outlier.go](/src/github.com/montanaflynn/stats/outlier.go) [percentile.go](/src/github.com/montanaflynn/stats/percentile.go) [quartile.go](/src/github.com/montanaflynn/stats/quartile.go) [ranksum.go](/src/github.com/montanaflynn/stats/ranksum.go) [regression.go](/src/github.com/montanaflynn/stats/regression.go) [round.go](/src/github.com/montanaflynn/stats/round.go) [sample.go](/src/github.com/montanaflynn/stats/sample.go) [sigmoid.go](/src/github.com/montanaflynn/stats/sigmoid.go) [softmax.go](/src/github.com/montanaflynn/stats/softmax.go) [sum.go](/src/github.com/montanaflynn/stats/sum.go) [util.go](/src/github.com/montanaflynn/stats/util.go) [variance.go](/src/github.com/montanaflynn/stats/variance.go) 
+[correlation.go](/src/github.com/montanaflynn/stats/correlation.go) [cumulative_sum.go](/src/github.com/montanaflynn/stats/cumulative_sum.go) [data.go](/src/github.com/montanaflynn/stats/data.go) [deviation.go](/src/github.com/montanaflynn/stats/deviation.go) [distances.go](/src/github.com/montanaflynn/stats/distances.go) [doc.go](/src/github.com/montanaflynn/stats/doc.go) [entropy.go](/src/github.com/montanaflynn/stats/entropy.go) [errors.go](/src/github.com/montanaflynn/stats/errors.go) [geometric_distribution.go](/src/github.com/montanaflynn/stats/geometric_distribution.go) [legacy.go](/src/github.com/montanaflynn/stats/legacy.go) [load.go](/src/github.com/montanaflynn/stats/load.go) [max.go](/src/github.com/montanaflynn/stats/max.go) [mean.go](/src/github.com/montanaflynn/stats/mean.go) [median.go](/src/github.com/montanaflynn/stats/median.go) [min.go](/src/github.com/montanaflynn/stats/min.go) [mode.go](/src/github.com/montanaflynn/stats/mode.go) [norm.go](/src/github.com/montanaflynn/stats/norm.go) [outlier.go](/src/github.com/montanaflynn/stats/outlier.go) [percentile.go](/src/github.com/montanaflynn/stats/percentile.go) [quartile.go](/src/github.com/montanaflynn/stats/quartile.go) [ranksum.go](/src/github.com/montanaflynn/stats/ranksum.go) [regression.go](/src/github.com/montanaflynn/stats/regression.go) [round.go](/src/github.com/montanaflynn/stats/round.go) [sample.go](/src/github.com/montanaflynn/stats/sample.go) [sigmoid.go](/src/github.com/montanaflynn/stats/sigmoid.go) [softmax.go](/src/github.com/montanaflynn/stats/softmax.go) [sum.go](/src/github.com/montanaflynn/stats/sum.go) [util.go](/src/github.com/montanaflynn/stats/util.go) [variance.go](/src/github.com/montanaflynn/stats/variance.go) 
 
 
 
@@ -273,6 +280,15 @@ Entropy provides calculation of the entropy
 func EuclideanDistance(dataPointX, dataPointY Float64Data) (distance float64, err error)
 ```
 EuclideanDistance computes the Euclidean distance between two data sets
+
+
+
+## <a name="ExpGeom">func</a> [ExpGeom](/geometric_distribution.go?s=652:700#L27)
+``` go
+func ExpGeom(p float64) (exp float64, err error)
+```
+ProbGeom generates the expectation or average number of trials
+for a geometric random variable with parameter p
 
 
 
@@ -601,6 +617,16 @@ PopulationVariance finds the amount of variance within a population
 
 
 
+## <a name="ProbGeom">func</a> [ProbGeom](/geometric_distribution.go?s=258:322#L10)
+``` go
+func ProbGeom(a int, b int, p float64) (prob float64, err error)
+```
+ProbGeom generates the probability for a geometric random variable
+with parameter p to achieve success in the interval of [a, b] trials
+See <a href="https://en.wikipedia.org/wiki/Geometric_distribution">https://en.wikipedia.org/wiki/Geometric_distribution</a> for more information
+
+
+
 ## <a name="Round">func</a> [Round](/round.go?s=88:154#L6)
 ``` go
 func Round(input float64, places int) (rounded float64, err error)
@@ -670,7 +696,7 @@ StandardDeviationPopulation finds the amount of variation from the population
 
 
 
-## <a name="StandardDeviationSample">func</a> [StandardDeviationSample](/deviation.go?s=1254:1327#L46)
+## <a name="StandardDeviationSample">func</a> [StandardDeviationSample](/deviation.go?s=1250:1323#L46)
 ``` go
 func StandardDeviationSample(input Float64Data) (sdev float64, err error)
 ```
@@ -707,6 +733,15 @@ Sum adds all the numbers of a slice together
 func Trimean(input Float64Data) (float64, error)
 ```
 Trimean finds the average of the median and the midhinge
+
+
+
+## <a name="VarGeom">func</a> [VarGeom](/geometric_distribution.go?s=885:933#L37)
+``` go
+func VarGeom(p float64) (exp float64, err error)
+```
+ProbGeom generates the variance for number for a
+geometric random variable with parameter p
 
 
 
@@ -786,7 +821,7 @@ Float64Data is a named type for []float64 with helper methods
 
 
 
-### <a name="LoadRawData">func</a> [LoadRawData](/load.go?s=119:168#L9)
+### <a name="LoadRawData">func</a> [LoadRawData](/load.go?s=145:194#L12)
 ``` go
 func LoadRawData(raw interface{}) (f Float64Data)
 ```
@@ -1026,6 +1061,15 @@ Quartile returns the three quartile points from a slice of data
 func (f Float64Data) QuartileOutliers() (Outliers, error)
 ```
 QuartileOutliers finds the mild and extreme outliers
+
+
+
+
+### <a name="Float64Data.Quartiles">func</a> (Float64Data) [Quartiles](/data.go?s=5628:5679#L167)
+``` go
+func (f Float64Data) Quartiles() (Quartiles, error)
+```
+Quartiles returns the three quartile points from instance of Float64Data
 
 
 

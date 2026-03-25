@@ -1,11 +1,8 @@
 items:
-- apiVersion: prow.k8s.io/v1
-  kind: ProwJob
-  metadata:
+- metadata:
     annotations:
       prow.k8s.io/context: ci/prow/cluster-provisioning
       prow.k8s.io/job: ephemeralcluster-ci-openshift-ci-tools-main-cluster-provisioning
-    creationTimestamp: null
     labels:
       ci-operator.openshift.io/cloud: aws
       ci-operator.openshift.io/cloud-cluster-profile: aws

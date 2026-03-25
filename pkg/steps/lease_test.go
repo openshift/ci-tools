@@ -11,7 +11,6 @@ import (
 
 	corev1 "k8s.io/api/core/v1"
 	v1 "k8s.io/apimachinery/pkg/apis/meta/v1"
-	"k8s.io/apimachinery/pkg/util/diff"
 	"k8s.io/utils/ptr"
 	"sigs.k8s.io/boskos/common"
 	ctrlruntimeclient "sigs.k8s.io/controller-runtime/pkg/client"
@@ -81,27 +80,27 @@ func TestLeaseStepForward(t *testing.T) {
 			t.Fatal(err)
 		}
 		if !reflect.DeepEqual(l, s) {
-			t.Errorf("not properly forwarded: %s", diff.ObjectDiff(l, s))
+			t.Errorf("not properly forwarded: %s", cmp.Diff(l, s))
 		}
 	})
 	t.Run("Name", func(t *testing.T) {
 		if s, l := step.Name(), withLease.Name(); l != s {
-			t.Errorf("not properly forwarded: %s", diff.ObjectDiff(l, s))
+			t.Errorf("not properly forwarded: %s", cmp.Diff(l, s))
 		}
 	})
 	t.Run("Description", func(t *testing.T) {
 		if s, l := step.Description(), withLease.Description(); l != s {
-			t.Errorf("not properly forwarded: %s", diff.ObjectDiff(l, s))
+			t.Errorf("not properly forwarded: %s", cmp.Diff(l, s))
 		}
 	})
 	t.Run("Requires", func(t *testing.T) {
 		if s, l := step.Requires(), withLease.Requires(); !reflect.DeepEqual(l, s) {
-			t.Errorf("not properly forwarded: %s", diff.ObjectDiff(l, s))
+			t.Errorf("not properly forwarded: %s", cmp.Diff(l, s))
 		}
 	})
 	t.Run("Creates", func(t *testing.T) {
 		if s, l := step.Creates(), withLease.Creates(); !reflect.DeepEqual(l, s) {
-			t.Errorf("not properly forwarded: %s", diff.ObjectDiff(l, s))
+			t.Errorf("not properly forwarded: %s", cmp.Diff(l, s))
 		}
 	})
 	t.Run("Provides includes parameters from wrapped step", func(t *testing.T) {
@@ -116,13 +115,13 @@ func TestLeaseStepForward(t *testing.T) {
 			t.Fatal(err)
 		}
 		if !reflect.DeepEqual(lRet, sRet) {
-			t.Errorf("not properly forwarded (param): %s", diff.ObjectDiff(lParam, sParam))
+			t.Errorf("not properly forwarded (param): %s", cmp.Diff(lParam, sParam))
 		}
 	})
 	t.Run("SubTests", func(T *testing.T) {
 		s, l := step.SubTests(), withLease.(SubtestReporter).SubTests()
 		if !reflect.DeepEqual(l, s) {
-			t.Errorf("not properly forwarded: %s", diff.ObjectDiff(l, s))
+			t.Errorf("not properly forwarded: %s", cmp.Diff(l, s))
 		}
 	})
 }
@@ -232,7 +231,7 @@ func TestError(t *testing.T) {
 			}
 			testhelper.Diff(t, "reasons", results.Reasons(err), tc.expectedReasons)
 			if !reflect.DeepEqual(calls, tc.expected) {
-				t.Fatalf("wrong calls to the lease client: %s", diff.ObjectDiff(calls, tc.expected))
+				t.Fatalf("wrong calls to the lease client: %s", cmp.Diff(calls, tc.expected))
 			}
 		})
 	}

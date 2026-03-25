@@ -50,7 +50,12 @@ const (
 
 func init() {
 	utilruntime.Must(coreapi.AddToScheme(coreScheme))
-	encoder = codecFactory.LegacyCodec(coreapi.SchemeGroupVersion)
+	encoder = codecFactory.CodecForVersions(
+		serializer.NewCodecFactory(coreScheme).LegacyCodec(coreapi.SchemeGroupVersion),
+		serializer.NewCodecFactory(coreScheme).UniversalDecoder(),
+		runtime.NewMultiGroupVersioner(coreapi.SchemeGroupVersion),
+		runtime.InternalGroupVersioner,
+	)
 }
 
 func main() {

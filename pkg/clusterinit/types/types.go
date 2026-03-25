@@ -61,3 +61,4 @@ type Step interface {
 
 type CmdBuilder func(ctx context.Context, program string, args ...string) *exec.Cmd
 type CmdRunner func(cmd *exec.Cmd) error
+type InstallConfigPatcher func(installConfigPath string) error

@@ -1,6 +1,7 @@
 package ldap
 
 import (
+	"errors"
 	"fmt"
 
 	ber "github.com/go-asn1-ber/asn1-ber"
@@ -219,7 +220,7 @@ func GetLDAPError(packet *ber.Packet) error {
 					return &Error{
 						ResultCode: resultCode,
 						MatchedDN:  response.Children[1].Value.(string),
-						Err:        fmt.Errorf("%s", response.Children[2].Value.(string)),
+						Err:        fmt.Errorf("%v", response.Children[2].Value),
 						Packet:     packet,
 					}
 				}
@@ -241,8 +242,8 @@ func IsErrorAnyOf(err error, codes ...uint16) bool {
 		return false
 	}
 
-	serverError, ok := err.(*Error)
-	if !ok {
+	var serverError *Error
+	if !errors.As(err, &serverError) {
 		return false
 	}
 

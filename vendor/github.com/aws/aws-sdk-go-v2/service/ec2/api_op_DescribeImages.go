@@ -29,12 +29,25 @@ import (
 // deregistered AMI are terminated, specifying the ID of the image will eventually
 // return an error indicating that the AMI ID cannot be found.
 //
+// When Allowed AMIs is set to enabled , only allowed images are returned in the
+// results, with the imageAllowed field set to true for each image. In audit-mode ,
+// the imageAllowed field is set to true for images that meet the account's
+// Allowed AMIs criteria, and false for images that don't meet the criteria. For
+// more information, see EnableAllowedImagesSettings.
+//
+// The Amazon EC2 API follows an eventual consistency model. This means that the
+// result of an API command you run that creates or modifies resources might not be
+// immediately available to all subsequent commands you run. For guidance on how to
+// manage eventual consistency, see [Eventual consistency in the Amazon EC2 API]in the Amazon EC2 Developer Guide.
+//
 // We strongly recommend using only paginated requests. Unpaginated requests are
 // susceptible to throttling and timeouts.
 //
 // The order of the elements in the response, including those within nested
 // structures, might vary. Applications should not assume the elements appear in a
 // particular order.
+//
+// [Eventual consistency in the Amazon EC2 API]: https://docs.aws.amazon.com/ec2/latest/devguide/eventual-consistency.html
 func (c *Client) DescribeImages(ctx context.Context, params *DescribeImagesInput, optFns ...func(*Options)) (*DescribeImagesOutput, error) {
 	if params == nil {
 		params = &DescribeImagesInput{}
@@ -106,7 +119,13 @@ type DescribeImagesInput struct {
 	//   - ena-support - A Boolean that indicates whether enhanced networking with ENA
 	//   is enabled.
 	//
+	//   - free-tier-eligible - A Boolean that indicates whether this image can be used
+	//   under the Amazon Web Services Free Tier ( true | false ).
+	//
 	//   - hypervisor - The hypervisor type ( ovm | xen ).
+	//
+	//   - image-allowed - A Boolean that indicates whether the image meets the
+	//   criteria specified for Allowed AMIs.
 	//
 	//   - image-id - The ID of the image.
 	//
@@ -141,6 +160,10 @@ type DescribeImagesInput struct {
 	//
 	//   - root-device-type - The type of the root device volume ( ebs | instance-store
 	//   ).
+	//
+	//   - source-image-id - The ID of the source AMI from which the AMI was created.
+	//
+	//   - source-image-region - The Region of the source AMI.
 	//
 	//   - source-instance-id - The ID of the instance that the AMI was created from if
 	//   the AMI was created using CreateImage. This filter is applicable only if the AMI
@@ -283,6 +306,9 @@ func (c *Client) addOperationDescribeImagesMiddlewares(stack *middleware.Stack, 
 		return err
 	}
 	if err = addUserAgentRetryMode(stack, options); err != nil {
+		return err
+	}
+	if err = addCredentialSource(stack, options); err != nil {
 		return err
 	}
 	if err = stack.Initialize.Add(newServiceMetadataMiddleware_opDescribeImages(options.Region), middleware.Before); err != nil {
@@ -519,6 +545,9 @@ func imageAvailableStateRetryable(ctx context.Context, input *DescribeImagesInpu
 		}
 	}
 
+	if err != nil {
+		return false, err
+	}
 	return true, nil
 }
 
@@ -707,6 +736,9 @@ func imageExistsStateRetryable(ctx context.Context, input *DescribeImagesInput, 
 		}
 	}
 
+	if err != nil {
+		return false, err
+	}
 	return true, nil
 }
 

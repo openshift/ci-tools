@@ -37,6 +37,12 @@ func runCmdFunc(e error) func(*exec.Cmd) error {
 	return func(c *exec.Cmd) error { return e }
 }
 
+func runPatchInstallConfigFunc() func(string) error {
+	return func(installConfigPath string) error {
+		return nil
+	}
+}
+
 func TestRun(t *testing.T) {
 	for _, tc := range []struct {
 		params  testParams
@@ -51,7 +57,8 @@ func TestRun(t *testing.T) {
 			newStep: func(t *testing.T, tc testParams) types.Step {
 				return NewCreateInstallConfigStep(logrus.NewEntry(logrus.StandardLogger()), tc.ci,
 					buildCmdFunc(t, tc.wantCmdArgs),
-					runCmdFunc(tc.runCmdErr))
+					runCmdFunc(tc.runCmdErr),
+					runPatchInstallConfigFunc())
 			},
 		},
 		{
@@ -65,7 +72,8 @@ func TestRun(t *testing.T) {
 			newStep: func(t *testing.T, tc testParams) types.Step {
 				return NewCreateInstallConfigStep(logrus.NewEntry(logrus.StandardLogger()), tc.ci,
 					buildCmdFunc(t, tc.wantCmdArgs),
-					runCmdFunc(tc.runCmdErr))
+					runCmdFunc(tc.runCmdErr),
+					runPatchInstallConfigFunc())
 			},
 		},
 		{

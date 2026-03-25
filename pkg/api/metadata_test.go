@@ -7,8 +7,6 @@ import (
 
 	"github.com/google/go-cmp/cmp"
 
-	"k8s.io/utils/diff"
-
 	"github.com/openshift/ci-tools/pkg/testhelper"
 )
 
@@ -89,7 +87,7 @@ func TestMetadata_Basename(t *testing.T) {
 	for _, testCase := range testCases {
 		t.Run(testCase.expected, func(t *testing.T) {
 			if actual, expected := testCase.metadata.Basename(), testCase.expected; !reflect.DeepEqual(actual, expected) {
-				t.Errorf("%s: didn't get correct basename: %v", testCase.name, diff.ObjectReflectDiff(actual, expected))
+				t.Errorf("%s: didn't get correct basename: %v", testCase.name, cmp.Diff(actual, expected))
 			}
 		})
 	}
@@ -207,7 +205,7 @@ func TestMetadata_ConfigMapName(t *testing.T) {
 			info := Metadata{Branch: testCase.branch}
 			actual, expected := info.ConfigMapName(), testCase.expected
 			if !reflect.DeepEqual(actual, expected) {
-				t.Errorf("%s: didn't get correct basename: %v", testCase.name, diff.ObjectReflectDiff(actual, expected))
+				t.Errorf("%s: didn't get correct basename: %v", testCase.name, cmp.Diff(actual, expected))
 			}
 			// test that ConfigMapName() stays in sync with IsCiopConfigCM()
 			if !IsCiopConfigCM(actual) {
@@ -403,7 +401,7 @@ func TestFlavorForBranch(t *testing.T) {
 	for _, testCase := range testCases {
 		t.Run(testCase.expected, func(t *testing.T) {
 			if actual, expected := FlavorForBranch(testCase.branch), testCase.expected; !reflect.DeepEqual(actual, expected) {
-				t.Errorf("%s: didn't get correct basename: %v", testCase.name, diff.ObjectReflectDiff(actual, expected))
+				t.Errorf("%s: didn't get correct basename: %v", testCase.name, cmp.Diff(actual, expected))
 			}
 		})
 	}

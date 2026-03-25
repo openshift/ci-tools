@@ -115,7 +115,7 @@ func restClientFor(config *restclient.Config) (restclient.Interface, error) {
 	}
 
 	codecs := serializer.NewCodecFactory(scheme)
-	return apiutil.RESTClientForGVK(gvk, false, config, codecs, http.DefaultClient)
+	return apiutil.RESTClientForGVK(gvk, false, false, config, codecs, http.DefaultClient)
 }
 
 func podGetterOrDefault(opts PortForwardOptions) (PodGetter, error) {

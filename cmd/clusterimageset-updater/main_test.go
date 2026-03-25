@@ -374,7 +374,6 @@ func TestEnsureLabelsOnClusterPools(t *testing.T) {
 			expectedContent: `apiVersion: hive.openshift.io/v1
 kind: ClusterPool
 metadata:
-  creationTimestamp: null
   labels:
     architecture: amd64
     cloud: aws

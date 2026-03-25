@@ -20,7 +20,7 @@
   				},
   				ResizePolicy:  nil,
   				RestartPolicy: nil,
-  				... // 13 identical fields
+  				... // 14 identical fields
   			},
   			{
   				... // 6 identical fields
@@ -37,7 +37,7 @@
   				},
   				ResizePolicy:  nil,
   				RestartPolicy: nil,
-  				... // 13 identical fields
+  				... // 14 identical fields
   			},
   			{
   				... // 6 identical fields
@@ -55,12 +55,12 @@
   				},
   				ResizePolicy:  nil,
   				RestartPolicy: nil,
-  				... // 13 identical fields
+  				... // 14 identical fields
   			},
   		},
   		EphemeralContainers: nil,
   		RestartPolicy:       "",
-  		... // 35 identical fields
+  		... // 36 identical fields
   	},
   	Status: {},
   }

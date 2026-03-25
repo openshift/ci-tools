@@ -7,8 +7,6 @@ import (
 	"testing"
 
 	"github.com/google/go-cmp/cmp"
-
-	"k8s.io/apimachinery/pkg/util/diff"
 )
 
 func TestAcquire(t *testing.T) {
@@ -20,7 +18,7 @@ func TestAcquire(t *testing.T) {
 	}
 	expected := []string{"acquireWaitWithPriority owner rtype free leased random"}
 	if !reflect.DeepEqual(calls, expected) {
-		t.Fatalf("wrong calls to the boskos client: %v", diff.ObjectDiff(calls, expected))
+		t.Fatalf("wrong calls to the boskos client: %v", cmp.Diff(calls, expected))
 	}
 	if err := client.Heartbeat(); err != nil {
 		t.Fatal(err)
@@ -30,7 +28,7 @@ func TestAcquire(t *testing.T) {
 		"updateone owner rtype_0 leased 0",
 	}
 	if !reflect.DeepEqual(calls, expected) {
-		t.Fatalf("wrong calls to the boskos client: %v", diff.ObjectDiff(calls, expected))
+		t.Fatalf("wrong calls to the boskos client: %v", cmp.Diff(calls, expected))
 	}
 	list, err := client.ReleaseAll()
 	if err != nil {
@@ -38,7 +36,7 @@ func TestAcquire(t *testing.T) {
 	}
 	expected = []string{"rtype_0"}
 	if !reflect.DeepEqual(list, expected) {
-		t.Fatalf("wrong list: %v", diff.ObjectDiff(list, expected))
+		t.Fatalf("wrong list: %v", cmp.Diff(list, expected))
 	}
 }
 

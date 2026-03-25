@@ -37,7 +37,7 @@ func TestValidatePath(t *testing.T) {
 				},
 			},
 			expectedError: []error{
-				errors.New("config_updater.maps.ci-operator/*.gzip: Invalid value: \"null\": field must be set to `true` for jobconfigs"),
+				errors.New("config_updater.maps.ci-operator/*.gzip: Invalid value: null: field must be set to `true` for jobconfigs"),
 			},
 		},
 		{

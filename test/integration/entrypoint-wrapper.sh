@@ -37,7 +37,6 @@ setup_test() {
         '"apiVersion":"v1",' \
         '"metadata":{' \
             '"name":"test",' \
-            '"creationTimestamp":null,' \
             '"labels":{' \
                 '"ci.openshift.io/skip-censoring":"true"' \
             '}' \
@@ -219,7 +218,6 @@ test_upload_on_interrupt() {
         '"apiVersion":"v1",' \
         '"metadata":{' \
             '"name":"test",' \
-            '"creationTimestamp":null,' \
             '"labels":{' \
                 '"ci.openshift.io/skip-censoring":"true"' \
             '}' \

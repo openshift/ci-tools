@@ -1,5 +1,4 @@
 metadata:
-  creationTimestamp: null
   name: ec
   namespace: ns
   resourceVersion: "1000"

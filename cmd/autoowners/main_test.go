@@ -8,7 +8,6 @@ import (
 	"github.com/google/go-cmp/cmp"
 	"github.com/google/go-cmp/cmp/cmpopts"
 
-	"k8s.io/apimachinery/pkg/util/diff"
 	"k8s.io/apimachinery/pkg/util/sets"
 	"sigs.k8s.io/prow/pkg/github"
 	"sigs.k8s.io/prow/pkg/plugins/ownersconfig"
@@ -219,7 +218,7 @@ func TestListUpdatedDirectoriesFromGitStatusOutput(t *testing.T) {
 		t.Errorf("unexpected error occurred when listUpdatedDirectoriesFromGitStatusOutput")
 	}
 	if !reflect.DeepEqual(actual, expected) {
-		t.Errorf("actual differs from expected:\n%s", diff.ObjectReflectDiff(expected, actual))
+		t.Errorf("actual differs from expected:\n%s", cmp.Diff(expected, actual))
 	}
 }
 

@@ -10,7 +10,6 @@ import (
 
 	coreapi "k8s.io/api/core/v1"
 	"k8s.io/apimachinery/pkg/util/sets"
-	"k8s.io/utils/diff"
 
 	imageapi "github.com/openshift/api/image/v1"
 
@@ -135,11 +134,11 @@ func TestToPromote(t *testing.T) {
 		t.Run(test.name, func(t *testing.T) {
 			bySource, names := toPromote(test.config, test.images, test.requiredImages)
 			if actual, expected := bySource, test.expectedBySource; !reflect.DeepEqual(actual, expected) {
-				t.Errorf("%s: got incorrect tags by source: %s", test.name, diff.ObjectDiff(actual, expected))
+				t.Errorf("%s: got incorrect tags by source: %s", test.name, cmp.Diff(actual, expected))
 			}
 
 			if actual, expected := names, test.expectedNames; !reflect.DeepEqual(actual, expected) {
-				t.Errorf("%s: got incorrect names: %s", test.name, diff.ObjectDiff(actual, expected))
+				t.Errorf("%s: got incorrect names: %s", test.name, cmp.Diff(actual, expected))
 			}
 		})
 	}
@@ -295,7 +294,7 @@ func TestPromotedTags(t *testing.T) {
 	for _, testCase := range testCases {
 		t.Run(testCase.name, func(t *testing.T) {
 			if actual, expected := PromotedTags(testCase.input), testCase.expected; !reflect.DeepEqual(actual, expected) {
-				t.Errorf("%s: got incorrect promoted tags: %v", testCase.name, diff.ObjectDiff(actual, expected))
+				t.Errorf("%s: got incorrect promoted tags: %v", testCase.name, cmp.Diff(actual, expected))
 			}
 		})
 	}
@@ -1019,7 +1018,7 @@ func TestGetImageMirror(t *testing.T) {
 	for _, testCase := range testCases {
 		t.Run(testCase.name, func(t *testing.T) {
 			if actual, _ := getImageMirrorTarget(testCase.tags, testCase.pipeline, testCase.registry, "20240603235401", testCase.mirrorFunc, testCase.targetNameFunc); !reflect.DeepEqual(actual, testCase.expected) {
-				t.Errorf("%s: got incorrect ImageMirror mapping: %v", testCase.name, diff.ObjectDiff(actual, testCase.expected))
+				t.Errorf("%s: got incorrect ImageMirror mapping: %v", testCase.name, cmp.Diff(actual, testCase.expected))
 			}
 		})
 	}
@@ -1043,7 +1042,7 @@ func TestGetPublicImageReference(t *testing.T) {
 	for _, testCase := range testCases {
 		t.Run(testCase.name, func(t *testing.T) {
 			if actual, expected := getPublicImageReference(testCase.dockerImageReference, testCase.publicDockerImageRepository), testCase.expected; !reflect.DeepEqual(actual, expected) {
-				t.Errorf("%s: got incorrect public image reference: %v", testCase.name, diff.ObjectDiff(actual, expected))
+				t.Errorf("%s: got incorrect public image reference: %v", testCase.name, cmp.Diff(actual, expected))
 			}
 		})
 	}

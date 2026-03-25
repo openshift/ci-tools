@@ -17,7 +17,6 @@ import (
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	utilerrors "k8s.io/apimachinery/pkg/util/errors"
 	"k8s.io/client-go/kubernetes/scheme"
-	"k8s.io/utils/diff"
 	"k8s.io/utils/pointer"
 	ctrlruntimeclient "sigs.k8s.io/controller-runtime/pkg/client"
 	fakectrlruntimeclient "sigs.k8s.io/controller-runtime/pkg/client/fake"
@@ -416,7 +415,7 @@ func TestGetResolverInfo(t *testing.T) {
 	for _, testCase := range testCases {
 		actual := testCase.opt.getResolverInfo(testCase.jobSpec)
 		if !reflect.DeepEqual(actual, testCase.expected) {
-			t.Errorf("%s: Actual does not match expected:\n%s", testCase.name, diff.ObjectReflectDiff(testCase.expected, actual))
+			t.Errorf("%s: Actual does not match expected:\n%s", testCase.name, cmp.Diff(testCase.expected, actual))
 		}
 	}
 }
@@ -969,7 +968,7 @@ func TestConfig(t *testing.T) {
 				t.Errorf("%s: expected no error, but got one: %v", testCase.name, err)
 			}
 			if actual, expected := config, testCase.expected; !reflect.DeepEqual(actual, expected) {
-				t.Errorf("%s: didn't get correct config: %v", testCase.name, diff.ObjectReflectDiff(actual, expected))
+				t.Errorf("%s: didn't get correct config: %v", testCase.name, cmp.Diff(actual, expected))
 			}
 
 		})

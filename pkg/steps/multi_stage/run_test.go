@@ -17,7 +17,6 @@ import (
 	v1 "k8s.io/api/core/v1"
 	apierrors "k8s.io/apimachinery/pkg/api/errors"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
-	"k8s.io/apimachinery/pkg/util/diff"
 	"k8s.io/apimachinery/pkg/util/sets"
 	"k8s.io/apimachinery/pkg/util/wait"
 	"k8s.io/utils/ptr"
@@ -683,7 +682,7 @@ func TestJUnit(t *testing.T) {
 				names = append(names, t.Name)
 			}
 			if !reflect.DeepEqual(names, tc.expected) {
-				t.Error(diff.ObjectReflectDiff(names, tc.expected))
+				t.Error(cmp.Diff(names, tc.expected))
 			}
 		})
 	}

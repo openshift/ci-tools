@@ -50,7 +50,7 @@ func newOCPCreate(log *logrus.Entry, opts *runtime.Options) *cobra.Command {
 
 			switch args[0] {
 			case "install-config":
-				step = ocp.NewCreateInstallConfigStep(log, clusterInstall, runtime.BuildCmd, runtime.RunCmd)
+				step = ocp.NewCreateInstallConfigStep(log, clusterInstall, runtime.BuildCmd, runtime.RunCmd, ocp.PatchInstallConfig)
 			case "manifests":
 				step = ocp.NewCreateManifestsStep(log, clusterInstall, runtime.BuildCmd, runtime.RunCmd)
 			case "cluster":

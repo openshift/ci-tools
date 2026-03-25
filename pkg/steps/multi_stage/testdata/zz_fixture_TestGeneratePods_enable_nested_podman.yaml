@@ -6,7 +6,6 @@
       io.kubernetes.cri-o.Devices: /dev/fuse,/dev/net/tun
       openshift.io/required-scc: nested-podman
       openshift.io/scc: nested-podman
-    creationTimestamp: null
     labels:
       OPENSHIFT_CI: "true"
       ci.openshift.io/jobid: prow_job_id

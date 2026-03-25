@@ -22,6 +22,7 @@ import (
 	"github.com/openshift/installer/pkg/types/nutanix"
 	"github.com/openshift/installer/pkg/types/openstack"
 	"github.com/openshift/installer/pkg/types/ovirt"
+	"github.com/openshift/installer/pkg/types/powervc"
 	"github.com/openshift/installer/pkg/types/powervs"
 	"github.com/openshift/installer/pkg/types/vsphere"
 )
@@ -45,6 +46,7 @@ var (
 		ibmcloud.Name,
 		nutanix.Name,
 		openstack.Name,
+		powervc.Name,
 		powervs.Name,
 		vsphere.Name,
 	}
@@ -56,14 +58,12 @@ var (
 		none.Name,
 	}
 
-	// FCOS is a setting to enable Fedora CoreOS-only modifications
-	FCOS = false
 	// SCOS is a setting to enable CentOS Stream CoreOS-only modifications
 	SCOS = false
 )
 
 // PublishingStrategy is a strategy for how various endpoints for the cluster are exposed.
-// +kubebuilder:validation:Enum="";External;Internal
+// +kubebuilder:validation:Enum="";External;Internal;Mixed
 type PublishingStrategy string
 
 const (
@@ -88,6 +88,7 @@ const (
 )
 
 //go:generate go run ../../vendor/sigs.k8s.io/controller-tools/cmd/controller-gen crd:crdVersions=v1 paths=. output:dir=../../data/data/
+//go:generate go run ../../vendor/k8s.io/code-generator/cmd/deepcopy-gen --output-file zz_generated.deepcopy.go ./...
 
 // InstallConfig is the configuration for an OpenShift install.
 type InstallConfig struct {
@@ -125,6 +126,11 @@ type InstallConfig struct {
 	// +optional
 	ControlPlane *MachinePool `json:"controlPlane,omitempty"`
 
+	// Arbiter is the configuration for the machines that comprise the
+	// arbiter nodes.
+	// +optional
+	Arbiter *MachinePool `json:"arbiter,omitempty"`
+
 	// Compute is the configuration for the machines that comprise the
 	// compute nodes.
 	// +optional
@@ -152,6 +158,7 @@ type InstallConfig struct {
 	ImageDigestSources []ImageDigestSource `json:"imageDigestSources,omitempty"`
 
 	// Publish controls how the user facing endpoints of the cluster like the Kubernetes API, OpenShift routes etc. are exposed.
+	// A "Mixed" strategy only applies to the "azure" platform, and requires "operatorPublishingStrategy" to be configured.
 	// When no strategy is specified, the strategy is "External".
 	//
 	// +kubebuilder:default=External
@@ -187,13 +194,15 @@ type InstallConfig struct {
 	// "Passthrough": copy the credentials with all of the overall permissions for each CredentialsRequest
 	// "Manual": CredentialsRequests must be handled manually by the user
 	//
-	// For each of the following platforms, the field can set to the specified values. For all other platforms, the
+	// For each of the following platforms, the field can be set to the specified values. For all other platforms, the
 	// field must not be set.
 	// AWS: "Mint", "Passthrough", "Manual"
 	// Azure: "Passthrough", "Manual"
 	// AzureStack: "Manual"
 	// GCP: "Mint", "Passthrough", "Manual"
 	// IBMCloud: "Manual"
+	// OpenStack: "Passthrough"
+	// PowerVC: "Passthrough"
 	// PowerVS: "Manual"
 	// Nutanix: "Manual"
 	// +optional
@@ -226,11 +235,6 @@ func (c *InstallConfig) ClusterDomain() string {
 	return fmt.Sprintf("%s.%s", c.ObjectMeta.Name, strings.TrimSuffix(c.BaseDomain, "."))
 }
 
-// IsFCOS returns true if Fedora CoreOS-only modifications are enabled
-func (c *InstallConfig) IsFCOS() bool {
-	return FCOS
-}
-
 // IsSCOS returns true if CentOs Stream CoreOS-only modifications are enabled
 func (c *InstallConfig) IsSCOS() bool {
 	return SCOS
@@ -238,13 +242,20 @@ func (c *InstallConfig) IsSCOS() bool {
 
 // IsOKD returns true if community-only modifications are enabled
 func (c *InstallConfig) IsOKD() bool {
-	return c.IsFCOS() || c.IsSCOS()
+	return c.IsSCOS()
 }
 
 // IsSingleNodeOpenShift returns true if the install-config has been configured for
 // bootstrapInPlace
 func (c *InstallConfig) IsSingleNodeOpenShift() bool {
 	return c.BootstrapInPlace != nil
+}
+
+// IsArbiterEnabled returns if arbiter is enabled based off of the install-config arbiter machine pool.
+func (c *InstallConfig) IsArbiterEnabled() bool {
+	return c.Arbiter != nil &&
+		c.Arbiter.Replicas != nil &&
+		*c.Arbiter.Replicas > 0
 }
 
 // CPUPartitioningMode defines how the nodes should be setup for partitioning the CPU Sets.
@@ -292,6 +303,10 @@ type Platform struct {
 	// OpenStack is the configuration used when installing on OpenStack.
 	// +optional
 	OpenStack *openstack.Platform `json:"openstack,omitempty"`
+
+	// PowerVC is the configuration used when installing on Power VC.
+	// +optional
+	PowerVC *powervc.Platform `json:"powervc,omitempty"`
 
 	// PowerVS is the configuration used when installing on Power VS.
 	// +optional
@@ -347,6 +362,9 @@ func (p *Platform) Name() string {
 		return none.Name
 	case p.External != nil:
 		return external.Name
+	// The PowerVC check needs to be performed before the OpenStack check
+	case p.PowerVC != nil:
+		return powervc.Name
 	case p.OpenStack != nil:
 		return openstack.Name
 	case p.VSphere != nil:
@@ -401,6 +419,10 @@ type Networking struct {
 	// +optional
 	ClusterNetworkMTU uint32 `json:"clusterNetworkMTU,omitempty"`
 
+	// OVNKubernetesConfig provides configuration for ovn-kubernetes as the default
+	// pod network when NetworkType is set to OVNKubernetes.
+	OVNKubernetesConfig *OVNKubernetesConfig `json:"ovnKubernetesConfig,omitempty"`
+
 	// Deprecated types, scheduled to be removed
 
 	// Deprecated way to configure an IP address pool for machines.
@@ -437,6 +459,8 @@ type ClusterNetworkEntry struct {
 	// HostPrefix is the prefix size to allocate to each node from the CIDR.
 	// For example, 24 would allocate 2^8=256 adresses to each node. If this
 	// field is not used by the plugin, it can be left unset.
+	// When multiple CIDRs of the same family (i.e. IPv4/IPv6) are present,
+	// their HostPrefix value must be the same.
 	// +optional
 	HostPrefix int32 `json:"hostPrefix,omitempty"`
 
@@ -444,6 +468,29 @@ type ClusterNetworkEntry struct {
 	// This is the length in bits - so a 9 here will allocate a /23.
 	// +optional
 	DeprecatedHostSubnetLength int32 `json:"hostSubnetLength,omitempty"`
+}
+
+// OVNKubernetesConfig configures the ovn-kubernetes sdn plugin.
+type OVNKubernetesConfig struct {
+	// ipv4 allows users to configure IP settings for IPv4 connections. When omitted,
+	// this means no opinions and the default configuration is used. Check individual
+	// fields within ipv4 for details of default values.
+	// +optional
+	IPv4 *IPv4OVNKubernetesConfig `json:"ipv4,omitempty"`
+}
+
+// IPv4OVNKubernetesConfig is IPv4 configuration for the ovn-kubernetes sdn plugin.
+type IPv4OVNKubernetesConfig struct {
+	// internalJoinSubnet is a v4 subnet used internally by ovn-kubernetes in case the
+	// default one is being already used by something else. It must not overlap with
+	// any other subnet being used by OpenShift or by the node network. The size of the
+	// subnet must be larger than the number of nodes. The value cannot be changed
+	// after installation.
+	// The current default value is 100.64.0.0/16
+	// The subnet must be large enough to accommodate one IP per node in your cluster
+	// The value must be in proper IPV4 CIDR format
+	// +optional
+	InternalJoinSubnet *ipnet.IPNet `json:"internalJoinSubnet,omitempty"`
 }
 
 // Proxy defines the proxy settings for the cluster.
@@ -481,6 +528,11 @@ type ImageDigestSource struct {
 	// Mirrors is one or more repositories that may also contain the same images.
 	// +optional
 	Mirrors []string `json:"mirrors,omitempty"`
+
+	// SourcePolicy defines the fallback policy when there is a failure pulling an
+	// image from the mirrors.
+	// +optional
+	SourcePolicy configv1.MirrorSourcePolicy `json:"sourcePolicy"`
 }
 
 // CredentialsMode is the mode by which CredentialsRequests will be satisfied.
@@ -578,47 +630,29 @@ func (c *InstallConfig) EnabledFeatureGates() featuregates.FeatureGate {
 	return fg
 }
 
-// ClusterAPIFeatureGateEnabled checks whether feature gates enabling
-// cluster api installs are enabled.
-func ClusterAPIFeatureGateEnabled(platform string, fgs featuregates.FeatureGate) bool {
-	// FeatureGateClusterAPIInstall enables for all platforms.
-	if fgs.Enabled(features.FeatureGateClusterAPIInstall) {
-		return true
-	}
-
-	// Check if CAPI install is enabled for individual platforms.
-	switch platform {
-	case aws.Name, azure.Name, gcp.Name, nutanix.Name, openstack.Name, powervs.Name, vsphere.Name:
-		return true
-	case azure.StackTerraformName, azure.StackCloud.Name():
-		return false
-	case ibmcloud.Name:
-		return fgs.Enabled(features.FeatureGateClusterAPIInstallIBMCloud)
-	default:
-		return false
-	}
-}
-
-// MultiArchFeatureGateEnabled checks whether feature gate enabling multi-arch clusters is enabled.
-func MultiArchFeatureGateEnabled(platform string, fgs featuregates.FeatureGate) bool {
-	switch platform {
-	case aws.Name:
-		return fgs.Enabled(features.FeatureGateMultiArchInstallAWS)
-	case gcp.Name:
-		return fgs.Enabled(features.FeatureGateMultiArchInstallGCP)
-	default:
-		return false
-	}
-}
-
 // PublicAPI indicates whether the API load balancer should be public
 // by inspecting the cluster and operator publishing strategies.
 func (c *InstallConfig) PublicAPI() bool {
-	if c.Publish == ExternalPublishingStrategy {
+	// When no strategy is specified, the strategy defaults to "External".
+	if c.Publish == "" || c.Publish == ExternalPublishingStrategy {
 		return true
 	}
 
 	if op := c.OperatorPublishingStrategy; op != nil && strings.EqualFold(op.APIServer, "External") {
+		return true
+	}
+	return false
+}
+
+// PublicIngress indicates whether the Ingress load balancer should be public
+// by inspecting the cluster and operator publishing strategies.
+func (c *InstallConfig) PublicIngress() bool {
+	// When no strategy is specified, the strategy defaults to "External".
+	if c.Publish == "" || c.Publish == ExternalPublishingStrategy {
+		return true
+	}
+
+	if op := c.OperatorPublishingStrategy; op != nil && strings.EqualFold(op.Ingress, "External") {
 		return true
 	}
 	return false

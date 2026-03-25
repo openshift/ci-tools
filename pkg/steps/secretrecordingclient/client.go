@@ -163,3 +163,7 @@ func (c *client) IsObjectNamespaced(obj runtime.Object) (bool, error) {
 func (c *client) SubResource(subResource string) ctrlruntimeclient.SubResourceClient {
 	return c.upstream.SubResource(subResource)
 }
+
+func (c *client) Apply(ctx context.Context, obj runtime.ApplyConfiguration, opts ...ctrlruntimeclient.ApplyOption) error {
+	return c.upstream.Apply(ctx, obj, opts...)
+}

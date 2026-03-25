@@ -3,7 +3,6 @@
       ci-operator.openshift.io/container-sub-tests: test
       ci-operator.openshift.io/save-container-logs: "true"
       ci.openshift.io/job-spec: ""
-    creationTimestamp: null
     labels:
       OPENSHIFT_CI: "true"
       ci.openshift.io/jobid: prow_job_id
@@ -189,7 +188,6 @@
       ci-operator.openshift.io/container-sub-tests: test
       ci-operator.openshift.io/save-container-logs: "true"
       ci.openshift.io/job-spec: ""
-    creationTimestamp: null
     labels:
       OPENSHIFT_CI: "true"
       ci.openshift.io/jobid: prow_job_id
@@ -369,7 +367,6 @@
       ci-operator.openshift.io/container-sub-tests: test
       ci-operator.openshift.io/save-container-logs: "true"
       ci.openshift.io/job-spec: ""
-    creationTimestamp: null
     labels:
       OPENSHIFT_CI: "true"
       ci.openshift.io/jobid: prow_job_id
@@ -553,7 +550,6 @@
       ci-operator.openshift.io/container-sub-tests: test
       ci-operator.openshift.io/save-container-logs: "true"
       ci.openshift.io/job-spec: ""
-    creationTimestamp: null
     labels:
       OPENSHIFT_CI: "true"
       ci.openshift.io/jobid: prow_job_id
@@ -741,7 +737,6 @@
       ci-operator.openshift.io/container-sub-tests: test
       ci-operator.openshift.io/save-container-logs: "true"
       ci.openshift.io/job-spec: ""
-    creationTimestamp: null
     labels:
       OPENSHIFT_CI: "true"
       ci.openshift.io/jobid: prow_job_id
@@ -923,7 +918,6 @@
       ci-operator.openshift.io/container-sub-tests: test
       ci-operator.openshift.io/save-container-logs: "true"
       ci.openshift.io/job-spec: ""
-    creationTimestamp: null
     labels:
       OPENSHIFT_CI: "true"
       ci.openshift.io/jobid: prow_job_id

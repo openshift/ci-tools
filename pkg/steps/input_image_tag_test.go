@@ -5,10 +5,11 @@ import (
 	"fmt"
 	"testing"
 
+	"github.com/google/go-cmp/cmp"
+
 	corev1 "k8s.io/api/core/v1"
 	"k8s.io/apimachinery/pkg/api/equality"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
-	"k8s.io/apimachinery/pkg/util/diff"
 	ctrlruntimeclient "sigs.k8s.io/controller-runtime/pkg/client"
 	fakectrlruntimeclient "sigs.k8s.io/controller-runtime/pkg/client/fake"
 
@@ -132,7 +133,7 @@ func TestInputImageTagStep(t *testing.T) {
 	}
 
 	if !equality.Semantic.DeepEqual(expectedImageStreamTag, targetImageStreamTag) {
-		t.Errorf("Different ImageStreamTag 'pipeline:TO' after step execution:\n%s", diff.ObjectReflectDiff(expectedImageStreamTag, targetImageStreamTag))
+		t.Errorf("Different ImageStreamTag 'pipeline:TO' after step execution:\n%s", cmp.Diff(expectedImageStreamTag, targetImageStreamTag))
 	}
 }
 
@@ -245,6 +246,6 @@ func TestInputImageTagStepExternal(t *testing.T) {
 	}
 
 	if !equality.Semantic.DeepEqual(expectedImageStreamTag, targetImageStreamTag) {
-		t.Errorf("Different ImageStreamTag 'pipeline:TO' after step execution:\n%s", diff.ObjectReflectDiff(expectedImageStreamTag, targetImageStreamTag))
+		t.Errorf("Different ImageStreamTag 'pipeline:TO' after step execution:\n%s", cmp.Diff(expectedImageStreamTag, targetImageStreamTag))
 	}
 }

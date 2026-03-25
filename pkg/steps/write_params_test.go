@@ -4,7 +4,7 @@ import (
 	"os"
 	"testing"
 
-	"k8s.io/apimachinery/pkg/util/diff"
+	"github.com/google/go-cmp/cmp"
 
 	"github.com/openshift/ci-tools/pkg/api"
 )
@@ -56,6 +56,6 @@ func TestWriteParamsStep(t *testing.T) {
 	}
 	writtenParams := string(written)
 	if writtenParams != expectedWrittenParams {
-		t.Errorf("Params were not written out as expected:\n%s", diff.StringDiff(expectedWrittenParams, writtenParams))
+		t.Errorf("Params were not written out as expected:\n%s", cmp.Diff(expectedWrittenParams, writtenParams))
 	}
 }

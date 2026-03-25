@@ -1,10 +1,7 @@
-- apiVersion: prow.k8s.io/v1
-  kind: ProwJob
-  metadata:
+- metadata:
     annotations:
       prow.k8s.io/context: ""
       prow.k8s.io/job: multi-pr-openshift-ci-tools-999-openshift-release-876-unit
-    creationTimestamp: null
     labels:
       ci.openshift.io/testwith: openshift.ci-tools.999
       created-by-prow: "true"

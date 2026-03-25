@@ -4,7 +4,7 @@ import (
 	"reflect"
 	"testing"
 
-	"k8s.io/apimachinery/pkg/util/diff"
+	"github.com/google/go-cmp/cmp"
 )
 
 func TestDeferredParametersMap(t *testing.T) {
@@ -62,7 +62,7 @@ func TestDeferredParametersMap(t *testing.T) {
 		createdMap, _ := tc.dp.Map()
 
 		if !reflect.DeepEqual(tc.expected, createdMap) {
-			t.Errorf("%s\n %v.Map() returned different map:\n%s", tc.purpose, tc.dp, diff.ObjectReflectDiff(tc.expected, createdMap))
+			t.Errorf("%s\n %v.Map() returned different map:\n%s", tc.purpose, tc.dp, cmp.Diff(tc.expected, createdMap))
 		}
 	}
 }

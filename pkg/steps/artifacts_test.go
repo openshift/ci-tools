@@ -11,7 +11,6 @@ import (
 	coreapi "k8s.io/api/core/v1"
 	"k8s.io/apimachinery/pkg/api/equality"
 	meta "k8s.io/apimachinery/pkg/apis/meta/v1"
-	"k8s.io/apimachinery/pkg/util/diff"
 	fakectrlruntimeclient "sigs.k8s.io/controller-runtime/pkg/client/fake"
 	prowv1 "sigs.k8s.io/prow/pkg/apis/prowjobs/v1"
 
@@ -481,7 +480,7 @@ func TestTestCaseNotifier_SubTests(t *testing.T) {
 			}
 			tests := n.SubTests(tt.prefix)
 			if !reflect.DeepEqual(tt.wantTests, tests) {
-				t.Fatalf("unexpected: %s", diff.ObjectReflectDiff(tt.wantTests, tests))
+				t.Fatalf("unexpected: %s", cmp.Diff(tt.wantTests, tests))
 			}
 		})
 	}
@@ -620,7 +619,7 @@ func TestAddArtifactsToPod(t *testing.T) {
 		t.Run(tc.testID, func(t *testing.T) {
 			addArtifactsToPod(tc.pod)
 			if !equality.Semantic.DeepEqual(tc.pod, tc.expected) {
-				t.Fatal(diff.ObjectReflectDiff(tc.pod, tc.expected))
+				t.Fatal(cmp.Diff(tc.pod, tc.expected))
 			}
 
 		})
@@ -630,7 +629,7 @@ func TestAddArtifactsToPod(t *testing.T) {
 func TestArtifactsContainer(t *testing.T) {
 	artifacts := artifactsContainer()
 	if !reflect.DeepEqual(artifacts, testArtifactsContainer) {
-		t.Fatal(diff.ObjectReflectDiff(artifacts, testArtifactsContainer))
+		t.Fatal(cmp.Diff(artifacts, testArtifactsContainer))
 	}
 }
 

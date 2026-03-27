@@ -47,8 +47,8 @@ type mockManifestPusher struct {
 	errToReturn error
 }
 
-func (m *mockManifestPusher) PushImageWithManifest(builds []buildv1.Build, targetImageRef string) error {
-	return m.errToReturn
+func (m *mockManifestPusher) PushImageWithManifest(builds []buildv1.Build, targetImageRef string) (string, error) {
+	return "", m.errToReturn
 }
 
 type buildBuilder struct {

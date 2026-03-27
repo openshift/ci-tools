@@ -16,7 +16,7 @@ const (
 )
 
 type ManifestPusher interface {
-	PushImageWithManifest(builds []buildv1.Build, targetImageRef string) error
+	PushImageWithManifest(builds []buildv1.Build, targetImageRef string) (string, error)
 }
 
 func NewManifestPusher(logger *logrus.Entry, registryURL string, dockercfgPath string) ManifestPusher {
@@ -33,7 +33,7 @@ type manifestPusher struct {
 	dockercfgPath string
 }
 
-func (m manifestPusher) PushImageWithManifest(builds []buildv1.Build, targetImageRef string) error {
+func (m manifestPusher) PushImageWithManifest(builds []buildv1.Build, targetImageRef string) (string, error) {
 	srcImages := []types.ManifestEntry{}
 
 	for _, build := range builds {
@@ -57,9 +57,9 @@ func (m manifestPusher) PushImageWithManifest(builds []buildv1.Build, targetImag
 		m.dockercfgPath,
 	)
 	if err != nil {
-		return err
+		return "", err
 	}
 	m.logger.WithField("digest", digest).Infof("Image %s created", targetImageRef)
 
-	return nil
+	return digest, nil
 }

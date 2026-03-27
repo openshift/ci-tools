@@ -511,8 +511,29 @@ func handleBuilds(ctx context.Context, buildClient BuildClient, podClient kubern
 
 	if len(errs) == 0 {
 		manifestPusher := manifestpusher.NewManifestPusher(logrus.WithField("for-build", build.Name), buildClient.LocalRegistryDNS(), buildClient.ManifestToolDockerCfg())
-		if err := manifestPusher.PushImageWithManifest(builds, fmt.Sprintf("%s/%s", build.Spec.Output.To.Namespace, build.Spec.Output.To.Name)); err != nil {
+		targetRef := fmt.Sprintf("%s/%s", build.Spec.Output.To.Namespace, build.Spec.Output.To.Name)
+		digest, err := manifestPusher.PushImageWithManifest(builds, targetRef)
+		if err != nil {
 			errs = append(errs, err)
+		} else if parts := strings.SplitN(build.Spec.Output.To.Name, ":", 2); len(parts) == 2 {
+			// Wait for the imagestream controller to reconcile the manifest list
+			// push so it doesn't stomp the tag later (OCPBUGS-65845).
+			ns, isName, tagName := build.Spec.Output.To.Namespace, parts[0], parts[1]
+			logrus.Infof("Waiting for imagestream tag %s/%s:%s to settle with digest %s", ns, isName, tagName, digest)
+			if err := wait.ExponentialBackoff(wait.Backoff{Duration: 10 * time.Second, Factor: 1.5, Steps: 10}, func() (bool, error) {
+				is := &imagev1.ImageStream{}
+				if err := buildClient.Get(ctx, ctrlruntimeclient.ObjectKey{Namespace: ns, Name: isName}, is); err != nil {
+					return false, err
+				}
+				for _, t := range is.Status.Tags {
+					if t.Tag == tagName && len(t.Items) > 0 && t.Items[0].Image == digest {
+						return true, nil
+					}
+				}
+				return false, nil
+			}); err != nil {
+				errs = append(errs, fmt.Errorf("imagestream tag %s/%s:%s did not settle to digest %s: %w", ns, isName, tagName, digest, err))
+			}
 		}
 	}
 
@@ -554,8 +575,6 @@ func handleBuild(ctx context.Context, client BuildClient, podClient kubernetes.P
 	var errs []error
 	if err := wait.ExponentialBackoff(wait.Backoff{Duration: time.Minute, Factor: 1.5, Steps: attempts}, func() (bool, error) {
 		var attempt buildapi.Build
-		// builds are using older src image, adding wait to avoid race condition
-		time.Sleep(time.Minute * 4)
 		build.DeepCopyInto(&attempt)
 		if err := client.Create(ctx, &attempt); err == nil {
 			logrus.Infof("Created build %q", name)

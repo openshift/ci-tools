@@ -245,7 +245,7 @@ func (r *reconciler) handlePushImageWithManifest(ctx context.Context, logger *lo
 		})
 	}
 
-	if err := r.manifestPusher.PushImageWithManifest(builds.Items, targetImageRef); err != nil {
+	if _, err := r.manifestPusher.PushImageWithManifest(builds.Items, targetImageRef); err != nil {
 		logger.Errorf("Failed to push manifest: %s", err)
 		mutateFn = func(mabcToMutate *v1.MultiArchBuildConfig) {
 			mabcToMutate.Status.Conditions = append(mabcToMutate.Status.Conditions, metav1.Condition{

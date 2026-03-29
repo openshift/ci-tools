@@ -134,9 +134,11 @@ func (s *jobNameGenerator) GenerateJobNames() ([]string, []error) {
 			resp.Body.Close()
 
 			// Temporary allowance for missing release-5.0 before branch cut
-			if !(strings.Contains(url, "release-5.0") && time.Now().Format(time.DateOnly) < "2026-05-01") {
-				errs = append(errs, fmt.Errorf("error reading %v: %v", url, resp.StatusCode))
+			if resp.StatusCode == 404 && strings.Contains(url, "release-5.0") && time.Now().Format(time.DateOnly) < "2026-05-01" {
+				continue
 			}
+
+			errs = append(errs, fmt.Errorf("error reading %v: %v", url, resp.StatusCode))
 			continue
 		}
 

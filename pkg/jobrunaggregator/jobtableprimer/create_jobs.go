@@ -61,7 +61,7 @@ func (o *CreateJobsOptions) Run(ctx context.Context) error {
 	fmt.Printf("Creating jobs from releases\n")
 	jobsToCreate, errs := o.createJobRowsFromReleases(ctx, o.ciDataClient)
 	for _, err := range errs {
-		fmt.Printf("warning: %v\n", err)
+		fmt.Printf("error: %v\n", err)
 	}
 
 	fmt.Printf("Priming jobs\n")
@@ -94,5 +94,8 @@ func (o *CreateJobsOptions) Run(ctx context.Context) error {
 		return err
 	}
 
-	return utilerrors.NewAggregate(errs)
+	if len(errs) > 0 {
+		return utilerrors.NewAggregate(errs)
+	}
+	return nil
 }

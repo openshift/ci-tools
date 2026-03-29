@@ -4,6 +4,8 @@ import (
 	"context"
 	"fmt"
 
+	utilerrors "k8s.io/apimachinery/pkg/util/errors"
+
 	"github.com/openshift/ci-tools/pkg/jobrunaggregator/jobrunaggregatorapi"
 	"github.com/openshift/ci-tools/pkg/jobrunaggregator/jobrunaggregatorlib"
 )
@@ -37,32 +39,29 @@ func (o *CreateJobsOptions) getNewReleases(ctx context.Context, ciDataClient job
 	return newReleases, nil
 }
 
-func (o *CreateJobsOptions) createJobRowsFromReleases(ctx context.Context, ciDataClient jobrunaggregatorlib.CIDataClient) ([]jobrunaggregatorapi.JobRow, error) {
+func (o *CreateJobsOptions) createJobRowsFromReleases(ctx context.Context, ciDataClient jobrunaggregatorlib.CIDataClient) ([]jobrunaggregatorapi.JobRow, []error) {
 	releases, err := o.getNewReleases(ctx, ciDataClient)
 	if err != nil {
-		return nil, fmt.Errorf("failed to get releases: %w", err)
+		return nil, []error{fmt.Errorf("failed to get releases: %w", err)}
 	}
 
 	// Update source URLs including periodic and release-controller URLs
 	jobNameGenerator := newJobNameGenerator()
 	jobNameGenerator.UpdateURLsForAllReleases(releases)
-	jobNames, err := jobNameGenerator.GenerateJobNames()
-	if err != nil {
-		return nil, err
-	}
+	jobNames, errs := jobNameGenerator.GenerateJobNames()
 
 	// Create job rows
 	jobRowListBuilder := newJobRowListBuilder(releases)
 	jobRowsToCreate := jobRowListBuilder.CreateAllJobRows(jobNames)
 
-	return jobRowsToCreate, nil
+	return jobRowsToCreate, errs
 }
 
 func (o *CreateJobsOptions) Run(ctx context.Context) error {
 	fmt.Printf("Creating jobs from releases\n")
-	jobsToCreate, err := o.createJobRowsFromReleases(ctx, o.ciDataClient)
-	if err != nil {
-		return fmt.Errorf("failed to create job rows from releases: %w", err)
+	jobsToCreate, errs := o.createJobRowsFromReleases(ctx, o.ciDataClient)
+	for _, err := range errs {
+		fmt.Printf("warning: %v\n", err)
 	}
 
 	fmt.Printf("Priming jobs\n")
@@ -95,5 +94,5 @@ func (o *CreateJobsOptions) Run(ctx context.Context) error {
 		return err
 	}
 
-	return nil
+	return utilerrors.NewAggregate(errs)
 }

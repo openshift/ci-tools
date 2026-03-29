@@ -7,6 +7,7 @@ import (
 	"net/http"
 	"sort"
 	"strings"
+	"time"
 
 	"gopkg.in/yaml.v3"
 
@@ -83,27 +84,33 @@ func (s *jobNameGenerator) UpdateURLsForAllReleases(releases []jobrunaggregatora
 	}
 }
 
-func (s *jobNameGenerator) GenerateJobNames() ([]string, error) {
+func (s *jobNameGenerator) GenerateJobNames() ([]string, []error) {
 	jobNames := []string{}
+	var errs []error
 
 	for _, url := range s.releaseConfigURLs {
 		resp, err := http.Get(url)
 		if err != nil {
-			return jobNames, fmt.Errorf("error reading %v: %w", url, err)
+			errs = append(errs, fmt.Errorf("error reading %v: %w", url, err))
+			continue
 		}
 		if resp.StatusCode < 200 || resp.StatusCode > 299 {
-			return jobNames, fmt.Errorf("error reading %v: %v", url, resp.StatusCode)
+			resp.Body.Close()
+			errs = append(errs, fmt.Errorf("error reading %v: %v", url, resp.StatusCode))
+			continue
 		}
 
 		content, err := io.ReadAll(resp.Body)
-		if err != nil {
-			return jobNames, fmt.Errorf("error reading %v: %w", url, err)
-		}
 		resp.Body.Close()
+		if err != nil {
+			errs = append(errs, fmt.Errorf("error reading %v: %w", url, err))
+			continue
+		}
 
 		releaseConfig := &FakeReleaseConfig{}
 		if err := json.Unmarshal(content, releaseConfig); err != nil {
-			return jobNames, fmt.Errorf("error reading %v: %w", url, err)
+			errs = append(errs, fmt.Errorf("error reading %v: %w", url, err))
+			continue
 		}
 
 		jobNames = append(jobNames, fmt.Sprintf("// begin %v", url))
@@ -120,21 +127,30 @@ func (s *jobNameGenerator) GenerateJobNames() ([]string, error) {
 	for _, url := range s.periodicURLs {
 		resp, err := http.Get(url)
 		if err != nil {
-			return jobNames, fmt.Errorf("error reading %v: %w", url, err)
+			errs = append(errs, fmt.Errorf("error reading %v: %w", url, err))
+			continue
 		}
 		if resp.StatusCode < 200 || resp.StatusCode > 299 {
-			return jobNames, fmt.Errorf("error reading %v: %v", url, resp.StatusCode)
+			resp.Body.Close()
+
+			// Temporary allowance for missing release-5.0 before branch cut
+			if !(strings.Contains(url, "release-5.0") && time.Now().Format(time.DateOnly) < "2026-05-01") {
+				errs = append(errs, fmt.Errorf("error reading %v: %v", url, resp.StatusCode))
+			}
+			continue
 		}
 
 		content, err := io.ReadAll(resp.Body)
-		if err != nil {
-			return jobNames, fmt.Errorf("error reading %v: %w", url, err)
-		}
 		resp.Body.Close()
+		if err != nil {
+			errs = append(errs, fmt.Errorf("error reading %v: %w", url, err))
+			continue
+		}
 
 		periodicConfig := &FakePeriodicConfig{}
 		if err := yaml.Unmarshal(content, periodicConfig); err != nil {
-			return jobNames, fmt.Errorf("error reading %v: %w", url, err)
+			errs = append(errs, fmt.Errorf("error reading %v: %w", url, err))
+			continue
 		}
 
 		jobNames = append(jobNames, fmt.Sprintf("// begin %v", url))
@@ -180,5 +196,5 @@ func (s *jobNameGenerator) GenerateJobNames() ([]string, error) {
 		jobNames = append(jobNames, fmt.Sprintf("// end %v", url))
 		jobNames = append(jobNames, "")
 	}
-	return jobNames, nil
+	return jobNames, errs
 }

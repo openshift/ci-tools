@@ -7,7 +7,6 @@ import (
 	"net/http"
 	"sort"
 	"strings"
-	"time"
 
 	"gopkg.in/yaml.v3"
 
@@ -92,40 +91,30 @@ func (s *jobNameGenerator) GenerateJobNames() ([]string, error) {
 		if err != nil {
 			return jobNames, fmt.Errorf("error reading %v: %w", url, err)
 		}
-		err = func() error {
-			defer resp.Body.Close()
-			if resp.StatusCode == 404 && strings.Contains(url, "release-5.0") && time.Now().Format(time.DateOnly) < "2026-05-01" {
-				// TRT defined the 5.0 release prior to branch cut for sippy's use; ignore if not defined
-				fmt.Println("SKIPPING release because URL is 404 not found: " + url)
-				return nil
-			} else if resp.StatusCode < 200 || resp.StatusCode > 299 {
-				return fmt.Errorf("error reading %v: %v", url, resp.StatusCode)
-			}
-
-			content, err := io.ReadAll(resp.Body)
-			if err != nil {
-				return fmt.Errorf("error reading %v: %w", url, err)
-			}
-
-			releaseConfig := &FakeReleaseConfig{}
-			if err := json.Unmarshal(content, releaseConfig); err != nil {
-				return fmt.Errorf("error reading %v: %w", url, err)
-			}
-
-			jobNames = append(jobNames, fmt.Sprintf("// begin %v", url))
-			localLines := []string{}
-			for _, curr := range releaseConfig.Verify {
-				localLines = append(localLines, curr.ProwJob.Name)
-			}
-			sort.Strings(localLines)
-			jobNames = append(jobNames, localLines...)
-			jobNames = append(jobNames, fmt.Sprintf("// end %v", url))
-			jobNames = append(jobNames, "")
-			return nil
-		}()
-		if err != nil {
-			return jobNames, err
+		if resp.StatusCode < 200 || resp.StatusCode > 299 {
+			return jobNames, fmt.Errorf("error reading %v: %v", url, resp.StatusCode)
 		}
+
+		content, err := io.ReadAll(resp.Body)
+		if err != nil {
+			return jobNames, fmt.Errorf("error reading %v: %w", url, err)
+		}
+		resp.Body.Close()
+
+		releaseConfig := &FakeReleaseConfig{}
+		if err := json.Unmarshal(content, releaseConfig); err != nil {
+			return jobNames, fmt.Errorf("error reading %v: %w", url, err)
+		}
+
+		jobNames = append(jobNames, fmt.Sprintf("// begin %v", url))
+		localLines := []string{}
+		for _, curr := range releaseConfig.Verify {
+			localLines = append(localLines, curr.ProwJob.Name)
+		}
+		sort.Strings(localLines)
+		jobNames = append(jobNames, localLines...)
+		jobNames = append(jobNames, fmt.Sprintf("// end %v", url))
+		jobNames = append(jobNames, "")
 	}
 
 	for _, url := range s.periodicURLs {

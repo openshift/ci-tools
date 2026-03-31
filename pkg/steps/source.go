@@ -467,30 +467,12 @@ func isBuildPhaseTerminated(phase buildapi.BuildPhase) bool {
 }
 
 type ImageBuildOptions struct {
-	Architectures            []string
-	NeedsMultiArchWorkaround func() bool
+	Architectures []string
 }
 
 func newImageBuildOptions(archs []string) ImageBuildOptions {
 	return ImageBuildOptions{Architectures: archs}
 }
-
-// multiArchRepos are repos that need the sleep workaround for multi-arch builds.
-var multiArchRepos = sets.New[string](
-	"openshift/ci-tools",
-	"openshift/kueue-operator",
-	"openshift/loki",
-	"openshift/multiarch-tuning-operator",
-	"openshift/oadp-must-gather",
-	"openshift/oadp-operator",
-	"openshift/openshift-velero-plugin",
-	"openshift/velero",
-	"openshift/velero-plugin-for-aws",
-	"openshift/velero-plugin-for-gcp",
-	"openshift/velero-plugin-for-legacy-aws",
-	"openshift/velero-plugin-for-microsoft-azure",
-	"openshift-eng/baremetal-qe-infra",
-)
 
 func handleBuilds(ctx context.Context, buildClient BuildClient, podClient kubernetes.PodClient, build buildapi.Build, metricsAgent *metrics.MetricsAgent, opts ...ImageBuildOptions) error {
 	var wg sync.WaitGroup
@@ -498,17 +480,6 @@ func handleBuilds(ctx context.Context, buildClient BuildClient, podClient kubern
 	o := ImageBuildOptions{}
 	if len(opts) > 0 {
 		o = opts[0]
-	}
-
-	// Create closure that checks if this build is for a multi-arch repo
-	needsMultiArchWorkaround := o.NeedsMultiArchWorkaround
-	if needsMultiArchWorkaround == nil {
-		needsMultiArchWorkaround = func() bool {
-			if org, repo := build.Labels[LabelMetadataOrg], build.Labels[LabelMetadataRepo]; org != "" && repo != "" {
-				return multiArchRepos.Has(fmt.Sprintf("%s/%s", org, repo))
-			}
-			return false
-		}
 	}
 
 	builds := constructMultiArchBuilds(build, o.Architectures)
@@ -519,7 +490,7 @@ func handleBuilds(ctx context.Context, buildClient BuildClient, podClient kubern
 		go func(b buildapi.Build) {
 			defer wg.Done()
 			metricsAgent.AddNodeWorkload(ctx, b.Namespace, fmt.Sprintf("%s-build", b.Name), b.Name, podClient)
-			if err := handleBuild(ctx, buildClient, podClient, b, needsMultiArchWorkaround); err != nil {
+			if err := handleBuild(ctx, buildClient, podClient, b); err != nil {
 				errChan <- fmt.Errorf("error occurred handling build %s: %w", b.Name, err)
 			}
 			metricsAgent.RemoveNodeWorkload(b.Name)
@@ -577,17 +548,14 @@ func constructMultiArchBuilds(build buildapi.Build, stepArchitectures []string) 
 	return ret
 }
 
-func handleBuild(ctx context.Context, client BuildClient, podClient kubernetes.PodClient, build buildapi.Build, needsMultiArchWorkaround func() bool) error {
+func handleBuild(ctx context.Context, client BuildClient, podClient kubernetes.PodClient, build buildapi.Build) error {
 	const attempts = 5
 	ns, name := build.Namespace, build.Name
 	var errs []error
 	if err := wait.ExponentialBackoff(wait.Backoff{Duration: time.Minute, Factor: 1.5, Steps: attempts}, func() (bool, error) {
 		var attempt buildapi.Build
-		// TODO: This is a workaround to avoid race condition with multiple ci-operator instances building different architectures
-		// See https://issues.redhat.com/browse/OCPBUGS-65845
-		if needsMultiArchWorkaround != nil && needsMultiArchWorkaround() {
-			time.Sleep(5 * time.Minute)
-		}
+		// builds are using older src image, adding wait to avoid race condition
+		//time.Sleep(1 * time.Minute)
 		build.DeepCopyInto(&attempt)
 		if err := client.Create(ctx, &attempt); err == nil {
 			logrus.Infof("Created build %q", name)

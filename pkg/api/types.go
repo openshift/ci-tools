@@ -1545,10 +1545,12 @@ const (
 
 	ClusterProfileRosaRegionalPlatformInt ClusterProfile = "rosa-regional-platform-int"
 
-	ClusterProfileAROHCPInt  ClusterProfile = "aro-hcp-int"
-	ClusterProfileAROHCPStg  ClusterProfile = "aro-hcp-stg"
-	ClusterProfileAROHCPProd ClusterProfile = "aro-hcp-prod"
-	ClusterProfileAROHCPDev  ClusterProfile = "aro-hcp-dev"
+	ClusterProfileAROHCPInt             ClusterProfile = "aro-hcp-int"
+	ClusterProfileAROHCPStg             ClusterProfile = "aro-hcp-stg"
+	ClusterProfileAROHCPProd            ClusterProfile = "aro-hcp-prod"
+	ClusterProfileAROHCPDev             ClusterProfile = "aro-hcp-dev"
+	ClusterProfileAROHCPRedHatTenant    ClusterProfile = "aro-hcp-red-hat-tenant"
+	ClusterProfileAROHCPMsftTestTenant  ClusterProfile = "aro-hcp-msft-test-tenant"
 
 	ClusterProfileAROClassicInt  ClusterProfile = "aro-classic-int"
 	ClusterProfileAROClassicStg  ClusterProfile = "aro-classic-stg"
@@ -1762,6 +1764,8 @@ func ClusterProfiles() []ClusterProfile {
 		ClusterProfileAROHCPStg,
 		ClusterProfileAROHCPProd,
 		ClusterProfileAROHCPDev,
+		ClusterProfileAROHCPRedHatTenant,
+		ClusterProfileAROHCPMsftTestTenant,
 
 		ClusterProfileAROClassicInt,
 		ClusterProfileAROClassicStg,
@@ -2074,6 +2078,10 @@ func (p ClusterProfile) ClusterType() string {
 		return "aro-hcp-prod"
 	case ClusterProfileAROHCPDev:
 		return "aro-hcp-dev"
+	case ClusterProfileAROHCPRedHatTenant:
+		return "aro-hcp-red-hat-tenant"
+	case ClusterProfileAROHCPMsftTestTenant:
+		return "aro-hcp-msft-test-tenant"
 
 	case ClusterProfileAROClassicInt:
 		return "aro-classic-int"
@@ -2495,6 +2503,10 @@ func (p ClusterProfile) LeaseType() string {
 		return "aro-hcp-prod-quota-slice"
 	case ClusterProfileAROHCPDev:
 		return "aro-hcp-dev-quota-slice"
+	case ClusterProfileAROHCPRedHatTenant:
+		return "aro-hcp-red-hat-tenant-quota-slice"
+	case ClusterProfileAROHCPMsftTestTenant:
+		return "aro-hcp-msft-test-tenant-quota-slice"
 
 	case ClusterProfileAROClassicInt:
 		return "aro-classic-int-quota-slice"
@@ -2550,7 +2562,7 @@ func LeaseTypeFromClusterType(t string) (string, error) {
 		"azure-virtualization", "hypershift-aws", "hypershift-aks", "hypershift-azure",
 		"hypershift-powervs", "hypershift-powervs-cb", "hypershift-gcp", "aws-mco-qe",
 		"equinix-edge-enablement", "aws-oadp-qe", "azure-oadp-qe", "gcp-oadp-qe", "aws-lp-chaos", "aws-osp-qe",
-		"metal-redhat-gs", "aro-hcp-int", "aro-hcp-stg", "aro-hcp-prod", "aro-hcp-dev", "rosa-regional-platform-int", "hyperfleet-e2e",
+		"metal-redhat-gs", "aro-hcp-int", "aro-hcp-stg", "aro-hcp-prod", "aro-hcp-dev", "aro-hcp-red-hat-tenant", "aro-hcp-msft-test-tenant", "rosa-regional-platform-int", "hyperfleet-e2e",
 		"aro-classic-int", "aro-classic-stg", "aro-classic-prod", "aro-classic-dev", "rosa-e2e-01", "rosa-e2e-02", "rosa-e2e-03":
 		return t + "-quota-slice", nil
 	default:

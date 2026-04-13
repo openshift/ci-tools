@@ -1,6 +1,6 @@
 module github.com/openshift/ci-tools
 
-go 1.25.5
+go 1.25.8
 
 replace github.com/docker/distribution => github.com/docker/distribution v2.7.1+incompatible
 
@@ -140,7 +140,7 @@ require (
 	golang.org/x/crypto v0.45.0 // indirect
 	golang.org/x/lint v0.0.0-20241112194109-818c5a804067 // indirect
 	golang.org/x/mod v0.29.0 // indirect
-	golang.org/x/sys v0.38.0 // indirect
+	golang.org/x/sys v0.40.0 // indirect
 	golang.org/x/term v0.37.0 // indirect
 	golang.org/x/time v0.12.0
 	golang.org/x/tools v0.38.0
@@ -187,11 +187,11 @@ require (
 	github.com/openshift/library-go v0.0.0-20240919205913-c96b82b3762b
 	github.com/ovn-org/ovn-kubernetes/go-controller v0.0.0-20240710195803-425a328cd172
 	github.com/robfig/cron/v3 v3.0.1
-	github.com/stretchr/testify v1.10.0
+	github.com/stretchr/testify v1.11.1
 	gopkg.in/evanphx/json-patch.v5 v5.9.0
 	k8s.io/metrics v0.32.0
 	sigs.k8s.io/boskos v0.0.0-20240624145324-1e4de26c366a
-	sigs.k8s.io/prow v0.0.0-20260227184331-937f24a5dcd2
+	sigs.k8s.io/prow v0.0.0-20260316161740-26fa34da6010
 )
 
 require (
@@ -205,10 +205,10 @@ require (
 	github.com/pelletier/go-toml/v2 v2.2.3 // indirect
 	github.com/spiffe/go-spiffe/v2 v2.6.0 // indirect
 	github.com/vektah/gqlparser/v2 v2.5.14 // indirect
-	go.opentelemetry.io/auto/sdk v1.1.0 // indirect
+	go.opentelemetry.io/auto/sdk v1.2.1 // indirect
 	go.opentelemetry.io/contrib/detectors/gcp v1.36.0 // indirect
-	go.opentelemetry.io/otel/sdk v1.37.0 // indirect
-	go.opentelemetry.io/otel/sdk/metric v1.37.0 // indirect
+	go.opentelemetry.io/otel/sdk v1.40.0 // indirect
+	go.opentelemetry.io/otel/sdk/metric v1.40.0 // indirect
 	go.yaml.in/yaml/v2 v2.4.2 // indirect
 	golang.org/x/telemetry v0.0.0-20251008203120-078029d740a8 // indirect
 	golang.org/x/tools/go/expect v0.1.1-deprecated // indirect
@@ -326,9 +326,9 @@ require (
 	github.com/zeebo/xxh3 v1.0.2 // indirect
 	go.opentelemetry.io/contrib/instrumentation/google.golang.org/grpc/otelgrpc v0.60.0 // indirect
 	go.opentelemetry.io/contrib/instrumentation/net/http/otelhttp v0.61.0 // indirect
-	go.opentelemetry.io/otel v1.37.0 // indirect
-	go.opentelemetry.io/otel/metric v1.37.0 // indirect
-	go.opentelemetry.io/otel/trace v1.37.0 // indirect
+	go.opentelemetry.io/otel v1.40.0 // indirect
+	go.opentelemetry.io/otel/metric v1.40.0 // indirect
+	go.opentelemetry.io/otel/trace v1.40.0 // indirect
 	go.uber.org/multierr v1.11.0 // indirect
 	go.uber.org/zap v1.27.0 // indirect
 	google.golang.org/genproto/googleapis/api v0.0.0-20250707201910-8d1bb00bc6a7 // indirect

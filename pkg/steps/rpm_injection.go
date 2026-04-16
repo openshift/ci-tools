@@ -108,6 +108,7 @@ func RPMImageInjectionStep(
 	jobSpec *api.JobSpec,
 	pullSecret *coreapi.Secret,
 	metricsAgent *metrics.MetricsAgent,
+	buildType string,
 ) api.Step {
 	return &rpmImageInjectionStep{
 		config:        config,
@@ -118,5 +119,6 @@ func RPMImageInjectionStep(
 		pullSecret:    pullSecret,
 		architectures: sets.New[string](),
 		metricsAgent:  metricsAgent,
+		buildType:     buildType,
 	}
 }

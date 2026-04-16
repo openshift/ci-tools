@@ -145,6 +145,7 @@ func BundleSourceStep(
 	podClient kubernetes.PodClient,
 	jobSpec *api.JobSpec,
 	pullSecret *coreapi.Secret,
+	buildType string,
 ) api.Step {
 	return &bundleSourceStep{
 		config:             config,
@@ -154,5 +155,6 @@ func BundleSourceStep(
 		podClient:          podClient,
 		jobSpec:            jobSpec,
 		pullSecret:         pullSecret,
+		buildType:          buildType,
 	}
 }

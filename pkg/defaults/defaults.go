@@ -205,9 +205,9 @@ func fromConfig(ctx context.Context, cfg *Config) ([]api.Step, []api.Step, error
 		} else if rawStep.SourceStepConfiguration != nil {
 			step = steps.SourceStep(*rawStep.SourceStepConfiguration, cfg.CIConfig.Resources, cfg.buildClient, cfg.podClient, cfg.JobSpec, cfg.CloneAuthConfig, cfg.PullSecret, cfg.MetricsAgent, cfg.CIConfig.BuildType)
 		} else if rawStep.BundleSourceStepConfiguration != nil {
-			step = steps.BundleSourceStep(*rawStep.BundleSourceStepConfiguration, cfg.CIConfig, cfg.CIConfig.Resources, cfg.buildClient, cfg.podClient, cfg.JobSpec, cfg.PullSecret)
+			step = steps.BundleSourceStep(*rawStep.BundleSourceStepConfiguration, cfg.CIConfig, cfg.CIConfig.Resources, cfg.buildClient, cfg.podClient, cfg.JobSpec, cfg.PullSecret, cfg.CIConfig.BuildType)
 		} else if rawStep.IndexGeneratorStepConfiguration != nil {
-			step = steps.IndexGeneratorStep(*rawStep.IndexGeneratorStepConfiguration, cfg.CIConfig, cfg.CIConfig.Resources, cfg.buildClient, cfg.podClient, cfg.JobSpec, cfg.PullSecret, cfg.MetricsAgent)
+			step = steps.IndexGeneratorStep(*rawStep.IndexGeneratorStepConfiguration, cfg.CIConfig, cfg.CIConfig.Resources, cfg.buildClient, cfg.podClient, cfg.JobSpec, cfg.PullSecret, cfg.MetricsAgent, cfg.CIConfig.BuildType)
 		} else if rawStep.ProjectDirectoryImageBuildStepConfiguration != nil {
 			imgConfig := rawStep.ProjectDirectoryImageBuildStepConfiguration
 			if cfg.SkippedImages.Has(string(imgConfig.To)) {
@@ -216,9 +216,9 @@ func fromConfig(ctx context.Context, cfg *Config) ([]api.Step, []api.Step, error
 			}
 			step = steps.ProjectDirectoryImageBuildStep(*imgConfig, cfg.CIConfig, cfg.CIConfig.Resources, cfg.buildClient, cfg.podClient, cfg.JobSpec, cfg.PullSecret, cfg.MetricsAgent)
 		} else if rawStep.ProjectDirectoryImageBuildInputs != nil {
-			step = steps.GitSourceStep(*rawStep.ProjectDirectoryImageBuildInputs, cfg.CIConfig.Resources, cfg.buildClient, cfg.podClient, cfg.JobSpec, cfg.CloneAuthConfig, cfg.PullSecret, cfg.MetricsAgent)
+			step = steps.GitSourceStep(*rawStep.ProjectDirectoryImageBuildInputs, cfg.CIConfig.Resources, cfg.buildClient, cfg.podClient, cfg.JobSpec, cfg.CloneAuthConfig, cfg.PullSecret, cfg.MetricsAgent, cfg.CIConfig.BuildType)
 		} else if rawStep.RPMImageInjectionStepConfiguration != nil {
-			step = steps.RPMImageInjectionStep(*rawStep.RPMImageInjectionStepConfiguration, cfg.CIConfig.Resources, cfg.buildClient, cfg.podClient, cfg.JobSpec, cfg.PullSecret, cfg.MetricsAgent)
+			step = steps.RPMImageInjectionStep(*rawStep.RPMImageInjectionStepConfiguration, cfg.CIConfig.Resources, cfg.buildClient, cfg.podClient, cfg.JobSpec, cfg.PullSecret, cfg.MetricsAgent, cfg.CIConfig.BuildType)
 		} else if rawStep.RPMServeStepConfiguration != nil {
 			step = steps.RPMServerStep(*rawStep.RPMServeStepConfiguration, cfg.kubeClient, cfg.JobSpec)
 		} else if rawStep.OutputImageTagStepConfiguration != nil {

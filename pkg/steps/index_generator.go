@@ -218,6 +218,7 @@ func IndexGeneratorStep(
 	jobSpec *api.JobSpec,
 	pullSecret *coreapi.Secret,
 	metricsAgent *metrics.MetricsAgent,
+	buildType string,
 ) api.Step {
 	return &indexGeneratorStep{
 		config:             config,
@@ -229,5 +230,6 @@ func IndexGeneratorStep(
 		pullSecret:         pullSecret,
 		architectures:      sets.New[string](),
 		metricsAgent:       metricsAgent,
+		buildType:          buildType,
 	}
 }

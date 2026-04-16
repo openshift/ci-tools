@@ -957,7 +957,10 @@ func awsBuild(ctx context.Context, buildClient BuildClient, build buildapi.Build
 		if err != nil {
 			return false, err
 		}
-		buildSpec := awsBuildSpec(build, string(credentials), is.Image.DockerImageReference, buildClient.LocalRegistryDNS())
+		buildSpec, err := awsBuildSpec(build, string(credentials), is.Image.DockerImageReference, buildClient.LocalRegistryDNS())
+		if err != nil {
+			return false, err
+		}
 
 		err = awsBuildCreateCloudBuildProject(ctx, build, cbClient, buildSpec, projectName, errs)
 		if err != nil {
@@ -972,7 +975,7 @@ func awsBuild(ctx context.Context, buildClient BuildClient, build buildapi.Build
 	awsBuildResult, err := cbClient.StartBuild(ctx, sbi)
 	if err != nil {
 		*errs = append(*errs, err)
-		return false, fmt.Errorf("could not start build at codebuild project %s: %w", build.Namespace, err)
+		return false, fmt.Errorf("could not start build at codebuild project %s: %w", projectName, err)
 	}
 
 	err = awsBuildWaitForIt(ctx, sdkConfig, cbClient, awsBuildResult, build.Name)
@@ -984,7 +987,7 @@ func awsBuild(ctx context.Context, buildClient BuildClient, build buildapi.Build
 	return true, nil
 }
 
-func awsBuildSpec(build buildapi.Build, credentials string, imageStreamReference, localRegistryDNS string) buildspec.BuildSpec {
+func awsBuildSpec(build buildapi.Build, credentials string, imageStreamReference, localRegistryDNS string) (buildspec.BuildSpec, error) {
 	commands := []string{
 		`mkdir -p ~/.docker`,
 		`echo "$credentials" > ~/.docker/config.json`,
@@ -1001,13 +1004,16 @@ func awsBuildSpec(build buildapi.Build, credentials string, imageStreamReference
 	buildEnv := []string{}
 	buildArgs := []string{}
 	for _, env := range build.Spec.CommonSpec.Strategy.DockerStrategy.Env {
-		buildEnv = append(buildEnv, fmt.Sprintf(`--build-arg %s='%s'`, env.Name, env.Value))
+		buildEnv = append(buildEnv, fmt.Sprintf(`--build-arg %s='%s'`, env.Name, util.ShellEscape(env.Value)))
 		buildArgs = append(buildArgs, fmt.Sprintf(`ARG %s`, env.Name))
 	}
 
 	re := regexp.MustCompile(`image-registry\.openshift-image-registry\.svc[.:a-z0-9]*`)
 	imageStreamReference = re.ReplaceAllString(imageStreamReference, localRegistryDNS)
 	commands = append(commands, fmt.Sprintf(`docker buildx build %s --platform linux/%s --tag %s/%s/%s --output type=registry .`, strings.Join(buildEnv, " "), build.Spec.NodeSelector["kubernetes.io/arch"], localRegistryDNS, build.Namespace, build.Spec.Output.To.Name))
+	if build.Spec.CommonSpec.Source.Dockerfile == nil {
+		return buildspec.BuildSpec{}, fmt.Errorf("no Dockerfile defined on build.spec")
+	}
 	dockerFile := strings.ReplaceAll(*build.Spec.CommonSpec.Source.Dockerfile, build.Spec.CommonSpec.Strategy.DockerStrategy.From.Name, fmt.Sprintf("%s\n%s", imageStreamReference, strings.Join(buildArgs, "\n")))
 
 	return buildspec.BuildSpec{
@@ -1024,7 +1030,7 @@ func awsBuildSpec(build buildapi.Build, credentials string, imageStreamReference
 			},
 		},
 		Version: "0.2",
-	}
+	}, nil
 }
 
 func awsBuildAssemblyCredentials(ctx context.Context, buildClient BuildClient, build buildapi.Build, is *imagev1.ImageStreamTag, errs *[]error) ([]byte, error) {

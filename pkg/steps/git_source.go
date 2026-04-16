@@ -143,6 +143,7 @@ func GitSourceStep(
 	cloneAuthConfig *CloneAuthConfig,
 	pullSecret *coreapi.Secret,
 	metricsAgent *metrics.MetricsAgent,
+	buildType string,
 ) api.Step {
 	return &gitSourceStep{
 		config:          config,
@@ -154,5 +155,6 @@ func GitSourceStep(
 		pullSecret:      pullSecret,
 		architectures:   sets.New[string](),
 		metricsAgent:    metricsAgent,
+		buildType:       buildType,
 	}
 }

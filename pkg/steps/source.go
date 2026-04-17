@@ -1147,10 +1147,19 @@ func awsBuildWaitForIt(ctx context.Context, sdkConfig aws.Config, cbClient *code
 	for {
 		// avoid maximum number of attempts
 		time.Sleep(10 * time.Second)
+
+		if ctx.Err() != nil {
+			return fmt.Errorf("build polling canceled: %w", ctx.Err())
+		}
+
 		buildInputs := codebuild.BatchGetBuildsInput{Ids: []string{buildId}}
 		builds, err := cbClient.BatchGetBuilds(ctx, &buildInputs)
 		if err != nil {
 			return fmt.Errorf("could not get build %s: %w", buildId, err)
+		}
+
+		if len(builds.Builds) == 0 {
+			return fmt.Errorf("no builds found with id %s", buildId)
 		}
 
 		build := builds.Builds[0]

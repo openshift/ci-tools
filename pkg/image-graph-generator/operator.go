@@ -79,7 +79,7 @@ func (o *Operator) callback(c *api.ReleaseBuildConfiguration, i *config.Info) er
 		return nil
 	}
 
-	configProwgen := &config.Prowgen{}
+	configProwgen := &api.Prowgen{}
 	orgProwgenConfig, err := config.LoadProwgenConfig(i.OrgPath)
 	if err != nil {
 		return err

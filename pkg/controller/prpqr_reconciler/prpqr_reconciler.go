@@ -587,8 +587,7 @@ func (r *reconciler) generateProwjob(ciopConfig *api.ReleaseBuildConfiguration,
 	imageTagOverrides []v1.ImageTagOverride,
 	shardCount, shardIndex int,
 ) (*prowv1.ProwJob, error) {
-	fakeProwgenInfo := &prowgen.ProwgenInfo{Metadata: *baseCiop}
-
+	extras := api.NewProwgenExtras(api.Prowgen{}, ciopConfig)
 	annotations := map[string]string{
 		releaseJobNameAnnotation: mimickedJob,
 	}
@@ -625,7 +624,7 @@ func (r *reconciler) generateProwjob(ciopConfig *api.ReleaseBuildConfiguration,
 				test.Timeout.Duration = r.defaultMultiRefJobTimeout
 			}
 		}
-		jobBaseGen := prowgen.NewProwJobBaseBuilderForTest(ciopConfig, fakeProwgenInfo, prowgen.NewCiOperatorPodSpecGenerator(), test)
+		jobBaseGen := prowgen.NewProwJobBaseBuilderForTest(ciopConfig, extras, prowgen.NewCiOperatorPodSpecGenerator(), test)
 		jobBaseGen.PodSpec.Add(prowgen.InjectTestFrom(inject))
 		if latestPayloadPullspec != "" {
 			jobBaseGen.PodSpec.Add(prowgen.ReleaseLatest(latestPayloadPullspec))
@@ -659,7 +658,7 @@ func (r *reconciler) generateProwjob(ciopConfig *api.ReleaseBuildConfiguration,
 		}
 		jobBaseGen.Cluster(cioperatorapi.Cluster(cluster))
 
-		periodic = prowgen.GeneratePeriodicForTest(jobBaseGen, fakeProwgenInfo, prowgen.FromConfigSpec(ciopConfig), func(options *prowgen.GeneratePeriodicOptions) {
+		periodic = prowgen.GeneratePeriodicForTest(jobBaseGen, extras, prowgen.FromConfigSpec(ciopConfig), func(options *prowgen.GeneratePeriodicOptions) {
 			options.Cron = "@yearly"
 		})
 		periodic.Name = generateJobNameToSubmit(inject, prs, shardCount, shardIndex)
@@ -836,9 +835,9 @@ func generateAggregatorJob(baseCiop *api.Metadata, uid, aggregatorJobName, jobNa
 		return nil, fmt.Errorf("couldn't marshal ci-operator config")
 	}
 
-	jobBaseGen := prowgen.NewProwJobBaseBuilderForTest(ciopConfig, &prowgen.ProwgenInfo{}, prowgen.NewCiOperatorPodSpecGenerator(), ciopConfig.Tests[0])
+	jobBaseGen := prowgen.NewProwJobBaseBuilderForTest(ciopConfig, &api.ProwgenExtras{}, prowgen.NewCiOperatorPodSpecGenerator(), ciopConfig.Tests[0])
 
-	periodic := prowgen.GeneratePeriodicForTest(jobBaseGen, &prowgen.ProwgenInfo{}, prowgen.FromConfigSpec(ciopConfig), func(options *prowgen.GeneratePeriodicOptions) {
+	periodic := prowgen.GeneratePeriodicForTest(jobBaseGen, &api.ProwgenExtras{}, prowgen.FromConfigSpec(ciopConfig), func(options *prowgen.GeneratePeriodicOptions) {
 		options.Cron = "@yearly"
 	})
 	periodic.Name = aggregatorJobName

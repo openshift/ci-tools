@@ -2,6 +2,8 @@ package api
 
 import (
 	"fmt"
+	"regexp"
+	"slices"
 	"strings"
 
 	"k8s.io/apimachinery/pkg/util/sets"
@@ -24,6 +26,100 @@ func IsPromotionJob(jobLabels map[string]string) bool {
 	return ok
 }
 
+// ProwgenExtras holds fields that control Prow job generation behavior.
+// TODO: After migration, remove the Prowgen embedding.
+type ProwgenExtras struct {
+	Prowgen `json:"-"`
+}
+
+// NewProwgenExtras merges configuration from .config.prowgen
+// and ci-operator config into a single ProwgenExtras.
+func NewProwgenExtras(prowgenFile Prowgen, config *ReleaseBuildConfiguration) *ProwgenExtras {
+	result := &ProwgenExtras{Prowgen: prowgenFile}
+	if config.Prowgen != nil {
+		// TODO: add merging of other fields from .config.prowgen into the extras struct as needed
+	}
+	return result
+}
+
+// Prowgen holds the configuration from a .config.prowgen file.
+type Prowgen struct {
+	Private                     bool                    `json:"private,omitempty"`
+	Expose                      bool                    `json:"expose,omitempty"`
+	Rehearsals                  Rehearsals              `json:"rehearsals,omitempty"`
+	SlackReporterConfigs        []SlackReporterConfig   `json:"slack_reporter,omitempty"`
+	SkipOperatorPresubmits      []SkipOperatorPresubmit `json:"skip_operator_presubmits,omitempty"`
+	EnableSecretsStoreCSIDriver bool                    `json:"enable_secrets_store_csi_driver,omitempty"`
+}
+
+type Rehearsals struct {
+	DisableAll         bool     `json:"disable_all,omitempty"`
+	DisabledRehearsals []string `json:"disabled_rehearsals,omitempty"`
+}
+
+type SlackReporterConfig struct {
+	Channel             string                `json:"channel,omitempty"`
+	JobStatesToReport   []prowv1.ProwJobState `json:"job_states_to_report,omitempty"`
+	ReportTemplate      string                `json:"report_template,omitempty"`
+	JobNames            []string              `json:"job_names,omitempty"`
+	JobNamePatterns     []string              `json:"job_name_patterns,omitempty"`
+	ExcludedVariants    []string              `json:"excluded_variants,omitempty"`
+	ExcludedJobPatterns []string              `json:"excluded_job_patterns,omitempty"`
+}
+
+type SkipOperatorPresubmit struct {
+	Branch  string `json:"branch,omitempty"`
+	Variant string `json:"variant,omitempty"`
+}
+
+func (p *Prowgen) MergeDefaults(defaults *Prowgen) {
+	if defaults.Private {
+		p.Private = true
+	}
+	if defaults.Expose {
+		p.Expose = true
+	}
+	if defaults.EnableSecretsStoreCSIDriver {
+		p.EnableSecretsStoreCSIDriver = true
+	}
+	if defaults.Rehearsals.DisableAll {
+		p.Rehearsals.DisableAll = true
+	}
+	p.Rehearsals.DisabledRehearsals = append(p.Rehearsals.DisabledRehearsals, defaults.Rehearsals.DisabledRehearsals...)
+}
+
+func (p *Prowgen) GetSlackReporterConfigForJobName(fullJobName, testName, variant string) *SlackReporterConfig {
+nextSlackReporterConfig:
+	for _, s := range p.SlackReporterConfigs {
+		if slices.Contains(s.ExcludedVariants, variant) {
+			continue
+		}
+		for _, excludePattern := range s.ExcludedJobPatterns {
+			if matched, err := regexp.MatchString(excludePattern, fullJobName); err == nil && matched {
+				continue nextSlackReporterConfig
+			}
+		}
+		if slices.Contains(s.JobNames, testName) {
+			return &s
+		}
+		for _, pattern := range s.JobNamePatterns {
+			if matched, err := regexp.MatchString(pattern, testName); err == nil && matched {
+				return &s
+			}
+		}
+	}
+	return nil
+}
+
+func (p *Prowgen) SkipPresubmits(branch string, variant string) bool {
+	for _, skip := range p.SkipOperatorPresubmits {
+		if skip.Branch == branch && skip.Variant == variant {
+			return true
+		}
+	}
+	return false
+}
+
 // ReleaseBuildConfiguration describes how release
 // artifacts are built from a repository of source
 // code. The configuration is made up of two parts:
@@ -38,6 +134,9 @@ type ReleaseBuildConfiguration struct {
 	Metadata Metadata `json:"zz_generated_metadata"`
 
 	InputConfiguration `json:",inline"`
+
+	// Prowgen holds fields that control Prow job generation behavior.
+	Prowgen *ProwgenExtras `json:"prowgen,omitempty"`
 
 	// BinaryBuildCommands will create a "bin" image based on "src" that
 	// contains the output of this command. This allows reuse of binary artifacts

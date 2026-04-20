@@ -99,13 +99,13 @@ func TestExtractRepoElementsFromPath(t *testing.T) {
 func TestValidateProwgenConfig(t *testing.T) {
 	testCases := []struct {
 		name     string
-		pConfig  *Prowgen
+		pConfig  *api.Prowgen
 		expected error
 	}{
 		{
 			name: "valid",
-			pConfig: &Prowgen{
-				SlackReporterConfigs: []SlackReporterConfig{
+			pConfig: &api.Prowgen{
+				SlackReporterConfigs: []api.SlackReporterConfig{
 					{
 						Channel:           "#slack-channel",
 						JobStatesToReport: []prowv1.ProwJobState{"error"},
@@ -123,8 +123,8 @@ func TestValidateProwgenConfig(t *testing.T) {
 		},
 		{
 			name: "invalid, same job in multiple slack reporter configs",
-			pConfig: &Prowgen{
-				SlackReporterConfigs: []SlackReporterConfig{
+			pConfig: &api.Prowgen{
+				SlackReporterConfigs: []api.SlackReporterConfig{
 					{
 						Channel:           "#slack-channel",
 						JobStatesToReport: []prowv1.ProwJobState{"error"},
@@ -143,8 +143,8 @@ func TestValidateProwgenConfig(t *testing.T) {
 		},
 		{
 			name: "invalid regex patterns cause validation errors",
-			pConfig: &Prowgen{
-				SlackReporterConfigs: []SlackReporterConfig{
+			pConfig: &api.Prowgen{
+				SlackReporterConfigs: []api.SlackReporterConfig{
 					{
 						Channel:         "#slack-channel",
 						JobNamePatterns: []string{"[invalid"},
@@ -159,8 +159,8 @@ func TestValidateProwgenConfig(t *testing.T) {
 		},
 		{
 			name: "duplicate regex patterns cause validation errors",
-			pConfig: &Prowgen{
-				SlackReporterConfigs: []SlackReporterConfig{
+			pConfig: &api.Prowgen{
+				SlackReporterConfigs: []api.SlackReporterConfig{
 					{
 						Channel:         "#slack-channel",
 						JobNamePatterns: []string{"^unit.*"},
@@ -175,8 +175,8 @@ func TestValidateProwgenConfig(t *testing.T) {
 		},
 		{
 			name: "valid regex patterns pass validation",
-			pConfig: &Prowgen{
-				SlackReporterConfigs: []SlackReporterConfig{
+			pConfig: &api.Prowgen{
+				SlackReporterConfigs: []api.SlackReporterConfig{
 					{
 						Channel:         "#slack-channel",
 						JobNamePatterns: []string{"^unit.*", "^e2e.*"},
@@ -190,8 +190,8 @@ func TestValidateProwgenConfig(t *testing.T) {
 		},
 		{
 			name: "invalid excluded job patterns cause validation errors",
-			pConfig: &Prowgen{
-				SlackReporterConfigs: []SlackReporterConfig{
+			pConfig: &api.Prowgen{
+				SlackReporterConfigs: []api.SlackReporterConfig{
 					{
 						Channel:             "#slack-channel",
 						ExcludedJobPatterns: []string{"[invalid"},
@@ -206,8 +206,8 @@ func TestValidateProwgenConfig(t *testing.T) {
 		},
 		{
 			name: "valid excluded job patterns pass validation",
-			pConfig: &Prowgen{
-				SlackReporterConfigs: []SlackReporterConfig{
+			pConfig: &api.Prowgen{
+				SlackReporterConfigs: []api.SlackReporterConfig{
 					{
 						Channel:             "#slack-channel",
 						JobNamePatterns:     []string{".*"},
@@ -235,15 +235,15 @@ func TestValidateProwgenConfig(t *testing.T) {
 func TestValidateProwgenSkipOperatorPresubmits(t *testing.T) {
 	testCases := []struct {
 		name     string
-		pConfig  *Prowgen
+		pConfig  *api.Prowgen
 		branch   string
 		variant  string
 		expected bool
 	}{
 		{
 			name: "skipping operator presubmits, exactly match",
-			pConfig: &Prowgen{
-				SkipOperatorPresubmits: []SkipOperatorPresubmits{
+			pConfig: &api.Prowgen{
+				SkipOperatorPresubmits: []api.SkipOperatorPresubmit{
 					{
 						Branch:  "main",
 						Variant: "4.18",
@@ -260,8 +260,8 @@ func TestValidateProwgenSkipOperatorPresubmits(t *testing.T) {
 		},
 		{
 			name: "generating operator presubmits, mismatch branches",
-			pConfig: &Prowgen{
-				SkipOperatorPresubmits: []SkipOperatorPresubmits{
+			pConfig: &api.Prowgen{
+				SkipOperatorPresubmits: []api.SkipOperatorPresubmit{
 					{
 						Branch:  "dev",
 						Variant: "4.18",
@@ -274,7 +274,7 @@ func TestValidateProwgenSkipOperatorPresubmits(t *testing.T) {
 		},
 		{
 			name:     "skipping operator presubmits, empty values",
-			pConfig:  &Prowgen{},
+			pConfig:  &api.Prowgen{},
 			branch:   "main",
 			variant:  "4.19",
 			expected: false,
@@ -295,15 +295,15 @@ func TestValidateProwgenSkipOperatorPresubmits(t *testing.T) {
 func TestProwgen_MergeDefaults_SlackReporterConfigs(t *testing.T) {
 	testCases := []struct {
 		name     string
-		base     Prowgen
-		defaults Prowgen
-		expected []SlackReporterConfig
+		base     api.Prowgen
+		defaults api.Prowgen
+		expected []api.SlackReporterConfig
 	}{
 		{
 			name: "slack reporter configs are never merged from defaults",
-			base: Prowgen{},
-			defaults: Prowgen{
-				SlackReporterConfigs: []SlackReporterConfig{
+			base: api.Prowgen{},
+			defaults: api.Prowgen{
+				SlackReporterConfigs: []api.SlackReporterConfig{
 					{
 						Channel:             "#test-channel",
 						JobStatesToReport:   []prowv1.ProwJobState{"failure"},
@@ -316,8 +316,8 @@ func TestProwgen_MergeDefaults_SlackReporterConfigs(t *testing.T) {
 		},
 		{
 			name: "existing slack reporter configs are preserved unchanged",
-			base: Prowgen{
-				SlackReporterConfigs: []SlackReporterConfig{
+			base: api.Prowgen{
+				SlackReporterConfigs: []api.SlackReporterConfig{
 					{
 						Channel:           "#existing-channel",
 						JobStatesToReport: []prowv1.ProwJobState{"error"},
@@ -325,8 +325,8 @@ func TestProwgen_MergeDefaults_SlackReporterConfigs(t *testing.T) {
 					},
 				},
 			},
-			defaults: Prowgen{
-				SlackReporterConfigs: []SlackReporterConfig{
+			defaults: api.Prowgen{
+				SlackReporterConfigs: []api.SlackReporterConfig{
 					{
 						Channel:             "#default-channel",
 						JobStatesToReport:   []prowv1.ProwJobState{"failure"},
@@ -335,7 +335,7 @@ func TestProwgen_MergeDefaults_SlackReporterConfigs(t *testing.T) {
 					},
 				},
 			},
-			expected: []SlackReporterConfig{
+			expected: []api.SlackReporterConfig{
 				{
 					Channel:           "#existing-channel",
 					JobStatesToReport: []prowv1.ProwJobState{"error"},
@@ -345,8 +345,8 @@ func TestProwgen_MergeDefaults_SlackReporterConfigs(t *testing.T) {
 		},
 		{
 			name:     "empty base with empty defaults stays empty",
-			base:     Prowgen{},
-			defaults: Prowgen{},
+			base:     api.Prowgen{},
+			defaults: api.Prowgen{},
 			expected: nil,
 		},
 	}

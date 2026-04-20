@@ -102,7 +102,7 @@ func (o *options) process() error {
 
 // generateJobsToDir generates prow job configuration into the dir provided by
 // consuming ci-operator configuration.
-func (o *options) generateJobsToDir(subDir string, prowConfig map[string]*config.Prowgen) error {
+func (o *options) generateJobsToDir(subDir string, prowConfig map[string]*cioperatorapi.Prowgen) error {
 	generated := map[string]*prowconfig.JobConfig{}
 	genJobsFunc := generateJobs(o.resolver, prowConfig, generated)
 	if err := o.OperateOnCIOperatorConfigDir(filepath.Join(o.fromDir, subDir), genJobsFunc); err != nil {
@@ -120,13 +120,16 @@ func (o *options) generateJobsToDir(subDir string, prowConfig map[string]*config
 	return writeToDir(o.toDir, generated)
 }
 
-func generateJobs(resolver registry.Resolver, cache map[string]*config.Prowgen, output map[string]*prowconfig.JobConfig) func(configSpec *cioperatorapi.ReleaseBuildConfiguration, info *config.Info) error {
+func generateJobs(resolver registry.Resolver, cache map[string]*cioperatorapi.Prowgen, output map[string]*prowconfig.JobConfig) func(configSpec *cioperatorapi.ReleaseBuildConfiguration, info *config.Info) error {
 	return func(configSpec *cioperatorapi.ReleaseBuildConfiguration, info *config.Info) error {
 		orgRepo := fmt.Sprintf("%s/%s", info.Org, info.Repo)
-		pInfo := &prowgen.ProwgenInfo{Metadata: info.Metadata, Config: config.Prowgen{Private: false, Expose: false}}
+		pInfo := &prowgen.ProwgenInfo{
+			Metadata: info.Metadata,
+			Config:   cioperatorapi.Prowgen{Private: false, Expose: false},
+		}
 		var ok bool
 		var err error
-		var orgConfig, repoConfig *config.Prowgen
+		var orgConfig, repoConfig *cioperatorapi.Prowgen
 
 		if orgConfig, ok = cache[info.Org]; !ok {
 			if cache[info.Org], err = config.LoadProwgenConfig(info.OrgPath); err != nil {
@@ -227,7 +230,7 @@ func main() {
 		args = append(args, "")
 	}
 	logger := logrus.WithFields(logrus.Fields{"target": opt.toDir, "source": opt.fromDir})
-	config := map[string]*config.Prowgen{}
+	config := map[string]*cioperatorapi.Prowgen{}
 	for _, subDir := range args {
 		logger = logger.WithFields(logrus.Fields{"subdir": subDir})
 		if err := opt.generateJobsToDir(subDir, config); err != nil {

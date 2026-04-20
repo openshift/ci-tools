@@ -355,8 +355,8 @@ func (s *server) generateProwJob(jr jobRun) (*prowv1.ProwJob, error) {
 			test.Timeout.Duration = defaultMultiRefJobTimeout
 		}
 
-		fakeProwgenInfo := &prowgen.ProwgenInfo{Metadata: testJobMetadata}
-		jobBaseGen := prowgen.NewProwJobBaseBuilderForTest(ciopConfig, fakeProwgenInfo, prowgen.NewCiOperatorPodSpecGenerator(), test)
+		extras := api.NewProwgenExtras(api.Prowgen{}, ciopConfig)
+		jobBaseGen := prowgen.NewProwJobBaseBuilderForTest(ciopConfig, extras, prowgen.NewCiOperatorPodSpecGenerator(), test)
 		jobBaseGen.PodSpec.Add(prowgen.InjectTestFrom(&jr.JobMetadata))
 		jobBaseGen.PodSpec.Add(prowgen.CustomHashInput(jobName))
 
@@ -375,7 +375,7 @@ func (s *server) generateProwJob(jr jobRun) (*prowv1.ProwJob, error) {
 		}
 		jobBaseGen.Cluster(api.Cluster(cluster))
 
-		periodic = prowgen.GeneratePeriodicForTest(jobBaseGen, fakeProwgenInfo)
+		periodic = prowgen.GeneratePeriodicForTest(jobBaseGen, extras)
 		break
 	}
 	if periodic == nil {

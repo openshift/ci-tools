@@ -4,22 +4,24 @@ import (
 	"testing"
 	"time"
 
-	"k8s.io/utils/pointer"
+	"k8s.io/utils/ptr"
 	prowv1 "sigs.k8s.io/prow/pkg/apis/prowjobs/v1"
-	v1 "sigs.k8s.io/prow/pkg/apis/prowjobs/v1"
 
 	ciop "github.com/openshift/ci-tools/pkg/api"
-	"github.com/openshift/ci-tools/pkg/config"
 	"github.com/openshift/ci-tools/pkg/testhelper"
 )
 
+var defaultMetadata = ciop.Metadata{
+	Org:    "org",
+	Repo:   "repo",
+	Branch: "branch",
+}
+
 func TestProwJobBaseBuilder(t *testing.T) {
-	defaultInfo := &ProwgenInfo{
-		Metadata: ciop.Metadata{
-			Org:    "org",
-			Repo:   "repo",
-			Branch: "branch",
-		},
+	releaseMetadata := ciop.Metadata{
+		Org:    "openshift",
+		Repo:   "release",
+		Branch: "main",
 	}
 	t.Parallel()
 	testCases := []struct {
@@ -31,32 +33,31 @@ func TestProwJobBaseBuilder(t *testing.T) {
 		testBinCommand string
 
 		podSpecBuilder CiOperatorPodSpecGenerator
-		info           *ProwgenInfo
+		metadata       ciop.Metadata
+		extras         *ciop.ProwgenExtras
 		prefix         string
 	}{
 		{
 			name:           "default job without further configuration",
-			info:           defaultInfo,
+			metadata:       defaultMetadata,
 			prefix:         "default",
 			podSpecBuilder: newFakePodSpecBuilder(),
 		},
 		{
 			name:           "job with configured prefix",
-			info:           defaultInfo,
+			metadata:       defaultMetadata,
 			prefix:         "prefix",
 			podSpecBuilder: newFakePodSpecBuilder(),
 		},
 		{
-			name: "job with a variant",
-			info: &ProwgenInfo{
-				Metadata: ciop.Metadata{Org: "vorg", Repo: "vrepo", Branch: "vbranch", Variant: "variant"},
-			},
+			name:           "job with a variant",
+			metadata:       ciop.Metadata{Org: "vorg", Repo: "vrepo", Branch: "vbranch", Variant: "variant"},
 			prefix:         "default",
 			podSpecBuilder: newFakePodSpecBuilder(),
 		},
 		{
-			name: "job with latest release that is a candidate: has `job-release` label",
-			info: defaultInfo,
+			name:     "job with latest release that is a candidate: has `job-release` label",
+			metadata: defaultMetadata,
 			inputs: ciop.InputConfiguration{
 				Releases: map[string]ciop.UnresolvedRelease{ciop.LatestReleaseName: {Candidate: &ciop.Candidate{Version: "THIS"}}},
 			},
@@ -64,8 +65,8 @@ func TestProwJobBaseBuilder(t *testing.T) {
 			podSpecBuilder: newFakePodSpecBuilder(),
 		},
 		{
-			name: "job with not a latest release that is a candidate: does not have `job-release` label",
-			info: defaultInfo,
+			name:     "job with not a latest release that is a candidate: does not have `job-release` label",
+			metadata: defaultMetadata,
 			inputs: ciop.InputConfiguration{
 				Releases: map[string]ciop.UnresolvedRelease{ciop.InitialReleaseName: {Candidate: &ciop.Candidate{Version: "THIS"}}},
 			},
@@ -73,8 +74,8 @@ func TestProwJobBaseBuilder(t *testing.T) {
 			podSpecBuilder: newFakePodSpecBuilder(),
 		},
 		{
-			name: "job with latest release that is not a candidate: does not have `job-release` label",
-			info: defaultInfo,
+			name:     "job with latest release that is not a candidate: does not have `job-release` label",
+			metadata: defaultMetadata,
 			inputs: ciop.InputConfiguration{
 				Releases: map[string]ciop.UnresolvedRelease{ciop.LatestReleaseName: {Release: &ciop.Release{Version: "THIS"}}},
 			},
@@ -83,23 +84,19 @@ func TestProwJobBaseBuilder(t *testing.T) {
 		},
 		{
 			name:           "job with no builds outside of openshift/release@main: does not have `no-builds` label",
-			info:           defaultInfo,
+			metadata:       defaultMetadata,
 			prefix:         "default",
 			podSpecBuilder: newFakePodSpecBuilder(),
 		},
 		{
-			name: "job with no builds in openshift/release@main: does have `no-builds` label",
-			info: &ProwgenInfo{
-				Metadata: ciop.Metadata{Org: "openshift", Repo: "release", Branch: "main"},
-			},
+			name:           "job with no builds in openshift/release@main: does have `no-builds` label",
+			metadata:       releaseMetadata,
 			prefix:         "default",
 			podSpecBuilder: newFakePodSpecBuilder(),
 		},
 		{
-			name: "job with a buildroot in of openshift/release@main: does not have `no-builds` label",
-			info: &ProwgenInfo{
-				Metadata: ciop.Metadata{Org: "openshift", Repo: "release", Branch: "main"},
-			},
+			name:     "job with a buildroot in of openshift/release@main: does not have `no-builds` label",
+			metadata: releaseMetadata,
 			inputs: ciop.InputConfiguration{
 				BuildRootImage: &ciop.BuildRootImageConfiguration{
 					ProjectImageBuild: &ciop.ProjectDirectoryImageBuildInputs{},
@@ -109,62 +106,50 @@ func TestProwJobBaseBuilder(t *testing.T) {
 			podSpecBuilder: newFakePodSpecBuilder(),
 		},
 		{
-			name: "job with binary build in openshift/release@main: does not have `no-builds` label",
-			info: &ProwgenInfo{
-				Metadata: ciop.Metadata{Org: "openshift", Repo: "release", Branch: "main"},
-			},
+			name:           "job with binary build in openshift/release@main: does not have `no-builds` label",
+			metadata:       releaseMetadata,
 			binCommand:     "make",
 			prefix:         "default",
 			podSpecBuilder: newFakePodSpecBuilder(),
 		},
 		{
-			name: "job with test binary build in of openshift/release@main: does not have `no-builds` label",
-			info: &ProwgenInfo{
-				Metadata: ciop.Metadata{Org: "openshift", Repo: "release", Branch: "main"},
-			},
+			name:           "job with test binary build in of openshift/release@main: does not have `no-builds` label",
+			metadata:       releaseMetadata,
 			testBinCommand: "make test",
 			prefix:         "default",
 			podSpecBuilder: newFakePodSpecBuilder(),
 		},
 		{
-			name: "job with image builds in of openshift/release@main: does not have `no-builds` label",
-			info: &ProwgenInfo{
-				Metadata: ciop.Metadata{Org: "openshift", Repo: "release", Branch: "main"},
-			},
+			name:           "job with image builds in of openshift/release@main: does not have `no-builds` label",
+			metadata:       releaseMetadata,
 			images:         ciop.ImageConfiguration{Items: []ciop.ProjectDirectoryImageBuildStepConfiguration{{From: "base", To: "image"}}},
 			prefix:         "default",
 			podSpecBuilder: newFakePodSpecBuilder(),
 		},
 		{
 			name:           "default job without further configuration, including podspec",
-			info:           defaultInfo,
+			metadata:       defaultMetadata,
 			prefix:         "default",
 			podSpecBuilder: NewCiOperatorPodSpecGenerator(),
 		},
 		{
-			name: "job with a variant, including podspec",
-			info: &ProwgenInfo{
-				Metadata: ciop.Metadata{Org: "vorg", Repo: "vrepo", Branch: "vbranch", Variant: "variant"},
-			},
+			name:           "job with a variant, including podspec",
+			metadata:       ciop.Metadata{Org: "vorg", Repo: "vrepo", Branch: "vbranch", Variant: "variant"},
 			prefix:         "default",
 			podSpecBuilder: NewCiOperatorPodSpecGenerator(),
 		},
 		{
-			name: "private job without cloning, including podspec",
-			info: &ProwgenInfo{
-				Metadata: ciop.Metadata{Org: "vorg", Repo: "vrepo", Branch: "vbranch"},
-				Config:   config.Prowgen{Private: true},
-			},
+			name:           "private job without cloning, including podspec",
+			metadata:       ciop.Metadata{Org: "vorg", Repo: "vrepo", Branch: "vbranch"},
+			extras:         &ciop.ProwgenExtras{Prowgen: ciop.Prowgen{Private: true}},
 			prefix:         "default",
 			podSpecBuilder: NewCiOperatorPodSpecGenerator(),
 		},
 		{
-			name: "private job with cloning, including podspec",
-			info: &ProwgenInfo{
-				Metadata: ciop.Metadata{Org: "vorg", Repo: "vrepo", Branch: "vbranch"},
-				Config:   config.Prowgen{Private: true},
-			},
-			prefix: "default",
+			name:     "private job with cloning, including podspec",
+			metadata: ciop.Metadata{Org: "vorg", Repo: "vrepo", Branch: "vbranch"},
+			extras:   &ciop.ProwgenExtras{Prowgen: ciop.Prowgen{Private: true}},
+			prefix:   "default",
 			inputs: ciop.InputConfiguration{
 				BuildRootImage: &ciop.BuildRootImageConfiguration{FromRepository: true},
 			},
@@ -181,9 +166,9 @@ func TestProwJobBaseBuilder(t *testing.T) {
 				Images:                  tc.images,
 				BinaryBuildCommands:     tc.binCommand,
 				TestBinaryBuildCommands: tc.testBinCommand,
-				Metadata:                tc.info.Metadata,
+				Metadata:                tc.metadata,
 			}
-			b := NewProwJobBaseBuilder(ciopconfig, tc.info, tc.podSpecBuilder).Build(tc.prefix)
+			b := NewProwJobBaseBuilder(ciopconfig, tc.extras, tc.podSpecBuilder).Build(tc.prefix)
 			testhelper.CompareWithFixture(t, b)
 		})
 	}
@@ -193,75 +178,69 @@ func TestGenerateJobBase(t *testing.T) {
 	var testCases = []struct {
 		testName              string
 		name                  string
-		info                  *ProwgenInfo
+		metadata              ciop.Metadata
+		extras                *ciop.ProwgenExtras
 		canonicalGoRepository string
 		rehearsable           bool
 	}{
 		{
 			testName: "no special options",
 			name:     "test",
-			info:     &ProwgenInfo{Metadata: ciop.Metadata{Org: "org", Repo: "repo", Branch: "branch"}},
+			metadata: defaultMetadata,
 		},
 		{
 			testName:    "rehearsable",
 			name:        "test",
-			info:        &ProwgenInfo{Metadata: ciop.Metadata{Org: "org", Repo: "repo", Branch: "branch"}},
+			metadata:    defaultMetadata,
 			rehearsable: true,
 		},
 		{
 			testName: "config variant",
 			name:     "test",
-			info:     &ProwgenInfo{Metadata: ciop.Metadata{Org: "org", Repo: "repo", Branch: "branch", Variant: "whatever"}},
+			metadata: ciop.Metadata{Org: "org", Repo: "repo", Branch: "branch", Variant: "whatever"},
 		},
 		{
 			testName:              "path alias",
 			name:                  "test",
 			canonicalGoRepository: "/some/where",
-			info:                  &ProwgenInfo{Metadata: ciop.Metadata{Org: "org", Repo: "repo", Branch: "branch", Variant: "whatever"}},
+			metadata:              ciop.Metadata{Org: "org", Repo: "repo", Branch: "branch", Variant: "whatever"},
 		},
 		{
 			testName: "hidden job for private repos",
 			name:     "test",
-			info: &ProwgenInfo{
-				Metadata: ciop.Metadata{Org: "org", Repo: "repo", Branch: "branch"},
-				Config:   config.Prowgen{Private: true},
-			},
+			metadata: defaultMetadata,
+			extras:   &ciop.ProwgenExtras{Prowgen: ciop.Prowgen{Private: true}},
 		},
 		{
 			testName: "expose job for private repos with public results",
 			name:     "test",
-			info: &ProwgenInfo{
-				Metadata: ciop.Metadata{Org: "org", Repo: "repo", Branch: "branch"},
-				Config:   config.Prowgen{Private: true, Expose: true},
-			},
+			metadata: defaultMetadata,
+			extras:   &ciop.ProwgenExtras{Prowgen: ciop.Prowgen{Private: true, Expose: true}},
 		},
 		{
 			testName: "expose option set but not private",
 			name:     "test",
-			info: &ProwgenInfo{
-				Metadata: ciop.Metadata{Org: "org", Repo: "repo", Branch: "branch"},
-				Config:   config.Prowgen{Private: false, Expose: true},
-			},
+			metadata: defaultMetadata,
+			extras:   &ciop.ProwgenExtras{Prowgen: ciop.Prowgen{Private: false, Expose: true}},
 		},
 	}
 
 	for _, testCase := range testCases {
 		t.Run(testCase.testName, func(t *testing.T) {
-			jobBaseGen := NewProwJobBaseBuilder(&ciop.ReleaseBuildConfiguration{CanonicalGoRepository: &testCase.canonicalGoRepository}, testCase.info, newFakePodSpecBuilder()).Rehearsable(testCase.rehearsable).TestName(testCase.name)
+			jobBaseGen := NewProwJobBaseBuilder(&ciop.ReleaseBuildConfiguration{CanonicalGoRepository: &testCase.canonicalGoRepository, Metadata: testCase.metadata}, testCase.extras, newFakePodSpecBuilder()).Rehearsable(testCase.rehearsable).TestName(testCase.name)
 			testhelper.CompareWithFixture(t, jobBaseGen.Build("pull"))
 		})
 	}
 }
 
 func TestNewProwJobBaseBuilderForTest(t *testing.T) {
-	ciopconfig := &ciop.ReleaseBuildConfiguration{}
-	defaultInfo := &ProwgenInfo{Metadata: ciop.Metadata{Org: "o", Repo: "r", Branch: "b"}}
+	defaultMetadata := ciop.Metadata{Org: "o", Repo: "r", Branch: "b"}
+	ciopconfig := &ciop.ReleaseBuildConfiguration{Metadata: defaultMetadata}
 	testCases := []struct {
-		name string
-
-		cfg  *ciop.ReleaseBuildConfiguration
-		test ciop.TestStepConfiguration
-		info *ProwgenInfo
+		name   string
+		cfg    *ciop.ReleaseBuildConfiguration
+		test   ciop.TestStepConfiguration
+		extras *ciop.ProwgenExtras
 	}{
 		{
 			name: "simple container-based test",
@@ -270,7 +249,6 @@ func TestNewProwJobBaseBuilderForTest(t *testing.T) {
 				Commands:                   "make",
 				ContainerTestConfiguration: &ciop.ContainerTestConfiguration{From: "src"},
 			},
-			info: defaultInfo,
 		},
 		{
 			name: "simple container-based test with timeout",
@@ -278,9 +256,8 @@ func TestNewProwJobBaseBuilderForTest(t *testing.T) {
 				As:                         "simple",
 				Commands:                   "make",
 				ContainerTestConfiguration: &ciop.ContainerTestConfiguration{From: "src"},
-				Timeout:                    &v1.Duration{Duration: time.Second},
+				Timeout:                    &prowv1.Duration{Duration: time.Second},
 			},
-			info: defaultInfo,
 		},
 		{
 			name: "simple container-based test with timeout and no decoration",
@@ -290,14 +267,14 @@ func TestNewProwJobBaseBuilderForTest(t *testing.T) {
 						FromRepository: true,
 					},
 				},
+				Metadata: defaultMetadata,
 			},
 			test: ciop.TestStepConfiguration{
 				As:                         "simple",
 				Commands:                   "make",
 				ContainerTestConfiguration: &ciop.ContainerTestConfiguration{From: "src"},
-				Timeout:                    &v1.Duration{Duration: time.Second},
+				Timeout:                    &prowv1.Duration{Duration: time.Second},
 			},
-			info: defaultInfo,
 		},
 		{
 			name: "simple container-based test with secret",
@@ -307,7 +284,6 @@ func TestNewProwJobBaseBuilderForTest(t *testing.T) {
 				ContainerTestConfiguration: &ciop.ContainerTestConfiguration{From: "src"},
 				Secret:                     &ciop.Secret{Name: "s", MountPath: "/path"},
 			},
-			info: defaultInfo,
 		},
 		{
 			name: "simple container-based test with secrets",
@@ -317,29 +293,26 @@ func TestNewProwJobBaseBuilderForTest(t *testing.T) {
 				ContainerTestConfiguration: &ciop.ContainerTestConfiguration{From: "src"},
 				Secrets:                    []*ciop.Secret{{Name: "s", MountPath: "/path"}, {Name: "s2", MountPath: "/path2"}},
 			},
-			info: defaultInfo,
 		},
 		{
 			name: "multi-stage test",
 			test: ciop.TestStepConfiguration{
 				As: "simple",
 				MultiStageTestConfiguration: &ciop.MultiStageTestConfiguration{
-					Workflow: pointer.StringPtr("workflow"),
+					Workflow: ptr.To("workflow"),
 				},
 			},
-			info: defaultInfo,
 		},
 		{
 			name: "multi-stage test with CSI enabled",
 			test: ciop.TestStepConfiguration{
 				As: "simple",
 				MultiStageTestConfiguration: &ciop.MultiStageTestConfiguration{
-					Workflow: pointer.StringPtr("workflow"),
+					Workflow: ptr.To("workflow"),
 				},
 			},
-			info: &ProwgenInfo{
-				Metadata: ciop.Metadata{Org: "o", Repo: "r", Branch: "b"},
-				Config:   config.Prowgen{EnableSecretsStoreCSIDriver: true},
+			extras: &ciop.ProwgenExtras{
+				Prowgen: ciop.Prowgen{EnableSecretsStoreCSIDriver: true},
 			},
 		},
 		{
@@ -349,9 +322,8 @@ func TestNewProwJobBaseBuilderForTest(t *testing.T) {
 				Commands:                   "make",
 				ContainerTestConfiguration: &ciop.ContainerTestConfiguration{From: "src"},
 			},
-			info: &ProwgenInfo{
-				Metadata: ciop.Metadata{Org: "o", Repo: "r", Branch: "b"},
-				Config:   config.Prowgen{EnableSecretsStoreCSIDriver: true},
+			extras: &ciop.ProwgenExtras{
+				Prowgen: ciop.Prowgen{EnableSecretsStoreCSIDriver: true},
 			},
 		},
 		{
@@ -360,10 +332,9 @@ func TestNewProwJobBaseBuilderForTest(t *testing.T) {
 				As:           "simple",
 				ClusterClaim: &ciop.ClusterClaim{Product: "ocp"},
 				MultiStageTestConfiguration: &ciop.MultiStageTestConfiguration{
-					Workflow: pointer.StringPtr("workflow"),
+					Workflow: ptr.To("workflow"),
 				},
 			},
-			info: defaultInfo,
 		},
 		{
 			name: "multi-stage test with cluster_profile",
@@ -371,10 +342,9 @@ func TestNewProwJobBaseBuilderForTest(t *testing.T) {
 				As: "simple",
 				MultiStageTestConfiguration: &ciop.MultiStageTestConfiguration{
 					ClusterProfile: ciop.ClusterProfileAlibabaCloud,
-					Workflow:       pointer.StringPtr("workflow"),
+					Workflow:       ptr.To("workflow"),
 				},
 			},
-			info: defaultInfo,
 		},
 		{
 			name: "multi-stage test with releases",
@@ -389,14 +359,14 @@ func TestNewProwJobBaseBuilderForTest(t *testing.T) {
 							},
 						},
 					}},
+				Metadata: defaultMetadata,
 			},
 			test: ciop.TestStepConfiguration{
 				As: "simple",
 				MultiStageTestConfiguration: &ciop.MultiStageTestConfiguration{
-					Workflow: pointer.StringPtr("workflow"),
+					Workflow: ptr.To("workflow"),
 				},
 			},
-			info: defaultInfo,
 		},
 		{
 			name: "literal multi-stage test",
@@ -406,7 +376,6 @@ func TestNewProwJobBaseBuilderForTest(t *testing.T) {
 					Test: []ciop.LiteralTestStep{{As: "step", From: "src"}},
 				},
 			},
-			info: defaultInfo,
 		},
 		{
 			name: "simple container-based test with cluster",
@@ -416,7 +385,6 @@ func TestNewProwJobBaseBuilderForTest(t *testing.T) {
 				Cluster:                    "build01",
 				ContainerTestConfiguration: &ciop.ContainerTestConfiguration{From: "src"},
 			},
-			info: defaultInfo,
 		},
 		{
 			name: "simple with slack reporter config",
@@ -425,10 +393,9 @@ func TestNewProwJobBaseBuilderForTest(t *testing.T) {
 				Commands:                   "make unit",
 				ContainerTestConfiguration: &ciop.ContainerTestConfiguration{From: "src"},
 			},
-			info: &ProwgenInfo{
-				Metadata: ciop.Metadata{Org: "o", Repo: "r", Branch: "b"},
-				Config: config.Prowgen{
-					SlackReporterConfigs: []config.SlackReporterConfig{
+			extras: &ciop.ProwgenExtras{
+				Prowgen: ciop.Prowgen{
+					SlackReporterConfigs: []ciop.SlackReporterConfig{
 						{
 							Channel:           "some-channel",
 							JobStatesToReport: []prowv1.ProwJobState{"error"},
@@ -446,10 +413,9 @@ func TestNewProwJobBaseBuilderForTest(t *testing.T) {
 				Commands:                   "make unit",
 				ContainerTestConfiguration: &ciop.ContainerTestConfiguration{From: "src"},
 			},
-			info: &ProwgenInfo{
-				Metadata: ciop.Metadata{Org: "o", Repo: "r", Branch: "b"},
-				Config: config.Prowgen{
-					SlackReporterConfigs: []config.SlackReporterConfig{
+			extras: &ciop.ProwgenExtras{
+				Prowgen: ciop.Prowgen{
+					SlackReporterConfigs: []ciop.SlackReporterConfig{
 						{
 							Channel:             "some-channel",
 							JobStatesToReport:   []prowv1.ProwJobState{"error"},
@@ -469,25 +435,23 @@ func TestNewProwJobBaseBuilderForTest(t *testing.T) {
 			if tc.cfg == nil {
 				tc.cfg = ciopconfig
 			}
-			b := NewProwJobBaseBuilderForTest(tc.cfg, tc.info, NewCiOperatorPodSpecGenerator(), tc.test).Build("prefix")
+			b := NewProwJobBaseBuilderForTest(tc.cfg, tc.extras, NewCiOperatorPodSpecGenerator(), tc.test).Build("prefix")
 			testhelper.CompareWithFixture(t, b)
 		})
 	}
 }
 
 func TestMiscellaneous(t *testing.T) {
-	defaultInfo := &ProwgenInfo{
-		Metadata: ciop.Metadata{
-			Org:    "org",
-			Repo:   "repo",
-			Branch: "branch",
-		},
+	defaultMetadata := ciop.Metadata{
+		Org:    "org",
+		Repo:   "repo",
+		Branch: "branch",
 	}
 	defaultConfig := &ciop.ReleaseBuildConfiguration{
-		Metadata: defaultInfo.Metadata,
+		Metadata: defaultMetadata,
 	}
 	simpleBuilder := func() *prowJobBaseBuilder {
-		return NewProwJobBaseBuilder(defaultConfig, defaultInfo, newFakePodSpecBuilder())
+		return NewProwJobBaseBuilder(defaultConfig, &ciop.ProwgenExtras{}, newFakePodSpecBuilder())
 	}
 
 	t.Parallel()

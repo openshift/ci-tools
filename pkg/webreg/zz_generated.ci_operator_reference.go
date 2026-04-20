@@ -334,6 +334,8 @@ const ciOperatorReferenceYaml = "# The list of base images describe\n" +
 	"          # this will cause both a floating tag and commit-specific tags\n" +
 	"          # to be promoted.\n" +
 	"          tag_by_commit: true\n" +
+	"# Prowgen holds fields that control Prow job generation behavior.\n" +
+	"prowgen: {}\n" +
 	"# RawSteps are literal Steps that should be\n" +
 	"# included in the final pipeline.\n" +
 	"raw_steps:\n" +

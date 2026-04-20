@@ -3,7 +3,7 @@ package prowgen
 import (
 	"time"
 
-	utilpointer "k8s.io/utils/pointer"
+	"k8s.io/utils/ptr"
 	prowv1 "sigs.k8s.io/prow/pkg/apis/prowjobs/v1"
 	prowconfig "sigs.k8s.io/prow/pkg/config"
 
@@ -16,7 +16,8 @@ type prowJobBaseBuilder struct {
 	PodSpec CiOperatorPodSpecGenerator
 	base    prowconfig.JobBase
 
-	info     *ProwgenInfo
+	metadata cioperatorapi.Metadata
+	extras   *cioperatorapi.ProwgenExtras
 	testName string
 }
 
@@ -38,12 +39,12 @@ func skipCloning(configSpec *cioperatorapi.ReleaseBuildConfiguration) bool {
 	return true
 }
 
-func hasNoBuilds(c *cioperatorapi.ReleaseBuildConfiguration, info *ProwgenInfo) bool {
+func hasNoBuilds(c *cioperatorapi.ReleaseBuildConfiguration) bool {
 	if c == nil {
 		return false
 	}
 	// only consider release jobs ATM
-	if info.Org != "openshift" || info.Repo != "release" || (info.Branch != "master" && info.Branch != "main") {
+	if c.Metadata.Org != "openshift" || c.Metadata.Repo != "release" || (c.Metadata.Branch != "master" && c.Metadata.Branch != "main") {
 		return false
 	}
 	if len(c.Images.Items) == 0 && c.BuildRootImage == nil && c.RpmBuildCommands == "" && c.TestBinaryBuildCommands == "" && c.BinaryBuildCommands == "" {
@@ -56,26 +57,31 @@ func hasNoBuilds(c *cioperatorapi.ReleaseBuildConfiguration, info *ProwgenInfo) 
 // from the given ReleaseBuildConfiguration, Prowgen config. The embedded PodSpec
 // is built using an injected CiOperatorPodSpecGenerator, not directly. The embedded
 // PodSpec is not built until the Build method is called.
-func NewProwJobBaseBuilder(configSpec *cioperatorapi.ReleaseBuildConfiguration, info *ProwgenInfo, podSpecGenerator CiOperatorPodSpecGenerator) *prowJobBaseBuilder {
+func NewProwJobBaseBuilder(configSpec *cioperatorapi.ReleaseBuildConfiguration, extras *cioperatorapi.ProwgenExtras, podSpecGenerator CiOperatorPodSpecGenerator) *prowJobBaseBuilder {
 	b := &prowJobBaseBuilder{
 		PodSpec: podSpecGenerator,
 		base: prowconfig.JobBase{
 			Agent:  string(prowv1.KubernetesAgent),
 			Labels: map[string]string{},
 			UtilityConfig: prowconfig.UtilityConfig{
-				Decorate: utilpointer.Bool(true),
+				Decorate: ptr.To(true),
 			},
 		},
+		metadata: configSpec.Metadata,
 	}
+	if extras == nil {
+		extras = cioperatorapi.NewProwgenExtras(cioperatorapi.Prowgen{}, configSpec)
+	}
+	b.extras = extras
 
 	if skipCloning(configSpec) {
-		b.base.UtilityConfig.DecorationConfig = &prowv1.DecorationConfig{SkipCloning: utilpointer.Bool(true)}
-	} else if info.Config.Private {
+		b.base.UtilityConfig.DecorationConfig = &prowv1.DecorationConfig{SkipCloning: ptr.To(true)}
+	} else if extras.Prowgen.Private {
 		b.base.UtilityConfig.DecorationConfig = &prowv1.DecorationConfig{OauthTokenSecret: &prowv1.OauthTokenSecret{Key: cioperatorapi.OauthTokenSecretKey, Name: cioperatorapi.OauthTokenSecretName}}
 	}
 
-	if len(info.Variant) > 0 {
-		b.base.Labels[jc.ProwJobLabelVariant] = info.Variant
+	if len(configSpec.Metadata.Variant) > 0 {
+		b.base.Labels[jc.ProwJobLabelVariant] = configSpec.Metadata.Variant
 	}
 
 	// jobs generated from some configSpec shapes provide relevant CI signal about OCP version stream
@@ -84,12 +90,12 @@ func NewProwJobBaseBuilder(configSpec *cioperatorapi.ReleaseBuildConfiguration, 
 		b.base.Labels[jc.JobReleaseKey] = versionStream
 	}
 
-	if hasNoBuilds(configSpec, info) {
+	if hasNoBuilds(configSpec) {
 		b.base.Labels[cioperatorapi.NoBuildsLabel] = cioperatorapi.NoBuildsValue
 	}
 
-	b.PodSpec.Add(Variant(info.Variant))
-	if info.Config.Private {
+	b.PodSpec.Add(Variant(configSpec.Metadata.Variant))
+	if b.extras.Prowgen.Private {
 		// We can reuse Prow's volume with the token if ProwJob itself is cloning the code
 		b.PodSpec.Add(GitHubToken(!skipCloning(configSpec)))
 	}
@@ -98,19 +104,18 @@ func NewProwJobBaseBuilder(configSpec *cioperatorapi.ReleaseBuildConfiguration, 
 		b.base.UtilityConfig.PathAlias = *configSpec.CanonicalGoRepository
 	}
 
-	if info.Config.Private && !info.Config.Expose {
+	if b.extras.Prowgen.Private && !b.extras.Prowgen.Expose {
 		b.base.Hidden = true
 	}
 
-	b.info = info
 	return b
 }
 
 // NewProwJobBaseBuilderForTest creates a new builder populated with defaults
 // for the given ci-operator test. The resulting builder is a superset of a
 // one built by NewProwJobBaseBuilder, with additional fields set for test
-func NewProwJobBaseBuilderForTest(configSpec *cioperatorapi.ReleaseBuildConfiguration, info *ProwgenInfo, podSpecGenerator CiOperatorPodSpecGenerator, test cioperatorapi.TestStepConfiguration) *prowJobBaseBuilder {
-	p := NewProwJobBaseBuilder(configSpec, info, podSpecGenerator)
+func NewProwJobBaseBuilderForTest(configSpec *cioperatorapi.ReleaseBuildConfiguration, extras *cioperatorapi.ProwgenExtras, podSpecGenerator CiOperatorPodSpecGenerator, test cioperatorapi.TestStepConfiguration) *prowJobBaseBuilder {
+	p := NewProwJobBaseBuilder(configSpec, extras, podSpecGenerator)
 	if test.Cluster != "" {
 		p.Cluster(test.Cluster)
 		p.WithLabel(cioperatorapi.ClusterLabel, string(test.Cluster))
@@ -147,7 +152,7 @@ func NewProwJobBaseBuilderForTest(configSpec *cioperatorapi.ReleaseBuildConfigur
 		if configSpec.Releases != nil {
 			p.PodSpec.Add(CIPullSecret())
 		}
-		if info.Config.EnableSecretsStoreCSIDriver {
+		if p.extras.Prowgen.EnableSecretsStoreCSIDriver {
 			p.PodSpec.Add(
 				GSMConfig(),
 			)
@@ -161,7 +166,7 @@ func NewProwJobBaseBuilderForTest(configSpec *cioperatorapi.ReleaseBuildConfigur
 		if configSpec.Releases != nil {
 			p.PodSpec.Add(CIPullSecret())
 		}
-		if info.Config.EnableSecretsStoreCSIDriver {
+		if p.extras.Prowgen.EnableSecretsStoreCSIDriver {
 			p.PodSpec.Add(
 				GSMConfig(),
 			)
@@ -213,7 +218,7 @@ func (p *prowJobBaseBuilder) WithLabel(key, value string) *prowJobBaseBuilder {
 
 // Build builds and returns the final JobBase instance
 func (p *prowJobBaseBuilder) Build(namePrefix string) prowconfig.JobBase {
-	p.base.Name = p.info.JobName(namePrefix, p.testName)
+	p.base.Name = p.metadata.JobName(namePrefix, p.testName)
 	p.base.Spec = p.PodSpec.MustBuild()
 	return p.base
 }

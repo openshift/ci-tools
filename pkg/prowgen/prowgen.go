@@ -43,8 +43,6 @@ func GenerateJobs(configSpec *cioperatorapi.ReleaseBuildConfiguration, info *Pro
 	postsubmits := map[string][]prowconfig.Postsubmit{}
 	var periodics []prowconfig.Periodic
 	extras := cioperatorapi.NewProwgenExtras(info.Config, configSpec)
-	rehearsals := extras.Rehearsals
-	disabledRehearsals := sets.New[string](rehearsals.DisabledRehearsals...)
 	for _, element := range configSpec.Tests {
 		shardCount := 1
 		if element.ShardCount != nil {
@@ -65,7 +63,7 @@ func GenerateJobs(configSpec *cioperatorapi.ReleaseBuildConfiguration, info *Pro
 				g.WithLabel(fmt.Sprintf("capability/%s", element.NodeArchitecture), string(element.NodeArchitecture))
 			}
 
-			disableRehearsal := rehearsals.DisableAll || disabledRehearsals.Has(element.As)
+			disableRehearsal := extras.IsRehearsalDisabledForTest(configSpec, element.As)
 
 			if element.IsPeriodic() {
 				cron := ""

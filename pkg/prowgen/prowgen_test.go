@@ -802,6 +802,77 @@ func TestGenerateJobs(t *testing.T) {
 				Branch: "branch",
 			}},
 		},
+		{
+			id: "disabled rehearsals at job level (prowgen file)",
+			config: &ciop.ReleaseBuildConfiguration{
+				Tests: []ciop.TestStepConfiguration{
+					{As: "unit", ContainerTestConfiguration: &ciop.ContainerTestConfiguration{From: "bin"}},
+					{As: "lint", ContainerTestConfiguration: &ciop.ContainerTestConfiguration{From: "bin"}},
+					{As: "periodic-unit", Cron: ptr.To(cron), ContainerTestConfiguration: &ciop.ContainerTestConfiguration{From: "bin"}},
+					{As: "periodic-lint", Cron: ptr.To(cron), ContainerTestConfiguration: &ciop.ContainerTestConfiguration{From: "bin"}},
+				},
+			},
+			repoInfo: &ProwgenInfo{
+				Metadata: ciop.Metadata{
+					Org:    "organization",
+					Repo:   "repository",
+					Branch: "branch",
+				},
+				Config: ciop.Prowgen{
+					Rehearsals: ciop.Rehearsals{DisabledRehearsals: []string{"unit", "periodic-unit"}},
+				},
+			},
+		},
+		{
+			id: "disabled all rehearsals (prowgen file)",
+			config: &ciop.ReleaseBuildConfiguration{
+				Tests: []ciop.TestStepConfiguration{
+					{As: "unit", ContainerTestConfiguration: &ciop.ContainerTestConfiguration{From: "bin"}},
+					{As: "periodic-unit", Cron: ptr.To(cron), ContainerTestConfiguration: &ciop.ContainerTestConfiguration{From: "bin"}},
+				},
+			},
+			repoInfo: &ProwgenInfo{
+				Metadata: ciop.Metadata{
+					Org:    "organization",
+					Repo:   "repository",
+					Branch: "branch",
+				},
+				Config: ciop.Prowgen{
+					Rehearsals: ciop.Rehearsals{DisableAll: true},
+				},
+			},
+		},
+		{
+			id: "disabled rehearsals at job level (ci-operator config)",
+			config: &ciop.ReleaseBuildConfiguration{
+				Tests: []ciop.TestStepConfiguration{
+					{As: "unit", ContainerTestConfiguration: &ciop.ContainerTestConfiguration{From: "bin"}, DisableRehearsal: ptr.To(true)},
+					{As: "lint", ContainerTestConfiguration: &ciop.ContainerTestConfiguration{From: "bin"}},
+					{As: "periodic-unit", Cron: ptr.To(cron), ContainerTestConfiguration: &ciop.ContainerTestConfiguration{From: "bin"}, DisableRehearsal: ptr.To(true)},
+					{As: "periodic-lint", Cron: ptr.To(cron), ContainerTestConfiguration: &ciop.ContainerTestConfiguration{From: "bin"}},
+				},
+			},
+			repoInfo: &ProwgenInfo{Metadata: ciop.Metadata{
+				Org:    "organization",
+				Repo:   "repository",
+				Branch: "branch",
+			}},
+		},
+		{
+			id: "disabled all rehearsals (ci-operator config)",
+			config: &ciop.ReleaseBuildConfiguration{
+				Tests: []ciop.TestStepConfiguration{
+					{As: "unit", ContainerTestConfiguration: &ciop.ContainerTestConfiguration{From: "bin"}},
+					{As: "periodic-unit", Cron: ptr.To(cron), ContainerTestConfiguration: &ciop.ContainerTestConfiguration{From: "bin"}},
+				},
+				Prowgen: &ciop.ProwgenExtras{DisableRehearsals: ptr.To(true)},
+			},
+			repoInfo: &ProwgenInfo{Metadata: ciop.Metadata{
+				Org:    "organization",
+				Repo:   "repository",
+				Branch: "branch",
+			}},
+		},
 	}
 
 	for _, tc := range tests {

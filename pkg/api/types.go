@@ -30,6 +30,9 @@ func IsPromotionJob(jobLabels map[string]string) bool {
 // TODO: After migration, remove the Prowgen embedding.
 type ProwgenExtras struct {
 	Prowgen `json:"-"`
+
+	// DisableRehearsals prevents all tests in config from being rehearsed.
+	DisableRehearsals *bool `json:"disable_rehearsals,omitempty"`
 }
 
 // NewProwgenExtras merges configuration from .config.prowgen
@@ -38,8 +41,31 @@ func NewProwgenExtras(prowgenFile Prowgen, config *ReleaseBuildConfiguration) *P
 	result := &ProwgenExtras{Prowgen: prowgenFile}
 	if config.Prowgen != nil {
 		// TODO: add merging of other fields from .config.prowgen into the extras struct as needed
+		result.DisableRehearsals = config.Prowgen.DisableRehearsals
 	}
 	return result
+}
+
+func (p *ProwgenExtras) AreRehearsalsDisabled() bool {
+	if p.DisableRehearsals != nil {
+		return *p.DisableRehearsals
+	}
+	return p.Rehearsals.DisableAll
+}
+
+func (p *ProwgenExtras) IsRehearsalDisabledForTest(config *ReleaseBuildConfiguration, testName string) bool {
+	for _, test := range config.Tests {
+		if test.As == testName {
+			if test.DisableRehearsal != nil {
+				return *test.DisableRehearsal
+			}
+		}
+	}
+
+	if slices.Contains(p.Rehearsals.DisabledRehearsals, testName) {
+		return true
+	}
+	return p.AreRehearsalsDisabled()
 }
 
 // Prowgen holds the configuration from a .config.prowgen file.
@@ -962,6 +988,9 @@ type TestStepConfiguration struct {
 	// Each generated job will be a duplication, but contain a suffix and the necessary SHARD_ARGS will be passed to the steps
 	// Only applicable to presubmits and periodics
 	ShardCount *int `json:"shard_count,omitempty"`
+
+	// DisableRehearsal prevents the test from being rehearsed.
+	DisableRehearsal *bool `json:"disable_rehearsal,omitempty"`
 
 	// Only one of the following can be not-null.
 	ContainerTestConfiguration         *ContainerTestConfiguration         `json:"container,omitempty"`

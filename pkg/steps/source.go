@@ -7,7 +7,6 @@ import (
 	"os"
 	"path/filepath"
 	"regexp"
-	"slices"
 	"sort"
 	"strings"
 	"sync"
@@ -945,13 +944,14 @@ func awsBuild(ctx context.Context, buildClient BuildClient, build buildapi.Build
 	}
 
 	cbClient := codebuild.NewFromConfig(sdkConfig)
-	pList, err := cbClient.ListProjects(ctx, nil)
+	projects, err := cbClient.BatchGetProjects(ctx, &codebuild.BatchGetProjectsInput{Names: []string{projectName}})
 	if err != nil {
 		*errs = append(*errs, err)
-		return false, fmt.Errorf("could not list project: %w", err)
+		return false, fmt.Errorf("could not get project %s: %w", projectName, err)
 	}
 
-	if !slices.Contains(pList.Projects, projectName) {
+	projectExists := len(projects.Projects) > 0
+	if !projectExists {
 		is := &imagev1.ImageStreamTag{}
 		credentials, err := awsBuildAssemblyCredentials(ctx, buildClient, build, is, errs)
 		if err != nil {
@@ -994,9 +994,9 @@ func awsBuildSpec(build buildapi.Build, credentials string, imageStreamReference
 		`echo "$dockerfile" > Dockerfile`,
 	}
 	for i, image := range build.Spec.CommonSpec.Source.Images {
-		commands = append(commands, fmt.Sprintf(`docker create --name c%d %s`, i, image.From.Name))
+		commands = append(commands, fmt.Sprintf(`docker create --name c%d %s`, i, util.ShellEscape(image.From.Name)))
 		for _, path := range image.Paths {
-			commands = append(commands, fmt.Sprintf(`docker cp c%d:%s %s`, i, path.SourcePath, path.DestinationDir))
+			commands = append(commands, fmt.Sprintf(`docker cp c%d:%s %s`, i, util.ShellEscape(path.SourcePath), util.ShellEscape(path.DestinationDir)))
 		}
 		commands = append(commands, fmt.Sprintf(`docker rm c%d`, i))
 	}
@@ -1034,6 +1034,11 @@ func awsBuildSpec(build buildapi.Build, credentials string, imageStreamReference
 }
 
 func awsBuildAssemblyCredentials(ctx context.Context, buildClient BuildClient, build buildapi.Build, is *imagev1.ImageStreamTag, errs *[]error) ([]byte, error) {
+	if build.Spec.Strategy.DockerStrategy == nil || build.Spec.Strategy.DockerStrategy.PullSecret == nil {
+		err := fmt.Errorf("build %s has no pull secret configured", build.Name)
+		*errs = append(*errs, err)
+		return nil, err
+	}
 	secretName := build.Spec.Strategy.DockerStrategy.PullSecret.Name
 	secret := &corev1.Secret{}
 	err := buildClient.Get(ctx, ctrlruntimeclient.ObjectKey{Namespace: build.Namespace, Name: secretName}, secret)
@@ -1080,7 +1085,17 @@ func awsBuildAssemblyCredentials(ctx context.Context, buildClient BuildClient, b
 		*errs = append(*errs, err)
 		return nil, fmt.Errorf("could not unmarshal secret %s: %w", secret.Name, err)
 	}
-	registryCredentials.Auths[buildClient.LocalRegistryDNS()] = pushCredentials.Auths[buildClient.LocalRegistryDNS()]
+	if registryCredentials.Auths == nil {
+		registryCredentials.Auths = map[string]credentialprovider.DockerConfigEntry{}
+	}
+	localRegistryDNS := buildClient.LocalRegistryDNS()
+	localRegistryAuth, exists := pushCredentials.Auths[localRegistryDNS]
+	if !exists {
+		err := fmt.Errorf("local registry auth %s not found", localRegistryDNS)
+		*errs = append(*errs, err)
+		return nil, err
+	}
+	registryCredentials.Auths[localRegistryDNS] = localRegistryAuth
 	marshalledRegistryCredentials, err := json.Marshal(registryCredentials)
 	if err != nil {
 		*errs = append(*errs, err)
@@ -1171,6 +1186,7 @@ func awsBuildWaitForIt(ctx context.Context, sdkConfig aws.Config, cbClient *code
 				return err
 			}
 			logFile, err := os.Open(logPath)
+			defer logFile.Close()
 			if err != nil {
 				return fmt.Errorf("could not open %s: %w", logPath, err)
 			}
@@ -1184,6 +1200,9 @@ func awsBuildWaitForIt(ctx context.Context, sdkConfig aws.Config, cbClient *code
 
 func awsBuildGatherLogs(ctx context.Context, sdkConfig aws.Config, build codebuildtypes.Build, log *os.File) error {
 	buildId := aws.ToString(build.Id)
+	if build.Logs == nil || build.Logs.GroupName == nil || build.Logs.StreamName == nil {
+		return fmt.Errorf("cloudwatch log location is missing for build %s", buildId)
+	}
 	cloudwatch := cloudwatchlogs.NewFromConfig(sdkConfig)
 	input := &cloudwatchlogs.GetLogEventsInput{
 		LogGroupName:  build.Logs.GroupName,
@@ -1200,6 +1219,9 @@ func awsBuildGatherLogs(ctx context.Context, sdkConfig aws.Config, build codebui
 			break
 		}
 		for _, event := range page.Events {
+			if event.Timestamp == nil || event.Message == nil {
+				continue
+			}
 			timestamp := time.Unix(*event.Timestamp/1000, 0)
 			_, err := log.Write([]byte(fmt.Sprintf("[%s] %s", timestamp.Format(time.RFC3339), *event.Message)))
 			if err != nil {

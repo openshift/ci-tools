@@ -230,6 +230,7 @@ type fakeFileGetter struct {
 	customOwnersAliases []byte
 	invalidOwners       []byte
 	mixedOwners         []byte
+	filtersOnly         []byte
 	someError           error
 	notFound            error
 }
@@ -299,6 +300,14 @@ func (fg fakeFileGetter) GetFile(org, repo, filepath, commit string) ([]byte, er
 			return nil, fg.notFound
 		}
 	}
+	if org == "org9" && repo == "repo9" {
+		if filepath == "OWNERS" {
+			return fg.filtersOnly, nil
+		}
+		if filepath == "OWNERS_ALIASES" {
+			return nil, fg.notFound
+		}
+	}
 
 	if filepath == "CUSTOM_OWNERS" {
 		return fg.customOwners, nil
@@ -351,6 +360,15 @@ filters:
       - nightly-approver2
       - approver1
 `)
+	fakeFiltersOnly := []byte(`---
+filters:
+  ".*\\.go$":
+    approvers:
+      - go-approver1
+      - go-approver2
+    reviewers:
+      - go-reviewer1
+`)
 	someError := fmt.Errorf("some error")
 	notFound := &github.FileNotFound{}
 
@@ -364,6 +382,7 @@ filters:
 		customOwnersAliases: fakeCustomAliases,
 		invalidOwners:       fakeInvalidOwners,
 		mixedOwners:         fakeMixedOwners,
+		filtersOnly:         fakeFiltersOnly,
 		someError:           someError,
 		notFound:            notFound,
 	}
@@ -479,16 +498,41 @@ filters:
 			},
 		},
 		{
-			description: "OWNERS with both top-level config and filters should use FullConfig",
+			description: "OWNERS with both top-level config and filters should preserve both",
 			given: orgRepo{
 				Organization: "org8",
 				Repository:   "repo8",
 			},
 			expectedHTTPResult: httpResult{
+				simpleConfig: SimpleConfig{
+					Config: repoowners.Config{
+						Approvers: []string{"approver1", "approver2"},
+						Reviewers: []string{"reviewer1", "reviewer2"},
+					},
+				},
 				fullConfig: FullConfig{
 					Filters: map[string]repoowners.Config{
 						"^nightly-.*\\.yaml$": {
 							Approvers: []string{"nightly-approver1", "nightly-approver2", "approver1"},
+						},
+					},
+				},
+				ownersFileExists: true,
+			},
+			expectedError: nil,
+		},
+		{
+			description: "OWNERS with only filters (no top-level config)",
+			given: orgRepo{
+				Organization: "org9",
+				Repository:   "repo9",
+			},
+			expectedHTTPResult: httpResult{
+				fullConfig: FullConfig{
+					Filters: map[string]repoowners.Config{
+						".*\\.go$": {
+							Approvers: []string{"go-approver1", "go-approver2"},
+							Reviewers: []string{"go-reviewer1"},
 						},
 					},
 				},
@@ -534,6 +578,32 @@ func TestResolveOwnerAliasesCleans(t *testing.T) {
 			in:   httpResult{fullConfig: FullConfig{Filters: map[string]repoowners.Config{"tld": {}}}},
 			expectedResult: FullConfig{Filters: map[string]repoowners.Config{
 				"tld": {
+					Approvers:         []string{"hans"},
+					Reviewers:         []string{"hans"},
+					RequiredReviewers: []string{"hans"},
+					Labels:            []string{},
+				},
+			}},
+		},
+		{
+			name: "mixed config - top-level becomes .* filter",
+			in: httpResult{
+				simpleConfig: SimpleConfig{Config: repoowners.Config{
+					Approvers: []string{"alice", "bob"},
+					Reviewers: []string{"charlie"},
+				}},
+				fullConfig: FullConfig{Filters: map[string]repoowners.Config{
+					".*\\.go$": {Approvers: []string{"go-team"}},
+				}},
+			},
+			expectedResult: FullConfig{Filters: map[string]repoowners.Config{
+				".*": {
+					Approvers:         []string{"hans"},
+					Reviewers:         []string{"hans"},
+					RequiredReviewers: []string{"hans"},
+					Labels:            []string{},
+				},
+				".*\\.go$": {
 					Approvers:         []string{"hans"},
 					Reviewers:         []string{"hans"},
 					RequiredReviewers: []string{"hans"},

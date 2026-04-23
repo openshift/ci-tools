@@ -208,19 +208,22 @@ func getOwnersHTTP(fg FileGetter, orgRepo orgRepo, filenames ownersconfig.Filena
 		switch filename {
 		case filenames.Owners:
 			httpResult.ownersFileExists = true
-			simple, err := repoowners.LoadSimpleConfig(data)
+			// Try to load as FullConfig first to check for filters
+			full, err := repoowners.LoadFullConfig(data)
 			if err != nil {
-				logrus.WithError(err).Error("Unable to load simple config.")
+				logrus.WithError(err).Error("Unable to load full config.")
 				return httpResult, err
 			}
-			httpResult.simpleConfig = simple
-			if httpResult.simpleConfig.Empty() {
-				full, err := repoowners.LoadFullConfig(data)
+			// If the file has filters, use FullConfig; otherwise use SimpleConfig
+			if len(full.Filters) > 0 {
+				httpResult.fullConfig = full
+			} else {
+				simple, err := repoowners.LoadSimpleConfig(data)
 				if err != nil {
-					logrus.WithError(err).Error("Unable to load full config.")
+					logrus.WithError(err).Error("Unable to load simple config.")
 					return httpResult, err
 				}
-				httpResult.fullConfig = full
+				httpResult.simpleConfig = simple
 			}
 		case filenames.OwnersAliases:
 			aliases, err := repoowners.ParseAliasesConfig(data)

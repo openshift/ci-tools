@@ -229,6 +229,7 @@ type fakeFileGetter struct {
 	aliases             []byte
 	customOwnersAliases []byte
 	invalidOwners       []byte
+	mixedOwners         []byte
 	someError           error
 	notFound            error
 }
@@ -290,6 +291,14 @@ func (fg fakeFileGetter) GetFile(org, repo, filepath, commit string) ([]byte, er
 			return nil, fg.notFound
 		}
 	}
+	if org == "org8" && repo == "repo8" {
+		if filepath == "OWNERS" {
+			return fg.mixedOwners, nil
+		}
+		if filepath == "OWNERS_ALIASES" {
+			return nil, fg.notFound
+		}
+	}
 
 	if filepath == "CUSTOM_OWNERS" {
 		return fg.customOwners, nil
@@ -327,6 +336,21 @@ approvers:
 - @abc
 - @team-a
 `)
+	fakeMixedOwners := []byte(`---
+reviewers:
+  - reviewer1
+  - reviewer2
+approvers:
+  - approver1
+  - approver2
+
+filters:
+  "^nightly-.*\\.yaml$":
+    approvers:
+      - nightly-approver1
+      - nightly-approver2
+      - approver1
+`)
 	someError := fmt.Errorf("some error")
 	notFound := &github.FileNotFound{}
 
@@ -339,6 +363,7 @@ approvers:
 		aliases:             fakeOwnersAliases,
 		customOwnersAliases: fakeCustomAliases,
 		invalidOwners:       fakeInvalidOwners,
+		mixedOwners:         fakeMixedOwners,
 		someError:           someError,
 		notFound:            notFound,
 	}
@@ -452,6 +477,24 @@ approvers:
 				repoAliases:      repoowners.RepoAliases{"approvers-from-custom-approvers-filename-team": sets.New[string]("teammember-from-custom-approvers-aliases-filename")},
 				ownersFileExists: true,
 			},
+		},
+		{
+			description: "OWNERS with both top-level config and filters should use FullConfig",
+			given: orgRepo{
+				Organization: "org8",
+				Repository:   "repo8",
+			},
+			expectedHTTPResult: httpResult{
+				fullConfig: FullConfig{
+					Filters: map[string]repoowners.Config{
+						"^nightly-.*\\.yaml$": {
+							Approvers: []string{"nightly-approver1", "nightly-approver2", "approver1"},
+						},
+					},
+				},
+				ownersFileExists: true,
+			},
+			expectedError: nil,
 		},
 	}
 

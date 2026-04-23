@@ -132,8 +132,7 @@ func TestShardPluginConfig(t *testing.T) {
 			expectedShardFiles: map[string]string{
 				"openshift/_pluginconfig.yaml": strings.Join([]string{
 					"approve:",
-					"- commandHelpLink: \"\"",
-					"  issue_required: true",
+					"- issue_required: true",
 					"  repos:",
 					"  - openshift",
 					"bugzilla:",
@@ -171,8 +170,7 @@ func TestShardPluginConfig(t *testing.T) {
 				}, "\n"),
 				"openshift/release/_pluginconfig.yaml": strings.Join([]string{
 					"approve:",
-					"- commandHelpLink: \"\"",
-					"  lgtm_acts_as_approve: true",
+					"- lgtm_acts_as_approve: true",
 					"  repos:",
 					"  - openshift/release",
 					"bugzilla:",
@@ -206,8 +204,7 @@ func TestShardPluginConfig(t *testing.T) {
 				}, "\n"),
 				"openshift/release2/_pluginconfig.yaml": strings.Join([]string{
 					"approve:",
-					"- commandHelpLink: \"\"",
-					"  lgtm_acts_as_approve: true",
+					"- lgtm_acts_as_approve: true",
 					"  repos:",
 					"  - openshift/release2",
 					"plugins:",

@@ -48,6 +48,8 @@ owners:
   - lgtm
 project_config: {}
 project_manager: {}
+release_note:
+  guidelines_url: https://git.k8s.io/community/contributors/guide/release-notes.md
 retitle: {}
 sigmention:
   regexp: (?m)@kubernetes/sig-([\w-]*)-(misc|test-failures|bugs|feature-requests|proposals|pr-reviews|api-reviews)

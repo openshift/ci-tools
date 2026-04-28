@@ -435,6 +435,11 @@ func handleFailedBuild(ctx context.Context, client BuildClient, ns, name string,
 		return err
 	}
 
+	if isNonRetriableInfraError(b.Status.LogSnippet) {
+		logrus.Infof("Build %s failed with non-retriable infrastructure error (%s), will not be retried", name, b.Status.Reason)
+		return err
+	}
+
 	logrus.Infof("Build %s previously failed from an infrastructure error (%s), retrying...", name, b.Status.Reason)
 
 	// Remove workload from metrics watching since we're about to delete and recreate the build
@@ -630,6 +635,10 @@ func isInfraReason(reason buildapi.StatusReason) bool {
 		}
 	}
 	return false
+}
+
+func isNonRetriableInfraError(logSnippet string) bool {
+	return strings.Contains(logSnippet, "manifest unknown")
 }
 
 func hintsAtInfraReason(logSnippet string) bool {

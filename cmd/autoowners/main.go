@@ -146,22 +146,7 @@ func (r httpResult) resolveOwnerAliases(cleaner ownersCleaner) interface{} {
 			Options: r.fullConfig.Options,
 		}
 
-		// If we also have top-level config, add it as a ".*" catch-all filter
-		// (unless a ".*" filter already exists in fullConfig)
-		if !r.simpleConfig.Empty() && r.fullConfig.Filters[".*"].Approvers == nil {
-			topLevelCfg := repoowners.Config{
-				Approvers:         cleaner(sets.List(r.repoAliases.ExpandAliases(repoowners.NormLogins(r.simpleConfig.Approvers)))),
-				Reviewers:         cleaner(sets.List(r.repoAliases.ExpandAliases(repoowners.NormLogins(r.simpleConfig.Reviewers)))),
-				RequiredReviewers: cleaner(sets.List(r.repoAliases.ExpandAliases(repoowners.NormLogins(r.simpleConfig.RequiredReviewers)))),
-				Labels:            sets.List(sets.New[string](r.simpleConfig.Labels...)),
-			}
-			if len(topLevelCfg.Reviewers) == 0 {
-				topLevelCfg.Reviewers = topLevelCfg.Approvers
-			}
-			fc.Filters[".*"] = topLevelCfg
-		}
-
-		// Add all the specific filters from fullConfig
+		// Process all specific filters from fullConfig first
 		for k, v := range r.fullConfig.Filters {
 			cfg := repoowners.Config{
 				Approvers:         cleaner(sets.List(r.repoAliases.ExpandAliases(repoowners.NormLogins(v.Approvers)))),
@@ -173,6 +158,28 @@ func (r httpResult) resolveOwnerAliases(cleaner ownersCleaner) interface{} {
 				cfg.Reviewers = cfg.Approvers
 			}
 			fc.Filters[k] = cfg
+		}
+
+		// If we also have top-level config, merge it into the ".*" catch-all filter
+		if !r.simpleConfig.Empty() {
+			topLevelCfg := repoowners.Config{
+				Approvers:         cleaner(sets.List(r.repoAliases.ExpandAliases(repoowners.NormLogins(r.simpleConfig.Approvers)))),
+				Reviewers:         cleaner(sets.List(r.repoAliases.ExpandAliases(repoowners.NormLogins(r.simpleConfig.Reviewers)))),
+				RequiredReviewers: cleaner(sets.List(r.repoAliases.ExpandAliases(repoowners.NormLogins(r.simpleConfig.RequiredReviewers)))),
+				Labels:            sets.List(sets.New[string](r.simpleConfig.Labels...)),
+			}
+			if len(topLevelCfg.Reviewers) == 0 {
+				topLevelCfg.Reviewers = topLevelCfg.Approvers
+			}
+
+			// Merge with existing ".*" filter if one exists
+			if existing, ok := fc.Filters[".*"]; ok {
+				topLevelCfg.Approvers = sets.List(sets.New[string](append(topLevelCfg.Approvers, existing.Approvers...)...))
+				topLevelCfg.Reviewers = sets.List(sets.New[string](append(topLevelCfg.Reviewers, existing.Reviewers...)...))
+				topLevelCfg.RequiredReviewers = sets.List(sets.New[string](append(topLevelCfg.RequiredReviewers, existing.RequiredReviewers...)...))
+				topLevelCfg.Labels = sets.List(sets.New[string](append(topLevelCfg.Labels, existing.Labels...)...))
+			}
+			fc.Filters[".*"] = topLevelCfg
 		}
 		return fc
 	} else if !r.simpleConfig.Empty() {

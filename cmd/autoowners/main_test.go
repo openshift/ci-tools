@@ -620,6 +620,77 @@ func TestResolveOwnerAliasesCleans(t *testing.T) {
 	}
 }
 
+func TestResolveOwnerAliasesMixedConfig(t *testing.T) {
+	testCases := []struct {
+		name           string
+		in             httpResult
+		expectedResult interface{}
+	}{
+		{
+			name: "mixed config - top-level becomes .* filter",
+			in: httpResult{
+				simpleConfig: SimpleConfig{Config: repoowners.Config{
+					Approvers: []string{"alice", "bob"},
+					Reviewers: []string{"charlie"},
+				}},
+				fullConfig: FullConfig{Filters: map[string]repoowners.Config{
+					".*\\.go$": {Approvers: []string{"go-team"}},
+				}},
+			},
+			expectedResult: FullConfig{Filters: map[string]repoowners.Config{
+				".*": {
+					Approvers:         []string{"alice", "bob"},
+					Reviewers:         []string{"charlie"},
+					RequiredReviewers: []string{},
+					Labels:            []string{},
+				},
+				".*\\.go$": {
+					Approvers:         []string{"go-team"},
+					Reviewers:         []string{"go-team"},
+					RequiredReviewers: []string{},
+					Labels:            []string{},
+				},
+			}},
+		},
+		{
+			name: "mixed config - top-level merges with explicit .* filter",
+			in: httpResult{
+				simpleConfig: SimpleConfig{Config: repoowners.Config{
+					Approvers: []string{"alice", "bob"},
+					Reviewers: []string{"charlie"},
+				}},
+				fullConfig: FullConfig{Filters: map[string]repoowners.Config{
+					".*": {
+						Approvers: []string{"dan"},
+						Reviewers: []string{"eve"},
+					},
+					".*\\.go$": {Approvers: []string{"go-team"}},
+				}},
+			},
+			expectedResult: FullConfig{Filters: map[string]repoowners.Config{
+				".*": {
+					Approvers:         []string{"alice", "bob", "dan"},
+					Reviewers:         []string{"charlie", "eve"},
+					RequiredReviewers: []string{},
+					Labels:            []string{},
+				},
+				".*\\.go$": {
+					Approvers:         []string{"go-team"},
+					Reviewers:         []string{"go-team"},
+					RequiredReviewers: []string{},
+					Labels:            []string{},
+				},
+			}},
+		},
+	}
+
+	for _, tc := range testCases {
+		t.Run(tc.name, func(t *testing.T) {
+			assertEqual(t, tc.in.resolveOwnerAliases(noOpCleaner), tc.expectedResult)
+		})
+	}
+}
+
 func noOpCleaner(in []string) []string {
 	return in
 }

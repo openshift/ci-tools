@@ -42,11 +42,25 @@ func GenerateJobs(configSpec *cioperatorapi.ReleaseBuildConfiguration, info *Pro
 	presubmits := map[string][]prowconfig.Presubmit{}
 	postsubmits := map[string][]prowconfig.Postsubmit{}
 	var periodics []prowconfig.Periodic
-	prowgenConfig := info.Config
 	if configSpec.Prowgen != nil && configSpec.Prowgen.DisableRehearsals {
-		prowgenConfig.Rehearsals.DisableAll = true
+		info.Config.Rehearsals.DisableAll = true
 	}
-	rehearsals := prowgenConfig.Rehearsals
+	if configSpec.Prowgen != nil && len(configSpec.Prowgen.SlackReporterConfigs) > 0 {
+		var converted []config.SlackReporterConfig
+		for _, src := range configSpec.Prowgen.SlackReporterConfigs {
+			converted = append(converted, config.SlackReporterConfig{
+				Channel:             src.Channel,
+				JobStatesToReport:   src.JobStatesToReport,
+				ReportTemplate:      src.ReportTemplate,
+				JobNames:            src.JobNames,
+				JobNamePatterns:     src.JobNamePatterns,
+				ExcludedVariants:    src.ExcludedVariants,
+				ExcludedJobPatterns: src.ExcludedJobPatterns,
+			})
+		}
+		info.Config.SlackReporterConfigs = append(converted, info.Config.SlackReporterConfigs...)
+	}
+	rehearsals := info.Config.Rehearsals
 	disabledRehearsals := sets.New[string](rehearsals.DisabledRehearsals...)
 
 	for _, element := range configSpec.Tests {

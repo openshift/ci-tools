@@ -345,6 +345,20 @@ const ciOperatorReferenceYaml = "# The list of base images describe\n" +
 	"    # to clone the repository under test.\n" +
 	"    private: true\n" +
 	"    skip_operator_presubmits: true\n" +
+	"    # SlackReporterConfigs defines slack reporter configurations for generated jobs.\n" +
+	"    slack_reporter:\n" +
+	"        - channel: ' '\n" +
+	"          excluded_job_patterns:\n" +
+	"            - \"\"\n" +
+	"          excluded_variants:\n" +
+	"            - \"\"\n" +
+	"          job_name_patterns:\n" +
+	"            - \"\"\n" +
+	"          job_names:\n" +
+	"            - \"\"\n" +
+	"          job_states_to_report:\n" +
+	"            - \"\"\n" +
+	"          report_template: ' '\n" +
 	"# RawSteps are literal Steps that should be\n" +
 	"# included in the final pipeline.\n" +
 	"raw_steps:\n" +

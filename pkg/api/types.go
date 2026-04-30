@@ -24,6 +24,16 @@ func IsPromotionJob(jobLabels map[string]string) bool {
 	return ok
 }
 
+type SlackReporterConfig struct {
+	Channel             string                `json:"channel,omitempty"`
+	JobStatesToReport   []prowv1.ProwJobState `json:"job_states_to_report,omitempty"`
+	ReportTemplate      string                `json:"report_template,omitempty"`
+	JobNames            []string              `json:"job_names,omitempty"`
+	JobNamePatterns     []string              `json:"job_name_patterns,omitempty"`
+	ExcludedVariants    []string              `json:"excluded_variants,omitempty"`
+	ExcludedJobPatterns []string              `json:"excluded_job_patterns,omitempty"`
+}
+
 type ProwgenOverrides struct {
 	DisableRehearsals           bool `json:"disable_rehearsals,omitempty"`
 	SkipOperatorPresubmits      bool `json:"skip_operator_presubmits,omitempty"`
@@ -35,6 +45,8 @@ type ProwgenOverrides struct {
 	// Expose declares that jobs should not be hidden from view in deck if they
 	// are private. This field has no effect if private is not set.
 	Expose bool `json:"expose,omitempty"`
+	// SlackReporterConfigs defines slack reporter configurations for generated jobs.
+	SlackReporterConfigs []SlackReporterConfig `json:"slack_reporter,omitempty"`
 }
 
 // ReleaseBuildConfiguration describes how release

@@ -833,6 +833,39 @@ func TestGenerateJobs(t *testing.T) {
 			},
 		},
 		{
+			id: "inline slack reporter config from ci-operator config takes precedence",
+			config: &ciop.ReleaseBuildConfiguration{
+				Prowgen: &ciop.ProwgenOverrides{
+					SlackReporterConfigs: []ciop.SlackReporterConfig{
+						{
+							Channel:           "inline-channel",
+							JobStatesToReport: []prowv1.ProwJobState{"failure"},
+							JobNames:          []string{"unit"},
+						},
+					},
+				},
+				Tests: []ciop.TestStepConfiguration{
+					{As: "unit", ContainerTestConfiguration: &ciop.ContainerTestConfiguration{From: "bin"}},
+				},
+			},
+			repoInfo: &ProwgenInfo{
+				Metadata: ciop.Metadata{
+					Org:    "organization",
+					Repo:   "repository",
+					Branch: "branch",
+				},
+				Config: config.Prowgen{
+					SlackReporterConfigs: []config.SlackReporterConfig{
+						{
+							Channel:           "prowgen-channel",
+							JobStatesToReport: []prowv1.ProwJobState{"error"},
+							JobNames:          []string{"unit"},
+						},
+					},
+				},
+			},
+		},
+		{
 			id: "periodic with capabilities",
 			config: &ciop.ReleaseBuildConfiguration{
 				Tests: []ciop.TestStepConfiguration{

@@ -1,0 +1,11 @@
+presubmits:
+  organization/repository:
+  - always_run: false
+    labels:
+      pj-rehearse.openshift.io/can-be-rehearsed: "true"
+    name: pull-ci-organization-repository-branch-unit
+    reporter_config:
+      slack:
+        channel: inline-channel
+        job_states_to_report:
+        - failure

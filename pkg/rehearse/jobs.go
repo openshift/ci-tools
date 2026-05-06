@@ -166,6 +166,9 @@ func makeRehearsalPresubmit(source *prowconfig.Presubmit, repo string, refs *pja
 				rehearsal.CloneURI = ""
 				rehearsal.SkipSubmodules = false
 				rehearsal.CloneDepth = 0
+				if rehearsal.DecorationConfig != nil {
+					rehearsal.DecorationConfig.SparseCheckoutFiles = nil
+				}
 			}
 			ghContext += repo + "/"
 		}

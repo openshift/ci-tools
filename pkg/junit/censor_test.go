@@ -19,7 +19,10 @@ func TestCensorTestSuite(t *testing.T) {
 		},
 		TestCases: []*TestCase{
 			{
-				Name:        "somehow secret",
+				Name: "somehow secret",
+				Properties: []*Property{
+					{Name: "lifecycle", Value: "secret value"},
+				},
 				SkipMessage: &SkipMessage{Message: "skipped due to secret"},
 				FailureOutput: &FailureOutput{
 					Message: "failed due to secret",
@@ -29,7 +32,10 @@ func TestCensorTestSuite(t *testing.T) {
 				SystemErr: "error containing secret",
 			},
 			{
-				Name:        "somehow also secret",
+				Name: "somehow also secret",
+				Properties: []*Property{
+					{Name: "owner", Value: "also secret value"},
+				},
 				SkipMessage: &SkipMessage{Message: "also skipped due to secret"},
 				FailureOutput: &FailureOutput{
 					Message: "also failed due to secret",
@@ -48,7 +54,10 @@ func TestCensorTestSuite(t *testing.T) {
 				},
 				TestCases: []*TestCase{
 					{
-						Name:        "somehow nested secret",
+						Name: "somehow nested secret",
+						Properties: []*Property{
+							{Name: "lifecycle", Value: "nested secret value"},
+						},
 						SkipMessage: &SkipMessage{Message: "skipped due to nested secret"},
 						FailureOutput: &FailureOutput{
 							Message: "failed due to nested secret",
@@ -58,7 +67,10 @@ func TestCensorTestSuite(t *testing.T) {
 						SystemErr: "error containing nested secret",
 					},
 					{
-						Name:        "somehow also nested secret",
+						Name: "somehow also nested secret",
+						Properties: []*Property{
+							{Name: "owner", Value: "also nested secret value"},
+						},
 						SkipMessage: &SkipMessage{Message: "also skipped due to nested secret"},
 						FailureOutput: &FailureOutput{
 							Message: "also failed due to nested secret",
@@ -77,7 +89,10 @@ func TestCensorTestSuite(t *testing.T) {
 						},
 						TestCases: []*TestCase{
 							{
-								Name:        "somehow very nested secret",
+								Name: "somehow very nested secret",
+								Properties: []*Property{
+									{Name: "lifecycle", Value: "very nested secret value"},
+								},
 								SkipMessage: &SkipMessage{Message: "skipped due to very nested secret"},
 								FailureOutput: &FailureOutput{
 									Message: "failed due to very nested secret",
@@ -87,7 +102,10 @@ func TestCensorTestSuite(t *testing.T) {
 								SystemErr: "error containing very nested secret",
 							},
 							{
-								Name:        "somehow also very nested secret",
+								Name: "somehow also very nested secret",
+								Properties: []*Property{
+									{Name: "owner", Value: "also very nested secret value"},
+								},
 								SkipMessage: &SkipMessage{Message: "also skipped due to very nested secret"},
 								FailureOutput: &FailureOutput{
 									Message: "also failed due to very nested secret",

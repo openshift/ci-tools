@@ -235,5 +235,16 @@ func aggregateTestCase(testSuiteName string, combined *junit.TestCase, jobGCSBuc
 		combined.Lifecycle = toAdd.Lifecycle
 	}
 
+	// Propagate properties from source test case to the combined one
+	if len(combined.Properties) == 0 && len(toAdd.Properties) > 0 {
+		combined.Properties = make([]*junit.Property, len(toAdd.Properties))
+		for i, prop := range toAdd.Properties {
+			combined.Properties[i] = &junit.Property{
+				Name:  prop.Name,
+				Value: prop.Value,
+			}
+		}
+	}
+
 	return nil
 }

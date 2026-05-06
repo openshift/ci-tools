@@ -13,7 +13,7 @@ func TestCensorTestSuite(t *testing.T) {
 	censorer.Refresh("secret")
 	input := TestSuite{
 		Name: "some secret",
-		Properties: []*TestSuiteProperty{
+		Properties: []*Property{
 			{Name: "secret things", Value: "secret values"},
 			{Name: "also secret things", Value: "really secret values"},
 		},
@@ -42,7 +42,7 @@ func TestCensorTestSuite(t *testing.T) {
 		Children: []*TestSuite{
 			{
 				Name: "some nested secret",
-				Properties: []*TestSuiteProperty{
+				Properties: []*Property{
 					{Name: "nested secret things", Value: "nested secret values"},
 					{Name: "also nested secret things", Value: "really nested secret values"},
 				},
@@ -71,7 +71,7 @@ func TestCensorTestSuite(t *testing.T) {
 				Children: []*TestSuite{
 					{
 						Name: "some very nested secret",
-						Properties: []*TestSuiteProperty{
+						Properties: []*Property{
 							{Name: "very nested secret things", Value: "very nested secret values"},
 							{Name: "also very nested secret things", Value: "really very nested secret values"},
 						},

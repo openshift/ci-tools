@@ -38,7 +38,7 @@ type TestSuite struct {
 	Duration float64 `xml:"time,attr"`
 
 	// Properties holds other properties of the test suite as a mapping of name to value
-	Properties []*TestSuiteProperty `xml:"properties>property,omitempty"`
+	Properties []*Property `xml:"properties>property,omitempty"`
 
 	// TestCases are the test cases contained in the test suite
 	TestCases []*TestCase `xml:"testcase"`
@@ -47,8 +47,8 @@ type TestSuite struct {
 	Children []*TestSuite `xml:"testsuite"`
 }
 
-// TestSuiteProperty contains a mapping of a property name to a value
-type TestSuiteProperty struct {
+// Property contains a mapping of a property name to a value
+type Property struct {
 	XMLName xml.Name `xml:"property"`
 
 	Name  string `xml:"name,attr"`
@@ -70,6 +70,9 @@ type TestCase struct {
 
 	// Lifecycle indicates the test lifecycle phase (e.g. "informing" or "blocking")
 	Lifecycle string `xml:"lifecycle,attr,omitempty"`
+
+	// Properties holds other properties of the test case as a mapping of name to value
+	Properties []*Property `xml:"properties>property,omitempty"`
 
 	// SkipMessage holds the reason why the test was skipped
 	SkipMessage *SkipMessage `xml:"skipped"`

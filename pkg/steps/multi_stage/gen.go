@@ -25,6 +25,8 @@ const (
 	profileVolumeName          = "cluster-profile"
 	vpnContainerName           = "vpn-client"
 	leaseProxyScriptsMountPath = "/opt/scripts/lease-proxy"
+	// defaultVPNWaitTimeout is used when vpn.yaml does not set wait_timeout; cluster profiles may override.
+	defaultVPNWaitTimeout = "5m0s"
 )
 
 func (s *multiStageTestStep) generateObservers(
@@ -305,10 +307,14 @@ func addSecretWrapper(pod *coreapi.Pod, vpnConf *vpnConf, skipKubeconfig bool, g
 	container := &pod.Spec.Containers[0]
 	args := container.Args
 	container.Args = make([]string, 0)
-	if c := vpnConf; c != nil && c.WaitTimeout != nil {
+	if c := vpnConf; c != nil {
+		waitTimeout := defaultVPNWaitTimeout
+		if c.WaitTimeout != nil {
+			waitTimeout = *c.WaitTimeout
+		}
 		container.Args = append(container.Args,
 			"--wait-for-file", "/tmp/vpn/up",
-			"--wait-timeout", *c.WaitTimeout)
+			"--wait-timeout", waitTimeout)
 	}
 	if skipKubeconfig {
 		container.Args = append(container.Args, "--mode=skip-kubeconfig")

@@ -223,6 +223,10 @@ func createBuild(config api.SourceStepConfiguration, jobSpec *api.JobSpec, clone
 		}
 	}
 
+	for i := range refs {
+		refs[i].SparseCheckoutFiles = nil
+	}
+
 	dockerfile := sourceDockerfile(config.From, decorate.DetermineWorkDir(gopath, refs), cloneAuthConfig)
 	buildSource := buildapi.BuildSource{
 		Type:       buildapi.BuildSourceDockerfile,

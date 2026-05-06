@@ -1,9 +1,11 @@
 package prowgen
 
 import (
+	"path"
 	"time"
 
-	utilpointer "k8s.io/utils/pointer"
+	"k8s.io/apimachinery/pkg/util/sets"
+	"k8s.io/utils/ptr"
 	prowv1 "sigs.k8s.io/prow/pkg/apis/prowjobs/v1"
 	prowconfig "sigs.k8s.io/prow/pkg/config"
 
@@ -20,22 +22,40 @@ type prowJobBaseBuilder struct {
 	testName string
 }
 
-// If any included buildRoot uses from_repository we must not skip cloning
-func skipCloning(configSpec *cioperatorapi.ReleaseBuildConfiguration) bool {
-	buildRoots := configSpec.BuildRootImages
-	if buildRoots == nil {
-		buildRoots = make(map[string]cioperatorapi.BuildRootImageConfiguration)
+func fromRepositorySet(configSpec *cioperatorapi.ReleaseBuildConfiguration) bool {
+	if configSpec.BuildRootImage != nil && configSpec.BuildRootImage.FromRepository {
+		return true
 	}
-	if configSpec.BuildRootImage != nil {
-		buildRoots[""] = *configSpec.BuildRootImage
-	}
-	for _, buildRoot := range buildRoots {
+	for _, buildRoot := range configSpec.BuildRootImages {
 		if buildRoot.FromRepository {
-			return false
+			return true
 		}
 	}
+	return false
+}
 
-	return true
+func sparseCheckoutFiles(configSpec *cioperatorapi.ReleaseBuildConfiguration) []string {
+	files := sets.New[string]()
+	if fromRepositorySet(configSpec) {
+		files.Insert(cioperatorapi.CIOperatorInrepoConfigFileName)
+	}
+	for _, image := range configSpec.Images.Items {
+		if image.DockerfileLiteral != nil {
+			continue
+		}
+		if image.Ref != "" {
+			continue
+		}
+		dockerfilePath := image.DockerfilePath
+		if dockerfilePath == "" {
+			dockerfilePath = "Dockerfile"
+		}
+		if image.ContextDir != "" {
+			dockerfilePath = path.Join(image.ContextDir, dockerfilePath)
+		}
+		files.Insert(dockerfilePath)
+	}
+	return sets.List(files)
 }
 
 func hasNoBuilds(c *cioperatorapi.ReleaseBuildConfiguration, info *ProwgenInfo) bool {
@@ -63,7 +83,8 @@ func NewProwJobBaseBuilder(configSpec *cioperatorapi.ReleaseBuildConfiguration, 
 			Agent:  string(prowv1.KubernetesAgent),
 			Labels: map[string]string{},
 			UtilityConfig: prowconfig.UtilityConfig{
-				Decorate: utilpointer.Bool(true),
+				Decorate:         ptr.To(true),
+				DecorationConfig: &prowv1.DecorationConfig{},
 			},
 		},
 	}
@@ -71,10 +92,15 @@ func NewProwJobBaseBuilder(configSpec *cioperatorapi.ReleaseBuildConfiguration, 
 	private := info.Config.Private || (configSpec.Prowgen != nil && configSpec.Prowgen.Private)
 	expose := info.Config.Expose || (configSpec.Prowgen != nil && configSpec.Prowgen.Expose)
 
-	if skipCloning(configSpec) {
-		b.base.UtilityConfig.DecorationConfig = &prowv1.DecorationConfig{SkipCloning: utilpointer.Bool(true)}
-	} else if private {
-		b.base.UtilityConfig.DecorationConfig = &prowv1.DecorationConfig{OauthTokenSecret: &prowv1.OauthTokenSecret{Key: cioperatorapi.OauthTokenSecretKey, Name: cioperatorapi.OauthTokenSecretName}}
+	sparseFiles := sparseCheckoutFiles(configSpec)
+	shouldSkipCloning := len(sparseFiles) == 0
+	if shouldSkipCloning {
+		b.base.UtilityConfig.DecorationConfig.SkipCloning = ptr.To(true)
+	} else {
+		b.base.UtilityConfig.DecorationConfig.SparseCheckoutFiles = sparseFiles
+		if private {
+			b.base.UtilityConfig.DecorationConfig.OauthTokenSecret = &prowv1.OauthTokenSecret{Key: cioperatorapi.OauthTokenSecretKey, Name: cioperatorapi.OauthTokenSecretName}
+		}
 	}
 
 	if len(info.Variant) > 0 {
@@ -93,7 +119,7 @@ func NewProwJobBaseBuilder(configSpec *cioperatorapi.ReleaseBuildConfiguration, 
 
 	b.PodSpec.Add(Variant(info.Variant))
 	if private {
-		b.PodSpec.Add(GitHubToken(!skipCloning(configSpec)))
+		b.PodSpec.Add(GitHubToken(!shouldSkipCloning))
 	}
 
 	if configSpec.CanonicalGoRepository != nil {

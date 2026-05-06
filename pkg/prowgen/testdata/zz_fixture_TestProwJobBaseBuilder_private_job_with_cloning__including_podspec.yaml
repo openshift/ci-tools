@@ -4,6 +4,8 @@ decoration_config:
   oauth_token_secret:
     key: oauth
     name: github-credentials-openshift-ci-robot-private-git-cloner
+  sparse_checkout_files:
+  - .ci-operator.yaml
 hidden: true
 name: default-ci-vorg-vrepo-vbranch-
 spec:

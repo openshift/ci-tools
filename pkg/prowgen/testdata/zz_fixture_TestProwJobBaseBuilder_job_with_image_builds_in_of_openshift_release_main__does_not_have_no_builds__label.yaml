@@ -1,5 +1,6 @@
 agent: kubernetes
 decorate: true
 decoration_config:
-  skip_cloning: true
+  sparse_checkout_files:
+  - Dockerfile
 name: default-ci-openshift-release-main-

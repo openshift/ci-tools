@@ -3,11 +3,14 @@ periodics:
   cron: 5 4 * * *
   decorate: true
   decoration_config:
-    skip_cloning: true
+    sparse_checkout_files:
+    - Dockerfile
   extra_refs:
   - base_ref: branch
     org: organization
     repo: repository
+    sparse_checkout_files:
+    - Dockerfile
   labels:
     ci-operator.openshift.io/is-promotion: "true"
   max_concurrency: 1

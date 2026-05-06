@@ -2,10 +2,15 @@ periodics:
 - agent: kubernetes
   cron: 47 3 * * *
   decorate: true
+  decoration_config:
+    sparse_checkout_files:
+    - .ci-operator.yaml
   extra_refs:
   - base_ref: release-4.19
     org: super
     repo: duper
+    sparse_checkout_files:
+    - .ci-operator.yaml
   labels:
     ci-operator.openshift.io/variant: periodics
     ci.openshift.io/generator: prowgen

@@ -2,11 +2,14 @@ periodics:
 - agent: kubernetes
   decorate: true
   decoration_config:
-    skip_cloning: true
+    sparse_checkout_files:
+    - Dockerfile
   extra_refs:
   - base_ref: master
     org: slack-report-inline
     repo: duper
+    sparse_checkout_files:
+    - Dockerfile
   interval: 2h
   labels:
     ci.openshift.io/generator: prowgen
@@ -68,11 +71,14 @@ periodics:
   cron: 5 3 * * *
   decorate: true
   decoration_config:
-    skip_cloning: true
+    sparse_checkout_files:
+    - Dockerfile
   extra_refs:
   - base_ref: master
     org: slack-report-inline
     repo: duper
+    sparse_checkout_files:
+    - Dockerfile
   labels:
     ci.openshift.io/generator: prowgen
     pj-rehearse.openshift.io/can-be-rehearsed: "true"

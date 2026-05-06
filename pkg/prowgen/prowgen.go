@@ -445,6 +445,9 @@ func GeneratePeriodicForTest(jobBaseBuilder *prowJobBaseBuilder, info *ProwgenIn
 	if opts.PathAlias != nil {
 		ref.PathAlias = *opts.PathAlias
 	}
+	if dc := base.UtilityConfig.DecorationConfig; dc != nil && len(dc.SparseCheckoutFiles) > 0 {
+		ref.SparseCheckoutFiles = dc.SparseCheckoutFiles
+	}
 	base.ExtraRefs = append([]prowv1.Refs{ref}, base.ExtraRefs...)
 	if opts.ReleaseController {
 		opts.Interval = ""

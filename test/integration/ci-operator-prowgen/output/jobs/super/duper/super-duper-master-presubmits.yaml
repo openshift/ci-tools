@@ -8,7 +8,8 @@ presubmits:
     context: ci/prow/ci-index
     decorate: true
     decoration_config:
-      skip_cloning: true
+      sparse_checkout_files:
+      - Dockerfile
     labels:
       ci.openshift.io/generator: prowgen
       pj-rehearse.openshift.io/can-be-rehearsed: "true"
@@ -62,7 +63,8 @@ presubmits:
     context: ci/prow/ci-index-my-bundle
     decorate: true
     decoration_config:
-      skip_cloning: true
+      sparse_checkout_files:
+      - Dockerfile
     labels:
       ci.openshift.io/generator: prowgen
       pj-rehearse.openshift.io/can-be-rehearsed: "true"
@@ -117,7 +119,8 @@ presubmits:
     context: ci/prow/e2e
     decorate: true
     decoration_config:
-      skip_cloning: true
+      sparse_checkout_files:
+      - Dockerfile
     labels:
       ci.openshift.io/generator: prowgen
       pj-rehearse.openshift.io/can-be-rehearsed: "true"
@@ -179,7 +182,8 @@ presubmits:
     context: ci/prow/images
     decorate: true
     decoration_config:
-      skip_cloning: true
+      sparse_checkout_files:
+      - Dockerfile
     labels:
       ci.openshift.io/generator: prowgen
       pj-rehearse.openshift.io/can-be-rehearsed: "true"
@@ -236,7 +240,8 @@ presubmits:
     context: ci/prow/images-build-affected-images
     decorate: true
     decoration_config:
-      skip_cloning: true
+      sparse_checkout_files:
+      - Dockerfile
     labels:
       ci-operator.openshift.io/variant: images-build-affected
       ci.openshift.io/generator: prowgen
@@ -293,7 +298,8 @@ presubmits:
     context: ci/prow/images-build-affected-unit
     decorate: true
     decoration_config:
-      skip_cloning: true
+      sparse_checkout_files:
+      - Dockerfile
     labels:
       ci-operator.openshift.io/variant: images-build-affected
       ci.openshift.io/generator: prowgen
@@ -357,7 +363,8 @@ presubmits:
     context: ci/prow/images-changed-images
     decorate: true
     decoration_config:
-      skip_cloning: true
+      sparse_checkout_files:
+      - Dockerfile
     labels:
       ci-operator.openshift.io/variant: images-changed
       ci.openshift.io/generator: prowgen
@@ -415,7 +422,8 @@ presubmits:
     context: ci/prow/images-changed-unit
     decorate: true
     decoration_config:
-      skip_cloning: true
+      sparse_checkout_files:
+      - Dockerfile
     labels:
       ci-operator.openshift.io/variant: images-changed
       ci.openshift.io/generator: prowgen
@@ -481,7 +489,8 @@ presubmits:
     context: ci/prow/images-pipeline-changed-images
     decorate: true
     decoration_config:
-      skip_cloning: true
+      sparse_checkout_files:
+      - Dockerfile
     labels:
       ci-operator.openshift.io/variant: images-pipeline-changed
       ci.openshift.io/generator: prowgen
@@ -538,7 +547,8 @@ presubmits:
     context: ci/prow/images-pipeline-changed-unit
     decorate: true
     decoration_config:
-      skip_cloning: true
+      sparse_checkout_files:
+      - Dockerfile
     labels:
       ci-operator.openshift.io/variant: images-pipeline-changed
       ci.openshift.io/generator: prowgen
@@ -602,7 +612,8 @@ presubmits:
     context: ci/prow/images-skip-docs-images
     decorate: true
     decoration_config:
-      skip_cloning: true
+      sparse_checkout_files:
+      - Dockerfile
     labels:
       ci-operator.openshift.io/variant: images-skip-docs
       ci.openshift.io/generator: prowgen
@@ -660,7 +671,8 @@ presubmits:
     context: ci/prow/images-skip-docs-unit
     decorate: true
     decoration_config:
-      skip_cloning: true
+      sparse_checkout_files:
+      - Dockerfile
     labels:
       ci-operator.openshift.io/variant: images-skip-docs
       ci.openshift.io/generator: prowgen
@@ -734,7 +746,8 @@ presubmits:
     context: ci/prow/lint
     decorate: true
     decoration_config:
-      skip_cloning: true
+      sparse_checkout_files:
+      - Dockerfile
     labels:
       ci.openshift.io/generator: prowgen
       pj-rehearse.openshift.io/can-be-rehearsed: "true"
@@ -796,7 +809,8 @@ presubmits:
     context: ci/prow/optional-job
     decorate: true
     decoration_config:
-      skip_cloning: true
+      sparse_checkout_files:
+      - Dockerfile
     labels:
       ci-operator.openshift.io/cloud: aws
       ci-operator.openshift.io/cloud-cluster-profile: aws
@@ -871,7 +885,8 @@ presubmits:
     context: ci/prow/registry
     decorate: true
     decoration_config:
-      skip_cloning: true
+      sparse_checkout_files:
+      - Dockerfile
     labels:
       ci.openshift.io/generator: prowgen
       pj-rehearse.openshift.io/can-be-rehearsed: "true"
@@ -943,7 +958,8 @@ presubmits:
     context: ci/prow/registry-with-profile
     decorate: true
     decoration_config:
-      skip_cloning: true
+      sparse_checkout_files:
+      - Dockerfile
     labels:
       ci-operator.openshift.io/cloud: aws
       ci-operator.openshift.io/cloud-cluster-profile: aws
@@ -1017,7 +1033,8 @@ presubmits:
     context: ci/prow/steps
     decorate: true
     decoration_config:
-      skip_cloning: true
+      sparse_checkout_files:
+      - Dockerfile
     labels:
       ci.openshift.io/generator: prowgen
       pj-rehearse.openshift.io/can-be-rehearsed: "true"
@@ -1089,7 +1106,8 @@ presubmits:
     context: ci/prow/unit
     decorate: true
     decoration_config:
-      skip_cloning: true
+      sparse_checkout_files:
+      - Dockerfile
     labels:
       ci.openshift.io/generator: prowgen
       pj-rehearse.openshift.io/can-be-rehearsed: "true"
@@ -1151,7 +1169,8 @@ presubmits:
     context: ci/prow/variant-images
     decorate: true
     decoration_config:
-      skip_cloning: true
+      sparse_checkout_files:
+      - Dockerfile
     labels:
       ci-operator.openshift.io/variant: variant
       ci.openshift.io/generator: prowgen
@@ -1209,7 +1228,8 @@ presubmits:
     context: ci/prow/variant-unit
     decorate: true
     decoration_config:
-      skip_cloning: true
+      sparse_checkout_files:
+      - Dockerfile
     labels:
       ci-operator.openshift.io/variant: variant
       ci.openshift.io/generator: prowgen

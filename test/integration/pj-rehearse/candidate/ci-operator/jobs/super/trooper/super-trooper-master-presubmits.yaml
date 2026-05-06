@@ -82,7 +82,8 @@ presubmits:
     context: ci/prow/images
     decorate: true
     decoration_config:
-      skip_cloning: true
+      sparse_checkout_files:
+      - Dockerfile
     labels:
       ci.openshift.io/generator: prowgen
       pj-rehearse.openshift.io/can-be-rehearsed: "true"
@@ -165,7 +166,8 @@ presubmits:
     context: ci/prow/multistage
     decorate: true
     decoration_config:
-      skip_cloning: true
+      sparse_checkout_files:
+      - Dockerfile
     labels:
       ci.openshift.io/generator: prowgen
       pj-rehearse.openshift.io/can-be-rehearsed: "true"
@@ -237,7 +239,8 @@ presubmits:
     context: ci/prow/multistage2
     decorate: true
     decoration_config:
-      skip_cloning: true
+      sparse_checkout_files:
+      - Dockerfile
     labels:
       ci.openshift.io/generator: prowgen
       pj-rehearse.openshift.io/can-be-rehearsed: "true"
@@ -309,7 +312,8 @@ presubmits:
     context: ci/prow/multistage3
     decorate: true
     decoration_config:
-      skip_cloning: true
+      sparse_checkout_files:
+      - Dockerfile
     labels:
       ci-operator.openshift.io/cloud: azure4
       ci-operator.openshift.io/cloud-cluster-profile: azure4
@@ -383,7 +387,8 @@ presubmits:
     context: ci/prow/multistage4
     decorate: true
     decoration_config:
-      skip_cloning: true
+      sparse_checkout_files:
+      - Dockerfile
     labels:
       ci.openshift.io/generator: prowgen
       pj-rehearse.openshift.io/can-be-rehearsed: "true"
@@ -455,7 +460,8 @@ presubmits:
     context: ci/prow/multistage5
     decorate: true
     decoration_config:
-      skip_cloning: true
+      sparse_checkout_files:
+      - Dockerfile
     labels:
       ci.openshift.io/generator: prowgen
       pj-rehearse.openshift.io/can-be-rehearsed: "true"
@@ -527,7 +533,8 @@ presubmits:
     context: ci/prow/unit
     decorate: true
     decoration_config:
-      skip_cloning: true
+      sparse_checkout_files:
+      - Dockerfile
     labels:
       ci.openshift.io/generator: prowgen
       pj-rehearse.openshift.io/can-be-rehearsed: "true"

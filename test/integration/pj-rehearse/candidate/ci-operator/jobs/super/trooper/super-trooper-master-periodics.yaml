@@ -49,11 +49,14 @@ periodics:
   cron: '@yearly'
   decorate: true
   decoration_config:
-    skip_cloning: true
+    sparse_checkout_files:
+    - Dockerfile
   extra_refs:
   - base_ref: master
     org: super
     repo: trooper
+    sparse_checkout_files:
+    - Dockerfile
   labels:
     ci.openshift.io/generator: prowgen
     pj-rehearse.openshift.io/can-be-rehearsed: "true"

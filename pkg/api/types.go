@@ -32,7 +32,6 @@ var (
 		prowv1.FailureState,
 		prowv1.ErrorState,
 	}
-	DefaultSlackReporterReportTemplate = `{{if eq .Status.State "success"}} :slack-green: Job *{{.Spec.Job}}* ended with *{{.Status.State}}*. <{{.Status.URL}}|View logs> {{else}} :failed: Job *{{.Spec.Job}}* ended with *{{.Status.State}}*. <{{.Status.URL}}|View logs> {{end}}`
 )
 
 type SlackReporterConfig struct {
@@ -2808,6 +2807,9 @@ type ImageConfiguration struct {
 	// When enabled, the tool-detector package analyzes git changes to determine which images should be built.
 	// The image name (To field) should match the cmd tool name for this to work correctly.
 	BuildIfAffected bool `json:"build_if_affected,omitempty"`
+
+	// SlackReporterConfig configures Slack notifications for the auto-generated images jobs.
+	SlackReporterConfig *SlackReporterConfig `json:"reporter_config,omitempty"`
 
 	// Items is the list of images to build.
 	Items []ProjectDirectoryImageBuildStepConfiguration `json:"items,omitempty"`

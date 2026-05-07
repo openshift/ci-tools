@@ -14,6 +14,19 @@ resources:
       cpu: 500Mi
     requests:
       cpu: 10Mi
+images:
+  items:
+  - from: base
+    to: test-image
+  reporter_config:
+    channel: "#images-channel"
+    job_states_to_report:
+    - failure
+    - error
+promotion:
+  to:
+  - namespace: ci
+    tag: latest
 tag_specification:
   name: origin-v4.0
   namespace: openshift

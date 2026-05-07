@@ -153,6 +153,7 @@ func GenerateJobs(configSpec *cioperatorapi.ReleaseBuildConfiguration, info *Pro
 			options.skipIfOnlyChanged = configSpec.Images.SkipIfOnlyChanged
 			options.pipelineRunIfChanged = configSpec.Images.PipelineRunIfChanged
 			options.pipelineSkipIfOnlyChanged = configSpec.Images.PipelineSkipIfOnlyChanged
+			options.slackReporterConfig = configSpec.Images.SlackReporterConfig
 		}))
 
 		if configSpec.PromotionConfiguration != nil {
@@ -160,8 +161,9 @@ func GenerateJobs(configSpec *cioperatorapi.ReleaseBuildConfiguration, info *Pro
 			injectCapabilitiesForImgJobs(jobBaseGen, configSpec.Images.Items)
 
 			jobBaseGen.PodSpec.Add(Promotion(), Targets(imageTargets.UnsortedList()...))
-			// Note: Slack reporter config for images postsubmit is now handled in generatePostsubmitForTest
-			postsubmit := generatePostsubmitForTest(jobBaseGen, info)
+			postsubmit := generatePostsubmitForTest(jobBaseGen, info, func(options *generatePostsubmitOptions) {
+				options.slackReporterConfig = configSpec.Images.SlackReporterConfig
+			})
 			postsubmit.MaxConcurrency = 1
 			if postsubmit.Labels == nil {
 				postsubmit.Labels = map[string]string{}

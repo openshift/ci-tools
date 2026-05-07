@@ -1,3 +1,5 @@
+prowgen:
+  disable_rehearsals: true
 base_images:
   base:
     name: origin-v4.0

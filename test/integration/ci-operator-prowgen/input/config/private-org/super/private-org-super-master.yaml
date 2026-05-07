@@ -1,3 +1,5 @@
+prowgen:
+  private: true
 build_root:
   from_repository: true
 resources:

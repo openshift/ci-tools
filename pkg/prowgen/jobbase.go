@@ -89,8 +89,8 @@ func NewProwJobBaseBuilder(configSpec *cioperatorapi.ReleaseBuildConfiguration, 
 		},
 	}
 
-	private := info.Config.Private || (configSpec.Prowgen != nil && configSpec.Prowgen.Private)
-	expose := info.Config.Expose || (configSpec.Prowgen != nil && configSpec.Prowgen.Expose)
+	private := configSpec.Prowgen != nil && configSpec.Prowgen.Private
+	expose := configSpec.Prowgen != nil && configSpec.Prowgen.Expose
 
 	sparseFiles := sparseCheckoutFiles(configSpec)
 	shouldSkipCloning := len(sparseFiles) == 0
@@ -175,7 +175,7 @@ func NewProwJobBaseBuilderForTest(configSpec *cioperatorapi.ReleaseBuildConfigur
 		if configSpec.Releases != nil {
 			p.PodSpec.Add(CIPullSecret())
 		}
-		if info.Config.EnableSecretsStoreCSIDriver || (configSpec.Prowgen != nil && configSpec.Prowgen.EnableSecretsStoreCSIDriver) {
+		if configSpec.Prowgen != nil && configSpec.Prowgen.EnableSecretsStoreCSIDriver {
 			p.PodSpec.Add(
 				GSMConfig(),
 			)
@@ -189,7 +189,7 @@ func NewProwJobBaseBuilderForTest(configSpec *cioperatorapi.ReleaseBuildConfigur
 		if configSpec.Releases != nil {
 			p.PodSpec.Add(CIPullSecret())
 		}
-		if info.Config.EnableSecretsStoreCSIDriver || (configSpec.Prowgen != nil && configSpec.Prowgen.EnableSecretsStoreCSIDriver) {
+		if configSpec.Prowgen != nil && configSpec.Prowgen.EnableSecretsStoreCSIDriver {
 			p.PodSpec.Add(
 				GSMConfig(),
 			)

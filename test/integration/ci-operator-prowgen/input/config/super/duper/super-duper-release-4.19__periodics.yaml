@@ -1,3 +1,5 @@
+prowgen:
+  skip_operator_presubmits: true
 base_images:
   base:
     name: "4.19"

@@ -102,9 +102,9 @@ func (o *options) process() error {
 
 // generateJobsToDir generates prow job configuration into the dir provided by
 // consuming ci-operator configuration.
-func (o *options) generateJobsToDir(subDir string, prowConfig map[string]*config.Prowgen) error {
+func (o *options) generateJobsToDir(subDir string) error {
 	generated := map[string]*prowconfig.JobConfig{}
-	genJobsFunc := generateJobs(o.resolver, prowConfig, generated)
+	genJobsFunc := generateJobs(o.resolver, generated)
 	if err := o.OperateOnCIOperatorConfigDir(filepath.Join(o.fromDir, subDir), genJobsFunc); err != nil {
 		return fmt.Errorf("failed to generate jobs: %w", err)
 	}
@@ -120,37 +120,10 @@ func (o *options) generateJobsToDir(subDir string, prowConfig map[string]*config
 	return writeToDir(o.toDir, generated)
 }
 
-func generateJobs(resolver registry.Resolver, cache map[string]*config.Prowgen, output map[string]*prowconfig.JobConfig) func(configSpec *cioperatorapi.ReleaseBuildConfiguration, info *config.Info) error {
+func generateJobs(resolver registry.Resolver, output map[string]*prowconfig.JobConfig) func(configSpec *cioperatorapi.ReleaseBuildConfiguration, info *config.Info) error {
 	return func(configSpec *cioperatorapi.ReleaseBuildConfiguration, info *config.Info) error {
 		orgRepo := fmt.Sprintf("%s/%s", info.Org, info.Repo)
-		pInfo := &prowgen.ProwgenInfo{Metadata: info.Metadata, Config: config.Prowgen{Private: false, Expose: false}}
-		var ok bool
-		var err error
-		var orgConfig, repoConfig *config.Prowgen
-
-		if orgConfig, ok = cache[info.Org]; !ok {
-			if cache[info.Org], err = config.LoadProwgenConfig(info.OrgPath); err != nil {
-				return err
-			}
-			orgConfig = cache[info.Org]
-		}
-
-		if repoConfig, ok = cache[orgRepo]; !ok {
-			if cache[orgRepo], err = config.LoadProwgenConfig(info.RepoPath); err != nil {
-				return err
-			}
-			repoConfig = cache[orgRepo]
-		}
-
-		switch {
-		case orgConfig != nil:
-			pInfo.Config = *orgConfig
-			if repoConfig != nil {
-				pInfo.Config.MergeDefaults(repoConfig)
-			}
-		case repoConfig != nil:
-			pInfo.Config = *repoConfig
-		}
+		pInfo := &prowgen.ProwgenInfo{Metadata: info.Metadata}
 		if resolver != nil {
 			resolved, err := registry.ResolveConfig(resolver, *configSpec)
 			if err != nil {
@@ -227,10 +200,9 @@ func main() {
 		args = append(args, "")
 	}
 	logger := logrus.WithFields(logrus.Fields{"target": opt.toDir, "source": opt.fromDir})
-	config := map[string]*config.Prowgen{}
 	for _, subDir := range args {
 		logger = logger.WithFields(logrus.Fields{"subdir": subDir})
-		if err := opt.generateJobsToDir(subDir, config); err != nil {
+		if err := opt.generateJobsToDir(subDir); err != nil {
 			logger.WithError(err).Fatal("Failed to generate jobs")
 		}
 	}

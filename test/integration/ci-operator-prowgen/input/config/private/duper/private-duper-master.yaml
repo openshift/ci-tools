@@ -1,3 +1,5 @@
+prowgen:
+  private: true
 base_images:
   base:
     name: origin-v4.0

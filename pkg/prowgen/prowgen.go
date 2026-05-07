@@ -9,7 +9,6 @@ import (
 	prowconfig "sigs.k8s.io/prow/pkg/config"
 
 	cioperatorapi "github.com/openshift/ci-tools/pkg/api"
-	"github.com/openshift/ci-tools/pkg/config"
 	jc "github.com/openshift/ci-tools/pkg/jobconfig"
 )
 
@@ -21,7 +20,6 @@ const (
 
 type ProwgenInfo struct {
 	cioperatorapi.Metadata
-	Config config.Prowgen
 }
 
 // GenerateJobs
@@ -42,12 +40,7 @@ func GenerateJobs(configSpec *cioperatorapi.ReleaseBuildConfiguration, info *Pro
 	presubmits := map[string][]prowconfig.Presubmit{}
 	postsubmits := map[string][]prowconfig.Postsubmit{}
 	var periodics []prowconfig.Periodic
-	prowgenConfig := info.Config
-	if configSpec.Prowgen != nil && configSpec.Prowgen.DisableRehearsals {
-		prowgenConfig.Rehearsals.DisableAll = true
-	}
-	rehearsals := prowgenConfig.Rehearsals
-	disabledRehearsals := sets.New[string](rehearsals.DisabledRehearsals...)
+	disableAllRehearsals := configSpec.Prowgen != nil && configSpec.Prowgen.DisableRehearsals
 
 	for _, element := range configSpec.Tests {
 		shardCount := 1
@@ -69,7 +62,7 @@ func GenerateJobs(configSpec *cioperatorapi.ReleaseBuildConfiguration, info *Pro
 				g.WithLabel(fmt.Sprintf("capability/%s", element.NodeArchitecture), string(element.NodeArchitecture))
 			}
 
-			disableRehearsal := rehearsals.DisableAll || disabledRehearsals.Has(element.As) || element.DisableRehearsal
+			disableRehearsal := disableAllRehearsals || element.DisableRehearsal
 
 			if element.IsPeriodic() {
 				cron := ""
@@ -187,8 +180,7 @@ func GenerateJobs(configSpec *cioperatorapi.ReleaseBuildConfiguration, info *Pro
 		}
 	}
 
-	skipOperatorPresubmits := info.Config.SkipPresubmits(configSpec.Metadata.Branch, configSpec.Metadata.Variant) ||
-		(configSpec.Prowgen != nil && configSpec.Prowgen.SkipOperatorPresubmits)
+	skipOperatorPresubmits := configSpec.Prowgen != nil && configSpec.Prowgen.SkipOperatorPresubmits
 	if configSpec.Operator != nil && !skipOperatorPresubmits {
 		containsUnnamedBundle := false
 		for _, bundle := range configSpec.Operator.Bundles {
@@ -269,32 +261,21 @@ func (opts *generatePresubmitOptions) shouldAlwaysRun() bool {
 
 type generatePresubmitOption func(options *generatePresubmitOptions)
 
-// slackReporterConfig returns the Slack reporter configuration for a job.
-// Per-test config (from ci-operator config) takes precedence over .config.prowgen.
-func slackReporterConfig(jobName, testName string, testSlackConfig *cioperatorapi.SlackReporterConfig, info *ProwgenInfo) *prowv1.ReporterConfig {
-	if testSlackConfig != nil {
-		jobStatesToReport := testSlackConfig.JobStatesToReport
-		if len(jobStatesToReport) == 0 {
-			jobStatesToReport = cioperatorapi.DefaultSlackReporterJobStatesToReport
-		}
-		return &prowv1.ReporterConfig{
-			Slack: &prowv1.SlackReporterConfig{
-				Channel:           testSlackConfig.Channel,
-				JobStatesToReport: jobStatesToReport,
-				ReportTemplate:    testSlackConfig.ReportTemplate,
-			},
-		}
+func slackReporterConfig(testSlackConfig *cioperatorapi.SlackReporterConfig) *prowv1.ReporterConfig {
+	if testSlackConfig == nil {
+		return nil
 	}
-	if slackReporter := info.Config.GetSlackReporterConfigForJobName(jobName, testName, info.Metadata.Variant); slackReporter != nil {
-		return &prowv1.ReporterConfig{
-			Slack: &prowv1.SlackReporterConfig{
-				Channel:           slackReporter.Channel,
-				JobStatesToReport: slackReporter.JobStatesToReport,
-				ReportTemplate:    slackReporter.ReportTemplate,
-			},
-		}
+	jobStatesToReport := testSlackConfig.JobStatesToReport
+	if len(jobStatesToReport) == 0 {
+		jobStatesToReport = cioperatorapi.DefaultSlackReporterJobStatesToReport
 	}
-	return nil
+	return &prowv1.ReporterConfig{
+		Slack: &prowv1.SlackReporterConfig{
+			Channel:           testSlackConfig.Channel,
+			JobStatesToReport: jobStatesToReport,
+			ReportTemplate:    testSlackConfig.ReportTemplate,
+		},
+	}
 }
 
 func generatePresubmitForTest(jobBaseBuilder *prowJobBaseBuilder, name string, info *ProwgenInfo, options ...generatePresubmitOption) *prowconfig.Presubmit {
@@ -306,8 +287,7 @@ func generatePresubmitForTest(jobBaseBuilder *prowJobBaseBuilder, name string, i
 	shortName := info.TestName(name)
 	base := jobBaseBuilder.Rehearsable(!opts.disableRehearsal).Build(jc.PresubmitPrefix)
 
-	fullJobName := info.JobName(jc.PresubmitPrefix, name)
-	base.ReporterConfig = slackReporterConfig(fullJobName, name, opts.slackReporterConfig, info)
+	base.ReporterConfig = slackReporterConfig(opts.slackReporterConfig)
 
 	pipelineOpt := false
 	if opts.pipelineRunIfChanged != "" {
@@ -365,9 +345,7 @@ func generatePostsubmitForTest(jobBaseBuilder *prowJobBaseBuilder, info *Prowgen
 
 	base := jobBaseBuilder.Build(jc.PostsubmitPrefix)
 
-	testName := jobBaseBuilder.testName
-	fullJobName := info.JobName(jc.PostsubmitPrefix, testName)
-	base.ReporterConfig = slackReporterConfig(fullJobName, testName, opts.slackReporterConfig, info)
+	base.ReporterConfig = slackReporterConfig(opts.slackReporterConfig)
 
 	alwaysRun := opts.runIfChanged == "" && opts.skipIfOnlyChanged == ""
 	pj := &prowconfig.Postsubmit{
@@ -425,9 +403,7 @@ func GeneratePeriodicForTest(jobBaseBuilder *prowJobBaseBuilder, info *ProwgenIn
 	// We are resetting PathAlias because it will be set on the `ExtraRefs` item
 	base := jobBaseBuilder.Rehearsable(!opts.DisableRehearsal).PathAlias("").Build(jc.PeriodicPrefix)
 
-	testName := jobBaseBuilder.testName
-	fullJobName := info.JobName(jc.PeriodicPrefix, testName)
-	base.ReporterConfig = slackReporterConfig(fullJobName, testName, opts.SlackReporterConfig, info)
+	base.ReporterConfig = slackReporterConfig(opts.SlackReporterConfig)
 
 	cron := opts.Cron
 	if cron == "@daily" {

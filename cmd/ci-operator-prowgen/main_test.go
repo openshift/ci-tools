@@ -7,7 +7,6 @@ import (
 	"strings"
 	"testing"
 
-	"github.com/openshift/ci-tools/pkg/config"
 	"github.com/openshift/ci-tools/pkg/testhelper"
 )
 
@@ -293,7 +292,7 @@ tests:
 			}
 
 			o := options{fromDir: fullConfigPath, toDir: baseProwConfigDir}
-			if err := o.generateJobsToDir("", map[string]*config.Prowgen{}); err != nil {
+			if err := o.generateJobsToDir(""); err != nil {
 				t.Fatalf("Unexpected error generating jobs from config: %v", err)
 			}
 

@@ -247,6 +247,16 @@ const ciOperatorReferenceYaml = "# The list of base images describe\n" +
 	"    # PipelineSkipIfOnlyChanged is a regex that will cause the auto-generated images\n" +
 	"    # presubmit to be skipped in the second stage of the pipeline if all changed files match the regex.\n" +
 	"    pipeline_skip_if_only_changed: ' '\n" +
+	"    # SlackReporterConfig configures Slack notifications for the auto-generated images jobs.\n" +
+	"    reporter_config:\n" +
+	"        channel: ' '\n" +
+	"        job_states_to_report:\n" +
+	"            - \"\"\n" +
+	"        # ReportPresubmit controls whether the presubmit job generated from a\n" +
+	"        # periodic test with `presubmit: true` also gets this slack config.\n" +
+	"        # Only valid when the test has `presubmit: true`.\n" +
+	"        report_presubmit: true\n" +
+	"        report_template: ' '\n" +
 	"    # RunIfChanged is a regex that will cause the auto-generated images\n" +
 	"    # presubmit to only run if a file matching the regex is changed.\n" +
 	"    run_if_changed: ' '\n" +

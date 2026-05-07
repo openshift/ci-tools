@@ -275,15 +275,11 @@ func slackReporterConfig(jobName, testName string, testSlackConfig *cioperatorap
 		if len(jobStatesToReport) == 0 {
 			jobStatesToReport = cioperatorapi.DefaultSlackReporterJobStatesToReport
 		}
-		reportTemplate := testSlackConfig.ReportTemplate
-		if reportTemplate == "" {
-			reportTemplate = cioperatorapi.DefaultSlackReporterReportTemplate
-		}
 		return &prowv1.ReporterConfig{
 			Slack: &prowv1.SlackReporterConfig{
 				Channel:           testSlackConfig.Channel,
 				JobStatesToReport: jobStatesToReport,
-				ReportTemplate:    reportTemplate,
+				ReportTemplate:    testSlackConfig.ReportTemplate,
 			},
 		}
 	}

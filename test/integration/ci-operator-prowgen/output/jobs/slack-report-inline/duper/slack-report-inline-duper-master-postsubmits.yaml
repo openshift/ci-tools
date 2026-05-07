@@ -16,10 +16,6 @@ postsubmits:
         channel: '#postsubmit-channel'
         job_states_to_report:
         - failure
-        report_template: '{{if eq .Status.State "success"}} :slack-green: Job *{{.Spec.Job}}*
-          ended with *{{.Status.State}}*. <{{.Status.URL}}|View logs> {{else}} :failed:
-          Job *{{.Spec.Job}}* ended with *{{.Status.State}}*. <{{.Status.URL}}|View
-          logs> {{end}}'
     spec:
       containers:
       - args:

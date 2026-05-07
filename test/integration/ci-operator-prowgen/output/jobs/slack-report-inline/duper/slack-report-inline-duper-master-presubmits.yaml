@@ -143,10 +143,6 @@ presubmits:
         job_states_to_report:
         - failure
         - error
-        report_template: '{{if eq .Status.State "success"}} :slack-green: Job *{{.Spec.Job}}*
-          ended with *{{.Status.State}}*. <{{.Status.URL}}|View logs> {{else}} :failed:
-          Job *{{.Spec.Job}}* ended with *{{.Status.State}}*. <{{.Status.URL}}|View
-          logs> {{end}}'
     rerun_command: /test unit
     spec:
       containers:
@@ -216,10 +212,6 @@ presubmits:
         - success
         - failure
         - error
-        report_template: '{{if eq .Status.State "success"}} :slack-green: Job *{{.Spec.Job}}*
-          ended with *{{.Status.State}}*. <{{.Status.URL}}|View logs> {{else}} :failed:
-          Job *{{.Spec.Job}}* ended with *{{.Status.State}}*. <{{.Status.URL}}|View
-          logs> {{end}}'
     rerun_command: /test verify
     spec:
       containers:

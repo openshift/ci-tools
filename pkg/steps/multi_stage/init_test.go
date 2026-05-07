@@ -13,10 +13,13 @@ import (
 	rbacv1 "k8s.io/api/rbac/v1"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/apimachinery/pkg/runtime"
+	"k8s.io/client-go/kubernetes/scheme"
 	ctrlruntimeclient "sigs.k8s.io/controller-runtime/pkg/client"
 	fakectrlruntimeclient "sigs.k8s.io/controller-runtime/pkg/client/fake"
 	"sigs.k8s.io/controller-runtime/pkg/client/interceptor"
 	csiapi "sigs.k8s.io/secrets-store-csi-driver/apis/v1"
+
+	imagev1 "github.com/openshift/api/image/v1"
 
 	"github.com/openshift/ci-tools/pkg/api"
 	gsm "github.com/openshift/ci-tools/pkg/gsm-secrets"
@@ -24,6 +27,12 @@ import (
 	"github.com/openshift/ci-tools/pkg/testhelper"
 	testhelper_kube "github.com/openshift/ci-tools/pkg/testhelper/kubernetes"
 )
+
+func init() {
+	if err := imagev1.AddToScheme(scheme.Scheme); err != nil {
+		panic(err)
+	}
+}
 
 func TestParseNamespaceUID(t *testing.T) {
 	for _, tc := range []struct {

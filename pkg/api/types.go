@@ -389,6 +389,8 @@ type ReleaseDescriptor struct {
 	// of 1 will resolve to the previous validated release
 	// for this stream.
 	Relative int `json:"relative,omitempty"`
+	// ReferencePolicy sets the tag reference policy for imported payload tags (Local or Source).
+	ReferencePolicy *imagev1.TagReferencePolicyType `json:"reference_policy,omitempty"`
 }
 
 // Candidate describes a validated candidate release payload
@@ -496,6 +498,8 @@ type Release struct {
 	// upgrade graph for this channel.  This field is ignored
 	// if an explicit Version is provided.
 	Relative int `json:"relative,omitempty"`
+	// ReferencePolicy sets the tag reference policy for imported payload tags (Local or Source).
+	ReferencePolicy *imagev1.TagReferencePolicyType `json:"reference_policy,omitempty"`
 }
 
 type ReleaseChannel string

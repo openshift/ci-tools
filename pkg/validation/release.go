@@ -24,6 +24,8 @@ func validateReleases(fieldRoot string, releases map[string]api.UnresolvedReleas
 			validationErrors = append(validationErrors, fmt.Errorf("%s[%s]: the release name is not valid: %w", fieldRoot, name, err))
 		}
 		release := releases[name]
+		field := fmt.Sprintf("%s.%s", fieldRoot, name)
+		validationErrors = append(validationErrors, validateUnresolvedReleaseReferencePolicy(field, release)...)
 		if hasTagSpec {
 			for _, incompatibleName := range []string{api.LatestReleaseName, api.InitialReleaseName} {
 				if name == incompatibleName {
@@ -57,6 +59,25 @@ func validateReleases(fieldRoot string, releases map[string]api.UnresolvedReleas
 			validationErrors = append(validationErrors, validateRelease(fmt.Sprintf("%s.%s", fieldRoot, name), *release.Release)...)
 		} else if release.Prerelease != nil {
 			validationErrors = append(validationErrors, validatePrerelease(fmt.Sprintf("%s.%s", fieldRoot, name), *release.Prerelease)...)
+		}
+	}
+	return validationErrors
+}
+
+func validateUnresolvedReleaseReferencePolicy(fieldRoot string, release api.UnresolvedRelease) []error {
+	var policy *imagev1.TagReferencePolicyType
+	switch {
+	case release.Candidate != nil:
+		policy = release.Candidate.ReferencePolicy
+	case release.Prerelease != nil:
+		policy = release.Prerelease.ReferencePolicy
+	case release.Release != nil:
+		policy = release.Release.ReferencePolicy
+	}
+	var validationErrors []error
+	if policy != nil {
+		if *policy != imagev1.LocalTagReferencePolicy && *policy != imagev1.SourceTagReferencePolicy {
+			validationErrors = append(validationErrors, fmt.Errorf("%s.reference_policy: must be one of Local or Source", fieldRoot))
 		}
 	}
 	return validationErrors

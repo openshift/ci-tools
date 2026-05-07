@@ -27,6 +27,82 @@ func init() {
 	}
 }
 
+func TestImageDigestFor(t *testing.T) {
+	testCases := []struct {
+		name string
+		is   *imagev1.ImageStream
+		want string
+	}{
+		{
+			name: "source uses spec digest when status incomplete",
+			is: &imagev1.ImageStream{
+				ObjectMeta: metav1.ObjectMeta{Name: "release", Namespace: "ns"},
+				Spec: imagev1.ImageStreamSpec{
+					Tags: []imagev1.TagReference{{
+						Name: "latest",
+						From: &coreapi.ObjectReference{
+							Kind: "DockerImage",
+							Name: "registry.example/ns/repo@sha256:bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb",
+						},
+						ReferencePolicy: imagev1.TagReferencePolicy{Type: imagev1.SourceTagReferencePolicy},
+					}},
+				},
+				Status: imagev1.ImageStreamStatus{
+					DockerImageRepository: "image-registry.openshift-image-registry.svc:5000/ns/stable",
+					Tags: []imagev1.NamedTagEventList{{
+						Tag: "latest",
+						Items: []imagev1.TagEvent{{
+							DockerImageReference: "",
+							Image:                "",
+						}},
+					}},
+				},
+			},
+			want: "registry.example/ns/repo@sha256:bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb",
+		},
+		{
+			name: "source uses status docker image reference",
+			is: &imagev1.ImageStream{
+				ObjectMeta: metav1.ObjectMeta{Name: "release", Namespace: "ns"},
+				Spec: imagev1.ImageStreamSpec{
+					Tags: []imagev1.TagReference{{
+						Name: "latest",
+						From: &coreapi.ObjectReference{
+							Kind: "DockerImage",
+							Name: "quay.io/org/repo@sha256:dddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddd",
+						},
+						ReferencePolicy: imagev1.TagReferencePolicy{Type: imagev1.SourceTagReferencePolicy},
+					}},
+				},
+				Status: imagev1.ImageStreamStatus{
+					DockerImageRepository: "image-registry.openshift-image-registry.svc:5000/ns/stable",
+					Tags: []imagev1.NamedTagEventList{{
+						Tag: "latest",
+						Items: []imagev1.TagEvent{{
+							DockerImageReference: "quay.io/org/repo@sha256:cccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccc",
+							Image:                "",
+						}},
+					}},
+				},
+			},
+			want: "quay.io/org/repo@sha256:cccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccc",
+		},
+	}
+
+	for _, tc := range testCases {
+		t.Run(tc.name, func(t *testing.T) {
+			client := fakectrlruntimeclient.NewClientBuilder().WithScheme(scheme.Scheme).WithObjects(tc.is).Build()
+			got, err := ImageDigestFor(client, func() string { return "ns" }, "release", "latest")()
+			if err != nil {
+				t.Fatal(err)
+			}
+			if got != tc.want {
+				t.Fatalf("ImageDigestFor() = %q, want %q", got, tc.want)
+			}
+		})
+	}
+}
+
 func TestReimportTag(t *testing.T) {
 	var testCases = []struct {
 		name                        string

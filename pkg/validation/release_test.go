@@ -170,6 +170,43 @@ func TestValidateReleases(t *testing.T) {
 			},
 		},
 		{
+			name: "valid candidate with reference_policy",
+			input: map[string]api.UnresolvedRelease{
+				"latest": {
+					Candidate: &api.Candidate{
+						ReleaseDescriptor: api.ReleaseDescriptor{
+							Product:         api.ReleaseProductOCP,
+							ReferencePolicy: getTagReferencePolicy("local"),
+						},
+						Stream:  api.ReleaseStreamCI,
+						Version: "4.12",
+					},
+				},
+			},
+		},
+		{
+			name: "invalid candidate reference_policy",
+			input: map[string]api.UnresolvedRelease{
+				"latest": {
+					Candidate: &api.Candidate{
+						ReleaseDescriptor: api.ReleaseDescriptor{
+							Product: api.ReleaseProductOCP,
+							ReferencePolicy: func() *imagev1.TagReferencePolicyType {
+								p := imagev1.TagReferencePolicyType("bogus")
+								return &p
+							}(),
+						},
+						Stream:  api.ReleaseStreamCI,
+						Version: "4.12",
+					},
+				},
+			},
+			output: []error{
+				errors.New("root.latest.reference_policy: must be one of Local or Source"),
+			},
+		},
+
+		{
 			name: "invalid release name",
 			input: map[string]api.UnresolvedRelease{
 				"ocp-4.11": {

@@ -31,6 +31,9 @@ func ImageDigestFor(client ctrlruntimeclient.Client, namespace func() string, na
 		if err := client.Get(context.TODO(), ctrlruntimeclient.ObjectKey{Namespace: namespace(), Name: name}, is); err != nil {
 			return "", fmt.Errorf("could not retrieve output imagestream: %w", err)
 		}
+		if pullSpec, ok, _ := util.ResolvePullSpec(is, tag, true); ok {
+			return pullSpec, nil
+		}
 		var registry string
 		if len(is.Status.PublicDockerImageRepository) > 0 {
 			registry = is.Status.PublicDockerImageRepository

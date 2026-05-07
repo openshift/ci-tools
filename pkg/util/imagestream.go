@@ -5,6 +5,7 @@ import (
 	"fmt"
 	"strings"
 
+	corev1 "k8s.io/api/core/v1"
 	kerrors "k8s.io/apimachinery/pkg/api/errors"
 	ctrlruntimeclient "sigs.k8s.io/controller-runtime/pkg/client"
 
@@ -29,8 +30,72 @@ func ParseImageStreamTagReference(s string) (api.ImageStreamTagReference, error)
 	return ret, nil
 }
 
-// ResolvePullSpec if a tag of an imagestream is resolved
+func findSpecTagReference(is *imageapi.ImageStream, tag string) (imageapi.TagReference, bool) {
+	for _, specTag := range is.Spec.Tags {
+		if specTag.Name == tag {
+			return specTag, true
+		}
+	}
+	return imageapi.TagReference{}, false
+}
+
+// digestOnlyResolutionAllowed follows ImportRelease tag policy semantics.
+func digestOnlyResolutionAllowed(specTag imageapi.TagReference, hasSpecTag bool, policy imageapi.TagReferencePolicyType) bool {
+	if policy == imageapi.LocalTagReferencePolicy {
+		return false
+	}
+	if policy == imageapi.SourceTagReferencePolicy {
+		return true
+	}
+	if policy != "" || !hasSpecTag {
+		return false
+	}
+	if specTag.Reference {
+		return true
+	}
+	return specTag.ImportPolicy.ImportMode == imageapi.ImportModePreserveOriginal
+}
+
+func sourceImportNotFailed(conditions []imageapi.TagEventCondition) bool {
+	for _, c := range conditions {
+		if c.Type == imageapi.ImportSuccess && c.Status == corev1.ConditionFalse {
+			return false
+		}
+	}
+	return true
+}
+
+func tagImportExplicitSuccess(conditions []imageapi.TagEventCondition) bool {
+	for _, c := range conditions {
+		if c.Type == imageapi.ImportSuccess && c.Status == corev1.ConditionTrue {
+			return true
+		}
+	}
+	return false
+}
+
+func digestPullSpecFromSpecTag(specTag imageapi.TagReference, hasSpecTag bool) string {
+	if !hasSpecTag || specTag.From == nil || specTag.From.Kind != "DockerImage" {
+		return ""
+	}
+	name := strings.TrimSpace(specTag.From.Name)
+	if name == "" {
+		return ""
+	}
+	if strings.Contains(name, "@sha256:") || strings.Contains(name, "@sha512:") {
+		return name
+	}
+	return ""
+}
+
+// ResolvePullSpec reports whether a tag can be pulled and the pullspec to use.
 func ResolvePullSpec(is *imageapi.ImageStream, tag string, requireExact bool) (string, bool, imageapi.TagEventCondition) {
+	specTag, hasSpecTag := findSpecTagReference(is, tag)
+	var specRefPolicy imageapi.TagReferencePolicyType
+	if hasSpecTag {
+		specRefPolicy = specTag.ReferencePolicy.Type
+	}
+
 	var condition imageapi.TagEventCondition
 	var pullSpec string
 	var exists bool
@@ -43,16 +108,37 @@ func ResolvePullSpec(is *imageapi.ImageStream, tag string, requireExact bool) (s
 			condition = conditions[0]
 		}
 		if len(tags.Items) == 0 {
+			if requireExact && digestOnlyResolutionAllowed(specTag, hasSpecTag, specRefPolicy) &&
+				tagImportExplicitSuccess(tags.Conditions) && sourceImportNotFailed(tags.Conditions) {
+				if pull := digestPullSpecFromSpecTag(specTag, hasSpecTag); pull != "" {
+					pullSpec = pull
+					exists = true
+					break
+				}
+			}
 			break
 		}
-		if image := tags.Items[0].Image; len(image) > 0 {
+		item := tags.Items[0]
+		if len(item.Image) > 0 {
 			if len(is.Status.PublicDockerImageRepository) > 0 {
-				pullSpec = fmt.Sprintf("%s@%s", is.Status.PublicDockerImageRepository, image)
+				pullSpec = fmt.Sprintf("%s@%s", is.Status.PublicDockerImageRepository, item.Image)
 				exists = true
 				break
 			}
 			if len(is.Status.DockerImageRepository) > 0 {
-				pullSpec = fmt.Sprintf("%s@%s", is.Status.DockerImageRepository, image)
+				pullSpec = fmt.Sprintf("%s@%s", is.Status.DockerImageRepository, item.Image)
+				exists = true
+				break
+			}
+		}
+		if requireExact && digestOnlyResolutionAllowed(specTag, hasSpecTag, specRefPolicy) &&
+			item.Image == "" && sourceImportNotFailed(tags.Conditions) {
+			ref := item.DockerImageReference
+			if !strings.Contains(ref, "@sha256:") && !strings.Contains(ref, "@sha512:") {
+				ref = digestPullSpecFromSpecTag(specTag, hasSpecTag)
+			}
+			if strings.Contains(ref, "@sha256:") || strings.Contains(ref, "@sha512:") {
+				pullSpec = ref
 				exists = true
 				break
 			}

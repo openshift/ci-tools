@@ -531,6 +531,8 @@ const ciOperatorReferenceYaml = "# The list of base images describe\n" +
 	"            architecture: ' '\n" +
 	"            # Product is the name of the product being released\n" +
 	"            product: ' '\n" +
+	"            # ReferencePolicy sets the tag reference policy for imported payload tags (Local or Source).\n" +
+	"            reference_policy: \"\"\n" +
 	"            # ReleaseStream is the stream from which we pick the latest candidate\n" +
 	"            stream: ' '\n" +
 	"            # Version is the minor version to search for\n" +
@@ -554,6 +556,8 @@ const ciOperatorReferenceYaml = "# The list of base images describe\n" +
 	"            architecture: ' '\n" +
 	"            # Product is the name of the product being released\n" +
 	"            product: ' '\n" +
+	"            # ReferencePolicy sets the tag reference policy for imported payload tags (Local or Source).\n" +
+	"            reference_policy: \"\"\n" +
 	"            # VersionBounds describe the allowable version bounds to search in\n" +
 	"            version_bounds:\n" +
 	"                lower: ' '\n" +
@@ -568,6 +572,8 @@ const ciOperatorReferenceYaml = "# The list of base images describe\n" +
 	"            architecture: ' '\n" +
 	"            # Channel is the release channel to search in\n" +
 	"            channel: ' '\n" +
+	"            # ReferencePolicy sets the tag reference policy for imported payload tags (Local or Source).\n" +
+	"            reference_policy: \"\"\n" +
 	"            # Version is the minor version to search for\n" +
 	"            version: ' '\n" +
 	"      rpm_image_injection_step:\n" +
@@ -1416,6 +1422,8 @@ const ciOperatorReferenceYaml = "# The list of base images describe\n" +
 	"            architecture: ' '\n" +
 	"            # Product is the name of the product being released\n" +
 	"            product: ' '\n" +
+	"            # ReferencePolicy sets the tag reference policy for imported payload tags (Local or Source).\n" +
+	"            reference_policy: \"\"\n" +
 	"            # ReleaseStream is the stream from which we pick the latest candidate\n" +
 	"            stream: ' '\n" +
 	"            # Version is the minor version to search for\n" +
@@ -1438,6 +1446,8 @@ const ciOperatorReferenceYaml = "# The list of base images describe\n" +
 	"            architecture: ' '\n" +
 	"            # Product is the name of the product being released\n" +
 	"            product: ' '\n" +
+	"            # ReferencePolicy sets the tag reference policy for imported payload tags (Local or Source).\n" +
+	"            reference_policy: \"\"\n" +
 	"            # VersionBounds describe the allowable version bounds to search in\n" +
 	"            version_bounds:\n" +
 	"                lower: ' '\n" +
@@ -1452,6 +1462,8 @@ const ciOperatorReferenceYaml = "# The list of base images describe\n" +
 	"            architecture: ' '\n" +
 	"            # Channel is the release channel to search in\n" +
 	"            channel: ' '\n" +
+	"            # ReferencePolicy sets the tag reference policy for imported payload tags (Local or Source).\n" +
+	"            reference_policy: \"\"\n" +
 	"            # Version is the minor version to search for\n" +
 	"            version: ' '\n" +
 	"# Resources is a set of resource requests or limits over the\n" +

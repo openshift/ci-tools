@@ -1,6 +1,7 @@
 package multi_stage
 
 import (
+	"context"
 	"fmt"
 	"path/filepath"
 	"strings"
@@ -8,11 +9,15 @@ import (
 	"github.com/sirupsen/logrus"
 
 	coreapi "k8s.io/api/core/v1"
+	kerrors "k8s.io/apimachinery/pkg/api/errors"
 	"k8s.io/apimachinery/pkg/api/resource"
 	utilerrors "k8s.io/apimachinery/pkg/util/errors"
 	"k8s.io/apimachinery/pkg/util/sets"
+	ctrlruntimeclient "sigs.k8s.io/controller-runtime/pkg/client"
 	prowapi "sigs.k8s.io/prow/pkg/apis/prowjobs/v1"
 	"sigs.k8s.io/prow/pkg/entrypoint"
+
+	imagev1 "github.com/openshift/api/image/v1"
 
 	"github.com/openshift/ci-tools/pkg/api"
 	base_steps "github.com/openshift/ci-tools/pkg/steps"
@@ -94,7 +99,12 @@ func (s *multiStageTestStep) generatePods(
 		} else {
 			dep := api.StepDependency{Name: image}
 			stream, tag, _ := s.config.DependencyParts(dep, claimRelease)
-			image = fmt.Sprintf("%s:%s", stream, tag)
+			resolvedImage, resolveErr := s.resolveStepImage(stream, tag)
+			if resolveErr != nil {
+				logrus.WithError(resolveErr).Warnf("failed to resolve step image %s:%s, using fallback", stream, tag)
+				resolvedImage = fmt.Sprintf("%s:%s", stream, tag)
+			}
+			image = resolvedImage
 		}
 		resources, err := base_steps.ResourcesFor(step.Resources)
 		if err != nil {
@@ -281,6 +291,27 @@ func (s *multiStageTestStep) generatePods(
 func isKubeconfigNeeded(step *api.LiteralTestStep, opts *generatePodOptions) bool {
 	needsKubeconfig := step.NoKubeconfig == nil || !*step.NoKubeconfig
 	return needsKubeconfig || opts.IsObserver
+}
+
+func (s *multiStageTestStep) resolveStepImage(stream, tag string) (string, error) {
+	fallback := fmt.Sprintf("%s:%s", stream, tag)
+	if !api.IsReleaseStream(stream) || s.client == nil || s.jobSpec == nil {
+		return fallback, nil
+	}
+	is := &imagev1.ImageStream{}
+	key := ctrlruntimeclient.ObjectKey{Namespace: s.jobSpec.Namespace(), Name: stream}
+	if err := s.client.Get(context.TODO(), key, is); err != nil {
+		if kerrors.IsNotFound(err) {
+			return fallback, nil
+		}
+		return "", fmt.Errorf("resolve step image %s: failed to get imagestream %s/%s: %w", fallback, key.Namespace, key.Name, err)
+	}
+	pullSpec, ok, _ := podsutils.ResolvePullSpec(is, tag, true)
+	if !ok {
+		logrus.WithField("step-image", fallback).Warnf("unable to resolve exact pullspec from imagestream %s/%s, using fallback", key.Namespace, key.Name)
+		return fallback, nil
+	}
+	return pullSpec, nil
 }
 
 func addSecretWrapper(pod *coreapi.Pod, vpnConf *vpnConf, skipKubeconfig bool, genPodOpts *generatePodOptions) {

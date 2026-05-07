@@ -232,6 +232,10 @@ spec:
                               description: Product is the name of the product being
                                 released
                               type: string
+                            reference_policy:
+                              description: ReferencePolicy sets the tag reference
+                                policy for imported payload tags (Local or Source).
+                              type: string
                             relative:
                               description: |-
                                 Relative optionally specifies how old of a release
@@ -288,6 +292,10 @@ spec:
                               description: Product is the name of the product being
                                 released
                               type: string
+                            reference_policy:
+                              description: ReferencePolicy sets the tag reference
+                                policy for imported payload tags (Local or Source).
+                              type: string
                             relative:
                               description: |-
                                 Relative optionally specifies how old of a release
@@ -327,6 +335,10 @@ spec:
                             channel:
                               description: Channel is the release channel to search
                                 in
+                              type: string
+                            reference_policy:
+                              description: ReferencePolicy sets the tag reference
+                                policy for imported payload tags (Local or Source).
                               type: string
                             relative:
                               description: |-

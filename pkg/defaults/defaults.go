@@ -149,9 +149,16 @@ func fromConfig(ctx context.Context, cfg *Config) ([]api.Step, []api.Step, error
 			if overrideCLIResolveErr != nil {
 				return nil, nil, results.ForReason("resolving_cli_override").ForError(fmt.Errorf("failed to resolve override CLI image for release %s: %w", resolveConfig.Name, overrideCLIResolveErr))
 			}
-			referencePolicy := imagev1.SourceTagReferencePolicy
-			if resolveConfig.Integration != nil && resolveConfig.Integration.ReferencePolicy != nil {
-				referencePolicy = *resolveConfig.Integration.ReferencePolicy
+			importReferencePolicy := imagev1.TagReferencePolicyType("")
+			switch {
+			case resolveConfig.Integration != nil && resolveConfig.Integration.ReferencePolicy != nil:
+				importReferencePolicy = *resolveConfig.Integration.ReferencePolicy
+			case resolveConfig.Candidate != nil && resolveConfig.Candidate.ReferencePolicy != nil:
+				importReferencePolicy = *resolveConfig.Candidate.ReferencePolicy
+			case resolveConfig.Prerelease != nil && resolveConfig.Prerelease.ReferencePolicy != nil:
+				importReferencePolicy = *resolveConfig.Prerelease.ReferencePolicy
+			case resolveConfig.Release != nil && resolveConfig.Release.ReferencePolicy != nil:
+				importReferencePolicy = *resolveConfig.Release.ReferencePolicy
 			}
 			var source releasesteps.ReleaseSource
 			if env := utils.ReleaseImageEnv(resolveConfig.Name); cfg.params.HasInput(env) {
@@ -165,14 +172,13 @@ func fromConfig(ctx context.Context, cfg *Config) ([]api.Step, []api.Step, error
 				switch {
 				case resolveConfig.Integration != nil:
 					logrus.Infof("Building release %s from a snapshot of %s/%s", resolveConfig.Name, resolveConfig.Integration.Namespace, resolveConfig.Integration.Name)
-					resolveConfig.Integration.ReferencePolicy = &referencePolicy
 					key := fmt.Sprintf("%s/%s", resolveConfig.Integration.Namespace, resolveConfig.Integration.Name)
 					snapshot := releasesteps.ReleaseSnapshotStep(resolveConfig.Name, *resolveConfig.Integration, cfg.podClient, cfg.JobSpec, cfg.IntegratedStreams[key])
 					assemble := releasesteps.AssembleReleaseStep(resolveConfig.Name, cfg.NodeName, &api.ReleaseTagConfiguration{
 						Namespace:          resolveConfig.Integration.Namespace,
 						Name:               resolveConfig.Integration.Name,
 						IncludeBuiltImages: resolveConfig.Integration.IncludeBuiltImages,
-						ReferencePolicy:    resolveConfig.Integration.ReferencePolicy,
+						ReferencePolicy:    &importReferencePolicy,
 					}, cfg.CIConfig.Resources, cfg.podClient, cfg.JobSpec, cfg.PullSecret)
 					for _, s := range []api.Step{snapshot, assemble} {
 						buildSteps = append(buildSteps, s)
@@ -184,7 +190,7 @@ func fromConfig(ctx context.Context, cfg *Config) ([]api.Step, []api.Step, error
 					source = releasesteps.NewReleaseSourceFromConfig(resolveConfig, cfg.httpClient)
 				}
 			}
-			step := releasesteps.ImportReleaseStep(resolveConfig.Name, cfg.NodeName, resolveConfig.TargetName(), referencePolicy, source, false, cfg.CIConfig.Resources, cfg.podClient, cfg.JobSpec, cfg.PullSecret, overrideCLIReleaseExtractImage)
+			step := releasesteps.ImportReleaseStep(resolveConfig.Name, cfg.NodeName, resolveConfig.TargetName(), importReferencePolicy, source, false, cfg.CIConfig.Resources, cfg.podClient, cfg.JobSpec, cfg.PullSecret, overrideCLIReleaseExtractImage)
 			buildSteps = append(buildSteps, step)
 			addProvidesForStep(step, cfg.params)
 			continue
@@ -245,9 +251,13 @@ func fromConfig(ctx context.Context, cfg *Config) ([]api.Step, []api.Step, error
 			for _, name := range []string{api.InitialReleaseName, api.LatestReleaseName} {
 				var releaseStep api.Step
 				envVar := utils.ReleaseImageEnv(name)
-				referencePolicy := imagev1.SourceTagReferencePolicy
+				var tagSpecReferencePolicy *imagev1.TagReferencePolicyType
 				if rawStep.ReleaseImagesTagStepConfiguration.ReferencePolicy != nil {
-					referencePolicy = *rawStep.ReleaseImagesTagStepConfiguration.ReferencePolicy
+					tagSpecReferencePolicy = rawStep.ReleaseImagesTagStepConfiguration.ReferencePolicy
+				}
+				referencePolicy := imagev1.SourceTagReferencePolicy
+				if tagSpecReferencePolicy != nil {
+					referencePolicy = *tagSpecReferencePolicy
 				}
 				if cfg.params.HasInput(envVar) {
 					pullSpec, err := cfg.params.Get(envVar)
@@ -373,9 +383,8 @@ func stepForTest(cfg *Config, inputImages inputImageSet, c *api.TestStepConfigur
 			step = steps.ClusterClaimStep(c.As, c.ClusterClaim, cfg.hiveClient, cfg.kubeClient, cfg.JobSpec, step, cfg.Censor)
 			name := c.ClusterClaim.ClaimRelease(c.As).ReleaseName
 			target := api.ReleaseConfiguration{Name: name}.TargetName()
-			referencePolicy := imagev1.SourceTagReferencePolicy
 			source := releasesteps.NewReleaseSourceFromClusterClaim(c.As, c.ClusterClaim, cfg.hiveClient)
-			ret = append(ret, releasesteps.ImportReleaseStep(name, cfg.NodeName, target, referencePolicy, source, false, cfg.CIConfig.Resources, cfg.podClient, cfg.JobSpec, cfg.PullSecret, nil))
+			ret = append(ret, releasesteps.ImportReleaseStep(name, cfg.NodeName, target, imagev1.TagReferencePolicyType(""), source, false, cfg.CIConfig.Resources, cfg.podClient, cfg.JobSpec, cfg.PullSecret, nil))
 		}
 		addProvidesForStep(step, params)
 		ret = append(ret, step)

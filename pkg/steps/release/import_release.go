@@ -232,26 +232,22 @@ oc create configmap release-%s --from-file=%s.yaml=${ARTIFACT_DIR}/%s
 			}
 		}
 
-		referencePolicy := imagev1.SourceTagReferencePolicy
-		if s.referencePolicy == imagev1.LocalTagReferencePolicy {
-			referencePolicy = s.referencePolicy
-		}
 		existing := sets.New[string]()
 		tags := make([]imagev1.TagReference, 0, len(releaseIS.Spec.Tags)+len(stable.Spec.Tags))
 		for _, tag := range releaseIS.Spec.Tags {
 			existing.Insert(tag.Name)
-			tag.ReferencePolicy.Type = referencePolicy
-			tag.ImportPolicy.ImportMode = imagev1.ImportModePreserveOriginal
-			tags = append(tags, tag)
+			t := mergedPayloadReferencePolicy(tag, s.referencePolicy)
+			t.ImportPolicy.ImportMode = imagev1.ImportModePreserveOriginal
+			tags = append(tags, t)
 		}
 		for _, tag := range stable.Spec.Tags {
 			if existing.Has(tag.Name) {
 				continue
 			}
 			existing.Insert(tag.Name)
-			tag.ReferencePolicy.Type = referencePolicy
-			tag.ImportPolicy.ImportMode = imagev1.ImportModePreserveOriginal
-			tags = append(tags, tag)
+			t := mergedPayloadReferencePolicy(tag, s.referencePolicy)
+			t.ImportPolicy.ImportMode = imagev1.ImportModePreserveOriginal
+			tags = append(tags, t)
 		}
 		stable.Spec.Tags = tags
 
@@ -331,6 +327,30 @@ func (s *importReleaseStep) Description() string {
 
 func (s *importReleaseStep) Objects() []ctrlruntimeclient.Object {
 	return s.client.Objects()
+}
+
+func payloadTagImpliesSource(tag *imagev1.TagReference) bool {
+	if tag.Reference {
+		return true
+	}
+	return tag.ImportPolicy.ImportMode == imagev1.ImportModePreserveOriginal
+}
+
+func mergedPayloadReferencePolicy(tag imagev1.TagReference, policy imagev1.TagReferencePolicyType) imagev1.TagReference {
+	if policy == imagev1.LocalTagReferencePolicy || policy == imagev1.SourceTagReferencePolicy {
+		tag.ReferencePolicy.Type = policy
+		return tag
+	}
+	switch tag.ReferencePolicy.Type {
+	case imagev1.LocalTagReferencePolicy, imagev1.SourceTagReferencePolicy:
+		return tag
+	}
+	if payloadTagImpliesSource(&tag) {
+		tag.ReferencePolicy.Type = imagev1.SourceTagReferencePolicy
+		return tag
+	}
+	tag.ReferencePolicy.Type = imagev1.LocalTagReferencePolicy
+	return tag
 }
 
 // ImportReleaseStep imports an existing update payload image
@@ -462,7 +482,7 @@ func (s *importReleaseStep) extractAndTagCLIImage(ctx context.Context, targetCLI
 	}
 	// tag the cli image into stable so we use the correct pull secrets from the namespace
 	referencePolicy := imagev1.LocalTagReferencePolicy
-	if s.referencePolicy == imagev1.SourceTagReferencePolicy {
+	if s.referencePolicy != "" {
 		referencePolicy = s.referencePolicy
 	}
 	streamTag := &imagev1.ImageStreamTag{
@@ -500,14 +520,14 @@ func (s *importReleaseStep) getCLIImage(ctx context.Context, target, streamName 
 		// create the imagestream to be able to set it there.
 		overrideIS := &imagev1.ImageStream{
 			ObjectMeta: metav1.ObjectMeta{Name: overrideCLIStreamName, Namespace: s.jobSpec.Namespace()},
-			Spec:       imagev1.ImageStreamSpec{LookupPolicy: imagev1.ImageLookupPolicy{Local: true}, Tags: []imagev1.TagReference{{ReferencePolicy: imagev1.TagReferencePolicy{Type: s.referencePolicy}}}},
+			Spec:       imagev1.ImageStreamSpec{LookupPolicy: imagev1.ImageLookupPolicy{Local: true}},
 		}
 		if _, err := util.CreateImageStreamWithMetrics(ctx, s.client, overrideIS, s.client.MetricsAgent()); err != nil {
 			return nil, fmt.Errorf("failed to create %s imagestream: %w", overrideCLIStreamName, err)
 		}
 
 		referencePolicy := imagev1.SourceTagReferencePolicy
-		if s.referencePolicy == imagev1.LocalTagReferencePolicy {
+		if s.referencePolicy != "" {
 			referencePolicy = s.referencePolicy
 		}
 		streamTag := &imagev1.ImageStreamTag{

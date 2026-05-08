@@ -8,6 +8,8 @@ periodics:
   - base_ref: branch
     org: organization
     repo: repository
+  labels:
+    presets.ci.openshift.io/registry-pull: "true"
   name: periodic-ci-organization-repository-branch-periodic-unit
   spec:
     containers:
@@ -39,9 +41,6 @@ periodics:
       - mountPath: /secrets/manifest-tool
         name: manifest-tool-local-pusher
         readOnly: true
-      - mountPath: /etc/pull-secret
-        name: pull-secret
-        readOnly: true
       - mountPath: /etc/report
         name: result-aggregator
         readOnly: true
@@ -50,9 +49,6 @@ periodics:
     - name: manifest-tool-local-pusher
       secret:
         secretName: manifest-tool-local-pusher
-    - name: pull-secret
-      secret:
-        secretName: registry-pull-credentials
     - name: result-aggregator
       secret:
         secretName: result-aggregator
@@ -67,6 +63,7 @@ periodics:
     repo: repository
   labels:
     pj-rehearse.openshift.io/can-be-rehearsed: "true"
+    presets.ci.openshift.io/registry-pull: "true"
   name: periodic-ci-organization-repository-branch-periodic-lint
   spec:
     containers:
@@ -98,9 +95,6 @@ periodics:
       - mountPath: /secrets/manifest-tool
         name: manifest-tool-local-pusher
         readOnly: true
-      - mountPath: /etc/pull-secret
-        name: pull-secret
-        readOnly: true
       - mountPath: /etc/report
         name: result-aggregator
         readOnly: true
@@ -109,17 +103,17 @@ periodics:
     - name: manifest-tool-local-pusher
       secret:
         secretName: manifest-tool-local-pusher
-    - name: pull-secret
-      secret:
-        secretName: registry-pull-credentials
     - name: result-aggregator
       secret:
         secretName: result-aggregator
 presubmits:
   organization/repository:
   - always_run: false
+    labels:
+      presets.ci.openshift.io/registry-pull: "true"
     name: pull-ci-organization-repository-branch-unit
   - always_run: false
     labels:
       pj-rehearse.openshift.io/can-be-rehearsed: "true"
+      presets.ci.openshift.io/registry-pull: "true"
     name: pull-ci-organization-repository-branch-lint

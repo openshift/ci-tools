@@ -12,6 +12,7 @@ items:
       ci.openshift.io/ephemeral-cluster: ec
       created-by-prow: "true"
       pj-rehearse.openshift.io/can-be-rehearsed: "true"
+      presets.ci.openshift.io/registry-pull: "true"
       prow.k8s.io/context: ""
       prow.k8s.io/job: ephemeralcluster-ci-org-repo-branch-cluster-provisioning
       prow.k8s.io/type: periodic
@@ -140,9 +141,6 @@ items:
         - mountPath: /secrets/manifest-tool
           name: manifest-tool-local-pusher
           readOnly: true
-        - mountPath: /etc/pull-secret
-          name: pull-secret
-          readOnly: true
         - mountPath: /etc/report
           name: result-aggregator
           readOnly: true
@@ -160,9 +158,6 @@ items:
       - name: manifest-tool-local-pusher
         secret:
           secretName: manifest-tool-local-pusher
-      - name: pull-secret
-        secret:
-          secretName: registry-pull-credentials
       - name: result-aggregator
         secret:
           secretName: result-aggregator

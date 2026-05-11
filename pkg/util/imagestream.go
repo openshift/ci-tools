@@ -29,6 +29,15 @@ func ParseImageStreamTagReference(s string) (api.ImageStreamTagReference, error)
 	return ret, nil
 }
 
+func isLocalReferenceTag(is *imageapi.ImageStream, tag string) bool {
+	for _, st := range is.Spec.Tags {
+		if st.Name == tag {
+			return st.Reference && st.ReferencePolicy.Type == imageapi.LocalTagReferencePolicy
+		}
+	}
+	return false
+}
+
 // ResolvePullSpec if a tag of an imagestream is resolved
 func ResolvePullSpec(is *imageapi.ImageStream, tag string, requireExact bool) (string, bool, imageapi.TagEventCondition) {
 	var condition imageapi.TagEventCondition
@@ -56,6 +65,9 @@ func ResolvePullSpec(is *imageapi.ImageStream, tag string, requireExact bool) (s
 				exists = true
 				break
 			}
+		} else if requireExact && isLocalReferenceTag(is, tag) && strings.Contains(tags.Items[0].DockerImageReference, "@sha256:") {
+			pullSpec = tags.Items[0].DockerImageReference
+			exists = true
 		}
 		break
 	}

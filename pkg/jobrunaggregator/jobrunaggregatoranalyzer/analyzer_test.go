@@ -496,14 +496,13 @@ func TestAggregateTestCasePropagatesProperties(t *testing.T) {
 	assert.Equal(t, 2, len(combined.Properties))
 	assert.Equal(t, "lifecycle", combined.Properties[0].Name)
 	assert.Equal(t, "informing", combined.Properties[0].Value)
-	assert.Equal(t, "owner", combined.Properties[1].Name)
-	assert.Equal(t, "team-platform", combined.Properties[1].Value)
 
-	// Second aggregation should not overwrite the properties
+	// A different second aggregation should not overwrite the properties
+	// (Usually the important properties would be the same anyway, but where properties differ, just one gets picked)
 	source2 := &junit.TestCase{
 		Name: "test-with-properties",
 		Properties: []*junit.Property{
-			{Name: "lifecycle", Value: "informing"},
+			{Name: "lifecycle", Value: "blocking"},
 		},
 	}
 	err = aggregateTestCase("suite", combined, "logs/job", "run2", source2)

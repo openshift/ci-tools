@@ -73,6 +73,8 @@ type context struct {
 	inputImagesSeen testInputImages
 	// releases is used to validate references to release images .
 	releases sets.Set[string]
+	// metadata is used for ownership checks (e.g., audience restrictions).
+	metadata *api.Metadata
 }
 
 // newContext creates a top-level context.
@@ -81,6 +83,7 @@ func newContext(
 	env api.TestEnvironment,
 	releases sets.Set[string],
 	inputImagesSeen testInputImages,
+	metadata *api.Metadata,
 ) *context {
 	return &context{
 		field:           field,
@@ -89,6 +92,7 @@ func newContext(
 		leasesSeen:      sets.New[string](),
 		inputImagesSeen: inputImagesSeen,
 		releases:        releases,
+		metadata:        metadata,
 	}
 }
 
@@ -586,7 +590,7 @@ func (v *Validator) validateTestConfigurationType(
 			clusterCount++
 			validationErrors = append(validationErrors, v.validateClusterProfile(fieldRoot, testConfig.ClusterProfile, test.As, metadata)...)
 		}
-		context := newContext(fieldPath(fieldRoot), testConfig.Environment, releases, inputImagesSeen)
+		context := newContext(fieldPath(fieldRoot), testConfig.Environment, releases, inputImagesSeen, metadata)
 		validationErrors = append(validationErrors, validateLeases(context.addField("leases"), testConfig.Leases)...)
 		if testConfig.NodeArchitecture != nil {
 			validationErrors = append(validationErrors, validateNodeArchitecture(fieldRoot, *testConfig.NodeArchitecture))
@@ -597,7 +601,7 @@ func (v *Validator) validateTestConfigurationType(
 	}
 	if testConfig := test.MultiStageTestConfigurationLiteral; testConfig != nil {
 		typeCount++
-		context := newContext(fieldPath(fieldRoot).addField("steps"), testConfig.Environment, releases, inputImagesSeen)
+		context := newContext(fieldPath(fieldRoot).addField("steps"), testConfig.Environment, releases, inputImagesSeen, metadata)
 		if testConfig.ClusterProfile != "" {
 			clusterCount++
 			validationErrors = append(validationErrors, v.validateClusterProfile(fieldRoot, testConfig.ClusterProfile, test.As, metadata)...)
@@ -706,6 +710,7 @@ func (v *Validator) validateLiteralTestStep(context *context, stage testStage, s
 	}
 	ret = append(ret, validateDependencies(string(context.field), step.Dependencies)...)
 	ret = append(ret, validateLeases(context.addField("leases"), step.Leases)...)
+	ret = append(ret, v.validateServiceAccountTokens(string(context.field), step.ServiceAccountTokens, step.Credentials, context.metadata)...)
 	if step.NodeArchitecture != nil {
 		if err := validateNodeArchitecture(string(context.field), *step.NodeArchitecture); err != nil {
 			ret = append(ret, err)
@@ -951,6 +956,83 @@ func validateLeases(context *context, leases []api.StepLease) (ret []error) {
 		}
 	}
 	return
+}
+
+func (v *Validator) validateServiceAccountTokens(fieldRoot string, tokens []api.ServiceAccountTokenVolume, credentials []api.CredentialReference, metadata *api.Metadata) (ret []error) {
+	mountPaths := sets.New[string]()
+	for i, token := range tokens {
+		fieldPath := fmt.Sprintf("%s.service_account_tokens[%d]", fieldRoot, i)
+		if token.Audience == "" {
+			ret = append(ret, fmt.Errorf("%s.audience: must not be empty", fieldPath))
+		} else if v.allowedAudiences != nil {
+			if details, ok := v.allowedAudiences[token.Audience]; ok {
+				if err := verifyAudienceOwnership(details, metadata); err != nil {
+					ret = append(ret, err)
+				}
+			}
+		}
+		if token.MountPath == "" {
+			ret = append(ret, fmt.Errorf("%s.mount_path: must not be empty", fieldPath))
+		} else if !filepath.IsAbs(token.MountPath) {
+			ret = append(ret, fmt.Errorf("%s.mount_path: must be an absolute path", fieldPath))
+		} else if mountPaths.Has(token.MountPath) {
+			ret = append(ret, fmt.Errorf("%s.mount_path: duplicate mount path %q", fieldPath, token.MountPath))
+		} else {
+			for j, cred := range credentials {
+				if cred.MountPath == "" {
+					continue
+				}
+				if token.MountPath == cred.MountPath {
+					ret = append(ret, fmt.Errorf("%s.mount_path: collides with credentials[%d] mount path %q", fieldPath, j, cred.MountPath))
+				} else if relPath, err := filepath.Rel(cred.MountPath, token.MountPath); err == nil && !strings.Contains(relPath, "..") {
+					ret = append(ret, fmt.Errorf("%s.mount_path: %s is under credentials[%d] mount path %s", fieldPath, token.MountPath, j, cred.MountPath))
+				} else if relPath, err := filepath.Rel(token.MountPath, cred.MountPath); err == nil && !strings.Contains(relPath, "..") {
+					ret = append(ret, fmt.Errorf("%s.mount_path: credentials[%d] mount path %s is under %s", fieldPath, j, cred.MountPath, token.MountPath))
+				}
+			}
+			for j, other := range tokens[:i] {
+				if other.MountPath == "" {
+					continue
+				}
+				if relPath, err := filepath.Rel(other.MountPath, token.MountPath); err == nil && !strings.Contains(relPath, "..") {
+					ret = append(ret, fmt.Errorf("%s.mount_path: %s is under service_account_tokens[%d] mount path %s", fieldPath, token.MountPath, j, other.MountPath))
+				}
+				if relPath, err := filepath.Rel(token.MountPath, other.MountPath); err == nil && !strings.Contains(relPath, "..") {
+					ret = append(ret, fmt.Errorf("%s.mount_path: service_account_tokens[%d] mount path %s is under %s", fieldPath, j, other.MountPath, token.MountPath))
+				}
+			}
+			mountPaths.Insert(token.MountPath)
+		}
+		if token.ExpirationSeconds != nil && *token.ExpirationSeconds < 600 {
+			ret = append(ret, fmt.Errorf("%s.expiration_seconds: must be at least 600 (10 minutes)", fieldPath))
+		}
+	}
+	return
+}
+
+// verifyAudienceOwnership checks if metadata's org and repo match those in the
+// audience config, verifying if it's one of the owners of the audience.
+func verifyAudienceOwnership(audience api.AllowedAudienceDetails, m *api.Metadata) error {
+	// When metadata is nil (e.g., standalone registry reference validation via
+	// IsValidReference), we can't determine org/repo ownership, so we permit the
+	// audience. This is intentionally more permissive than verifyClusterProfileOwnership
+	// because audience restrictions are enforced at the resolved config level where
+	// metadata is always available.
+	if m == nil || m.Org == "" {
+		return nil
+	}
+	if len(audience.Owners) == 0 {
+		return nil
+	}
+	for _, owner := range audience.Owners {
+		if owner.Org != m.Org {
+			continue
+		}
+		if owner.Repos == nil || util.Contains(owner.Repos, m.Repo) {
+			return nil
+		}
+	}
+	return fmt.Errorf("%s/%s is not allowed to use service account token audience %q", m.Org, m.Repo, audience.Audience)
 }
 
 func validateNodeArchitectureOverrides(fieldRoot string, nodeArchitectureOverrides api.NodeArchitectureOverrides) error {

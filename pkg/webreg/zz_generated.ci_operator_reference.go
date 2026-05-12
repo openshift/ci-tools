@@ -845,6 +845,20 @@ const ciOperatorReferenceYaml = "# The list of base images describe\n" +
 	"                  # RunAsScript defines if this step should be executed as a script mounted\n" +
 	"                  # in the test container instead of being executed directly via bash\n" +
 	"                  run_as_script: false\n" +
+	"                  # ServiceAccountTokens configures additional projected service account token\n" +
+	"                  # volumes with custom audiences, mounted into the step container. This is\n" +
+	"                  # useful for workloads that need to exchange tokens with external identity\n" +
+	"                  # providers (e.g., GCP Workload Identity Federation).\n" +
+	"                  service_account_tokens:\n" +
+	"                    - # Audience is the intended audience of the token. The token will only be\n" +
+	"                      # valid for recipients that identify themselves with this audience.\n" +
+	"                      audience: ' '\n" +
+	"                      # ExpirationSeconds is the requested duration of validity of the token,\n" +
+	"                      # in seconds. The kubelet will automatically rotate the token at 80% of\n" +
+	"                      # its TTL. Defaults to 3600 (1 hour) if not set.\n" +
+	"                      expiration_seconds: 0\n" +
+	"                      # MountPath is the path where the token will be mounted in the container.\n" +
+	"                      mount_path: ' '\n" +
 	"                  # Timeout is how long the we will wait before aborting a job with SIGINT.\n" +
 	"                  timeout: 0s\n" +
 	"            # Pre is the array of test steps run to set up the environment for the test.\n" +
@@ -953,6 +967,20 @@ const ciOperatorReferenceYaml = "# The list of base images describe\n" +
 	"                  # RunAsScript defines if this step should be executed as a script mounted\n" +
 	"                  # in the test container instead of being executed directly via bash\n" +
 	"                  run_as_script: false\n" +
+	"                  # ServiceAccountTokens configures additional projected service account token\n" +
+	"                  # volumes with custom audiences, mounted into the step container. This is\n" +
+	"                  # useful for workloads that need to exchange tokens with external identity\n" +
+	"                  # providers (e.g., GCP Workload Identity Federation).\n" +
+	"                  service_account_tokens:\n" +
+	"                    - # Audience is the intended audience of the token. The token will only be\n" +
+	"                      # valid for recipients that identify themselves with this audience.\n" +
+	"                      audience: ' '\n" +
+	"                      # ExpirationSeconds is the requested duration of validity of the token,\n" +
+	"                      # in seconds. The kubelet will automatically rotate the token at 80% of\n" +
+	"                      # its TTL. Defaults to 3600 (1 hour) if not set.\n" +
+	"                      expiration_seconds: 0\n" +
+	"                      # MountPath is the path where the token will be mounted in the container.\n" +
+	"                      mount_path: ' '\n" +
 	"                  # Timeout is how long the we will wait before aborting a job with SIGINT.\n" +
 	"                  timeout: 0s\n" +
 	"            # Test is the array of test steps that define the actual test.\n" +
@@ -1061,6 +1089,20 @@ const ciOperatorReferenceYaml = "# The list of base images describe\n" +
 	"                  # RunAsScript defines if this step should be executed as a script mounted\n" +
 	"                  # in the test container instead of being executed directly via bash\n" +
 	"                  run_as_script: false\n" +
+	"                  # ServiceAccountTokens configures additional projected service account token\n" +
+	"                  # volumes with custom audiences, mounted into the step container. This is\n" +
+	"                  # useful for workloads that need to exchange tokens with external identity\n" +
+	"                  # providers (e.g., GCP Workload Identity Federation).\n" +
+	"                  service_account_tokens:\n" +
+	"                    - # Audience is the intended audience of the token. The token will only be\n" +
+	"                      # valid for recipients that identify themselves with this audience.\n" +
+	"                      audience: ' '\n" +
+	"                      # ExpirationSeconds is the requested duration of validity of the token,\n" +
+	"                      # in seconds. The kubelet will automatically rotate the token at 80% of\n" +
+	"                      # its TTL. Defaults to 3600 (1 hour) if not set.\n" +
+	"                      expiration_seconds: 0\n" +
+	"                      # MountPath is the path where the token will be mounted in the container.\n" +
+	"                      mount_path: ' '\n" +
 	"                  # Timeout is how long the we will wait before aborting a job with SIGINT.\n" +
 	"                  timeout: 0s\n" +
 	"            # Override job timeout\n" +
@@ -1263,6 +1305,11 @@ const ciOperatorReferenceYaml = "# The list of base images describe\n" +
 	"                        # LiteralTestStep is a full test step definition.\n" +
 	"                        \"\": \"\"\n" +
 	"                  run_as_script: false\n" +
+	"                  service_account_tokens:\n" +
+	"                    # LiteralTestStep is a full test step definition.\n" +
+	"                    - audience: ' '\n" +
+	"                      expiration_seconds: 0\n" +
+	"                      mount_path: ' '\n" +
 	"                  timeout: 0s\n" +
 	"            # Pre is the array of test steps run to set up the environment for the test.\n" +
 	"            pre:\n" +
@@ -1334,6 +1381,11 @@ const ciOperatorReferenceYaml = "# The list of base images describe\n" +
 	"                        # LiteralTestStep is a full test step definition.\n" +
 	"                        \"\": \"\"\n" +
 	"                  run_as_script: false\n" +
+	"                  service_account_tokens:\n" +
+	"                    # LiteralTestStep is a full test step definition.\n" +
+	"                    - audience: ' '\n" +
+	"                      expiration_seconds: 0\n" +
+	"                      mount_path: ' '\n" +
 	"                  timeout: 0s\n" +
 	"            # Test is the array of test steps that define the actual test.\n" +
 	"            test:\n" +
@@ -1405,6 +1457,11 @@ const ciOperatorReferenceYaml = "# The list of base images describe\n" +
 	"                        # LiteralTestStep is a full test step definition.\n" +
 	"                        \"\": \"\"\n" +
 	"                  run_as_script: false\n" +
+	"                  service_account_tokens:\n" +
+	"                    # LiteralTestStep is a full test step definition.\n" +
+	"                    - audience: ' '\n" +
+	"                      expiration_seconds: 0\n" +
+	"                      mount_path: ' '\n" +
 	"                  timeout: 0s\n" +
 	"            # Workflow is the name of the workflow to be used for this configuration. For fields defined in both\n" +
 	"            # the config and the workflow, the fields from the config will override what is set in Workflow.\n" +
@@ -1777,6 +1834,20 @@ const ciOperatorReferenceYaml = "# The list of base images describe\n" +
 	"              # RunAsScript defines if this step should be executed as a script mounted\n" +
 	"              # in the test container instead of being executed directly via bash\n" +
 	"              run_as_script: false\n" +
+	"              # ServiceAccountTokens configures additional projected service account token\n" +
+	"              # volumes with custom audiences, mounted into the step container. This is\n" +
+	"              # useful for workloads that need to exchange tokens with external identity\n" +
+	"              # providers (e.g., GCP Workload Identity Federation).\n" +
+	"              service_account_tokens:\n" +
+	"                - # Audience is the intended audience of the token. The token will only be\n" +
+	"                  # valid for recipients that identify themselves with this audience.\n" +
+	"                  audience: ' '\n" +
+	"                  # ExpirationSeconds is the requested duration of validity of the token,\n" +
+	"                  # in seconds. The kubelet will automatically rotate the token at 80% of\n" +
+	"                  # its TTL. Defaults to 3600 (1 hour) if not set.\n" +
+	"                  expiration_seconds: 0\n" +
+	"                  # MountPath is the path where the token will be mounted in the container.\n" +
+	"                  mount_path: ' '\n" +
 	"              # Timeout is how long the we will wait before aborting a job with SIGINT.\n" +
 	"              timeout: 0s\n" +
 	"        # Pre is the array of test steps run to set up the environment for the test.\n" +
@@ -1885,6 +1956,20 @@ const ciOperatorReferenceYaml = "# The list of base images describe\n" +
 	"              # RunAsScript defines if this step should be executed as a script mounted\n" +
 	"              # in the test container instead of being executed directly via bash\n" +
 	"              run_as_script: false\n" +
+	"              # ServiceAccountTokens configures additional projected service account token\n" +
+	"              # volumes with custom audiences, mounted into the step container. This is\n" +
+	"              # useful for workloads that need to exchange tokens with external identity\n" +
+	"              # providers (e.g., GCP Workload Identity Federation).\n" +
+	"              service_account_tokens:\n" +
+	"                - # Audience is the intended audience of the token. The token will only be\n" +
+	"                  # valid for recipients that identify themselves with this audience.\n" +
+	"                  audience: ' '\n" +
+	"                  # ExpirationSeconds is the requested duration of validity of the token,\n" +
+	"                  # in seconds. The kubelet will automatically rotate the token at 80% of\n" +
+	"                  # its TTL. Defaults to 3600 (1 hour) if not set.\n" +
+	"                  expiration_seconds: 0\n" +
+	"                  # MountPath is the path where the token will be mounted in the container.\n" +
+	"                  mount_path: ' '\n" +
 	"              # Timeout is how long the we will wait before aborting a job with SIGINT.\n" +
 	"              timeout: 0s\n" +
 	"        # Test is the array of test steps that define the actual test.\n" +
@@ -1993,6 +2078,20 @@ const ciOperatorReferenceYaml = "# The list of base images describe\n" +
 	"              # RunAsScript defines if this step should be executed as a script mounted\n" +
 	"              # in the test container instead of being executed directly via bash\n" +
 	"              run_as_script: false\n" +
+	"              # ServiceAccountTokens configures additional projected service account token\n" +
+	"              # volumes with custom audiences, mounted into the step container. This is\n" +
+	"              # useful for workloads that need to exchange tokens with external identity\n" +
+	"              # providers (e.g., GCP Workload Identity Federation).\n" +
+	"              service_account_tokens:\n" +
+	"                - # Audience is the intended audience of the token. The token will only be\n" +
+	"                  # valid for recipients that identify themselves with this audience.\n" +
+	"                  audience: ' '\n" +
+	"                  # ExpirationSeconds is the requested duration of validity of the token,\n" +
+	"                  # in seconds. The kubelet will automatically rotate the token at 80% of\n" +
+	"                  # its TTL. Defaults to 3600 (1 hour) if not set.\n" +
+	"                  expiration_seconds: 0\n" +
+	"                  # MountPath is the path where the token will be mounted in the container.\n" +
+	"                  mount_path: ' '\n" +
 	"              # Timeout is how long the we will wait before aborting a job with SIGINT.\n" +
 	"              timeout: 0s\n" +
 	"        # Override job timeout\n" +
@@ -2195,6 +2294,11 @@ const ciOperatorReferenceYaml = "# The list of base images describe\n" +
 	"                    # LiteralTestStep is a full test step definition.\n" +
 	"                    \"\": \"\"\n" +
 	"              run_as_script: false\n" +
+	"              service_account_tokens:\n" +
+	"                # LiteralTestStep is a full test step definition.\n" +
+	"                - audience: ' '\n" +
+	"                  expiration_seconds: 0\n" +
+	"                  mount_path: ' '\n" +
 	"              timeout: 0s\n" +
 	"        # Pre is the array of test steps run to set up the environment for the test.\n" +
 	"        pre:\n" +
@@ -2266,6 +2370,11 @@ const ciOperatorReferenceYaml = "# The list of base images describe\n" +
 	"                    # LiteralTestStep is a full test step definition.\n" +
 	"                    \"\": \"\"\n" +
 	"              run_as_script: false\n" +
+	"              service_account_tokens:\n" +
+	"                # LiteralTestStep is a full test step definition.\n" +
+	"                - audience: ' '\n" +
+	"                  expiration_seconds: 0\n" +
+	"                  mount_path: ' '\n" +
 	"              timeout: 0s\n" +
 	"        # Test is the array of test steps that define the actual test.\n" +
 	"        test:\n" +
@@ -2337,6 +2446,11 @@ const ciOperatorReferenceYaml = "# The list of base images describe\n" +
 	"                    # LiteralTestStep is a full test step definition.\n" +
 	"                    \"\": \"\"\n" +
 	"              run_as_script: false\n" +
+	"              service_account_tokens:\n" +
+	"                # LiteralTestStep is a full test step definition.\n" +
+	"                - audience: ' '\n" +
+	"                  expiration_seconds: 0\n" +
+	"                  mount_path: ' '\n" +
 	"              timeout: 0s\n" +
 	"        # Workflow is the name of the workflow to be used for this configuration. For fields defined in both\n" +
 	"        # the config and the workflow, the fields from the config will override what is set in Workflow.\n" +

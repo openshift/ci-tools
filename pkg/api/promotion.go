@@ -111,7 +111,7 @@ func quayImageWithTime(timestamp string, tag ImageStreamTagReference) string {
 // Format: namespace/imagestream-name-quay:tag
 func getQuayProxyTarget(target string, tag ImageStreamTagReference) string {
 	if tag.Name != "" {
-		proxyTarget := fmt.Sprintf("%s/%s-quay:%s", tag.Namespace, tag.Name, tag.Tag)
+		proxyTarget := fmt.Sprintf("%s/%s:%s", tag.Namespace, tag.Name, tag.Tag)
 		return proxyTarget
 	}
 
@@ -126,14 +126,14 @@ func getQuayProxyTarget(target string, tag ImageStreamTagReference) string {
 			tagStart := len(tagPart) - len(tagSuffix)
 			targetComponent := tagPart[first+1 : tagStart]
 			if targetComponent != "" {
-				proxyTarget := fmt.Sprintf("%s/%s-quay:%s", targetNamespace, targetComponent, tag.Tag)
+				proxyTarget := fmt.Sprintf("%s/%s:%s", targetNamespace, targetComponent, tag.Tag)
 				return proxyTarget
 			}
 		}
 	}
 
 	// Fallback: use namespace and tag
-	proxyTarget := fmt.Sprintf("%s/%s-quay:%s", tag.Namespace, tag.Tag, tag.Tag)
+	proxyTarget := fmt.Sprintf("%s/%s:%s", tag.Namespace, tag.Tag, tag.Tag)
 	return proxyTarget
 }
 

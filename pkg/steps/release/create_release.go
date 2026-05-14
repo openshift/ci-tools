@@ -311,11 +311,11 @@ func hasMinimumVersion(config *api.ReleaseTagConfiguration, majorVersion, minorV
 	return major > majorVersion || (major == majorVersion && minor >= minorVersion)
 }
 
-func buildOcAdmReleaseNewCommand(config *api.ReleaseTagConfiguration, namespace, streamName, cvo, destination, version string) string {
+func joinOcAdmReleaseNewCommand(config *api.ReleaseTagConfiguration, namespace, cvo, destination, version, fromFlag, fromValue string) string {
 	cmd := []string{"oc", "adm", "release", "new",
 		"--max-per-registry=32",
 		"-n", namespace,
-		"--from-image-stream", streamName,
+		fromFlag, fromValue,
 		"--to-image-base", cvo,
 		"--to-image", destination,
 		"--name", version,
@@ -332,4 +332,17 @@ func buildOcAdmReleaseNewCommand(config *api.ReleaseTagConfiguration, namespace,
 		cmd = append(cmd, "--keep-manifest-list")
 	}
 	return strings.Join(cmd, " ")
+}
+
+func buildOcAdmReleaseNewCommand(config *api.ReleaseTagConfiguration, namespace, streamName, cvo, destination, version string) string {
+	filePathVar := "${_CI_RELEASE_IS_FILE}"
+	fromStream := joinOcAdmReleaseNewCommand(config, namespace, cvo, destination, version, "--from-image-stream", streamName)
+	fromFile := joinOcAdmReleaseNewCommand(config, namespace, cvo, destination, version, "--from-image-stream-file", filePathVar)
+	safeTag := strings.ReplaceAll(strings.ReplaceAll(streamName, "/", "_"), ":", "_")
+	return fmt.Sprintf(`_CI_RELEASE_IS_FILE="/tmp/ci-operator-release-is-%s.yaml"
+if oc get imagestream %q -n %q -o yaml > "${_CI_RELEASE_IS_FILE}" 2>/dev/null; then
+  %s || %s
+else
+  %s
+fi`, safeTag, streamName, namespace, fromFile, fromStream, fromStream)
 }

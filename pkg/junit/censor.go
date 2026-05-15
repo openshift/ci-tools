@@ -7,30 +7,35 @@ func CensorTestSuite(censor secretutil.Censorer, testSuite *TestSuite) {
 	if testSuite == nil {
 		return
 	}
-	testSuite.Name = censored(censor, testSuite.Name)
-	for i := range testSuite.Properties {
-		testSuite.Properties[i].Name = censored(censor, testSuite.Properties[i].Name)
-		testSuite.Properties[i].Value = censored(censor, testSuite.Properties[i].Value)
+	censorStr(censor, &testSuite.Name)
+	for i, prop := range testSuite.Properties {
+		censorStr(censor, &prop.Name, &prop.Value)
+		testSuite.Properties[i] = prop
 	}
-	for i := range testSuite.TestCases {
-		testSuite.TestCases[i].Name = censored(censor, testSuite.TestCases[i].Name)
-		if testSuite.TestCases[i].SkipMessage != nil {
-			testSuite.TestCases[i].SkipMessage.Message = censored(censor, testSuite.TestCases[i].SkipMessage.Message)
+	for i, testCase := range testSuite.TestCases {
+		censorStr(censor, &testCase.Name)
+		for j, prop := range testCase.Properties {
+			censorStr(censor, &prop.Name, &prop.Value)
+			testCase.Properties[j] = prop
 		}
-		if testSuite.TestCases[i].FailureOutput != nil {
-			testSuite.TestCases[i].FailureOutput.Output = censored(censor, testSuite.TestCases[i].FailureOutput.Output)
-			testSuite.TestCases[i].FailureOutput.Message = censored(censor, testSuite.TestCases[i].FailureOutput.Message)
+		if testCase.SkipMessage != nil {
+			censorStr(censor, &testCase.SkipMessage.Message)
 		}
-		testSuite.TestCases[i].SystemOut = censored(censor, testSuite.TestCases[i].SystemOut)
-		testSuite.TestCases[i].SystemErr = censored(censor, testSuite.TestCases[i].SystemErr)
+		if testCase.FailureOutput != nil {
+			censorStr(censor, &testCase.FailureOutput.Output, &testCase.FailureOutput.Message)
+		}
+		censorStr(censor, &testCase.SystemOut, &testCase.SystemErr)
+		testSuite.TestCases[i] = testCase
 	}
 	for i := range testSuite.Children {
 		CensorTestSuite(censor, testSuite.Children[i])
 	}
 }
 
-func censored(censor secretutil.Censorer, value string) string {
-	raw := []byte(value)
-	censor.Censor(&raw)
-	return string(raw)
+func censorStr(censor secretutil.Censorer, values ...*string) {
+	for _, val := range values {
+		raw := []byte(*val)
+		censor.Censor(&raw)
+		*val = string(raw)
+	}
 }

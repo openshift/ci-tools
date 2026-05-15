@@ -480,6 +480,39 @@ func TestAggregateTestCasePropagatesLifecycle(t *testing.T) {
 	assert.Equal(t, "informing", combined.Lifecycle)
 }
 
+func TestAggregateTestCasePropagatesProperties(t *testing.T) {
+	combined := &junit.TestCase{Name: "test-with-properties"}
+
+	source := &junit.TestCase{
+		Name: "test-with-properties",
+		Properties: []*junit.Property{
+			{Name: "lifecycle", Value: "informing"},
+			{Name: "owner", Value: "team-platform"},
+		},
+	}
+
+	err := aggregateTestCase("suite", combined, "logs/job", "run1", source)
+	assert.NoError(t, err)
+	assert.Equal(t, 2, len(combined.Properties))
+	assert.Equal(t, "lifecycle", combined.Properties[0].Name)
+	assert.Equal(t, "informing", combined.Properties[0].Value)
+
+	// A different second aggregation should not overwrite the properties
+	// (Usually the important properties would be the same anyway, but where properties differ, just one gets picked)
+	source2 := &junit.TestCase{
+		Name: "test-with-properties",
+		Properties: []*junit.Property{
+			{Name: "lifecycle", Value: "blocking"},
+		},
+	}
+	err = aggregateTestCase("suite", combined, "logs/job", "run2", source2)
+	assert.NoError(t, err)
+	// Properties should remain unchanged from first aggregation
+	assert.Equal(t, 2, len(combined.Properties))
+	assert.Equal(t, "lifecycle", combined.Properties[0].Name)
+	assert.Equal(t, "informing", combined.Properties[0].Value)
+}
+
 func TestInformingTestFailureMessage(t *testing.T) {
 	suite := &junit.TestSuites{
 		Suites: []*junit.TestSuite{

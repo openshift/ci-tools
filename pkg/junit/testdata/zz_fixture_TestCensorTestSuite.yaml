@@ -28,6 +28,12 @@ Children:
           Space: ""
       Lifecycle: ""
       Name: somehow very nested XXXXXX
+      Properties:
+      - Name: lifecycle
+        Value: very nested XXXXXX value
+        XMLName:
+          Local: ""
+          Space: ""
       SkipMessage:
         Message: skipped due to very nested XXXXXX
         XMLName:
@@ -48,6 +54,12 @@ Children:
           Space: ""
       Lifecycle: ""
       Name: somehow also very nested XXXXXX
+      Properties:
+      - Name: owner
+        Value: also very nested XXXXXX value
+        XMLName:
+          Local: ""
+          Space: ""
       SkipMessage:
         Message: also skipped due to very nested XXXXXX
         XMLName:
@@ -88,6 +100,12 @@ Children:
         Space: ""
     Lifecycle: ""
     Name: somehow nested XXXXXX
+    Properties:
+    - Name: lifecycle
+      Value: nested XXXXXX value
+      XMLName:
+        Local: ""
+        Space: ""
     SkipMessage:
       Message: skipped due to nested XXXXXX
       XMLName:
@@ -108,6 +126,12 @@ Children:
         Space: ""
     Lifecycle: ""
     Name: somehow also nested XXXXXX
+    Properties:
+    - Name: owner
+      Value: also nested XXXXXX value
+      XMLName:
+        Local: ""
+        Space: ""
     SkipMessage:
       Message: also skipped due to nested XXXXXX
       XMLName:
@@ -148,6 +172,12 @@ TestCases:
       Space: ""
   Lifecycle: ""
   Name: somehow XXXXXX
+  Properties:
+  - Name: lifecycle
+    Value: XXXXXX value
+    XMLName:
+      Local: ""
+      Space: ""
   SkipMessage:
     Message: skipped due to XXXXXX
     XMLName:
@@ -168,6 +198,12 @@ TestCases:
       Space: ""
   Lifecycle: ""
   Name: somehow also XXXXXX
+  Properties:
+  - Name: owner
+    Value: also XXXXXX value
+    XMLName:
+      Local: ""
+      Space: ""
   SkipMessage:
     Message: also skipped due to XXXXXX
     XMLName:

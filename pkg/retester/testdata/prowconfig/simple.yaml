@@ -1,4 +1,0 @@
-tide:
-  queries:
-    - orgs:
-        - "openshift"

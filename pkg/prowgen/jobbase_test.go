@@ -13,12 +13,10 @@ import (
 )
 
 func TestProwJobBaseBuilder(t *testing.T) {
-	defaultInfo := &ProwgenInfo{
-		Metadata: ciop.Metadata{
-			Org:    "org",
-			Repo:   "repo",
-			Branch: "branch",
-		},
+	defaultInfo := &ciop.Metadata{
+		Org:    "org",
+		Repo:   "repo",
+		Branch: "branch",
 	}
 	t.Parallel()
 	testCases := []struct {
@@ -31,7 +29,7 @@ func TestProwJobBaseBuilder(t *testing.T) {
 		prowgenOverrides *ciop.ProwgenOverrides
 
 		podSpecBuilder CiOperatorPodSpecGenerator
-		info           *ProwgenInfo
+		info           *ciop.Metadata
 		prefix         string
 	}{
 		{
@@ -48,9 +46,7 @@ func TestProwJobBaseBuilder(t *testing.T) {
 		},
 		{
 			name: "job with a variant",
-			info: &ProwgenInfo{
-				Metadata: ciop.Metadata{Org: "vorg", Repo: "vrepo", Branch: "vbranch", Variant: "variant"},
-			},
+			info: &ciop.Metadata{Org: "vorg", Repo: "vrepo", Branch: "vbranch", Variant: "variant"},
 			prefix:         "default",
 			podSpecBuilder: newFakePodSpecBuilder(),
 		},
@@ -89,17 +85,13 @@ func TestProwJobBaseBuilder(t *testing.T) {
 		},
 		{
 			name: "job with no builds in openshift/release@main: does have `no-builds` label",
-			info: &ProwgenInfo{
-				Metadata: ciop.Metadata{Org: "openshift", Repo: "release", Branch: "main"},
-			},
+			info: &ciop.Metadata{Org: "openshift", Repo: "release", Branch: "main"},
 			prefix:         "default",
 			podSpecBuilder: newFakePodSpecBuilder(),
 		},
 		{
 			name: "job with a buildroot in of openshift/release@main: does not have `no-builds` label",
-			info: &ProwgenInfo{
-				Metadata: ciop.Metadata{Org: "openshift", Repo: "release", Branch: "main"},
-			},
+			info: &ciop.Metadata{Org: "openshift", Repo: "release", Branch: "main"},
 			inputs: ciop.InputConfiguration{
 				BuildRootImage: &ciop.BuildRootImageConfiguration{
 					ProjectImageBuild: &ciop.ProjectDirectoryImageBuildInputs{},
@@ -110,27 +102,21 @@ func TestProwJobBaseBuilder(t *testing.T) {
 		},
 		{
 			name: "job with binary build in openshift/release@main: does not have `no-builds` label",
-			info: &ProwgenInfo{
-				Metadata: ciop.Metadata{Org: "openshift", Repo: "release", Branch: "main"},
-			},
+			info: &ciop.Metadata{Org: "openshift", Repo: "release", Branch: "main"},
 			binCommand:     "make",
 			prefix:         "default",
 			podSpecBuilder: newFakePodSpecBuilder(),
 		},
 		{
 			name: "job with test binary build in of openshift/release@main: does not have `no-builds` label",
-			info: &ProwgenInfo{
-				Metadata: ciop.Metadata{Org: "openshift", Repo: "release", Branch: "main"},
-			},
+			info: &ciop.Metadata{Org: "openshift", Repo: "release", Branch: "main"},
 			testBinCommand: "make test",
 			prefix:         "default",
 			podSpecBuilder: newFakePodSpecBuilder(),
 		},
 		{
 			name: "job with image builds in of openshift/release@main: does not have `no-builds` label",
-			info: &ProwgenInfo{
-				Metadata: ciop.Metadata{Org: "openshift", Repo: "release", Branch: "main"},
-			},
+			info: &ciop.Metadata{Org: "openshift", Repo: "release", Branch: "main"},
 			images:         ciop.ImageConfiguration{Items: []ciop.ProjectDirectoryImageBuildStepConfiguration{{From: "base", To: "image"}}},
 			prefix:         "default",
 			podSpecBuilder: newFakePodSpecBuilder(),
@@ -143,26 +129,20 @@ func TestProwJobBaseBuilder(t *testing.T) {
 		},
 		{
 			name: "job with a variant, including podspec",
-			info: &ProwgenInfo{
-				Metadata: ciop.Metadata{Org: "vorg", Repo: "vrepo", Branch: "vbranch", Variant: "variant"},
-			},
+			info: &ciop.Metadata{Org: "vorg", Repo: "vrepo", Branch: "vbranch", Variant: "variant"},
 			prefix:         "default",
 			podSpecBuilder: NewCiOperatorPodSpecGenerator(),
 		},
 		{
 			name: "private job without cloning, including podspec",
-			info: &ProwgenInfo{
-				Metadata: ciop.Metadata{Org: "vorg", Repo: "vrepo", Branch: "vbranch"},
-			},
+			info: &ciop.Metadata{Org: "vorg", Repo: "vrepo", Branch: "vbranch"},
 			prowgenOverrides: &ciop.ProwgenOverrides{Private: true},
 			prefix:           "default",
 			podSpecBuilder:   NewCiOperatorPodSpecGenerator(),
 		},
 		{
 			name: "private job with cloning, including podspec",
-			info: &ProwgenInfo{
-				Metadata: ciop.Metadata{Org: "vorg", Repo: "vrepo", Branch: "vbranch"},
-			},
+			info: &ciop.Metadata{Org: "vorg", Repo: "vrepo", Branch: "vbranch"},
 			prowgenOverrides: &ciop.ProwgenOverrides{Private: true},
 			prefix:           "default",
 			inputs: ciop.InputConfiguration{
@@ -172,14 +152,14 @@ func TestProwJobBaseBuilder(t *testing.T) {
 		},
 		{
 			name:             "private job via ci-operator config",
-			info:             &ProwgenInfo{Metadata: ciop.Metadata{Org: "vorg", Repo: "vrepo", Branch: "vbranch"}},
+			info:             &ciop.Metadata{Org: "vorg", Repo: "vrepo", Branch: "vbranch"},
 			prowgenOverrides: &ciop.ProwgenOverrides{Private: true},
 			prefix:           "default",
 			podSpecBuilder:   NewCiOperatorPodSpecGenerator(),
 		},
 		{
 			name:             "private job with expose via ci-operator config",
-			info:             &ProwgenInfo{Metadata: ciop.Metadata{Org: "vorg", Repo: "vrepo", Branch: "vbranch"}},
+			info:             &ciop.Metadata{Org: "vorg", Repo: "vrepo", Branch: "vbranch"},
 			prowgenOverrides: &ciop.ProwgenOverrides{Private: true, Expose: true},
 			prefix:           "default",
 			podSpecBuilder:   NewCiOperatorPodSpecGenerator(),
@@ -195,7 +175,7 @@ func TestProwJobBaseBuilder(t *testing.T) {
 				Images:                  tc.images,
 				BinaryBuildCommands:     tc.binCommand,
 				TestBinaryBuildCommands: tc.testBinCommand,
-				Metadata:                tc.info.Metadata,
+				Metadata:                *tc.info,
 				Prowgen:                 tc.prowgenOverrides,
 			}
 			b := NewProwJobBaseBuilder(ciopconfig, tc.info, tc.podSpecBuilder).Build(tc.prefix)
@@ -208,7 +188,7 @@ func TestGenerateJobBase(t *testing.T) {
 	var testCases = []struct {
 		testName              string
 		name                  string
-		info                  *ProwgenInfo
+		info                  *ciop.Metadata
 		prowgenOverrides      *ciop.ProwgenOverrides
 		canonicalGoRepository string
 		rehearsable           bool
@@ -216,41 +196,41 @@ func TestGenerateJobBase(t *testing.T) {
 		{
 			testName: "no special options",
 			name:     "test",
-			info:     &ProwgenInfo{Metadata: ciop.Metadata{Org: "org", Repo: "repo", Branch: "branch"}},
+			info:     &ciop.Metadata{Org: "org", Repo: "repo", Branch: "branch"},
 		},
 		{
 			testName:    "rehearsable",
 			name:        "test",
-			info:        &ProwgenInfo{Metadata: ciop.Metadata{Org: "org", Repo: "repo", Branch: "branch"}},
+			info:        &ciop.Metadata{Org: "org", Repo: "repo", Branch: "branch"},
 			rehearsable: true,
 		},
 		{
 			testName: "config variant",
 			name:     "test",
-			info:     &ProwgenInfo{Metadata: ciop.Metadata{Org: "org", Repo: "repo", Branch: "branch", Variant: "whatever"}},
+			info:     &ciop.Metadata{Org: "org", Repo: "repo", Branch: "branch", Variant: "whatever"},
 		},
 		{
 			testName:              "path alias",
 			name:                  "test",
 			canonicalGoRepository: "/some/where",
-			info:                  &ProwgenInfo{Metadata: ciop.Metadata{Org: "org", Repo: "repo", Branch: "branch", Variant: "whatever"}},
+			info:                  &ciop.Metadata{Org: "org", Repo: "repo", Branch: "branch", Variant: "whatever"},
 		},
 		{
 			testName:         "hidden job for private repos",
 			name:             "test",
-			info:             &ProwgenInfo{Metadata: ciop.Metadata{Org: "org", Repo: "repo", Branch: "branch"}},
+			info:             &ciop.Metadata{Org: "org", Repo: "repo", Branch: "branch"},
 			prowgenOverrides: &ciop.ProwgenOverrides{Private: true},
 		},
 		{
 			testName:         "expose job for private repos with public results",
 			name:             "test",
-			info:             &ProwgenInfo{Metadata: ciop.Metadata{Org: "org", Repo: "repo", Branch: "branch"}},
+			info:             &ciop.Metadata{Org: "org", Repo: "repo", Branch: "branch"},
 			prowgenOverrides: &ciop.ProwgenOverrides{Private: true, Expose: true},
 		},
 		{
 			testName:         "expose option set but not private",
 			name:             "test",
-			info:             &ProwgenInfo{Metadata: ciop.Metadata{Org: "org", Repo: "repo", Branch: "branch"}},
+			info:             &ciop.Metadata{Org: "org", Repo: "repo", Branch: "branch"},
 			prowgenOverrides: &ciop.ProwgenOverrides{Expose: true},
 		},
 	}
@@ -265,13 +245,13 @@ func TestGenerateJobBase(t *testing.T) {
 
 func TestNewProwJobBaseBuilderForTest(t *testing.T) {
 	ciopconfig := &ciop.ReleaseBuildConfiguration{}
-	defaultInfo := &ProwgenInfo{Metadata: ciop.Metadata{Org: "o", Repo: "r", Branch: "b"}}
+	defaultInfo := &ciop.Metadata{Org: "o", Repo: "r", Branch: "b"}
 	testCases := []struct {
 		name string
 
 		cfg  *ciop.ReleaseBuildConfiguration
 		test ciop.TestStepConfiguration
-		info *ProwgenInfo
+		info *ciop.Metadata
 	}{
 		{
 			name: "simple container-based test",
@@ -470,15 +450,13 @@ func TestNewProwJobBaseBuilderForTest(t *testing.T) {
 }
 
 func TestMiscellaneous(t *testing.T) {
-	defaultInfo := &ProwgenInfo{
-		Metadata: ciop.Metadata{
-			Org:    "org",
-			Repo:   "repo",
-			Branch: "branch",
-		},
+	defaultInfo := &ciop.Metadata{
+		Org:    "org",
+		Repo:   "repo",
+		Branch: "branch",
 	}
 	defaultConfig := &ciop.ReleaseBuildConfiguration{
-		Metadata: defaultInfo.Metadata,
+		Metadata: *defaultInfo,
 	}
 	simpleBuilder := func() *prowJobBaseBuilder {
 		return NewProwJobBaseBuilder(defaultConfig, defaultInfo, newFakePodSpecBuilder())

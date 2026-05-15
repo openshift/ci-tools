@@ -18,10 +18,6 @@ const (
 	Generator      jc.Generator = "prowgen"
 )
 
-type ProwgenInfo struct {
-	cioperatorapi.Metadata
-}
-
 // GenerateJobs
 // Given a ci-operator configuration file and basic information about what
 // should be tested, generate a following JobConfig:
@@ -35,7 +31,7 @@ type ProwgenInfo struct {
 // new jobs are generated with GenerateJobs, the call site should also use
 // Prune() function to remove all stale jobs and label the jobs as simply
 // "generated".
-func GenerateJobs(configSpec *cioperatorapi.ReleaseBuildConfiguration, info *ProwgenInfo) (*prowconfig.JobConfig, error) {
+func GenerateJobs(configSpec *cioperatorapi.ReleaseBuildConfiguration, info *cioperatorapi.Metadata) (*prowconfig.JobConfig, error) {
 	orgrepo := fmt.Sprintf("%s/%s", info.Org, info.Repo)
 	presubmits := map[string][]prowconfig.Presubmit{}
 	postsubmits := map[string][]prowconfig.Postsubmit{}
@@ -218,7 +214,7 @@ func GenerateJobs(configSpec *cioperatorapi.ReleaseBuildConfiguration, info *Pro
 	}, nil
 }
 
-func handlePresubmit(g *prowJobBaseBuilder, element cioperatorapi.TestStepConfiguration, info *ProwgenInfo, name string, disableRehearsal bool, requests cioperatorapi.ResourceList, presubmits map[string][]prowconfig.Presubmit, orgrepo string, fromPeriodic bool) {
+func handlePresubmit(g *prowJobBaseBuilder, element cioperatorapi.TestStepConfiguration, info *cioperatorapi.Metadata, name string, disableRehearsal bool, requests cioperatorapi.ResourceList, presubmits map[string][]prowconfig.Presubmit, orgrepo string, fromPeriodic bool) {
 	slackConfig := element.SlackReporterConfig
 	if fromPeriodic && (slackConfig == nil || !slackConfig.ReportPresubmit) {
 		slackConfig = nil
@@ -278,7 +274,7 @@ func slackReporterConfig(testSlackConfig *cioperatorapi.SlackReporterConfig) *pr
 	}
 }
 
-func generatePresubmitForTest(jobBaseBuilder *prowJobBaseBuilder, name string, info *ProwgenInfo, options ...generatePresubmitOption) *prowconfig.Presubmit {
+func generatePresubmitForTest(jobBaseBuilder *prowJobBaseBuilder, name string, info *cioperatorapi.Metadata, options ...generatePresubmitOption) *prowconfig.Presubmit {
 	opts := &generatePresubmitOptions{}
 	for _, opt := range options {
 		opt(opts)
@@ -337,7 +333,7 @@ type generatePostsubmitOptions struct {
 
 type generatePostsubmitOption func(options *generatePostsubmitOptions)
 
-func generatePostsubmitForTest(jobBaseBuilder *prowJobBaseBuilder, info *ProwgenInfo, options ...generatePostsubmitOption) *prowconfig.Postsubmit {
+func generatePostsubmitForTest(jobBaseBuilder *prowJobBaseBuilder, info *cioperatorapi.Metadata, options ...generatePostsubmitOption) *prowconfig.Postsubmit {
 	opts := &generatePostsubmitOptions{}
 	for _, opt := range options {
 		opt(opts)
@@ -394,7 +390,7 @@ func FromConfigSpec(configSpec *cioperatorapi.ReleaseBuildConfiguration) Generat
 	}
 }
 
-func GeneratePeriodicForTest(jobBaseBuilder *prowJobBaseBuilder, info *ProwgenInfo, options ...GeneratePeriodicOption) *prowconfig.Periodic {
+func GeneratePeriodicForTest(jobBaseBuilder *prowJobBaseBuilder, info *cioperatorapi.Metadata, options ...GeneratePeriodicOption) *prowconfig.Periodic {
 	opts := &GeneratePeriodicOptions{}
 	for _, opt := range options {
 		opt(opts)

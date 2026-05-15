@@ -123,7 +123,6 @@ func (o *options) generateJobsToDir(subDir string) error {
 func generateJobs(resolver registry.Resolver, output map[string]*prowconfig.JobConfig) func(configSpec *cioperatorapi.ReleaseBuildConfiguration, info *config.Info) error {
 	return func(configSpec *cioperatorapi.ReleaseBuildConfiguration, info *config.Info) error {
 		orgRepo := fmt.Sprintf("%s/%s", info.Org, info.Repo)
-		pInfo := &prowgen.ProwgenInfo{Metadata: info.Metadata}
 		if resolver != nil {
 			resolved, err := registry.ResolveConfig(resolver, *configSpec)
 			if err != nil {
@@ -131,7 +130,7 @@ func generateJobs(resolver registry.Resolver, output map[string]*prowconfig.JobC
 			}
 			configSpec = &resolved
 		}
-		generated, err := prowgen.GenerateJobs(configSpec, pInfo)
+		generated, err := prowgen.GenerateJobs(configSpec, &info.Metadata)
 		if err != nil {
 			return err
 		}

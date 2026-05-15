@@ -413,12 +413,10 @@ func (r *reconciler) createProwJob(ctx context.Context, log *logrus.Entry, ec *e
 }
 
 func (r *reconciler) makeProwJob(ciOperatorConfig *api.ReleaseBuildConfiguration, ec *ephemeralclusterv1.EphemeralCluster) (*prowv1.ProwJob, error) {
-	jobConfig, err := prowgen.GenerateJobs(ciOperatorConfig, &prowgen.ProwgenInfo{
-		Metadata: api.Metadata{
-			Org:    "org",
-			Repo:   "repo",
-			Branch: "branch",
-		},
+	jobConfig, err := prowgen.GenerateJobs(ciOperatorConfig, &api.Metadata{
+		Org:    "org",
+		Repo:   "repo",
+		Branch: "branch",
 	})
 	if err != nil {
 		return nil, fmt.Errorf("generate jobs: %w", err)

@@ -220,20 +220,20 @@ func TestGenerateMappings(t *testing.T) {
 			},
 			expected: map[string]map[string]sets.Set[string]{
 				"mapping_origin_4_8": {
-					"registry.ci.openshift.org/origin/4.8:bar": sets.New[string]("quay.io/openshift/origin-bar:4.8", "quay.io/openshift/origin-bar:4.8.0"),
-					"registry.ci.openshift.org/origin/4.8:foo": sets.New[string]("quay.io/openshift/origin-foo:4.8", "quay.io/openshift/origin-foo:4.8.0"),
-					"registry.ci.openshift.org/origin/4.8:ocp-some": sets.New[string](
+					"quay-proxy.ci.openshift.org/openshift/ci:origin_4.8_bar": sets.New[string]("quay.io/openshift/origin-bar:4.8", "quay.io/openshift/origin-bar:4.8.0"),
+					"quay-proxy.ci.openshift.org/openshift/ci:origin_4.8_foo": sets.New[string]("quay.io/openshift/origin-foo:4.8", "quay.io/openshift/origin-foo:4.8.0"),
+					"quay-proxy.ci.openshift.org/openshift/ci:origin_4.8_ocp-some": sets.New[string](
 						"quay.io/openshift/origin-ocp-some:4.8",
 						"quay.io/openshift/origin-ocp-some:4.8.0",
 					),
 				},
 				"mapping_origin_4_9": {
-					"registry.ci.openshift.org/origin/4.9:bar": sets.New[string](
+					"quay-proxy.ci.openshift.org/openshift/ci:origin_4.9_bar": sets.New[string](
 						"quay.io/openshift/origin-bar:4.9",
 						"quay.io/openshift/origin-bar:4.9.0",
 						"quay.io/openshift/origin-bar:latest",
 					),
-					"registry.ci.openshift.org/origin/4.9:some": sets.New[string](
+					"quay-proxy.ci.openshift.org/openshift/ci:origin_4.9_some": sets.New[string](
 						"quay.io/openshift/origin-some:4.9",
 						"quay.io/openshift/origin-some:4.9.0",
 						"quay.io/openshift/origin-some:latest",
@@ -271,8 +271,8 @@ func TestGenerateMappings(t *testing.T) {
 				},
 			},
 			expectedErr: utilerrors.NewAggregate([]error{
-				fmt.Errorf("cannot define the same mirroring destination quay.io/openshift/origin-ovirt-installer:4.6 more than once for the source registry.ci.openshift.org/origin/4.6:ovirt-installer in filename mapping_origin_4_6"),
-				fmt.Errorf("cannot define the same mirroring destination quay.io/openshift/origin-ovirt-installer:4.6.0 more than once for the source registry.ci.openshift.org/origin/4.6:ovirt-installer in filename mapping_origin_4_6"),
+				fmt.Errorf("cannot define the same mirroring destination quay.io/openshift/origin-ovirt-installer:4.6 more than once for the source quay-proxy.ci.openshift.org/openshift/ci:origin_4.6_ovirt-installer in filename mapping_origin_4_6"),
+				fmt.Errorf("cannot define the same mirroring destination quay.io/openshift/origin-ovirt-installer:4.6.0 more than once for the source quay-proxy.ci.openshift.org/openshift/ci:origin_4.6_ovirt-installer in filename mapping_origin_4_6"),
 			}),
 		},
 		{
@@ -307,7 +307,7 @@ func TestGenerateMappings(t *testing.T) {
 			},
 			expected: map[string]map[string]sets.Set[string]{
 				"mapping_origin_4_6": {
-					"registry.ci.openshift.org/origin/4.6:ovirt-installer": sets.New[string]("quay.io/openshift/origin-ovirt-installer:4.6", "quay.io/openshift/origin-ovirt-installer:4.6.0"),
+					"quay-proxy.ci.openshift.org/openshift/ci:origin_4.6_ovirt-installer": sets.New[string]("quay.io/openshift/origin-ovirt-installer:4.6", "quay.io/openshift/origin-ovirt-installer:4.6.0"),
 				},
 			},
 		},
@@ -323,12 +323,6 @@ func TestGenerateMappings(t *testing.T) {
 				t.Errorf("%s: actual does not match expected, diff: %s", tc.name, diff)
 			}
 		})
-	}
-}
-
-func init() {
-	if err := imagev1.AddToScheme(scheme.Scheme); err != nil {
-		panic(fmt.Sprintf("failed to register imagev1 scheme: %v", err))
 	}
 }
 

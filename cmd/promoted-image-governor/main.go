@@ -208,7 +208,7 @@ func mirroredTagsByReleaseController(ctx context.Context, client ctrlruntimeclie
 	for _, ref := range refs {
 		imageStream := &imagev1.ImageStream{}
 		if err := client.Get(ctx, ctrlruntimeclient.ObjectKey{Namespace: "ocp", Name: ref.Name}, imageStream); err != nil {
-			return nil, fmt.Errorf("could not get image stream %s in namespace ocp", ref.Name)
+			return nil, fmt.Errorf("could not get image stream %s in namespace ocp: %w", ref.Name, err)
 		}
 		excludedTags := sets.New[string](ref.ExcludeTags...)
 		for _, tag := range imageStream.Status.Tags {
@@ -256,7 +256,11 @@ func generateMappings(promotedTags []api.ImageStreamTagReference, mappingConfig 
 						if _, ok := mappings[filename]; !ok {
 							mappings[filename] = map[string]sets.Set[string]{}
 						}
-						src := fmt.Sprintf("%s/%s/%s:%s", mappingConfig.SourceRegistry, mappingConfig.SourceNamespace, tag.Name, tag.Tag)
+						src := api.QuayImageReference(api.ImageStreamTagReference{
+							Namespace: mappingConfig.SourceNamespace,
+							Name:      tag.Name,
+							Tag:       tag.Tag,
+						})
 						dst := fmt.Sprintf("%s/%s/%s-%s:%s", mappingConfig.TargetRegistry, mappingConfig.TargetNamespace, mappingConfig.SourceNamespace, tag.Tag, targetTag)
 						if _, ok = mappings[filename][src]; !ok {
 							mappings[filename][src] = sets.New[string]()

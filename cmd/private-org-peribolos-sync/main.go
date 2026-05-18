@@ -104,8 +104,10 @@ func main() {
 		logger.WithError(err).Fatal("failed to unmarshal peribolos config")
 	}
 
-	if err := secret.Add(o.github.TokenPath); err != nil {
-		logrus.WithError(err).Fatal("Error starting secrets agent.")
+	if o.github.TokenPath != "" {
+		if err := secret.Add(o.github.TokenPath); err != nil {
+			logrus.WithError(err).Fatal("Error starting secrets agent.")
+		}
 	}
 	gc, err := o.github.GitHubClient(false)
 	if err != nil {

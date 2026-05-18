@@ -5,6 +5,7 @@ import (
 	"flag"
 	"fmt"
 	"os"
+	"os/exec"
 	"path"
 	"path/filepath"
 	"regexp"
@@ -25,6 +26,7 @@ import (
 	"sigs.k8s.io/prow/pkg/plugins/ownersconfig"
 	"sigs.k8s.io/prow/pkg/repoowners"
 
+	"github.com/openshift/ci-tools/pkg/github/orgclient"
 	"github.com/openshift/ci-tools/pkg/rehearse"
 )
 
@@ -512,10 +514,20 @@ func main() {
 	remoteBranch := "autoowners"
 	matchTitle := "Sync OWNERS files"
 	title := getTitle(matchTitle, time.Now().Format(time.RFC1123))
-	if err := bumper.GitCommitSignoffAndPush(fmt.Sprintf("https://%s:%s@github.com/%s/%s.git", o.githubLogin,
-		string(secret.GetTokenGenerator(o.GitHubOptions.TokenPath)()), o.githubLogin, o.githubRepo),
-		remoteBranch, o.gitName, o.gitEmail, title, stdout, stderr, o.gitSignoff, o.dryRun); err != nil {
-		logrus.WithError(err).Fatal("Failed to push changes.")
+
+	var prHead string
+	if o.GitHubOptions.TokenPath != "" {
+		if err := bumper.GitCommitSignoffAndPush(fmt.Sprintf("https://%s:%s@github.com/%s/%s.git", o.githubLogin,
+			string(secret.GetTokenGenerator(o.GitHubOptions.TokenPath)()), o.githubLogin, o.githubRepo),
+			remoteBranch, o.gitName, o.gitEmail, title, stdout, stderr, o.gitSignoff, o.dryRun); err != nil {
+			logrus.WithError(err).Fatal("Failed to push changes.")
+		}
+		prHead = o.githubLogin + ":" + remoteBranch
+	} else {
+		if err := pushWithAppAuth(&o, remoteBranch, o.gitName, o.gitEmail, title, o.gitSignoff, stdout, stderr, o.dryRun); err != nil {
+			logrus.WithError(err).Fatal("Failed to push changes.")
+		}
+		prHead = remoteBranch
 	}
 
 	labelsToAdd := []string{
@@ -525,10 +537,59 @@ func main() {
 		logrus.Infof("Self-aproving PR by adding the %q and %q labels", labels.Approved, labels.LGTM)
 		labelsToAdd = append(labelsToAdd, labels.Approved, labels.LGTM)
 	}
-	if err := bumper.UpdatePullRequestWithLabels(gc, o.githubOrg, o.githubRepo, title,
-		getBody(directories, o.assign), o.githubLogin+":"+remoteBranch, o.prBaseBranch, remoteBranch, true, labelsToAdd, o.dryRun); err != nil {
+	isAppAuth := o.GitHubOptions.TokenPath == ""
+	prClient := github.Client(&orgclient.OrgAwareClient{Client: gc, Org: o.githubOrg, IsAppAuth: isAppAuth})
+	if err := bumper.UpdatePullRequestWithLabels(prClient, o.githubOrg, o.githubRepo, title,
+		getBody(directories, o.assign), prHead, o.prBaseBranch, remoteBranch, true, labelsToAdd, o.dryRun); err != nil {
 		logrus.WithError(err).Fatal("PR creation failed.")
 	}
+}
+
+func pushWithAppAuth(o *options, branch, gitName, gitEmail, commitMsg string, signoff bool, stdout, stderr bumper.HideSecretsWriter, dryRun bool) error {
+	if err := bumper.Call(stdout, stderr, "git", []string{"add", "-A"}); err != nil {
+		return fmt.Errorf("git add: %w", err)
+	}
+	commitArgs := []string{"commit", "-m", commitMsg}
+	if gitName != "" && gitEmail != "" {
+		commitArgs = append(commitArgs, "--author", fmt.Sprintf("%s <%s>", gitName, gitEmail))
+	}
+	if signoff {
+		commitArgs = append(commitArgs, "--signoff")
+	}
+	if err := bumper.Call(stdout, stderr, "git", commitArgs); err != nil {
+		return fmt.Errorf("git commit: %w", err)
+	}
+
+	if dryRun {
+		logrus.Info("[Dryrun] Skip git push")
+		return nil
+	}
+
+	if out, err := exec.Command("git", "checkout", "-B", branch).CombinedOutput(); err != nil {
+		return fmt.Errorf("error creating local branch %s: %w\n%s", branch, err, string(out))
+	}
+
+	gcf, err := o.GitHubOptions.GitClientFactory("", nil, false, false)
+	if err != nil {
+		return fmt.Errorf("error creating git client factory: %w", err)
+	}
+	defer func() {
+		if err := gcf.Clean(); err != nil {
+			logrus.WithError(err).Warn("Failed to clean git client factory cache.")
+		}
+	}()
+
+	cwd, err := os.Getwd()
+	if err != nil {
+		return fmt.Errorf("error getting working directory: %w", err)
+	}
+
+	repoClient, err := gcf.ClientFromDir(o.githubOrg, o.githubRepo, cwd)
+	if err != nil {
+		return fmt.Errorf("error creating repo client: %w", err)
+	}
+
+	return repoClient.PushToCentral(branch, true)
 }
 
 type ownersCleaner func([]string) []string

@@ -506,6 +506,68 @@ func TestAddCredentials(t *testing.T) {
 	}
 }
 
+func TestAddSharedDirSecret(t *testing.T) {
+	tests := []struct {
+		name           string
+		secret         string
+		wantVolumeName string
+		wantSecretName string
+	}{
+		{
+			name:           "valid label unchanged",
+			secret:         "multi-stage-test-alpha",
+			wantVolumeName: "multi-stage-test-alpha",
+			wantSecretName: "multi-stage-test-alpha",
+		},
+		{
+			name:           "valid label with version segment",
+			secret:         "multi-stage-test-beta-4-21",
+			wantVolumeName: "multi-stage-test-beta-4-21",
+			wantSecretName: "multi-stage-test-beta-4-21",
+		},
+		{
+			name:           "dots replaced",
+			secret:         "multi-stage-test-gamma-4.22",
+			wantVolumeName: "multi-stage-test-gamma-4-22",
+			wantSecretName: "multi-stage-test-gamma-4.22",
+		},
+	}
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			pod := coreapi.Pod{Spec: coreapi.PodSpec{
+				Containers: []coreapi.Container{{}},
+			}}
+			addSharedDirSecret(tt.secret, &pod)
+			if len(pod.Spec.Volumes) != 1 {
+				t.Fatalf("expected 1 volume, got %d", len(pod.Spec.Volumes))
+			}
+			vol := pod.Spec.Volumes[0]
+			if vol.Name != tt.wantVolumeName {
+				t.Errorf("volume name = %q, want %q", vol.Name, tt.wantVolumeName)
+			}
+			if vol.Secret == nil {
+				t.Fatalf("volume secret source is nil")
+			}
+			if vol.Secret.SecretName != tt.wantSecretName {
+				t.Errorf("secret name = %q, want %q", vol.Secret.SecretName, tt.wantSecretName)
+			}
+			if len(pod.Spec.Containers) == 0 {
+				t.Fatalf("expected at least 1 container, got 0")
+			}
+			if len(pod.Spec.Containers[0].VolumeMounts) == 0 {
+				t.Fatalf("expected at least 1 volume mount, got 0")
+			}
+			mount := pod.Spec.Containers[0].VolumeMounts[0]
+			if mount.Name != tt.wantVolumeName {
+				t.Errorf("volume mount name = %q, want %q", mount.Name, tt.wantVolumeName)
+			}
+			if mount.MountPath != SecretMountPath {
+				t.Errorf("mount path = %q, want %q", mount.MountPath, SecretMountPath)
+			}
+		})
+	}
+}
+
 // sortPodVolumesAndMounts sorts volumes and volume mounts in a pod for deterministic comparison
 func sortPodVolumesAndMounts(pod *coreapi.Pod) {
 	// Sort volumes by name

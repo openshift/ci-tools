@@ -605,15 +605,20 @@ func addCliInjector(imagestream string, pod *coreapi.Pod) {
 	})
 }
 
+func sharedDirVolumeName(secret string) string {
+	return strings.ReplaceAll(secret, ".", "-")
+}
+
 func addSharedDirSecret(secret string, pod *coreapi.Pod) {
+	volName := sharedDirVolumeName(secret)
 	pod.Spec.Volumes = append(pod.Spec.Volumes, coreapi.Volume{
-		Name: secret,
+		Name: volName,
 		VolumeSource: coreapi.VolumeSource{
 			Secret: &coreapi.SecretVolumeSource{SecretName: secret},
 		},
 	})
 	pod.Spec.Containers[0].VolumeMounts = append(pod.Spec.Containers[0].VolumeMounts, coreapi.VolumeMount{
-		Name:      secret,
+		Name:      volName,
 		MountPath: SecretMountPath,
 	})
 	pod.Spec.Containers[0].Env = append(pod.Spec.Containers[0].Env, coreapi.EnvVar{

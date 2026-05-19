@@ -334,7 +334,20 @@ func joinOcAdmReleaseNewCommand(config *api.ReleaseTagConfiguration, namespace, 
 	return strings.Join(cmd, " ")
 }
 
+func hasExactVersion(config *api.ReleaseTagConfiguration, majorVersion, minorVersion int) bool {
+	var major, minor int
+	n, err := fmt.Sscanf(config.Name, "%d.%d", &major, &minor)
+	if err != nil || n != 2 {
+		logrus.Warnf("Could not parse release version from release tag configuration name=%q: %v", config.Name, err)
+		return false
+	}
+	return major == majorVersion && minor == minorVersion
+}
+
 func buildOcAdmReleaseNewCommand(config *api.ReleaseTagConfiguration, namespace, streamName, cvo, destination, version string) string {
+	if !hasExactVersion(config, 4, 12) {
+		return joinOcAdmReleaseNewCommand(config, namespace, cvo, destination, version, "--from-image-stream", streamName)
+	}
 	filePathVar := "${_CI_RELEASE_IS_FILE}"
 	fromStream := joinOcAdmReleaseNewCommand(config, namespace, cvo, destination, version, "--from-image-stream", streamName)
 	fromFile := joinOcAdmReleaseNewCommand(config, namespace, cvo, destination, version, "--from-image-stream-file", filePathVar)

@@ -744,8 +744,8 @@ func TestGetPromotionPod(t *testing.T) {
 				"quay.io/openshift/ci:20240603235401_prune_ci_c_latest": "quay.io/openshift/ci:ci_c_latest",
 				"quay.io/openshift/ci:ci_a_latest":                      "registry.build02.ci.openshift.org/ci-op-y2n8rsh3/pipeline@sha256:bbb",
 				"quay.io/openshift/ci:ci_c_latest":                      "registry.build02.ci.openshift.org/ci-op-y2n8rsh3/pipeline@sha256:ddd",
-				"ci/ci:${component}":                                    "quay-proxy.ci.openshift.org/openshift/ci@sha256:bbb",
-				"ci/${component}:c":                                     "quay-proxy.ci.openshift.org/openshift/ci@sha256:ddd",
+				"ci/ci-quay:${component}":                               "quay-proxy.ci.openshift.org/openshift/ci@sha256:bbb",
+				"ci/${component}-quay:c":                                "quay-proxy.ci.openshift.org/openshift/ci@sha256:ddd",
 			},
 			namespace: "ci-op-9bdij1f6",
 		},
@@ -760,22 +760,23 @@ func TestGetPromotionPod(t *testing.T) {
 				"quay.io/openshift/ci:ocp_4.21_ovn-kubernetes":                        "registry.build02.ci.openshift.org/ci-op-y2n8rsh3/pipeline@sha256:aaa",
 				"quay.io/openshift/ci:ocp_4.21_ovn-kubernetes-base":                   "registry.build02.ci.openshift.org/ci-op-y2n8rsh3/pipeline@sha256:bbb",
 				"quay.io/openshift/ci:ocp_4.21_ovn-kubernetes-microshift":             "registry.build02.ci.openshift.org/ci-op-y2n8rsh3/pipeline@sha256:ccc",
-				"ocp/4.21:ovn-kubernetes":                                             "quay-proxy.ci.openshift.org/openshift/ci@sha256:aaa",
-				"ocp/4.21:ovn-kubernetes-base":                                        "quay-proxy.ci.openshift.org/openshift/ci@sha256:bbb",
-				"ocp/4.21:ovn-kubernetes-microshift":                                  "quay-proxy.ci.openshift.org/openshift/ci@sha256:ccc",
+				"ocp/4.21-quay:ovn-kubernetes":                                        "quay-proxy.ci.openshift.org/openshift/ci@sha256:aaa",
+				"ocp/4.21-quay:ovn-kubernetes-base":                                   "quay-proxy.ci.openshift.org/openshift/ci@sha256:bbb",
+				"ocp/4.21-quay:ovn-kubernetes-microshift":                             "quay-proxy.ci.openshift.org/openshift/ci@sha256:ccc",
 			},
 			namespace: "ci-op-9bdij1f6",
 		},
 		{
-			name:              "promotion-quay-non-digest",
+			name:              "promotion-quay-4.12",
 			stepName:          "promotion-quay",
 			nodeArchitectures: []string{"amd64"},
 			imageMirror: map[string]string{
-				"quay.io/openshift/ci:20240603235401_prune_ci_a_latest": "quay.io/openshift/ci:ci_a_latest",
-				"quay.io/openshift/ci:ci_a_latest":                      "registry.build02.ci.openshift.org/ci-op-y2n8rsh3/pipeline:promoted-tag",
-				"quay.io/openshift/ci:ci_c_latest":                      "registry.build02.ci.openshift.org/ci-op-y2n8rsh3/pipeline@sha256:ddd",
-				"ci/ci:${component}":                                    "registry.build02.ci.openshift.org/ci-op-y2n8rsh3/pipeline:promoted-tag",
-				"ci/${component}:c":                                     "registry.build02.ci.openshift.org/ci-op-y2n8rsh3/pipeline@sha256:ddd",
+				"quay.io/openshift/ci:20240603235401_prune_ovn-kubernetes":      "quay.io/openshift/ci:ocp_4.12_ovn-kubernetes",
+				"quay.io/openshift/ci:20240603235401_prune_ovn-kubernetes-base": "quay.io/openshift/ci:ocp_4.12_ovn-kubernetes-base",
+				"quay.io/openshift/ci:ocp_4.12_ovn-kubernetes":                  "registry.build02.ci.openshift.org/ci-op-y2n8rsh3/pipeline@sha256:aaa",
+				"quay.io/openshift/ci:ocp_4.12_ovn-kubernetes-base":             "registry.build02.ci.openshift.org/ci-op-y2n8rsh3/pipeline@sha256:bbb",
+				"ocp/4.12:ovn-kubernetes":                                       "quay-proxy.ci.openshift.org/openshift/ci@sha256:aaa",
+				"ocp/4.12:ovn-kubernetes-base":                                  "quay-proxy.ci.openshift.org/openshift/ci@sha256:bbb",
 			},
 			namespace: "ci-op-9bdij1f6",
 		},
@@ -1030,17 +1031,14 @@ func TestGetImageMirror(t *testing.T) {
 			},
 			registry: "registry.ci.openshift.org",
 			mirrorFunc: func(source, target string, tag api.ImageStreamTagReference, date string, imageMirror map[string]string) {
-				val := fmt.Sprintf("quay-proxy.ci.openshift.org/openshift/ci:%s_%s_%s", tag.Namespace, tag.Name, tag.Tag)
-				if idx := strings.LastIndex(source, "@sha256:"); idx != -1 {
-					val = fmt.Sprintf("%s/openshift/ci@%s", api.QCIAPPCIDomain, source[idx+1:])
-				}
-				imageMirror[target] = val
+				proxyTarget := fmt.Sprintf("quay-proxy.ci.openshift.org/openshift/ci:%s_%s_%s", tag.Namespace, tag.Name, tag.Tag)
+				imageMirror[target] = proxyTarget
 			},
 			targetNameFunc: func(registry string, config api.PromotionTarget) string {
-				return fmt.Sprintf("%s/%s/%s:${component}", registry, config.Namespace, config.Name)
+				return fmt.Sprintf("%s/%s/%s-quay:${component}", registry, config.Namespace, config.Name)
 			},
 			expected: map[string]string{
-				"registry.ci.openshift.org/ocp/4.22:vertical-pod-autoscaler": fmt.Sprintf("%s/openshift/ci@sha256:vpa", api.QCIAPPCIDomain),
+				"registry.ci.openshift.org/ocp/4.22-quay:vertical-pod-autoscaler": "quay-proxy.ci.openshift.org/openshift/ci:ocp_4.22_vertical-pod-autoscaler",
 			},
 		},
 		{

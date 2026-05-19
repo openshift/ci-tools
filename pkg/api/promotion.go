@@ -107,11 +107,42 @@ func quayImageWithTime(timestamp string, tag ImageStreamTagReference) string {
 	return fmt.Sprintf("%s:%s_prune_%s_%s_%s", QuayOpenShiftCIRepo, timestamp, tag.Namespace, tag.Name, tag.Tag)
 }
 
+func ConsolidatedQuayPromotion(c *ReleaseBuildConfiguration) bool {
+	if c == nil {
+		return false
+	}
+	if c.ReleaseTagConfiguration != nil && releaseVersionEquals(c.ReleaseTagConfiguration.Name, 4, 12) {
+		return true
+	}
+	for _, target := range PromotionTargets(c.PromotionConfiguration) {
+		if releaseVersionEquals(target.Name, 4, 12) {
+			return true
+		}
+	}
+	return false
+}
+
+func releaseVersionEquals(name string, major, minor int) bool {
+	var gotMajor, gotMinor int
+	if _, err := fmt.Sscanf(name, "%d.%d", &gotMajor, &gotMinor); err != nil {
+		return false
+	}
+	return gotMajor == major && gotMinor == minor
+}
+
+func quayProxyStreamSuffix(tag ImageStreamTagReference) string {
+	if releaseVersionEquals(tag.Name, 4, 12) {
+		return ""
+	}
+	return "-quay"
+}
+
 // getQuayProxyTarget creates the quay-proxy target imagestream tag reference.
 // Format: namespace/imagestream-name-quay:tag
 func getQuayProxyTarget(target string, tag ImageStreamTagReference) string {
+	suffix := quayProxyStreamSuffix(tag)
 	if tag.Name != "" {
-		proxyTarget := fmt.Sprintf("%s/%s:%s", tag.Namespace, tag.Name, tag.Tag)
+		proxyTarget := fmt.Sprintf("%s/%s%s:%s", tag.Namespace, tag.Name, suffix, tag.Tag)
 		return proxyTarget
 	}
 
@@ -126,14 +157,14 @@ func getQuayProxyTarget(target string, tag ImageStreamTagReference) string {
 			tagStart := len(tagPart) - len(tagSuffix)
 			targetComponent := tagPart[first+1 : tagStart]
 			if targetComponent != "" {
-				proxyTarget := fmt.Sprintf("%s/%s:%s", targetNamespace, targetComponent, tag.Tag)
+				proxyTarget := fmt.Sprintf("%s/%s%s:%s", targetNamespace, targetComponent, suffix, tag.Tag)
 				return proxyTarget
 			}
 		}
 	}
 
 	// Fallback: use namespace and tag
-	proxyTarget := fmt.Sprintf("%s/%s:%s", tag.Namespace, tag.Tag, tag.Tag)
+	proxyTarget := fmt.Sprintf("%s/%s%s:%s", tag.Namespace, tag.Tag, suffix, tag.Tag)
 	return proxyTarget
 }
 

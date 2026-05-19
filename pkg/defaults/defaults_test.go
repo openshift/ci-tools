@@ -1703,6 +1703,20 @@ func TestFromConfig(t *testing.T) {
 		expectedSteps: []string{"[output-images]", "[images]"},
 		expectedPost:  []string{"[promotion]", "[promotion-quay]"},
 	}, {
+		name: "promote 4.12 consolidated quay",
+		config: api.ReleaseBuildConfiguration{
+			PromotionConfiguration: &api.PromotionConfiguration{
+				Targets: []api.PromotionTarget{{
+					Namespace: ns,
+					Name:      "4.12",
+					Tag:       "tag",
+				}},
+			},
+		},
+		promote:       true,
+		expectedSteps: []string{"[output-images]", "[images]"},
+		expectedPost:  []string{"[promotion-quay]"},
+	}, {
 		name: "duplicate input images",
 		config: api.ReleaseBuildConfiguration{
 			Tests: []api.TestStepConfiguration{{

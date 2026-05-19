@@ -187,6 +187,22 @@ func TestQuayCombinedMirrorFunc(t *testing.T) {
 		expected map[string]string
 	}{
 		{
+			name:   "4.12 consolidated quay proxy target",
+			source: "registry.build02.ci.openshift.org/ci-op-abc/pipeline@sha256:abc123",
+			target: "quay.io/openshift/ci:ocp_4.12_ovn-kubernetes",
+			tag: ImageStreamTagReference{
+				Namespace: "ocp",
+				Name:      "4.12",
+				Tag:       "ovn-kubernetes",
+			},
+			time: "20241024102030",
+			expected: map[string]string{
+				"quay.io/openshift/ci:ocp_4.12_ovn-kubernetes":                      "registry.build02.ci.openshift.org/ci-op-abc/pipeline@sha256:abc123",
+				"quay.io/openshift/ci:20241024102030_prune_ocp_4.12_ovn-kubernetes": "quay.io/openshift/ci:ocp_4.12_ovn-kubernetes",
+				"ocp/4.12:ovn-kubernetes":                                           "quay-proxy.ci.openshift.org/openshift/ci@sha256:abc123",
+			},
+		},
+		{
 			name:   "name-based promotion with component",
 			source: "registry.build02.ci.openshift.org/ci-op-abc/pipeline@sha256:abc123",
 			target: "quay.io/openshift/ci:ocp_4.22_ovn-kubernetes",

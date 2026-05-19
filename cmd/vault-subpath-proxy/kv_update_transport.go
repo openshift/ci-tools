@@ -127,6 +127,24 @@ func (k *kvUpdateTransport) RoundTrip(r *http.Request) (*http.Response, error) {
 			}
 			continue
 		}
+		if key == vault.SecretSyncTargetLabelsKey {
+			for _, label := range strings.Split(value, ",") {
+				parts := strings.Split(label, ":")
+				if len(parts) != 2 {
+					errs = append(errs, fmt.Sprintf("invalid label format for secret %s: '%s' (expected 'key:value')", key, label))
+					continue
+				}
+				if validation.IsQualifiedName(parts[0]) != nil {
+					errs = append(errs, fmt.Sprintf("invalid label key for secret %s: '%s'", key, parts[0]))
+					continue
+				}
+				if validation.IsValidLabelValue(parts[1]) != nil {
+					errs = append(errs, fmt.Sprintf("invalid label value for secret %s: '%s'", key, parts[1]))
+					continue
+				}
+			}
+			continue
+		}
 		if key == vault.SecretSyncTargetClusterKey {
 			continue
 		}
@@ -236,7 +254,7 @@ func (k *kvUpdateTransport) validateKeysDontConflict(ctx context.Context, path s
 
 		name := types.NamespacedName{Namespace: namespace, Name: data[vault.SecretSyncTargetNameKey]}
 		for key := range data {
-			if key == vault.SecretSyncTargetNamepaceKey || key == vault.SecretSyncTargetNameKey || key == vault.SecretSyncTargetClusterKey {
+			if key == vault.SecretSyncTargetNamepaceKey || key == vault.SecretSyncTargetNameKey || key == vault.SecretSyncTargetClusterKey || key == vault.SecretSyncTargetLabelsKey {
 				continue
 			}
 			if k.existingSecretKeysByNamespaceName[name].Has(key) && !namespacedNameKeySliceContains(k.existingSecretKeysByVaultSecretName[path], namespacedNameKey{name: name, key: key}) {
@@ -362,7 +380,7 @@ func (k *kvUpdateTransport) syncSecret(data map[string]string) {
 					secret.Data = map[string][]byte{}
 				}
 				for k, v := range data {
-					if k == vault.SecretSyncTargetNamepaceKey || k == vault.SecretSyncTargetNameKey || k == vault.SecretSyncTargetClusterKey {
+					if k == vault.SecretSyncTargetNamepaceKey || k == vault.SecretSyncTargetNameKey || k == vault.SecretSyncTargetClusterKey || k == vault.SecretSyncTargetLabelsKey {
 						continue
 					}
 					secret.Data[k] = []byte(v)

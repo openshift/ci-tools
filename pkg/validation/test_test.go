@@ -712,6 +712,17 @@ func TestValidateTests(t *testing.T) {
 				},
 			},
 		},
+		{
+			id: `test name contains forbidden chars`,
+			tests: []api.TestStepConfiguration{
+				{
+					As:                          "e2e-release-4.22",
+					Commands:                    "commands",
+					MultiStageTestConfiguration: &api.MultiStageTestConfiguration{},
+				},
+			},
+			expectedError: errors.New("tests[0].as: 'e2e-release-4.22' is not a valid name, the following chars '.' are forbidden"),
+		},
 	} {
 		t.Run(tc.id, func(t *testing.T) {
 			v := newSingleUseValidator()

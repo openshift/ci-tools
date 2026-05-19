@@ -43,6 +43,8 @@ const (
 	// more things from the name
 	maxClaimTestNameLength = 42
 	maxTestNameLength      = 61
+
+	multiStageTestNameForbiddenChars = "."
 )
 
 func (v *Validator) commandHasTrap(cmd string) bool {
@@ -131,6 +133,8 @@ func (v *Validator) validateTestStepConfiguration(
 	validationErrors = append(validationErrors, searchForTestDuplicates(input)...)
 	inputImagesSeen := make(testInputImages)
 	for num, test := range input {
+		hasCommands, hasSteps, hasLiteral := len(test.Commands) != 0, test.MultiStageTestConfiguration != nil, test.MultiStageTestConfigurationLiteral != nil
+
 		fieldRootN := fmt.Sprintf("%s[%d]", fieldRoot, num)
 		if len(test.As) == 0 {
 			validationErrors = append(validationErrors, fmt.Errorf("%s.as: is required", fieldRootN))
@@ -148,8 +152,11 @@ func (v *Validator) validateTestStepConfiguration(
 			validationErrors = append(validationErrors, fmt.Errorf("%s.as: '%s' is not a valid Kubernetes object name", fieldRootN, test.As))
 		} else if api.ShardSuffix.MatchString(test.As) {
 			validationErrors = append(validationErrors, fmt.Errorf("%s.as: '%s' ends with a shard suffix (e.g. -1of2) which is reserved for infrastructure use and will be stripped from the test name during rehearsals", fieldRootN, test.As))
+		} else if strings.ContainsAny(test.As, multiStageTestNameForbiddenChars) && (hasSteps || hasLiteral) {
+			validationErrors = append(validationErrors, fmt.Errorf("%s.as: '%s' is not a valid name, the following chars '%s' are forbidden", fieldRootN, test.As, multiStageTestNameForbiddenChars))
 		}
-		if hasCommands, hasSteps, hasLiteral := len(test.Commands) != 0, test.MultiStageTestConfiguration != nil, test.MultiStageTestConfigurationLiteral != nil; !hasCommands && !hasSteps && !hasLiteral {
+
+		if !hasCommands && !hasSteps && !hasLiteral {
 			validationErrors = append(validationErrors, fmt.Errorf("%s: either `commands`, `steps`, or `literal_steps` should be set", fieldRootN))
 		} else if hasCommands && (hasSteps || hasLiteral) || (hasSteps && hasLiteral) {
 			validationErrors = append(validationErrors, fmt.Errorf("%s: `commands`, `steps`, and `literal_steps` are mutually exclusive", fieldRootN))

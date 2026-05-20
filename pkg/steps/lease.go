@@ -280,24 +280,26 @@ func (s *leaseStep) handleClusterProfile(ctx context.Context, l *stepLease, name
 		return fmt.Errorf("resolve cluster profile %s: %w", s.clusterProfileName, err)
 	}
 
-	s.stsHubRoleARN = cpDetails.HubRoleARN
-	s.stsTargetRoleARN = cpDetails.TargetRoleARN
-
-	if err := s.importClusterProfileSecret(ctx, cpDetails.Secret); err != nil {
+	secretData, err := s.importClusterProfileSecret(ctx, cpDetails.Secret)
+	if err != nil {
 		return fmt.Errorf("import secret %s for cluster profile %s: %w", cpDetails.Secret, s.clusterProfileName, err)
 	}
+
+	s.stsHubRoleARN = string(secretData[api.STSHubRoleARNSecretKey])
+	s.stsTargetRoleARN = string(secretData[api.STSTargetRoleARNSecretKey])
 
 	s.clusterProfileSecretName = cpDetails.Secret
 	return nil
 }
 
-// importClusterProfileSecret retrieves the cluster profile secret name using config resolver,
-// and gets the secret from the ci namespace
-func (s *leaseStep) importClusterProfileSecret(ctx context.Context, secretName string) error {
+// importClusterProfileSecret retrieves the cluster profile secret from the
+// ci namespace, copies it into the test namespace, and returns the raw data
+// so callers can extract additional fields (e.g. STS role ARNs).
+func (s *leaseStep) importClusterProfileSecret(ctx context.Context, secretName string) (map[string][]byte, error) {
 	ciSecret := &coreapi.Secret{}
 	err := s.kubeClient.Get(ctx, ctrlruntimeclient.ObjectKey{Namespace: "ci", Name: secretName}, ciSecret)
 	if err != nil {
-		return fmt.Errorf("failed to get secret '%s' from ci namespace: %w", secretName, err)
+		return nil, fmt.Errorf("failed to get secret '%s' from ci namespace: %w", secretName, err)
 	}
 
 	newSecret := &coreapi.Secret{
@@ -311,7 +313,7 @@ func (s *leaseStep) importClusterProfileSecret(ctx context.Context, secretName s
 
 	created, err := util.UpsertImmutableSecret(ctx, s.kubeClient, newSecret)
 	if err != nil {
-		return fmt.Errorf("could not update secret %s: %w", newSecret.Name, err)
+		return nil, fmt.Errorf("could not update secret %s: %w", newSecret.Name, err)
 	}
 	if created {
 		logrus.Debugf("Created secret %s", newSecret.Name)
@@ -319,5 +321,5 @@ func (s *leaseStep) importClusterProfileSecret(ctx context.Context, secretName s
 		logrus.Debugf("Updated secret %s", newSecret.Name)
 	}
 
-	return nil
+	return ciSecret.Data, nil
 }

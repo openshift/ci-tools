@@ -478,15 +478,15 @@ func TestAcquireLeases(t *testing.T) {
 					Name:      "cluster-secrets-aws",
 				},
 				Data: map[string][]byte{
-					"k1": []byte("v1"),
+					"k1":                          []byte("v1"),
+					api.STSHubRoleARNSecretKey:    []byte("arn:aws:iam::111:role/hub"),
+					api.STSTargetRoleARNSecretKey: []byte("arn:aws:iam::222:role/target"),
 				},
 			}},
 			clusterProfiles: map[string]*api.ClusterProfileDetails{
 				"aws": {
-					Secret:        "cluster-secrets-aws",
-					LeaseType:     "aws-quota-slice",
-					HubRoleARN:    "arn:aws:iam::111:role/hub",
-					TargetRoleARN: "arn:aws:iam::222:role/target",
+					Secret:    "cluster-secrets-aws",
+					LeaseType: "aws-quota-slice",
 				},
 			},
 			wantProvides: map[string]string{
@@ -507,7 +507,9 @@ func TestAcquireLeases(t *testing.T) {
 							ResourceVersion: "999",
 						},
 						Data: map[string][]byte{
-							"k1": []byte("v1"),
+							"k1":                          []byte("v1"),
+							api.STSHubRoleARNSecretKey:    []byte("arn:aws:iam::111:role/hub"),
+							api.STSTargetRoleARNSecretKey: []byte("arn:aws:iam::222:role/target"),
 						},
 					},
 					{
@@ -517,7 +519,9 @@ func TestAcquireLeases(t *testing.T) {
 							ResourceVersion: "1",
 						},
 						Data: map[string][]byte{
-							"k1": []byte("v1"),
+							"k1":                          []byte("v1"),
+							api.STSHubRoleARNSecretKey:    []byte("arn:aws:iam::111:role/hub"),
+							api.STSTargetRoleARNSecretKey: []byte("arn:aws:iam::222:role/target"),
 						},
 						Immutable: ptr.To(true),
 					},

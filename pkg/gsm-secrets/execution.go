@@ -28,7 +28,8 @@ import (
 
 // CreateOrUpdateSecret creates a new secret in Google Secret Manager or updates an existing one with a new version.
 // If labels or annotations are nil, they won't be set on the secret.
-func CreateOrUpdateSecret(ctx context.Context, client SecretManagerClient, projectIdNumber, secretName string, payload []byte, labels, annotations map[string]string) error {
+// destroyPreviousVersions controls whether old enabled versions are cleaned up after adding the new one.
+func CreateOrUpdateSecret(ctx context.Context, client SecretManagerClient, projectIdNumber, secretName string, payload []byte, labels, annotations map[string]string, destroyPreviousVersions bool) error {
 	parent := GetProjectResourceIdNumber(projectIdNumber)
 	secretPath := fmt.Sprintf("%s/secrets/%s", parent, secretName)
 
@@ -52,7 +53,7 @@ func CreateOrUpdateSecret(ctx context.Context, client SecretManagerClient, proje
 		}
 	}
 
-	_, err = client.AddSecretVersion(ctx, &secretmanagerpb.AddSecretVersionRequest{
+	newVersion, err := client.AddSecretVersion(ctx, &secretmanagerpb.AddSecretVersionRequest{
 		Parent:  secretPath,
 		Payload: &secretmanagerpb.SecretPayload{Data: payload},
 	})
@@ -60,16 +61,53 @@ func CreateOrUpdateSecret(ctx context.Context, client SecretManagerClient, proje
 		return fmt.Errorf("failed to add version to secret %s: %w", secretName, err)
 	}
 
+	if destroyPreviousVersions {
+		if err := destroyPreviousSecretVersions(ctx, client, secretPath, newVersion.Name); err != nil {
+			return fmt.Errorf("failed to destroy previous versions of %s: %w", secretName, err)
+		}
+	}
+	return nil
+}
+
+// destroyPreviousSecretVersions destroys all enabled secret versions except the current one
+// to avoid accumulating billable versions in GSM.
+func destroyPreviousSecretVersions(ctx context.Context, client SecretManagerClient, secretPath, currentVersionName string) error {
+	it := client.ListSecretVersions(ctx, &secretmanagerpb.ListSecretVersionsRequest{
+		Parent: secretPath,
+		Filter: "state:ENABLED",
+	})
+	if it == nil {
+		return nil
+	}
+	for {
+		v, err := it.Next()
+		if errors.Is(err, iterator.Done) {
+			break
+		}
+		if err != nil {
+			return fmt.Errorf("failed to list versions for secret %s: %w", secretPath, err)
+		}
+		if v.Name == currentVersionName {
+			continue
+		}
+		if _, err := client.DestroySecretVersion(ctx, &secretmanagerpb.DestroySecretVersionRequest{
+			Name: v.Name,
+		}); err != nil {
+			return fmt.Errorf("failed to destroy version %s: %w", v.Name, err)
+		}
+	}
 	return nil
 }
 
 // SecretManagerClient interface defines methods for interacting with Google Secret Manager
 type SecretManagerClient interface {
 	ListSecrets(ctx context.Context, req *secretmanagerpb.ListSecretsRequest, opts ...gax.CallOption) *secretmanager.SecretIterator
+	ListSecretVersions(ctx context.Context, req *secretmanagerpb.ListSecretVersionsRequest, opts ...gax.CallOption) *secretmanager.SecretVersionIterator
 	GetSecret(ctx context.Context, req *secretmanagerpb.GetSecretRequest, opts ...gax.CallOption) (*secretmanagerpb.Secret, error)
 	DeleteSecret(ctx context.Context, req *secretmanagerpb.DeleteSecretRequest, opts ...gax.CallOption) error
 	CreateSecret(ctx context.Context, req *secretmanagerpb.CreateSecretRequest, opts ...gax.CallOption) (*secretmanagerpb.Secret, error)
 	AddSecretVersion(ctx context.Context, req *secretmanagerpb.AddSecretVersionRequest, opts ...gax.CallOption) (*secretmanagerpb.SecretVersion, error)
+	DestroySecretVersion(ctx context.Context, req *secretmanagerpb.DestroySecretVersionRequest, opts ...gax.CallOption) (*secretmanagerpb.SecretVersion, error)
 	AccessSecretVersion(ctx context.Context, req *secretmanagerpb.AccessSecretVersionRequest, opts ...gax.CallOption) (*secretmanagerpb.AccessSecretVersionResponse, error)
 }
 
@@ -260,7 +298,7 @@ func (a *Actions) CreateSecrets(ctx context.Context, secretsClient SecretManager
 		}
 
 		logrus.Infof("Creating secret: %s (type: %v, collection: %s)", s.Name, s.Type, s.Collection)
-		if err := CreateOrUpdateSecret(ctx, secretsClient, a.Config.ProjectIdNumber, s.Name, s.Payload, s.Labels, s.Annotations); err != nil {
+		if err := CreateOrUpdateSecret(ctx, secretsClient, a.Config.ProjectIdNumber, s.Name, s.Payload, s.Labels, s.Annotations, false); err != nil {
 			logrus.WithError(err).Errorf("Failed to create secret: %s", s.Name)
 			continue
 		}

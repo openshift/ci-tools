@@ -45,6 +45,14 @@ func (f *fakeGSMClient) AddSecretVersion(ctx context.Context, req *secretmanager
 	panic("AddSecretVersion not implemented in test")
 }
 
+func (f *fakeGSMClient) ListSecretVersions(ctx context.Context, req *secretmanagerpb.ListSecretVersionsRequest, opts ...gax.CallOption) *secretmanager.SecretVersionIterator {
+	return nil
+}
+
+func (f *fakeGSMClient) DestroySecretVersion(ctx context.Context, req *secretmanagerpb.DestroySecretVersionRequest, opts ...gax.CallOption) (*secretmanagerpb.SecretVersion, error) {
+	panic("DestroySecretVersion not implemented in test")
+}
+
 func TestResolveCredentialReferences(t *testing.T) {
 	client := &fakeGSMClient{}
 

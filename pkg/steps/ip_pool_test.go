@@ -3,6 +3,7 @@ package steps
 import (
 	"context"
 	"errors"
+	"sync/atomic"
 	"testing"
 	"time"
 
@@ -20,6 +21,12 @@ import (
 
 func ipPoolLeaseAdapter(lease stepLease) func(api.ClusterProfile, string) stepLease {
 	return func(api.ClusterProfile, string) stepLease { return lease }
+}
+
+func atomicBool(v bool) *atomic.Bool {
+	b := &atomic.Bool{}
+	b.Store(v)
+	return b
 }
 
 func TestProvides(t *testing.T) {
@@ -40,6 +47,7 @@ func TestProvides(t *testing.T) {
 					resources: []string{"some-resource", "some-other-resource"},
 				},
 				wrapped: &stepNeedsLease{},
+				stepRun: atomicBool(true),
 			},
 			expected: map[string]string{
 				"parameter":               "map",
@@ -58,10 +66,30 @@ func TestProvides(t *testing.T) {
 					resources: []string{},
 				},
 				wrapped: &stepNeedsLease{},
+				stepRun: atomicBool(true),
 			},
 			expected: map[string]string{
 				"parameter":               "map",
 				api.DefaultIPPoolLeaseEnv: "0",
+			},
+		},
+		{
+			name: "step did not run, ip pool env var is empty",
+			step: ipPoolStep{
+				ipPoolLease: stepLease{
+					StepLease: api.StepLease{
+						ResourceType: "aws-ip-pool",
+						Env:          api.DefaultIPPoolLeaseEnv,
+						Count:        2,
+					},
+					resources: []string{},
+				},
+				wrapped: &stepNeedsLease{},
+				stepRun: atomicBool(false),
+			},
+			expected: map[string]string{
+				"parameter":               "map",
+				api.DefaultIPPoolLeaseEnv: "",
 			},
 		},
 	}
@@ -164,6 +192,7 @@ func TestRun(t *testing.T) {
 				namespace: func() string {
 					return ciOpNamespace
 				},
+				stepRun: &atomic.Bool{},
 			},
 			expected: []string{
 				"acquire owner aws-ip-pool-us-east-1 free leased",
@@ -187,6 +216,7 @@ func TestRun(t *testing.T) {
 				namespace: func() string {
 					return ciOpNamespace
 				},
+				stepRun: &atomic.Bool{},
 			},
 			expected: []string{
 				"acquire owner aws-ip-pool-us-east-1 free leased",
@@ -213,6 +243,7 @@ func TestRun(t *testing.T) {
 				namespace: func() string {
 					return ciOpNamespace
 				},
+				stepRun: &atomic.Bool{},
 			},
 			expected: []string{
 				"acquire owner aws-ip-pool-us-east-1 free leased",
@@ -235,6 +266,7 @@ func TestRun(t *testing.T) {
 				namespace: func() string {
 					return ciOpNamespace
 				},
+				stepRun: &atomic.Bool{},
 			},
 			injectFailures: map[string]error{
 				"acquire owner aws-ip-pool-us-east-1 free leased": lease.ErrNotFound,
@@ -255,6 +287,7 @@ func TestRun(t *testing.T) {
 				}),
 				wrapped: &stepNeedsLease{},
 				params:  fakeStepParams{},
+				stepRun: &atomic.Bool{},
 			},
 			expectedError: errors.New("failed to determine region to acquire lease for aws-ip-pool"),
 		},
@@ -270,6 +303,7 @@ func TestRun(t *testing.T) {
 				}),
 				wrapped: &stepNeedsLease{},
 				params:  fakeStepParams{api.DefaultLeaseEnv: "us-east-1"},
+				stepRun: &atomic.Bool{},
 			},
 			injectFailures: map[string]error{
 				"acquire owner aws-ip-pool-us-east-1 free leased": errors.New("some client error"),
@@ -294,6 +328,7 @@ func TestRun(t *testing.T) {
 				},
 				wrapped: &stepNeedsLease{fail: true},
 				params:  fakeStepParams{api.DefaultLeaseEnv: "us-east-1"},
+				stepRun: &atomic.Bool{},
 			},
 			expected: []string{
 				"acquire owner aws-ip-pool-us-east-1 free leased",
@@ -311,6 +346,7 @@ func TestRun(t *testing.T) {
 					return ciOpNamespace
 				},
 				wrapped: &stepNeedsLease{},
+				stepRun: &atomic.Bool{},
 			},
 		},
 	}

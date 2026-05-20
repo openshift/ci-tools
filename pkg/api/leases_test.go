@@ -65,7 +65,7 @@ func TestIPPoolLeaseForTest(t *testing.T) {
 	}{
 		{
 			name:     "aws",
-			tests:    MultiStageTestConfigurationLiteral{ClusterProfile: ClusterProfileAWS},
+			tests:    MultiStageTestConfigurationLiteral{ClusterProfile: ClusterProfileAWSUSEast1},
 			metadata: Metadata{Branch: "master"},
 			expected: StepLease{
 				ResourceType: "aws-ip-pools",
@@ -79,7 +79,7 @@ func TestIPPoolLeaseForTest(t *testing.T) {
 		},
 		{
 			name:     "aws, with 4.16 branch",
-			tests:    MultiStageTestConfigurationLiteral{ClusterProfile: ClusterProfileAWS},
+			tests:    MultiStageTestConfigurationLiteral{ClusterProfile: ClusterProfileAWSUSEast1},
 			metadata: Metadata{Branch: "release-4.16"},
 			expected: StepLease{
 				ResourceType: "aws-ip-pools",
@@ -89,12 +89,12 @@ func TestIPPoolLeaseForTest(t *testing.T) {
 		},
 		{
 			name:     "aws, but older release branch",
-			tests:    MultiStageTestConfigurationLiteral{ClusterProfile: ClusterProfileAWS},
+			tests:    MultiStageTestConfigurationLiteral{ClusterProfile: ClusterProfileAWSUSEast1},
 			metadata: Metadata{Branch: "release-4.10"},
 		},
 		{
 			name:     "aws, with 5.0 branch (should be valid)",
-			tests:    MultiStageTestConfigurationLiteral{ClusterProfile: ClusterProfileAWS},
+			tests:    MultiStageTestConfigurationLiteral{ClusterProfile: ClusterProfileAWSUSEast1},
 			metadata: Metadata{Branch: "release-5.0"},
 			expected: StepLease{
 				ResourceType: "aws-ip-pools",
@@ -104,7 +104,7 @@ func TestIPPoolLeaseForTest(t *testing.T) {
 		},
 		{
 			name:     "aws, with openshift-5.0 branch (should be valid)",
-			tests:    MultiStageTestConfigurationLiteral{ClusterProfile: ClusterProfileAWS},
+			tests:    MultiStageTestConfigurationLiteral{ClusterProfile: ClusterProfileAWSUSEast1},
 			metadata: Metadata{Branch: "openshift-5.0"},
 			expected: StepLease{
 				ResourceType: "aws-ip-pools",
@@ -114,7 +114,7 @@ func TestIPPoolLeaseForTest(t *testing.T) {
 		},
 		{
 			name:     "aws, with 5.1 branch (should be valid)",
-			tests:    MultiStageTestConfigurationLiteral{ClusterProfile: ClusterProfileAWS},
+			tests:    MultiStageTestConfigurationLiteral{ClusterProfile: ClusterProfileAWSUSEast1},
 			metadata: Metadata{Branch: "release-5.1"},
 			expected: StepLease{
 				ResourceType: "aws-ip-pools",

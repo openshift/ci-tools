@@ -1136,7 +1136,6 @@ func (p ClusterProfile) LeaseType() string {
 func (p ClusterProfile) IPPoolLeaseType() string {
 	switch p {
 	case
-		ClusterProfileAWS,
 		ClusterProfileAWSUSEast1:
 		return "aws-ip-pools"
 	default:

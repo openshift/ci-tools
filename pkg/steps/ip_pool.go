@@ -6,6 +6,7 @@ import (
 	"fmt"
 	"strconv"
 	"strings"
+	"sync/atomic"
 	"time"
 
 	"github.com/sirupsen/logrus"
@@ -37,6 +38,9 @@ type ipPoolStep struct {
 	profile         api.ClusterProfile
 	branch          string
 	ipPoolLeaseFunc func(profile api.ClusterProfile, branch string) stepLease
+
+	// Reports whether this step has run or not
+	stepRun *atomic.Bool
 }
 
 // lease api.StepLease,
@@ -54,6 +58,7 @@ func IPPoolStep(client *lease.Client, secretClient SecretClient, wrapped api.Ste
 		ipPoolLeaseFunc: func(profile api.ClusterProfile, branch string) stepLease {
 			return stepLease{StepLease: api.IPPoolLeaseForTest(profile, branch)}
 		},
+		stepRun: &atomic.Bool{},
 	}
 }
 
@@ -83,6 +88,9 @@ func (s *ipPoolStep) Provides() api.ParameterMap {
 	// Disable unparam lint as we need to confirm to this interface, but there will never be an error
 	//nolint:unparam
 	parameters[api.DefaultIPPoolLeaseEnv] = func() (string, error) {
+		if !s.stepRun.Load() {
+			return "", nil
+		}
 		return strconv.Itoa(len(s.ipPoolLease.resources)), nil
 	}
 
@@ -122,6 +130,7 @@ func (s *ipPoolStep) run(ctx context.Context, minute time.Duration) error {
 		return results.ForReason("executing_test").ForError(s.wrapped.Run(ctx))
 	}
 
+	s.stepRun.Store(true)
 	l := &s.ipPoolLease
 
 	region, err := s.params.Get(api.DefaultLeaseEnv)

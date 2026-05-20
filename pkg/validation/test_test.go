@@ -2016,6 +2016,44 @@ func TestVerifyClusterProfileOwnership(t *testing.T) {
 			Name:   "profile-with-no-owners-specified",
 			Owners: []api.ClusterProfileOwners{},
 		},
+		"profile-with-flattened-org-owner": api.ClusterProfileDetails{
+			Name: "profile-with-flattened-org-owner",
+			Owners: []api.ClusterProfileOwners{
+				{
+					Org:   "openshift",
+					Repos: []string{"csi-operator", "installer"},
+				},
+				{
+					Org:   "operator-framework",
+					Repos: []string{"operator-marketplace"},
+				},
+			},
+		},
+		"profile-with-non-flattened-org-owner": api.ClusterProfileDetails{
+			Name: "profile-with-non-flattened-org-owner",
+			Owners: []api.ClusterProfileOwners{
+				{
+					Org:   "stolostron",
+					Repos: []string{"acm-cli", "observatorium-operator"},
+				},
+			},
+		},
+		"profile-with-flattened-wildcard-owner": api.ClusterProfileDetails{
+			Name: "profile-with-flattened-wildcard-owner",
+			Owners: []api.ClusterProfileOwners{
+				{
+					Org: "openshift",
+				},
+			},
+		},
+		"profile-with-non-flattened-wildcard-owner": api.ClusterProfileDetails{
+			Name: "profile-with-non-flattened-wildcard-owner",
+			Owners: []api.ClusterProfileOwners{
+				{
+					Org: "stolostron",
+				},
+			},
+		},
 	}
 	v := NewValidator(cpMap, nil)
 
@@ -2090,6 +2128,82 @@ func TestVerifyClusterProfileOwnership(t *testing.T) {
 			metadata: nil,
 			expected: fmt.Errorf("can't do ownership check, metadata not defined"),
 		},
+		{
+			name:    "openshift-priv mirror of flattened org repo is allowed",
+			profile: v.validClusterProfiles["profile-with-flattened-org-owner"],
+			metadata: &api.Metadata{
+				Org:  "openshift-priv",
+				Repo: "csi-operator",
+			},
+		},
+		{
+			name:    "openshift-priv mirror of another flattened org repo is allowed",
+			profile: v.validClusterProfiles["profile-with-flattened-org-owner"],
+			metadata: &api.Metadata{
+				Org:  "openshift-priv",
+				Repo: "operator-marketplace",
+			},
+		},
+		{
+			name:    "openshift-priv mirror of non-flattened org repo is allowed with collapsed name",
+			profile: v.validClusterProfiles["profile-with-non-flattened-org-owner"],
+			metadata: &api.Metadata{
+				Org:  "openshift-priv",
+				Repo: "stolostron-acm-cli",
+			},
+		},
+		{
+			name:    "openshift-priv non-flattened org repo without collapsed name is rejected",
+			profile: v.validClusterProfiles["profile-with-non-flattened-org-owner"],
+			metadata: &api.Metadata{
+				Org:  "openshift-priv",
+				Repo: "acm-cli",
+			},
+			expected: fmt.Errorf("openshift-priv/acm-cli is not an owner of the cluster profile: \"profile-with-non-flattened-org-owner\""),
+		},
+		{
+			name:    "openshift-priv unknown repo is rejected",
+			profile: v.validClusterProfiles["profile-with-flattened-org-owner"],
+			metadata: &api.Metadata{
+				Org:  "openshift-priv",
+				Repo: "unknown-repo",
+			},
+			expected: fmt.Errorf("openshift-priv/unknown-repo is not an owner of the cluster profile: \"profile-with-flattened-org-owner\""),
+		},
+		{
+			name:    "openshift-priv non-matching prefix for non-flattened wildcard owner is rejected",
+			profile: v.validClusterProfiles["profile-with-one-owner"],
+			metadata: &api.Metadata{
+				Org:  "openshift-priv",
+				Repo: "any-repo",
+			},
+			expected: fmt.Errorf("openshift-priv/any-repo is not an owner of the cluster profile: \"profile-with-one-owner\""),
+		},
+		{
+			name:    "openshift-priv wildcard flattened org owner extends to mirrors",
+			profile: v.validClusterProfiles["profile-with-flattened-wildcard-owner"],
+			metadata: &api.Metadata{
+				Org:  "openshift-priv",
+				Repo: "any-repo",
+			},
+		},
+		{
+			name:    "openshift-priv wildcard non-flattened org owner extends to prefixed mirrors",
+			profile: v.validClusterProfiles["profile-with-non-flattened-wildcard-owner"],
+			metadata: &api.Metadata{
+				Org:  "openshift-priv",
+				Repo: "stolostron-some-repo",
+			},
+		},
+		{
+			name:    "openshift-priv wildcard non-flattened org owner rejects wrong prefix",
+			profile: v.validClusterProfiles["profile-with-non-flattened-wildcard-owner"],
+			metadata: &api.Metadata{
+				Org:  "openshift-priv",
+				Repo: "other-org-some-repo",
+			},
+			expected: fmt.Errorf("openshift-priv/other-org-some-repo is not an owner of the cluster profile: \"profile-with-non-flattened-wildcard-owner\""),
+		},
 	} {
 		t.Run(tc.name, func(t *testing.T) {
 			actual := verifyClusterProfileOwnership(tc.profile, tc.metadata)
@@ -2138,6 +2252,40 @@ func TestVerifyClusterClaimOwnership(t *testing.T) {
 		"claim-with-no-owners-specified": api.ClusterClaimDetails{
 			Claim:  "claim-with-no-owners-specified",
 			Owners: []api.ClusterClaimOwnerDetails{},
+		},
+		"claim-with-flattened-org-owner": api.ClusterClaimDetails{
+			Claim: "claim-with-flattened-org-owner",
+			Owners: []api.ClusterClaimOwnerDetails{
+				{
+					Org:   "openshift",
+					Repos: []string{"csi-operator", "installer"},
+				},
+			},
+		},
+		"claim-with-non-flattened-org-owner": api.ClusterClaimDetails{
+			Claim: "claim-with-non-flattened-org-owner",
+			Owners: []api.ClusterClaimOwnerDetails{
+				{
+					Org:   "stolostron",
+					Repos: []string{"acm-cli"},
+				},
+			},
+		},
+		"claim-with-flattened-wildcard-owner": api.ClusterClaimDetails{
+			Claim: "claim-with-flattened-wildcard-owner",
+			Owners: []api.ClusterClaimOwnerDetails{
+				{
+					Org: "openshift",
+				},
+			},
+		},
+		"claim-with-non-flattened-wildcard-owner": api.ClusterClaimDetails{
+			Claim: "claim-with-non-flattened-wildcard-owner",
+			Owners: []api.ClusterClaimOwnerDetails{
+				{
+					Org: "stolostron",
+				},
+			},
 		},
 	}
 	v := NewValidator(nil, clusterClaim)
@@ -2212,6 +2360,65 @@ func TestVerifyClusterClaimOwnership(t *testing.T) {
 			claim:    v.validClusterClaimOwners["claim-with-multiple-orgs-and-repos"],
 			metadata: nil,
 			expected: fmt.Errorf("can't do ownership check, metadata not defined"),
+		},
+		{
+			name:  "openshift-priv mirror of flattened org repo is allowed",
+			claim: v.validClusterClaimOwners["claim-with-flattened-org-owner"],
+			metadata: &api.Metadata{
+				Org:  "openshift-priv",
+				Repo: "csi-operator",
+			},
+		},
+		{
+			name:  "openshift-priv mirror of non-flattened org repo is allowed with collapsed name",
+			claim: v.validClusterClaimOwners["claim-with-non-flattened-org-owner"],
+			metadata: &api.Metadata{
+				Org:  "openshift-priv",
+				Repo: "stolostron-acm-cli",
+			},
+		},
+		{
+			name:  "openshift-priv non-flattened org repo without collapsed name is rejected",
+			claim: v.validClusterClaimOwners["claim-with-non-flattened-org-owner"],
+			metadata: &api.Metadata{
+				Org:  "openshift-priv",
+				Repo: "acm-cli",
+			},
+			expected: fmt.Errorf("openshift-priv/acm-cli is not an owner of the cluster claim: \"claim-with-non-flattened-org-owner\""),
+		},
+		{
+			name:  "openshift-priv non-matching prefix for non-flattened wildcard owner is rejected",
+			claim: v.validClusterClaimOwners["claim-with-one-owner"],
+			metadata: &api.Metadata{
+				Org:  "openshift-priv",
+				Repo: "any-repo",
+			},
+			expected: fmt.Errorf("openshift-priv/any-repo is not an owner of the cluster claim: \"claim-with-one-owner\""),
+		},
+		{
+			name:  "openshift-priv wildcard flattened org owner extends to mirrors",
+			claim: v.validClusterClaimOwners["claim-with-flattened-wildcard-owner"],
+			metadata: &api.Metadata{
+				Org:  "openshift-priv",
+				Repo: "any-repo",
+			},
+		},
+		{
+			name:  "openshift-priv wildcard non-flattened org owner extends to prefixed mirrors",
+			claim: v.validClusterClaimOwners["claim-with-non-flattened-wildcard-owner"],
+			metadata: &api.Metadata{
+				Org:  "openshift-priv",
+				Repo: "stolostron-some-repo",
+			},
+		},
+		{
+			name:  "openshift-priv wildcard non-flattened org owner rejects wrong prefix",
+			claim: v.validClusterClaimOwners["claim-with-non-flattened-wildcard-owner"],
+			metadata: &api.Metadata{
+				Org:  "openshift-priv",
+				Repo: "other-org-some-repo",
+			},
+			expected: fmt.Errorf("openshift-priv/other-org-some-repo is not an owner of the cluster claim: \"claim-with-non-flattened-wildcard-owner\""),
 		},
 	} {
 		t.Run(tc.name, func(t *testing.T) {

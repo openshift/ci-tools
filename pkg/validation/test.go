@@ -15,6 +15,7 @@ import (
 	"k8s.io/apimachinery/pkg/util/validation"
 
 	"github.com/openshift/ci-tools/pkg/api"
+	"github.com/openshift/ci-tools/pkg/privateorg"
 	"github.com/openshift/ci-tools/pkg/util"
 )
 
@@ -466,6 +467,22 @@ func (v *Validator) validateClusterProfile(fieldRoot string, p api.ClusterProfil
 	return nil
 }
 
+var privateOrgFlattenedOrgs = sets.New[string](privateorg.DefaultFlattenOrgs...)
+
+// isPrivateMirrorOf returns true when openshift-priv/<privRepo> could be a
+// mirror of a repo owned by ownerOrg. For flattened orgs the repo name is
+// unchanged; for all others the mirror name is <ownerOrg>-<repo>.
+func isPrivateMirrorOf(privRepo string, ownerOrg string, ownerRepos []string) bool {
+	if privateOrgFlattenedOrgs.Has(ownerOrg) {
+		return ownerRepos == nil || util.Contains(ownerRepos, privRepo)
+	}
+	prefix := ownerOrg + "-"
+	if !strings.HasPrefix(privRepo, prefix) {
+		return false
+	}
+	return ownerRepos == nil || util.Contains(ownerRepos, strings.TrimPrefix(privRepo, prefix))
+}
+
 // verifyClusterProfileOwnership checks if metadata's org and repo match those in the profile,
 // verifying if it's one of the owners of the profile.
 func verifyClusterProfileOwnership(profile api.ClusterProfileDetails, m *api.Metadata) error {
@@ -481,6 +498,13 @@ func verifyClusterProfileOwnership(profile api.ClusterProfileDetails, m *api.Met
 		}
 		if owner.Repos == nil || util.Contains(owner.Repos, m.Repo) {
 			return nil
+		}
+	}
+	if m.Org == "openshift-priv" {
+		for _, owner := range profile.Owners {
+			if isPrivateMirrorOf(m.Repo, owner.Org, owner.Repos) {
+				return nil
+			}
 		}
 	}
 	return fmt.Errorf("%s/%s is not an owner of the cluster profile: %q", m.Org, m.Repo, profile.Name)
@@ -499,6 +523,13 @@ func verifyClusterClaimOwnership(claim api.ClusterClaimDetails, m *api.Metadata)
 		}
 		if owner.Repos == nil || util.Contains(owner.Repos, m.Repo) {
 			return nil
+		}
+	}
+	if m.Org == "openshift-priv" {
+		for _, owner := range claim.Owners {
+			if isPrivateMirrorOf(m.Repo, owner.Org, owner.Repos) {
+				return nil
+			}
 		}
 	}
 	return fmt.Errorf("%s/%s is not an owner of the cluster claim: %q", m.Org, m.Repo, claim.Claim)

@@ -554,7 +554,7 @@ func TestMutatePodResources(t *testing.T) {
 	for _, testCase := range testCases {
 		t.Run(testCase.name, func(t *testing.T) {
 			original := testCase.pod.DeepCopy()
-			mutatePodResources(testCase.pod, testCase.server, testCase.mutateResourceLimits, 10, "20Gi", false, nil, 50.0, &defaultReporter, logrus.WithField("test", testCase.name))
+			mutatePodResources(testCase.pod, testCase.server, testCase.mutateResourceLimits, 10, "20Gi", false, nil, 50.0, false, false, &defaultReporter, logrus.WithField("test", testCase.name))
 			diff := cmp.Diff(original, testCase.pod)
 			// In some cases, cmp.Diff decides to use non-breaking spaces, and it's not
 			// particularly deterministic about this. We don't care.
@@ -729,9 +729,94 @@ func TestUseOursIfLarger(t *testing.T) {
 	}
 	for _, testCase := range testCases {
 		t.Run(testCase.name, func(t *testing.T) {
-			useOursIfLarger(&testCase.ours, &testCase.theirs, "test", "build", false, "", &defaultReporter, logrus.WithField("test", testCase.name))
+			useOursIfLarger(&testCase.ours, &testCase.theirs, "test", "build", false, "", false, false, &defaultReporter, logrus.WithField("test", testCase.name))
 			if diff := cmp.Diff(testCase.theirs, testCase.expected); diff != "" {
 				t.Errorf("%s: got incorrect resources after mutation: %v", testCase.name, diff)
+			}
+		})
+	}
+}
+
+func TestUseOursIfLarger_authoritative(t *testing.T) {
+	testCases := []struct {
+		name                                  string
+		authoritativeCPU, authoritativeMemory bool
+		isMeasured                            bool
+		ours, theirs, expected                corev1.ResourceRequirements
+	}{
+		{
+			name: "authoritative disabled",
+			ours: corev1.ResourceRequirements{
+				Requests: corev1.ResourceList{
+					corev1.ResourceCPU:    *resource.NewQuantity(10, resource.DecimalSI),
+					corev1.ResourceMemory: *resource.NewQuantity(1e1, resource.BinarySI),
+				},
+			},
+			theirs: corev1.ResourceRequirements{
+				Requests: corev1.ResourceList{
+					corev1.ResourceCPU:    *resource.NewQuantity(100, resource.DecimalSI),
+					corev1.ResourceMemory: *resource.NewQuantity(2e10, resource.BinarySI),
+				},
+			},
+			expected: corev1.ResourceRequirements{
+				Limits: corev1.ResourceList{},
+				Requests: corev1.ResourceList{
+					corev1.ResourceCPU:    *resource.NewQuantity(100, resource.DecimalSI),
+					corev1.ResourceMemory: *resource.NewQuantity(2e10, resource.BinarySI),
+				},
+			},
+		},
+		{
+			name:                "capped reduction",
+			authoritativeCPU:    true,
+			authoritativeMemory: true,
+			ours: corev1.ResourceRequirements{
+				Requests: corev1.ResourceList{
+					corev1.ResourceCPU:    *resource.NewQuantity(10, resource.DecimalSI),
+					corev1.ResourceMemory: *resource.NewQuantity(1e1, resource.BinarySI),
+				},
+			},
+			theirs: corev1.ResourceRequirements{
+				Requests: corev1.ResourceList{
+					corev1.ResourceCPU:    *resource.NewQuantity(100, resource.DecimalSI),
+					corev1.ResourceMemory: *resource.NewQuantity(2e10, resource.BinarySI),
+				},
+			},
+			expected: corev1.ResourceRequirements{
+				Limits: corev1.ResourceList{},
+				Requests: corev1.ResourceList{
+					corev1.ResourceCPU:    *resource.NewQuantity(75, resource.DecimalSI),
+					corev1.ResourceMemory: *resource.NewQuantity(15e9, resource.BinarySI),
+				},
+			},
+		},
+		{
+			name:             "measured pod skips reduction",
+			authoritativeCPU: true,
+			isMeasured:       true,
+			ours: corev1.ResourceRequirements{
+				Requests: corev1.ResourceList{
+					corev1.ResourceCPU: *resource.NewQuantity(10, resource.DecimalSI),
+				},
+			},
+			theirs: corev1.ResourceRequirements{
+				Requests: corev1.ResourceList{
+					corev1.ResourceCPU: *resource.NewQuantity(100, resource.DecimalSI),
+				},
+			},
+			expected: corev1.ResourceRequirements{
+				Limits: corev1.ResourceList{},
+				Requests: corev1.ResourceList{
+					corev1.ResourceCPU: *resource.NewQuantity(100, resource.DecimalSI),
+				},
+			},
+		},
+	}
+	for _, tc := range testCases {
+		t.Run(tc.name, func(t *testing.T) {
+			useOursIfLarger(&tc.ours, &tc.theirs, "test", "build", tc.isMeasured, "", tc.authoritativeCPU, tc.authoritativeMemory, &defaultReporter, logrus.WithField("test", tc.name))
+			if diff := cmp.Diff(tc.theirs, tc.expected); diff != "" {
+				t.Errorf("unexpected resources: %s", diff)
 			}
 		})
 	}
@@ -814,7 +899,7 @@ func TestUseOursIsLarger_ReporterReports(t *testing.T) {
 
 	for _, tc := range testCases {
 		t.Run(tc.name, func(t *testing.T) {
-			useOursIfLarger(&tc.ours, &tc.theirs, "test", "build", false, "", &tc.reporter, logrus.WithField("test", tc.name))
+			useOursIfLarger(&tc.ours, &tc.theirs, "test", "build", false, "", false, false, &tc.reporter, logrus.WithField("test", tc.name))
 
 			if diff := cmp.Diff(tc.reporter.called, tc.expected); diff != "" {
 				t.Errorf("actual and expected reporter states don't match, : %v", diff)

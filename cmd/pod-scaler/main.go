@@ -72,6 +72,8 @@ type consumerOptions struct {
 	percentageMeasured     float64
 	measuredPodCPUIncrease float64
 	systemReservedCPU      int64
+	authoritativeCPU       bool
+	authoritativeMemory    bool
 }
 
 func bindOptions(fs *flag.FlagSet) *options {
@@ -98,6 +100,8 @@ func bindOptions(fs *flag.FlagSet) *options {
 	fs.Float64Var(&o.percentageMeasured, "percentage-measured", 0, "Percentage of pods to mark as measured (0-100). Measured pods get increased CPU requests and anti-affinity rules.")
 	fs.Float64Var(&o.measuredPodCPUIncrease, "measured-pod-cpu-increase", 50, "Percentage increase in CPU requests for measured pods (default: 50%).")
 	fs.Int64Var(&o.systemReservedCPU, "system-reserved-cpu", 2, "CPU cores to reserve for system overhead when capping measured pod CPU.")
+	fs.BoolVar(&o.authoritativeCPU, "authoritative-cpu", false, "Allow admission to decrease CPU requests and limits based on measured usage.")
+	fs.BoolVar(&o.authoritativeMemory, "authoritative-memory", false, "Allow admission to decrease memory requests and limits based on measured usage.")
 	o.resultsOptions.Bind(fs)
 	return &o
 }
@@ -287,7 +291,7 @@ func mainAdmission(opts *options, cache Cache) {
 		logrus.WithError(err).Fatal("Failed to create pod-scaler reporter.")
 	}
 
-	go admit(opts.port, opts.instrumentationOptions.HealthPort, opts.certDir, client, kubeClient, loaders(cache), opts.mutateResourceLimits, opts.cpuCap, opts.memoryCap, opts.cpuPriorityScheduling, opts.percentageMeasured, opts.measuredPodCPUIncrease, opts.systemReservedCPU, reporter)
+	go admit(opts.port, opts.instrumentationOptions.HealthPort, opts.certDir, client, kubeClient, loaders(cache), opts.mutateResourceLimits, opts.cpuCap, opts.memoryCap, opts.cpuPriorityScheduling, opts.percentageMeasured, opts.measuredPodCPUIncrease, opts.systemReservedCPU, opts.authoritativeCPU, opts.authoritativeMemory, reporter)
 }
 
 func loaders(cache Cache) map[string][]*cacheReloader {

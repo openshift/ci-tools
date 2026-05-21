@@ -429,7 +429,7 @@ func (s *importReleaseStep) resolveCLIImage(ctx context.Context, targetCLI, stre
 }
 
 func (s *importReleaseStep) extractAndTagCLIImage(ctx context.Context, targetCLI, streamName string) (*api.ImageStreamTagReference, error) {
-	if _, err := steps.RunPod(ctx, s.client, &coreapi.Pod{
+	pod, err := steps.RunPod(ctx, s.client, &coreapi.Pod{
 		ObjectMeta: meta.ObjectMeta{
 			Name:      targetCLI,
 			Namespace: s.jobSpec.Namespace(),
@@ -445,14 +445,11 @@ func (s *importReleaseStep) extractAndTagCLIImage(ctx context.Context, targetCLI
 				},
 			},
 		},
-	}, true); err != nil {
+	}, true)
+	if err != nil {
 		return nil, fmt.Errorf("unable to find the 'cli' image in the provided release image: %w", err)
 	}
-	pod := &coreapi.Pod{}
-	if err := s.client.Get(ctx, ctrlruntimeclient.ObjectKey{Namespace: s.jobSpec.Namespace(), Name: targetCLI}, pod); err != nil {
-		return nil, fmt.Errorf("unable to extract the 'cli' image from the release image: %w", err)
-	}
-	if len(pod.Status.ContainerStatuses) == 0 || pod.Status.ContainerStatuses[0].State.Terminated == nil {
+	if pod == nil || len(pod.Status.ContainerStatuses) == 0 || pod.Status.ContainerStatuses[0].State.Terminated == nil {
 		return nil, errors.New("unable to extract the 'cli' image from the release image, pod produced no output")
 	}
 	cliImage := pod.Status.ContainerStatuses[0].State.Terminated.Message

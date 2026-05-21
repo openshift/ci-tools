@@ -1,15 +1,128 @@
 package util
 
 import (
+	"context"
 	"errors"
 	"testing"
 	"time"
 
 	corev1 "k8s.io/api/core/v1"
+	apierrors "k8s.io/apimachinery/pkg/api/errors"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
+	"k8s.io/apimachinery/pkg/types"
+	ctrlruntimeclient "sigs.k8s.io/controller-runtime/pkg/client"
+	fakectrlruntimeclient "sigs.k8s.io/controller-runtime/pkg/client/fake"
+	"sigs.k8s.io/controller-runtime/pkg/client/interceptor"
 
 	"github.com/openshift/ci-tools/pkg/testhelper"
 )
+
+func TestWaitForCompletedPodDeletion(t *testing.T) {
+	const namespace = "test-ns"
+	const name = "test-pod"
+
+	succeededPod := &corev1.Pod{
+		ObjectMeta: metav1.ObjectMeta{
+			Namespace: namespace,
+			Name:      name,
+			UID:       types.UID("original-uid"),
+		},
+		Status: corev1.PodStatus{Phase: corev1.PodSucceeded},
+	}
+	failedPod := &corev1.Pod{
+		ObjectMeta: metav1.ObjectMeta{
+			Namespace: namespace,
+			Name:      name,
+			UID:       types.UID("original-uid"),
+		},
+		Status: corev1.PodStatus{Phase: corev1.PodFailed},
+	}
+	runningPod := &corev1.Pod{
+		ObjectMeta: metav1.ObjectMeta{
+			Namespace: namespace,
+			Name:      name,
+			UID:       types.UID("original-uid"),
+		},
+		Status: corev1.PodStatus{Phase: corev1.PodRunning},
+	}
+
+	for _, tc := range []struct {
+		name             string
+		objects          []ctrlruntimeclient.Object
+		interceptorsFunc func() interceptor.Funcs
+		expectErr        bool
+	}{
+		{
+			name:    "pod does not exist",
+			objects: nil,
+		},
+		{
+			name:    "running pod is left alone",
+			objects: []ctrlruntimeclient.Object{runningPod},
+		},
+		{
+			name:    "succeeded pod is deleted",
+			objects: []ctrlruntimeclient.Object{succeededPod},
+		},
+		{
+			name:    "failed pod is deleted",
+			objects: []ctrlruntimeclient.Object{failedPod},
+		},
+		{
+			name:    "delete returns NotFound",
+			objects: []ctrlruntimeclient.Object{succeededPod},
+			interceptorsFunc: func() interceptor.Funcs {
+				return interceptor.Funcs{
+					Delete: func(_ context.Context, _ ctrlruntimeclient.WithWatch, _ ctrlruntimeclient.Object, _ ...ctrlruntimeclient.DeleteOption) error {
+						return &apierrors.StatusError{ErrStatus: metav1.Status{Reason: metav1.StatusReasonNotFound, Code: 404}}
+					},
+				}
+			},
+		},
+		{
+			name:    "delete returns Conflict (UID mismatch) is treated as success",
+			objects: []ctrlruntimeclient.Object{succeededPod},
+			interceptorsFunc: func() interceptor.Funcs {
+				return interceptor.Funcs{
+					Delete: func(_ context.Context, _ ctrlruntimeclient.WithWatch, _ ctrlruntimeclient.Object, _ ...ctrlruntimeclient.DeleteOption) error {
+						return &apierrors.StatusError{ErrStatus: metav1.Status{Reason: metav1.StatusReasonConflict, Code: 409}}
+					},
+				}
+			},
+		},
+		{
+			name:      "delete returns unexpected error",
+			objects:   []ctrlruntimeclient.Object{succeededPod},
+			expectErr: true,
+			interceptorsFunc: func() interceptor.Funcs {
+				return interceptor.Funcs{
+					Delete: func(_ context.Context, _ ctrlruntimeclient.WithWatch, _ ctrlruntimeclient.Object, _ ...ctrlruntimeclient.DeleteOption) error {
+						return &apierrors.StatusError{ErrStatus: metav1.Status{Reason: metav1.StatusReasonInternalError, Code: 500}}
+					},
+				}
+			},
+		},
+	} {
+		t.Run(tc.name, func(t *testing.T) {
+			builder := fakectrlruntimeclient.NewClientBuilder()
+			if tc.objects != nil {
+				builder = builder.WithObjects(tc.objects...)
+			}
+			if tc.interceptorsFunc != nil {
+				builder = builder.WithInterceptorFuncs(tc.interceptorsFunc())
+			}
+			client := builder.Build()
+
+			err := waitForCompletedPodDeletion(context.Background(), client, namespace, name)
+			if tc.expectErr && err == nil {
+				t.Errorf("expected error but got nil")
+			}
+			if !tc.expectErr && err != nil {
+				t.Errorf("unexpected error: %v", err)
+			}
+		})
+	}
+}
 
 func TestCheckPending(t *testing.T) {
 	timeout, now := 30*time.Minute, time.Time{}

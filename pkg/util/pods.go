@@ -94,6 +94,11 @@ func waitForCompletedPodDeletion(ctx context.Context, podClient ctrlruntimeclien
 	if kerrors.IsNotFound(err) {
 		return nil
 	}
+	if kerrors.IsConflict(err) {
+		// UID precondition mismatch: the pod was replaced between our GET and
+		// DELETE. The completed pod we intended to remove is already gone.
+		return nil
+	}
 	if err != nil {
 		return fmt.Errorf("could not delete completed pod: %w", err)
 	}

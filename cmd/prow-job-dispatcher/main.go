@@ -10,6 +10,7 @@ import (
 	"os/signal"
 	"path/filepath"
 	"reflect"
+	"regexp"
 	"slices"
 	"sort"
 	"strings"
@@ -46,6 +47,10 @@ const (
 	upstreamBranch = "master"
 	listURL        = "https://github.com/openshift/release/pulls?q=is%3Apr+author%3Aopenshift-bot+prow+job+dispatcher+in%3Atitle+is%3Aopen"
 )
+
+var blockedClusterRelocationJobExceptions = []*regexp.Regexp{
+	regexp.MustCompile(`^periodic-build[0-9]{2}-upgrade$`),
+}
 
 type options struct {
 	prowJobConfigDir  string
@@ -277,6 +282,25 @@ func extractCapabilities(labels map[string]string) []string {
 	return capabilities
 }
 
+func isBlockedClusterRelocationException(jobName string) bool {
+	for _, re := range blockedClusterRelocationJobExceptions {
+		if re.MatchString(jobName) {
+			return true
+		}
+	}
+	return false
+}
+
+func blockedClustersForJob(jobName string, determinedCluster string, blocked sets.Set[string]) sets.Set[string] {
+	if !blocked.Has(determinedCluster) || !isBlockedClusterRelocationException(jobName) {
+		return blocked
+	}
+
+	filteredBlocked := blocked.Clone()
+	filteredBlocked.Delete(determinedCluster)
+	return filteredBlocked
+}
+
 func findClusterAssigmentsForJobs(jc *prowconfig.JobConfig, path string, config *dispatcher.Config, pjs map[string]dispatcher.ProwJobData, blocked sets.Set[string], cm dispatcher.ClusterMap) error {
 	mostUsedCluster := dispatcher.FindMostUsedCluster(jc)
 
@@ -286,7 +310,8 @@ func findClusterAssigmentsForJobs(jc *prowconfig.JobConfig, path string, config 
 			return fmt.Errorf("failed to determine cluster for the job %s in path %q: %w", jobBase.Name, path, err)
 		}
 
-		c := dispatcher.DetermineTargetCluster(cluster, string(determinedCluster), string(config.Default), canBeRelocated, blocked)
+		blockedForJob := blockedClustersForJob(jobBase.Name, string(determinedCluster), blocked)
+		c := dispatcher.DetermineTargetCluster(cluster, string(determinedCluster), string(config.Default), canBeRelocated, blockedForJob)
 		pjs[jobBase.Name] = dispatcher.ProwJobData{Cluster: c, Capabilities: extractCapabilities(jobBase.Labels)}
 		logrus.WithField("job", jobBase.Name).WithField("cluster", c).Info("found cluster for job")
 		return nil
@@ -330,7 +355,8 @@ func (cv *clusterVolume) addToVolume(cluster string, jobBase prowconfig.JobBase,
 		return fmt.Errorf("failed to determine cluster for the job %s in path %q: %w", jobBase.Name, path, err)
 	}
 
-	c := dispatcher.DetermineTargetCluster(cluster, string(determinedCluster), string(config.Default), canBeRelocated, cv.blocked)
+	blockedForJob := blockedClustersForJob(jobBase.Name, string(determinedCluster), cv.blocked)
+	c := dispatcher.DetermineTargetCluster(cluster, string(determinedCluster), string(config.Default), canBeRelocated, blockedForJob)
 	cv.pjs[jobBase.Name] = dispatcher.ProwJobData{Cluster: c, Capabilities: extractCapabilities(jobBase.Labels)}
 	if determinedCloudProvider := config.IsInBuildFarm(api.Cluster(c)); determinedCloudProvider != "" {
 		cv.clusterVolumeMap[string(determinedCloudProvider)][c] = cv.clusterVolumeMap[string(determinedCloudProvider)][c] + jobVolumes[jobBase.Name]

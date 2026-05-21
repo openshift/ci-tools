@@ -477,6 +477,100 @@ func TestDispatchDeltaJobs(t *testing.T) {
 	}
 }
 
+func TestBlockedClustersForJob(t *testing.T) {
+	blocked := sets.New[string]("build01", "build02")
+
+	testCases := []struct {
+		name              string
+		jobName           string
+		determinedCluster string
+		expectedBlocked   sets.Set[string]
+	}{
+		{
+			name:              "keeps blocked clusters for non-matching job",
+			jobName:           "periodic-something-else",
+			determinedCluster: "build01",
+			expectedBlocked:   sets.New[string]("build01", "build02"),
+		},
+		{
+			name:              "removes determined cluster for matching upgrade job",
+			jobName:           "periodic-build01-upgrade",
+			determinedCluster: "build01",
+			expectedBlocked:   sets.New[string]("build02"),
+		},
+		{
+			name:              "keeps blocked clusters when determined cluster not blocked",
+			jobName:           "periodic-build77-upgrade",
+			determinedCluster: "build77",
+			expectedBlocked:   sets.New[string]("build01", "build02"),
+		},
+	}
+
+	for _, tc := range testCases {
+		t.Run(tc.name, func(t *testing.T) {
+			actual := blockedClustersForJob(tc.jobName, tc.determinedCluster, blocked)
+			if !actual.Equal(tc.expectedBlocked) {
+				t.Fatalf("unexpected blocked set. expected=%v actual=%v", tc.expectedBlocked.UnsortedList(), actual.UnsortedList())
+			}
+		})
+	}
+}
+
+func TestAddToVolumeSkipsBlockedRelocationForMatchingUpgradePeriodic(t *testing.T) {
+	config := &dispatcher.Config{
+		Default: "api.ci",
+		BuildFarm: map[api.Cloud]map[api.Cluster]*dispatcher.BuildFarmConfig{
+			api.CloudAWS: {
+				"build01": {},
+			},
+			api.CloudGCP: {
+				"build02": {},
+			},
+		},
+		Groups: map[api.Cluster]dispatcher.Group{
+			"build01": {
+				Jobs: []string{"periodic-build01-upgrade", "periodic-something-else"},
+			},
+		},
+	}
+
+	cv := &clusterVolume{
+		clusterVolumeMap: map[string]map[string]float64{
+			"aws": {"build01": 0},
+			"gcp": {"build02": 0},
+		},
+		cloudProviders: sets.New[string]("aws", "gcp"),
+		pjs:            map[string]dispatcher.ProwJobData{},
+		blocked:        sets.New[string]("build01"),
+		specialClusters: map[string]float64{
+			"api.ci": 0,
+		},
+		clusterMap: dispatcher.ClusterMap{
+			"build01": {Capacity: 100},
+			"build02": {Capacity: 100},
+		},
+	}
+
+	jobVolumes := map[string]float64{
+		"periodic-build01-upgrade": 1,
+		"periodic-something-else":  1,
+	}
+
+	if err := cv.addToVolume("build02", prowconfig.JobBase{Name: "periodic-build01-upgrade"}, "foo-periodics.yaml", config, jobVolumes); err != nil {
+		t.Fatalf("addToVolume returned error for matching periodic: %v", err)
+	}
+	if err := cv.addToVolume("build02", prowconfig.JobBase{Name: "periodic-something-else"}, "foo-periodics.yaml", config, jobVolumes); err != nil {
+		t.Fatalf("addToVolume returned error for non-matching periodic: %v", err)
+	}
+
+	if got := cv.pjs["periodic-build01-upgrade"].Cluster; got != "build01" {
+		t.Fatalf("expected matching periodic to stay on determined blocked cluster build01, got %s", got)
+	}
+	if got := cv.pjs["periodic-something-else"].Cluster; got != "build02" {
+		t.Fatalf("expected non-matching periodic to be relocated to build02, got %s", got)
+	}
+}
+
 type fakeSlackClient struct {
 }
 

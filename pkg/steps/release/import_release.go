@@ -421,22 +421,6 @@ func (s *importReleaseStep) resolveCLIImage(ctx context.Context, targetCLI, stre
 		return nil, fmt.Errorf("unable to check for existing cli extraction pod %s: %w", targetCLI, err)
 	}
 
-	// If the existing pod has already failed or is being deleted, clean it up
-	// and return nil to allow the caller to create a fresh extraction pod.
-	// This enables retry after transient failures like pod eviction.
-	if existingExtractorPod.Status.Phase == coreapi.PodFailed || existingExtractorPod.DeletionTimestamp != nil {
-		logrus.Warnf("Found CLI extraction pod %s in state %s (deleted=%v), cleaning up for retry",
-			targetCLI, existingExtractorPod.Status.Phase, existingExtractorPod.DeletionTimestamp != nil)
-		uid := existingExtractorPod.UID
-		if err := s.client.Delete(ctx, existingExtractorPod, ctrlruntimeclient.Preconditions(meta.Preconditions{UID: &uid})); err != nil && !kerrors.IsNotFound(err) && !kerrors.IsConflict(err) {
-			logrus.WithError(err).Warnf("Failed to delete CLI extraction pod %s", targetCLI)
-		}
-		if err := util.WaitForPodDeletion(ctx, s.client, s.jobSpec.Namespace(), targetCLI, uid); err != nil {
-			logrus.WithError(err).Warnf("Timed out waiting for CLI extraction pod %s deletion", targetCLI)
-		}
-		return nil, nil
-	}
-
 	if _, err := util.WaitForPodCompletion(ctx, s.client, s.jobSpec.Namespace(), targetCLI, nil, util.SkipLogs); err != nil {
 		return nil, fmt.Errorf("unable to wait for existing cli extraction pod %s: %w", targetCLI, err)
 	}
@@ -562,36 +546,13 @@ func (s *importReleaseStep) getCLIImage(ctx context.Context, target, streamName 
 	}
 
 	targetCLI := fmt.Sprintf("%s-cli", target)
-
-	const maxCLIExtractionAttempts = 3
-	var lastErr error
-	for attempt := 0; attempt < maxCLIExtractionAttempts; attempt++ {
-		if attempt > 0 {
-			delay := time.Duration(attempt*10) * time.Second
-			logrus.WithError(lastErr).Warnf("CLI image extraction for %s failed, retrying in %s (%d/%d)...",
-				s.name, delay, attempt+1, maxCLIExtractionAttempts)
-			select {
-			case <-ctx.Done():
-				return nil, ctx.Err()
-			case <-time.After(delay):
-			}
-		}
-
-		cliRef, err := s.resolveCLIImage(ctx, targetCLI, streamName)
-		if err != nil {
-			lastErr = err
-			continue
-		}
-		if cliRef != nil {
-			return cliRef, nil
-		}
-
-		cliRef, err = s.extractAndTagCLIImage(ctx, targetCLI, streamName)
-		if err != nil {
-			lastErr = err
-			continue
-		}
+	cliRef, err := s.resolveCLIImage(ctx, targetCLI, streamName)
+	if err != nil {
+		return nil, err
+	}
+	if cliRef != nil {
 		return cliRef, nil
 	}
-	return nil, lastErr
+
+	return s.extractAndTagCLIImage(ctx, targetCLI, streamName)
 }

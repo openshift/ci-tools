@@ -39,6 +39,7 @@ type options struct {
 	kubernetesOptions flagutil.KubernetesOptions
 	vaultToken        string
 	vaultRole         string
+	readOnly          bool
 }
 
 func gatherOptions() (*options, error) {
@@ -52,6 +53,7 @@ func gatherOptions() (*options, error) {
 	o.kubernetesOptions.AddFlags(fs)
 	fs.StringVar(&o.vaultToken, "vault-token", "", "Vault token that will be used to detect conflicting secrets. Must have read access to the whole kv store. Mutually exclusive with --vault-token.")
 	fs.StringVar(&o.vaultRole, "vault-role", "", "Vault role to use for detecting conflicting secrets. Must have access to the whole kv store. Mutually exclusive with --vault-token.")
+	fs.BoolVar(&o.readOnly, "read-only", false, "Reject all write operations to the KV store. Use during Vault-to-GSM migration to freeze secrets.")
 	if err := fs.Parse(os.Args[1:]); err != nil {
 		return nil, fmt.Errorf("failed to parse flags: %w", err)
 	}
@@ -92,7 +94,10 @@ func main() {
 		logrus.WithError(err).Fatal("failed to load kubeconfigs")
 	}
 
-	server, err := createProxyServer(opts.vaultAddr, opts.listenAddr, opts.kvMountPath, clientGetter, privilegedVaultClient)
+	if opts.readOnly {
+		logrus.Warn("Running in read-only mode: all write operations will be rejected")
+	}
+	server, err := createProxyServer(opts.vaultAddr, opts.listenAddr, opts.kvMountPath, clientGetter, privilegedVaultClient, opts.readOnly)
 	if err != nil {
 		logrus.WithError(err).Fatal("failed to create server")
 	}
@@ -111,7 +116,7 @@ func main() {
 	}
 }
 
-func createProxyServer(vaultAddr string, listenAddr string, kvMountPath string, clients func() map[string]ctrlruntimeclient.Client, privilegedVaultClient *vaultclient.VaultClient) (*http.Server, error) {
+func createProxyServer(vaultAddr string, listenAddr string, kvMountPath string, clients func() map[string]ctrlruntimeclient.Client, privilegedVaultClient *vaultclient.VaultClient, readOnly bool) (*http.Server, error) {
 	vaultClient, err := api.NewClient(&api.Config{Address: vaultAddr})
 	if err != nil {
 		return nil, fmt.Errorf("failed to create vault client: %w", err)
@@ -122,7 +127,7 @@ func createProxyServer(vaultAddr string, listenAddr string, kvMountPath string, 
 	}
 
 	proxy := httputil.NewSingleHostReverseProxy(vaultURL)
-	transport := &kvUpdateTransport{kvMountPath: kvMountPath, upstream: http.DefaultTransport, kubeClients: clients, privilegedVaultClient: privilegedVaultClient}
+	transport := &kvUpdateTransport{kvMountPath: kvMountPath, upstream: http.DefaultTransport, kubeClients: clients, privilegedVaultClient: privilegedVaultClient, readOnly: readOnly}
 	transport.initialize()
 	proxy.Transport = transport
 	injector := &kvSubPathInjector{

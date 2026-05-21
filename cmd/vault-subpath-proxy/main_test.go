@@ -69,7 +69,7 @@ path "secret/metadata/team-1/*" {
 	}
 
 	proxyServerPort := testhelper.GetFreePort(t)
-	proxyServer, err := createProxyServer("http://"+vaultAddr, "127.0.0.1:"+proxyServerPort, "secret", nil, rootDirect)
+	proxyServer, err := createProxyServer("http://"+vaultAddr, "127.0.0.1:"+proxyServerPort, "secret", nil, rootDirect, false)
 	if err != nil {
 		t.Fatalf("failed to create proxy server: %v", err)
 	}
@@ -502,6 +502,77 @@ path "secret/metadata/team-1/*" {
 		}
 	})
 
+	t.Run("readOnlyMode", func(t *testing.T) {
+		kvUpdateTransport.readOnly = true
+		t.Cleanup(func() { kvUpdateTransport.readOnly = false })
+
+		readOnlyTestCases := []struct {
+			name               string
+			operation          string
+			path               string
+			data               map[string]string
+			expectedStatusCode int
+			expectedErrors     []string
+		}{
+			{
+				name:               "Write is rejected",
+				operation:          "write",
+				path:               "secret/read-only-test/should-fail",
+				data:               map[string]string{"key": "value"},
+				expectedStatusCode: 403,
+				expectedErrors:     []string{"Vault is in read-only mode for migration. No secret modifications are allowed."},
+			},
+			{
+				name:               "Delete is rejected",
+				operation:          "delete",
+				path:               "secret/metadata/top-level",
+				expectedStatusCode: 403,
+				expectedErrors:     []string{"Vault is in read-only mode for migration. No secret modifications are allowed."},
+			},
+			{
+				name:      "Read still works",
+				operation: "read",
+				path:      "secret/metadata",
+			},
+		}
+
+		for _, tc := range readOnlyTestCases {
+			t.Run(tc.name, func(t *testing.T) {
+				var actualStatusCode int
+				var actualErrors []string
+
+				var err error
+				switch tc.operation {
+				case "write":
+					err = rootProxy.UpsertKV(tc.path, tc.data)
+				case "delete":
+					_, err = rootProxy.Logical().Delete(tc.path)
+				case "read":
+					result, readErr := rootProxy.Logical().List(tc.path)
+					if readErr != nil {
+						t.Fatalf("expected read to succeed in read-only mode, got error: %v", readErr)
+					}
+					if result == nil || result.Data == nil {
+						t.Fatal("expected non-nil result for read in read-only mode")
+					}
+				}
+				if err != nil {
+					responseErr, ok := err.(*api.ResponseError)
+					if !ok {
+						t.Fatalf("got an error back that was not a response error but a %T", err)
+					}
+					actualStatusCode = responseErr.StatusCode
+					actualErrors = responseErr.Errors
+				}
+				if actualStatusCode != tc.expectedStatusCode {
+					t.Errorf("expected status code %d, got %d", tc.expectedStatusCode, actualStatusCode)
+				}
+				if diff := cmp.Diff(actualErrors, tc.expectedErrors); diff != "" {
+					t.Errorf("actual errors differ from expected: %s", diff)
+				}
+			})
+		}
+	})
 }
 func writeKV(client *api.Client, path string, data map[string]string) error {
 	request := client.NewRequest("POST", path)

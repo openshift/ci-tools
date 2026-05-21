@@ -108,7 +108,7 @@ func (s *inputImageTagStep) run(ctx context.Context) error {
 		},
 		Tag: &imagev1.TagReference{
 			ReferencePolicy: imagev1.TagReferencePolicy{
-				Type: imagev1.SourceTagReferencePolicy,
+				Type: imagev1.LocalTagReferencePolicy,
 			},
 			From: from,
 			ImportPolicy: imagev1.TagImportPolicy{

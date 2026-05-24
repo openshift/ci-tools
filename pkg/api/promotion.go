@@ -111,27 +111,27 @@ func ConsolidatedQuayPromotion(c *ReleaseBuildConfiguration) bool {
 	if c == nil {
 		return false
 	}
-	if c.ReleaseTagConfiguration != nil && releaseVersionEquals(c.ReleaseTagConfiguration.Name, 4, 12) {
+	if c.ReleaseTagConfiguration != nil && ConsolidatedQuayPromotionVersion(c.ReleaseTagConfiguration.Name) {
 		return true
 	}
 	for _, target := range PromotionTargets(c.PromotionConfiguration) {
-		if releaseVersionEquals(target.Name, 4, 12) {
+		if ConsolidatedQuayPromotionVersion(target.Name) {
 			return true
 		}
 	}
 	return false
 }
 
-func releaseVersionEquals(name string, major, minor int) bool {
-	var gotMajor, gotMinor int
-	if _, err := fmt.Sscanf(name, "%d.%d", &gotMajor, &gotMinor); err != nil {
+func ConsolidatedQuayPromotionVersion(name string) bool {
+	var major, minor int
+	if _, err := fmt.Sscanf(name, "%d.%d", &major, &minor); err != nil {
 		return false
 	}
-	return gotMajor == major && gotMinor == minor
+	return major == 4 && minor >= 11 && minor <= 22
 }
 
 func quayProxyStreamSuffix(tag ImageStreamTagReference) string {
-	if releaseVersionEquals(tag.Name, 4, 12) {
+	if ConsolidatedQuayPromotionVersion(tag.Name) {
 		return ""
 	}
 	return "-quay"

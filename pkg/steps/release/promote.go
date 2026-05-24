@@ -384,10 +384,10 @@ func getPromotionPod(imageMirrorTarget map[string]string, timeStr string, namesp
 
 		// Template-based IS tags (contain ${component}): batch-then-individual retry, unchanged.
 		if len(tags) > 0 {
-			singleCmd := fmt.Sprintf(retryLoopTemplate, 2, "'Tag attempt $r (all together)'", getTagCommand(tags, 2), ":")
+			singleCmd := fmt.Sprintf(retryLoopTemplate, 2, `"Tag attempt $r (all together)"`, getTagCommand(tags, 2), ":")
 			tagCommands = append(tagCommands, singleCmd)
 			for _, tagPair := range tags {
-				individualCmd := fmt.Sprintf(retryLoopTemplate, 3, "'Tag attempt $r (individual)'", getTagCommand([]string{tagPair}, 2), retryLoopWithBackoff)
+				individualCmd := fmt.Sprintf(retryLoopTemplate, 3, `"Tag attempt $r (individual)"`, getTagCommand([]string{tagPair}, 2), retryLoopWithBackoff)
 				tagCommands = append(tagCommands, individualCmd)
 			}
 		}

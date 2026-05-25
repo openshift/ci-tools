@@ -18,7 +18,7 @@ type prowJobBaseBuilder struct {
 	PodSpec CiOperatorPodSpecGenerator
 	base    prowconfig.JobBase
 
-	info     *ProwgenInfo
+	info     *cioperatorapi.Metadata
 	testName string
 }
 
@@ -58,7 +58,7 @@ func sparseCheckoutFiles(configSpec *cioperatorapi.ReleaseBuildConfiguration) []
 	return sets.List(files)
 }
 
-func hasNoBuilds(c *cioperatorapi.ReleaseBuildConfiguration, info *ProwgenInfo) bool {
+func hasNoBuilds(c *cioperatorapi.ReleaseBuildConfiguration, info *cioperatorapi.Metadata) bool {
 	if c == nil {
 		return false
 	}
@@ -76,7 +76,7 @@ func hasNoBuilds(c *cioperatorapi.ReleaseBuildConfiguration, info *ProwgenInfo) 
 // from the given ReleaseBuildConfiguration, Prowgen config. The embedded PodSpec
 // is built using an injected CiOperatorPodSpecGenerator, not directly. The embedded
 // PodSpec is not built until the Build method is called.
-func NewProwJobBaseBuilder(configSpec *cioperatorapi.ReleaseBuildConfiguration, info *ProwgenInfo, podSpecGenerator CiOperatorPodSpecGenerator) *prowJobBaseBuilder {
+func NewProwJobBaseBuilder(configSpec *cioperatorapi.ReleaseBuildConfiguration, info *cioperatorapi.Metadata, podSpecGenerator CiOperatorPodSpecGenerator) *prowJobBaseBuilder {
 	b := &prowJobBaseBuilder{
 		PodSpec: podSpecGenerator,
 		base: prowconfig.JobBase{
@@ -89,8 +89,8 @@ func NewProwJobBaseBuilder(configSpec *cioperatorapi.ReleaseBuildConfiguration, 
 		},
 	}
 
-	private := info.Config.Private || (configSpec.Prowgen != nil && configSpec.Prowgen.Private)
-	expose := info.Config.Expose || (configSpec.Prowgen != nil && configSpec.Prowgen.Expose)
+	private := configSpec.Prowgen != nil && configSpec.Prowgen.Private
+	expose := configSpec.Prowgen != nil && configSpec.Prowgen.Expose
 
 	sparseFiles := sparseCheckoutFiles(configSpec)
 	shouldSkipCloning := len(sparseFiles) == 0
@@ -137,7 +137,7 @@ func NewProwJobBaseBuilder(configSpec *cioperatorapi.ReleaseBuildConfiguration, 
 // NewProwJobBaseBuilderForTest creates a new builder populated with defaults
 // for the given ci-operator test. The resulting builder is a superset of a
 // one built by NewProwJobBaseBuilder, with additional fields set for test
-func NewProwJobBaseBuilderForTest(configSpec *cioperatorapi.ReleaseBuildConfiguration, info *ProwgenInfo, podSpecGenerator CiOperatorPodSpecGenerator, test cioperatorapi.TestStepConfiguration) *prowJobBaseBuilder {
+func NewProwJobBaseBuilderForTest(configSpec *cioperatorapi.ReleaseBuildConfiguration, info *cioperatorapi.Metadata, podSpecGenerator CiOperatorPodSpecGenerator, test cioperatorapi.TestStepConfiguration) *prowJobBaseBuilder {
 	p := NewProwJobBaseBuilder(configSpec, info, podSpecGenerator)
 	if test.Cluster != "" {
 		p.Cluster(test.Cluster)
@@ -175,7 +175,7 @@ func NewProwJobBaseBuilderForTest(configSpec *cioperatorapi.ReleaseBuildConfigur
 		if configSpec.Releases != nil {
 			p.PodSpec.Add(CIPullSecret())
 		}
-		if info.Config.EnableSecretsStoreCSIDriver || (configSpec.Prowgen != nil && configSpec.Prowgen.EnableSecretsStoreCSIDriver) {
+		if configSpec.Prowgen != nil && configSpec.Prowgen.EnableSecretsStoreCSIDriver {
 			p.PodSpec.Add(
 				GSMConfig(),
 			)
@@ -189,7 +189,7 @@ func NewProwJobBaseBuilderForTest(configSpec *cioperatorapi.ReleaseBuildConfigur
 		if configSpec.Releases != nil {
 			p.PodSpec.Add(CIPullSecret())
 		}
-		if info.Config.EnableSecretsStoreCSIDriver || (configSpec.Prowgen != nil && configSpec.Prowgen.EnableSecretsStoreCSIDriver) {
+		if configSpec.Prowgen != nil && configSpec.Prowgen.EnableSecretsStoreCSIDriver {
 			p.PodSpec.Add(
 				GSMConfig(),
 			)

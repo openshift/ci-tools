@@ -1,3 +1,5 @@
+prowgen:
+  private: true
 build_root:
   image_stream_tag:
     name: release

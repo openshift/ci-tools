@@ -6,197 +6,16 @@ import (
 	"os"
 	"path"
 	"path/filepath"
-	"regexp"
-	"slices"
 	"strings"
 
 	"github.com/ghodss/yaml"
 	"github.com/sirupsen/logrus"
-
-	utilerrors "k8s.io/apimachinery/pkg/util/errors"
-	"k8s.io/apimachinery/pkg/util/sets"
-	prowv1 "sigs.k8s.io/prow/pkg/apis/prowjobs/v1"
 
 	cioperatorapi "github.com/openshift/ci-tools/pkg/api"
 	"github.com/openshift/ci-tools/pkg/util"
 	"github.com/openshift/ci-tools/pkg/util/gzip"
 	"github.com/openshift/ci-tools/pkg/validation"
 )
-
-// ProwgenFile is the name of prowgen's configuration file.
-var ProwgenFile = ".config.prowgen"
-
-// Prowgen holds the information of the prowgen's configuration file.
-type Prowgen struct {
-	// Private indicates that generated jobs should be marked as hidden
-	// from display in deck and that they should mount appropriate git credentials
-	// to clone the repository under test.
-	Private bool `json:"private,omitempty"`
-	// Expose declares that jobs should not be hidden from view in deck if they
-	// are private.
-	// This field has no effect if private is not set.
-	Expose bool `json:"expose,omitempty"`
-	// Rehearsals declares any disabled rehearsals for jobs
-	Rehearsals Rehearsals `json:"rehearsals,omitempty"`
-	// SlackReporterConfigs defines all desired slack reporter info for included jobs
-	SlackReporterConfigs []SlackReporterConfig `json:"slack_reporter,omitempty"`
-	// SkipOperatorPresubmits allow users to skip the presubmit generation for that specific variant
-	SkipOperatorPresubmits []SkipOperatorPresubmits `json:"skip_operator_presubmits,omitempty"`
-	// EnableSecretsStoreCSIDriver indicates that jobs should use the new CSI Secrets Store
-	// mechanism to handle multi-stage credentials secrets.
-	EnableSecretsStoreCSIDriver bool `json:"enable_secrets_store_csi_driver,omitempty"`
-}
-
-// SlackReporterConfig groups test names to a channel to report; mimicking Prow's version, with some unnecessary fields removed
-type SlackReporterConfig struct {
-	Channel           string                `json:"channel,omitempty"`
-	JobStatesToReport []prowv1.ProwJobState `json:"job_states_to_report,omitempty"`
-	ReportTemplate    string                `json:"report_template,omitempty"`
-	// JobNames matches against test names (e.g., "unit", "e2e") not full Prow job names.
-	// This is intentional for backward compatibility - existing configs use test names here.
-	JobNames []string `json:"job_names,omitempty"`
-	// JobNamePatterns are regex patterns that match against test names (e.g., ".*-e2e$").
-	// Like JobNames, these match test names, not full Prow job names.
-	JobNamePatterns []string `json:"job_name_patterns,omitempty"`
-	// ExcludedVariants is a list of variants to skip (e.g., ["hypershift", "okd"])
-	ExcludedVariants []string `json:"excluded_variants,omitempty"`
-	// ExcludedJobPatterns are regex patterns that match against FULL Prow job names
-	// (e.g., "^pull-.*-skip$" or "^periodic-"). This lets you exclude specific job types
-	// or use prefixes that only exist in the full job name, not the test name.
-	ExcludedJobPatterns []string `json:"excluded_job_patterns,omitempty"`
-}
-
-type SkipOperatorPresubmits struct {
-	Branch  string `json:"branch,omitempty"`
-	Variant string `json:"variant,omitempty"`
-}
-
-// GetSlackReporterConfigForJobName checks against full job names, allowing excluded_job_patterns
-// to work with prefixes like "pull-", "periodic-", etc.
-func (p *Prowgen) GetSlackReporterConfigForJobName(fullJobName, testName, variant string) *SlackReporterConfig {
-nextSlackReporterConfig:
-	for _, s := range p.SlackReporterConfigs {
-		if slices.Contains(s.ExcludedVariants, variant) {
-			continue
-		}
-
-		// Check if job is excluded by pattern (using full job name)
-		for _, excludePattern := range s.ExcludedJobPatterns {
-			if matched, err := regexp.MatchString(excludePattern, fullJobName); err == nil && matched {
-				continue nextSlackReporterConfig
-			}
-		}
-
-		// Check exact job name matches first (against test name for backward compatibility)
-		if slices.Contains(s.JobNames, testName) {
-			return &s
-		}
-
-		// Check regex pattern matches (against test name for backward compatibility)
-		for _, pattern := range s.JobNamePatterns {
-			if matched, err := regexp.MatchString(pattern, testName); err == nil && matched {
-				return &s
-			}
-		}
-	}
-	return nil
-}
-
-func (p *Prowgen) MergeDefaults(defaults *Prowgen) {
-	if defaults.Private {
-		p.Private = true
-	}
-	if defaults.Expose {
-		p.Expose = true
-	}
-	if defaults.EnableSecretsStoreCSIDriver {
-		p.EnableSecretsStoreCSIDriver = true
-	}
-	if defaults.Rehearsals.DisableAll {
-		p.Rehearsals.DisableAll = true
-	}
-	p.Rehearsals.DisabledRehearsals = append(p.Rehearsals.DisabledRehearsals, defaults.Rehearsals.DisabledRehearsals...)
-}
-
-func LoadProwgenConfig(folder string) (*Prowgen, error) {
-	var pConfig *Prowgen
-	path := filepath.Join(folder, ProwgenFile)
-	b, err := os.ReadFile(path)
-	if err != nil && !os.IsNotExist(err) {
-		return nil, fmt.Errorf("prowgen config found in path %s but couldn't read the file: %w", path, err)
-	}
-
-	if err == nil {
-		if err := yaml.Unmarshal(b, &pConfig); err != nil {
-			return nil, fmt.Errorf("prowgen config found in path %sbut couldn't unmarshal it: %w", path, err)
-		}
-	}
-
-	if pConfig != nil {
-		if err := validateProwgenConfig(pConfig); err != nil {
-			return nil, fmt.Errorf("prowgen config found in path %s, but it is invalid: %w", path, err)
-		}
-	}
-
-	return pConfig, nil
-}
-
-func validateProwgenConfig(pConfig *Prowgen) error {
-	var errs []error
-	if len(pConfig.SlackReporterConfigs) > 1 { // There is no reason to validate if we only have one slack_reporter_config
-		jobsSeen := sets.NewString()
-		patternsSeen := sets.NewString()
-
-		for _, sc := range pConfig.SlackReporterConfigs {
-			// Validate exact job names
-			for _, job := range sc.JobNames {
-				if jobsSeen.Has(job) {
-					errs = append(errs, fmt.Errorf("job: %s exists in multiple slack_reporter_configs, it should only be in one", job))
-					continue
-				}
-				jobsSeen.Insert(job)
-			}
-
-			// Validate regex patterns
-			for _, pattern := range sc.JobNamePatterns {
-				// Check if regex pattern is valid
-				if _, err := regexp.Compile(pattern); err != nil {
-					errs = append(errs, fmt.Errorf("invalid regex pattern: %s, error: %w", pattern, err))
-					continue
-				}
-
-				// Check for duplicate patterns
-				if patternsSeen.Has(pattern) {
-					errs = append(errs, fmt.Errorf("regex pattern: %s exists in multiple slack_reporter_configs, it should only be in one", pattern))
-					continue
-				}
-				patternsSeen.Insert(pattern)
-			}
-
-			// Validate excluded job patterns
-			for _, pattern := range sc.ExcludedJobPatterns {
-				// Check if regex pattern is valid
-				if _, err := regexp.Compile(pattern); err != nil {
-					errs = append(errs, fmt.Errorf("invalid excluded job pattern: %s, error: %w", pattern, err))
-					continue
-				}
-
-				// Note: We don't check for duplicates in excluded patterns as it's reasonable
-				// to have the same exclusion in multiple configs
-			}
-		}
-	}
-	return utilerrors.NewAggregate(errs)
-}
-
-type Rehearsals struct {
-	// DisableAll indicates that all jobs will not have their "can-be-rehearsed" label set
-	// and therefore will not be picked up for rehearsals.
-	DisableAll bool `json:"disable_all,omitempty"`
-	// DisabledRehearsals contains a list of jobs that will not have their "can-be-rehearsed" label set
-	// and therefore will not be picked up for rehearsals.
-	DisabledRehearsals []string `json:"disabled_rehearsals,omitempty"`
-}
 
 func readCiOperatorConfig(configFilePath string, info Info) (*cioperatorapi.ReleaseBuildConfiguration, error) {
 	data, err := gzip.ReadFileMaybeGZIP(configFilePath)
@@ -495,13 +314,4 @@ func LoadByOrgRepo(path string) (ByOrgRepo, error) {
 		return nil, err
 	}
 	return config, nil
-}
-
-func (p *Prowgen) SkipPresubmits(branch string, variant string) bool {
-	for _, skip := range p.SkipOperatorPresubmits {
-		if skip.Branch == branch && skip.Variant == variant {
-			return true
-		}
-	}
-	return false
 }

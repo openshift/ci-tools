@@ -412,8 +412,9 @@ func TestCreateSTSConfigMap(t *testing.T) {
 	}
 	s := &multiStageTestStep{
 		name:             "e2e-aws",
+		stsHomeRoleARN:   "arn:aws:iam::000000000000:role/ci-step-runner",
 		stsHubRoleARN:    "arn:aws:iam::111111111111:role/ci-step-runner",
-		stsTargetRoleARN: "arn:aws:iam::222222222222:role/ci-profile-aws-5",
+		stsTargetRoleARN: "arn:aws:iam::222222222222:role/ci-step-runner",
 		client:           fakeClient,
 		jobSpec:          &api.JobSpec{},
 	}
@@ -436,11 +437,17 @@ func TestCreateSTSConfigMap(t *testing.T) {
 		t.Fatal("configmap missing 'config' key")
 	}
 
+	if !strings.Contains(config, "arn:aws:iam::000000000000:role/ci-step-runner") {
+		t.Error("config missing home role ARN")
+	}
 	if !strings.Contains(config, "arn:aws:iam::111111111111:role/ci-step-runner") {
 		t.Error("config missing hub role ARN")
 	}
-	if !strings.Contains(config, "arn:aws:iam::222222222222:role/ci-profile-aws-5") {
+	if !strings.Contains(config, "arn:aws:iam::222222222222:role/ci-step-runner") {
 		t.Error("config missing target role ARN")
+	}
+	if !strings.Contains(config, "source_profile = home") {
+		t.Error("config missing source_profile = home")
 	}
 	if !strings.Contains(config, "source_profile = hub") {
 		t.Error("config missing source_profile = hub")

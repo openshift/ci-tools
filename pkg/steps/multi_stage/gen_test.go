@@ -72,6 +72,7 @@ func TestGeneratePods(t *testing.T) {
 		secretVolumeMounts        []coreapi.VolumeMount
 		leaseProxyServerAvailable bool
 		paramsFunc                func() api.Parameters
+		stsHomeRoleARN            string
 		stsHubRoleARN             string
 		stsTargetRoleARN          string
 	}{
@@ -190,8 +191,9 @@ func TestGeneratePods(t *testing.T) {
 				})
 				return params
 			},
+			stsHomeRoleARN:   "arn:aws:iam::000000000000:role/ci-step-runner",
 			stsHubRoleARN:    "arn:aws:iam::111111111111:role/ci-step-runner",
-			stsTargetRoleARN: "arn:aws:iam::222222222222:role/ci-profile-aws-5",
+			stsTargetRoleARN: "arn:aws:iam::222222222222:role/ci-step-runner",
 		},
 	} {
 		t.Run(tc.name, func(t *testing.T) {
@@ -204,6 +206,7 @@ func TestGeneratePods(t *testing.T) {
 
 			js := jobSpec()
 			step := newMultiStageTestStep(tc.config.Tests[0], tc.config, params, nil, &js, nil, "node-name", "", nil, false, nil, tc.leaseProxyServerAvailable, wait.Backoff{})
+			step.stsHomeRoleARN = tc.stsHomeRoleARN
 			step.stsHubRoleARN = tc.stsHubRoleARN
 			step.stsTargetRoleARN = tc.stsTargetRoleARN
 			step.test[0].Resources = resourceRequirements

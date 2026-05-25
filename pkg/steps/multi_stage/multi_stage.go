@@ -132,6 +132,7 @@ type multiStageTestStep struct {
 	requireNestedPodman              bool
 	leaseProxyServerAvailable        bool
 	leaseProxyClientConfigMapBackoff wait.Backoff
+	stsHomeRoleARN                   string
 	stsHubRoleARN                    string
 	stsTargetRoleARN                 string
 }
@@ -224,6 +225,15 @@ func (s *multiStageTestStep) profileSecretName() (string, error) {
 func (s *multiStageTestStep) retrieveSTSRoleARNParams() error {
 	if s.params == nil {
 		return nil
+	}
+
+	homeRole, err := s.params.Get(api.STSHomeRoleARNParam)
+	if err != nil {
+		return fmt.Errorf("get %s: %w", api.STSHomeRoleARNParam, err)
+	}
+
+	if homeRole != "" {
+		s.stsHomeRoleARN = homeRole
 	}
 
 	hubRole, err := s.params.Get(api.STSHubRoleARNParam)
@@ -325,7 +335,7 @@ func (s *multiStageTestStep) run(ctx context.Context) error {
 	if err := s.createCommandConfigMaps(ctx); err != nil {
 		return fmt.Errorf("failed to create command configmap: %w", err)
 	}
-	if s.stsHubRoleARN != "" && s.stsTargetRoleARN != "" {
+	if s.stsHomeRoleARN != "" && s.stsHubRoleARN != "" && s.stsTargetRoleARN != "" {
 		if err := s.createSTSConfigMap(ctx); err != nil {
 			return fmt.Errorf("failed to create STS config configmap: %w", err)
 		}

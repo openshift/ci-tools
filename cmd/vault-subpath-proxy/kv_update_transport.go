@@ -43,6 +43,7 @@ type kvUpdateTransport struct {
 	// If enabled, the roundtripper will wait for secret
 	// sync to complete. Should only be enabled in tests.
 	synchronousSecretSync bool
+	readOnly              bool
 
 	privilegedVaultClient *vaultclient.VaultClient
 	// existingSecretKeysByNamespaceName is used in the key validation.
@@ -83,6 +84,10 @@ func (k *kvUpdateTransport) RoundTrip(r *http.Request) (*http.Response, error) {
 	l.Debug("Received request")
 	if (r.Method != http.MethodPut && r.Method != http.MethodPost && r.Method != http.MethodPatch && r.Method != http.MethodDelete) || !strings.HasPrefix(r.URL.Path, "/v1/"+k.kvMountPath) {
 		return k.upstream.RoundTrip(r)
+	}
+	if k.readOnly {
+		l.Warn("Rejected write operation: vault is in read-only mode")
+		return newResponse(http.StatusForbidden, r, "Vault is in read-only mode for migration. No secret modifications are allowed."), nil
 	}
 	if r.Method == http.MethodDelete {
 		resp, err := k.upstream.RoundTrip(r)

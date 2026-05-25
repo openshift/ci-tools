@@ -28,8 +28,7 @@ import (
 
 // CreateOrUpdateSecret creates a new secret in Google Secret Manager or updates an existing one with a new version.
 // If labels or annotations are nil, they won't be set on the secret.
-// destroyPreviousVersions controls whether old enabled versions are cleaned up after adding the new one.
-func CreateOrUpdateSecret(ctx context.Context, client SecretManagerClient, projectIdNumber, secretName string, payload []byte, labels, annotations map[string]string, destroyPreviousVersions bool) error {
+func CreateOrUpdateSecret(ctx context.Context, client SecretManagerClient, projectIdNumber, secretName string, payload []byte, labels, annotations map[string]string) error {
 	parent := GetProjectResourceIdNumber(projectIdNumber)
 	secretPath := fmt.Sprintf("%s/secrets/%s", parent, secretName)
 
@@ -53,25 +52,31 @@ func CreateOrUpdateSecret(ctx context.Context, client SecretManagerClient, proje
 		}
 	}
 
-	newVersion, err := client.AddSecretVersion(ctx, &secretmanagerpb.AddSecretVersionRequest{
+	_, err = client.AddSecretVersion(ctx, &secretmanagerpb.AddSecretVersionRequest{
 		Parent:  secretPath,
 		Payload: &secretmanagerpb.SecretPayload{Data: payload},
 	})
 	if err != nil {
 		return fmt.Errorf("failed to add version to secret %s: %w", secretName, err)
 	}
-
-	if destroyPreviousVersions {
-		if err := destroyPreviousSecretVersions(ctx, client, secretPath, newVersion.Name); err != nil {
-			return fmt.Errorf("failed to destroy previous versions of %s: %w", secretName, err)
-		}
-	}
 	return nil
 }
 
-// destroyPreviousSecretVersions destroys all enabled secret versions except the current one
+// CreateOrUpdateSecretDestroyingPreviousVersions creates or updates a secret and then destroys
+// all previously enabled versions to prevent version accumulation and cost growth.
+// Use this for periodic updates (e.g. ci-secret-generator). For initial creation where there
+// are no previous versions, use CreateOrUpdateSecret instead.
+func CreateOrUpdateSecretDestroyingPreviousVersions(ctx context.Context, client SecretManagerClient, projectIdNumber, secretName string, payload []byte, labels, annotations map[string]string) error {
+	if err := CreateOrUpdateSecret(ctx, client, projectIdNumber, secretName, payload, labels, annotations); err != nil {
+		return err
+	}
+	secretPath := fmt.Sprintf("%s/secrets/%s", GetProjectResourceIdNumber(projectIdNumber), secretName)
+	return destroyPreviousSecretVersions(ctx, client, secretPath)
+}
+
+// destroyPreviousSecretVersions destroys all enabled secret versions except the latest one,
 // to avoid accumulating billable versions in GSM.
-func destroyPreviousSecretVersions(ctx context.Context, client SecretManagerClient, secretPath, currentVersionName string) error {
+func destroyPreviousSecretVersions(ctx context.Context, client SecretManagerClient, secretPath string) error {
 	it := client.ListSecretVersions(ctx, &secretmanagerpb.ListSecretVersionsRequest{
 		Parent: secretPath,
 		Filter: "state:ENABLED",
@@ -79,6 +84,8 @@ func destroyPreviousSecretVersions(ctx context.Context, client SecretManagerClie
 	if it == nil {
 		return nil
 	}
+
+	var versions []*secretmanagerpb.SecretVersion
 	for {
 		v, err := it.Next()
 		if errors.Is(err, iterator.Done) {
@@ -87,7 +94,28 @@ func destroyPreviousSecretVersions(ctx context.Context, client SecretManagerClie
 		if err != nil {
 			return fmt.Errorf("failed to list versions for secret %s: %w", secretPath, err)
 		}
-		if v.Name == currentVersionName {
+		versions = append(versions, v)
+	}
+
+	if len(versions) <= 1 {
+		return nil
+	}
+
+	var latest *secretmanagerpb.SecretVersion
+	for _, v := range versions {
+		if v.CreateTime == nil {
+			continue
+		}
+		if latest == nil || v.CreateTime.AsTime().After(latest.CreateTime.AsTime()) {
+			latest = v
+		}
+	}
+	if latest == nil {
+		return fmt.Errorf("cannot determine latest version for %s: no versions have CreateTime set", secretPath)
+	}
+
+	for _, v := range versions {
+		if v.Name == latest.Name {
 			continue
 		}
 		if _, err := client.DestroySecretVersion(ctx, &secretmanagerpb.DestroySecretVersionRequest{
@@ -298,7 +326,7 @@ func (a *Actions) CreateSecrets(ctx context.Context, secretsClient SecretManager
 		}
 
 		logrus.Infof("Creating secret: %s (type: %v, collection: %s)", s.Name, s.Type, s.Collection)
-		if err := CreateOrUpdateSecret(ctx, secretsClient, a.Config.ProjectIdNumber, s.Name, s.Payload, s.Labels, s.Annotations, false); err != nil {
+		if err := CreateOrUpdateSecret(ctx, secretsClient, a.Config.ProjectIdNumber, s.Name, s.Payload, s.Labels, s.Annotations); err != nil {
 			logrus.WithError(err).Errorf("Failed to create secret: %s", s.Name)
 			continue
 		}

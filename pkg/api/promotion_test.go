@@ -215,7 +215,7 @@ func TestQuayCombinedMirrorFunc(t *testing.T) {
 			expected: map[string]string{
 				"quay.io/openshift/ci:ocp_4.22_ovn-kubernetes":                      "registry.build02.ci.openshift.org/ci-op-abc/pipeline@sha256:abc123",
 				"quay.io/openshift/ci:20241024102030_prune_ocp_4.22_ovn-kubernetes": "quay.io/openshift/ci:ocp_4.22_ovn-kubernetes",
-				"ocp/4.22-quay:ovn-kubernetes":                                      "quay-proxy.ci.openshift.org/openshift/ci@sha256:abc123",
+				"ocp/4.22:ovn-kubernetes":                                           "quay-proxy.ci.openshift.org/openshift/ci@sha256:abc123",
 			},
 		},
 		{
@@ -245,7 +245,7 @@ func TestQuayCombinedMirrorFunc(t *testing.T) {
 			},
 			time: "",
 			expected: map[string]string{
-				"ocp/4.22-quay:installer": "quay-proxy.ci.openshift.org/openshift/ci@sha256:xyz789",
+				"ocp/4.22:installer": "quay-proxy.ci.openshift.org/openshift/ci@sha256:xyz789",
 			},
 		},
 		{
@@ -261,7 +261,7 @@ func TestQuayCombinedMirrorFunc(t *testing.T) {
 			expected: map[string]string{
 				"quay.io/openshift/ci:ocp_4.20_cluster-api":                      "registry.build02.ci.openshift.org/ci-op-abc/pipeline@sha256:111222",
 				"quay.io/openshift/ci:20241024104500_prune_ocp_4.20_cluster-api": "quay.io/openshift/ci:ocp_4.20_cluster-api",
-				"ocp/4.20-quay:cluster-api":                                      "quay-proxy.ci.openshift.org/openshift/ci@sha256:111222",
+				"ocp/4.20:cluster-api":                                           "quay-proxy.ci.openshift.org/openshift/ci@sha256:111222",
 			},
 		},
 		{
@@ -309,7 +309,7 @@ func TestQuayCombinedMirrorFunc(t *testing.T) {
 			expected: map[string]string{
 				"quay.io/openshift/ci:ocp_4.22_ovn-kubernetes":                      "registry.build02.ci.openshift.org/ci-op-abc/pipeline:some-tag",
 				"quay.io/openshift/ci:20241024102030_prune_ocp_4.22_ovn-kubernetes": "quay.io/openshift/ci:ocp_4.22_ovn-kubernetes",
-				"ocp/4.22-quay:ovn-kubernetes":                                      "registry.build02.ci.openshift.org/ci-op-abc/pipeline:some-tag",
+				"ocp/4.22:ovn-kubernetes":                                           "registry.build02.ci.openshift.org/ci-op-abc/pipeline:some-tag",
 			},
 		},
 	}

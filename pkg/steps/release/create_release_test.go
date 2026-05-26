@@ -109,7 +109,7 @@ fi`
 		if diff := cmp.Diff(want, got); diff != "" {
 			t.Fatalf("buildOcAdmReleaseNewCommand() mismatch (-want +got):\n%s", diff)
 		}
-		got = buildOcAdmReleaseNewCommand(&api.ReleaseTagConfiguration{Name: "4.15", ReferencePolicy: &srcPol}, "test-ns", "stable", "cvo-pullspec", "dest:tag", "0.0.1-ver")
+		got = buildOcAdmReleaseNewCommand(&api.ReleaseTagConfiguration{Name: "4.23", ReferencePolicy: &srcPol}, "test-ns", "stable", "cvo-pullspec", "dest:tag", "0.0.1-ver")
 		want = "oc adm release new --max-per-registry=32 -n test-ns --from-image-stream stable --to-image-base cvo-pullspec --to-image dest:tag --name 0.0.1-ver --reference-mode=source --keep-manifest-list"
 		if diff := cmp.Diff(want, got); diff != "" {
 			t.Fatalf("buildOcAdmReleaseNewCommand() mismatch (-want +got):\n%s", diff)

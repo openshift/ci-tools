@@ -11,48 +11,10 @@ spec:
       oc image mirror --loglevel=2 --keep-manifest-list --registry-config=/etc/push-secret/.dockerconfigjson --max-per-registry=10 quay.io/openshift/ci:ocp_4.21_ovn-kubernetes=quay.io/openshift/ci:20240603235401_prune_ovn-kubernetes quay.io/openshift/ci:ocp_4.21_ovn-kubernetes-base=quay.io/openshift/ci:20240603235401_prune_ovn-kubernetes-base quay.io/openshift/ci:ocp_4.21_ovn-kubernetes-microshift=quay.io/openshift/ci:20240603235401_prune_ovn-kubernetes-microshift || true
       for r in {1..5}; do echo Mirror attempt $r; oc image mirror --loglevel=2 --keep-manifest-list --registry-config=/etc/push-secret/.dockerconfigjson --max-per-registry=10 registry.build02.ci.openshift.org/ci-op-y2n8rsh3/pipeline@sha256:aaa=quay.io/openshift/ci:ocp_4.21_ovn-kubernetes registry.build02.ci.openshift.org/ci-op-y2n8rsh3/pipeline@sha256:bbb=quay.io/openshift/ci:ocp_4.21_ovn-kubernetes-base registry.build02.ci.openshift.org/ci-op-y2n8rsh3/pipeline@sha256:ccc=quay.io/openshift/ci:ocp_4.21_ovn-kubernetes-microshift && break; backoff=$(($RANDOM % 120))s; echo Sleeping randomized $backoff before retry; sleep $backoff; done
       set +e
-      for r in {1..5}; do
-        _digest=$(oc image info --registry-config=/etc/push-secret/.dockerconfigjson --filter-by-os=linux/amd64 quay-proxy.ci.openshift.org/openshift/ci:ocp_4.21_ovn-kubernetes | sed -n '/^Digest:[[:space:]]/s/^Digest:[[:space:]]*//p' | head -n1)
-        if [ -n "${_digest}" ] && oc tag --source=docker --loglevel=2 --reference-policy='source' --import-mode='PreserveOriginal' --reference quay-proxy.ci.openshift.org/openshift/ci@${_digest} ocp/4.21-quay:ovn-kubernetes; then
-          break
-        fi
-        echo "promotion-quay: digest-tag failed for ocp/4.21-quay:ovn-kubernetes attempt ${r}/5 (QCI digest may have moved after mirror)" >&2
-        if [ "${r}" -eq 5 ]; then
-          exit 1
-        fi
-        echo "promotion-quay: retrying digest-tag for ocp/4.21-quay:ovn-kubernetes (attempt $((r+1))/5 after randomized backoff)" >&2
-        backoff=$(($RANDOM % 120))s
-        sleep "${backoff}"
-      done
-
-      for r in {1..5}; do
-        _digest=$(oc image info --registry-config=/etc/push-secret/.dockerconfigjson --filter-by-os=linux/amd64 quay-proxy.ci.openshift.org/openshift/ci:ocp_4.21_ovn-kubernetes-base | sed -n '/^Digest:[[:space:]]/s/^Digest:[[:space:]]*//p' | head -n1)
-        if [ -n "${_digest}" ] && oc tag --source=docker --loglevel=2 --reference-policy='source' --import-mode='PreserveOriginal' --reference quay-proxy.ci.openshift.org/openshift/ci@${_digest} ocp/4.21-quay:ovn-kubernetes-base; then
-          break
-        fi
-        echo "promotion-quay: digest-tag failed for ocp/4.21-quay:ovn-kubernetes-base attempt ${r}/5 (QCI digest may have moved after mirror)" >&2
-        if [ "${r}" -eq 5 ]; then
-          exit 1
-        fi
-        echo "promotion-quay: retrying digest-tag for ocp/4.21-quay:ovn-kubernetes-base (attempt $((r+1))/5 after randomized backoff)" >&2
-        backoff=$(($RANDOM % 120))s
-        sleep "${backoff}"
-      done
-
-      for r in {1..5}; do
-        _digest=$(oc image info --registry-config=/etc/push-secret/.dockerconfigjson --filter-by-os=linux/amd64 quay-proxy.ci.openshift.org/openshift/ci:ocp_4.21_ovn-kubernetes-microshift | sed -n '/^Digest:[[:space:]]/s/^Digest:[[:space:]]*//p' | head -n1)
-        if [ -n "${_digest}" ] && oc tag --source=docker --loglevel=2 --reference-policy='source' --import-mode='PreserveOriginal' --reference quay-proxy.ci.openshift.org/openshift/ci@${_digest} ocp/4.21-quay:ovn-kubernetes-microshift; then
-          break
-        fi
-        echo "promotion-quay: digest-tag failed for ocp/4.21-quay:ovn-kubernetes-microshift attempt ${r}/5 (QCI digest may have moved after mirror)" >&2
-        if [ "${r}" -eq 5 ]; then
-          exit 1
-        fi
-        echo "promotion-quay: retrying digest-tag for ocp/4.21-quay:ovn-kubernetes-microshift (attempt $((r+1))/5 after randomized backoff)" >&2
-        backoff=$(($RANDOM % 120))s
-        sleep "${backoff}"
-      done
-
+      for r in {1..2}; do echo "Tag attempt $r (all together)"; oc tag --source=docker --loglevel=2 --reference-policy='source' --import-mode='PreserveOriginal' --reference quay-proxy.ci.openshift.org/openshift/ci@sha256:aaa ocp/4.21:ovn-kubernetes quay-proxy.ci.openshift.org/openshift/ci@sha256:bbb ocp/4.21:ovn-kubernetes-base quay-proxy.ci.openshift.org/openshift/ci@sha256:ccc ocp/4.21:ovn-kubernetes-microshift && break; :; done
+      for r in {1..3}; do echo "Tag attempt $r (individual)"; oc tag --source=docker --loglevel=2 --reference-policy='source' --import-mode='PreserveOriginal' --reference quay-proxy.ci.openshift.org/openshift/ci@sha256:aaa ocp/4.21:ovn-kubernetes && break; backoff=$(($RANDOM % 120))s; echo Sleeping randomized $backoff before retry; sleep $backoff; done
+      for r in {1..3}; do echo "Tag attempt $r (individual)"; oc tag --source=docker --loglevel=2 --reference-policy='source' --import-mode='PreserveOriginal' --reference quay-proxy.ci.openshift.org/openshift/ci@sha256:bbb ocp/4.21:ovn-kubernetes-base && break; backoff=$(($RANDOM % 120))s; echo Sleeping randomized $backoff before retry; sleep $backoff; done
+      for r in {1..3}; do echo "Tag attempt $r (individual)"; oc tag --source=docker --loglevel=2 --reference-policy='source' --import-mode='PreserveOriginal' --reference quay-proxy.ci.openshift.org/openshift/ci@sha256:ccc ocp/4.21:ovn-kubernetes-microshift && break; backoff=$(($RANDOM % 120))s; echo Sleeping randomized $backoff before retry; sleep $backoff; done
       set -e
     command:
     - /bin/sh

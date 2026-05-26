@@ -1717,6 +1717,34 @@ func TestFromConfig(t *testing.T) {
 		expectedSteps: []string{"[output-images]", "[images]"},
 		expectedPost:  []string{"[promotion-quay]"},
 	}, {
+		name: "promote 4.23 legacy quay",
+		config: api.ReleaseBuildConfiguration{
+			PromotionConfiguration: &api.PromotionConfiguration{
+				Targets: []api.PromotionTarget{{
+					Namespace: ns,
+					Name:      "4.23",
+					Tag:       "tag",
+				}},
+			},
+		},
+		promote:       true,
+		expectedSteps: []string{"[output-images]", "[images]"},
+		expectedPost:  []string{"[promotion]", "[promotion-quay]"},
+	}, {
+		name: "promote 5.0 legacy quay",
+		config: api.ReleaseBuildConfiguration{
+			PromotionConfiguration: &api.PromotionConfiguration{
+				Targets: []api.PromotionTarget{{
+					Namespace: ns,
+					Name:      "5.0",
+					Tag:       "tag",
+				}},
+			},
+		},
+		promote:       true,
+		expectedSteps: []string{"[output-images]", "[images]"},
+		expectedPost:  []string{"[promotion]", "[promotion-quay]"},
+	}, {
 		name: "duplicate input images",
 		config: api.ReleaseBuildConfiguration{
 			Tests: []api.TestStepConfiguration{{

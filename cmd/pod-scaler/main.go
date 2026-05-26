@@ -63,17 +63,19 @@ type consumerOptions struct {
 	port   int
 	uiPort int
 
-	dataDir                string
-	certDir                string
-	mutateResourceLimits   bool
-	cpuCap                 int64
-	memoryCap              string
-	cpuPriorityScheduling  int64
-	percentageMeasured     float64
-	measuredPodCPUIncrease float64
-	systemReservedCPU      int64
-	authoritativeCPU       bool
-	authoritativeMemory    bool
+	dataDir                   string
+	certDir                   string
+	mutateResourceLimits      bool
+	cpuCap                    int64
+	memoryCap                 string
+	cpuPriorityScheduling     int64
+	percentageMeasured        float64
+	measuredPodCPUIncrease    float64
+	systemReservedCPU         int64
+	authoritativeCPU          bool
+	authoritativeMemory       bool
+	authoritativeCPUDryRun    bool
+	authoritativeMemoryDryRun bool
 }
 
 func bindOptions(fs *flag.FlagSet) *options {
@@ -102,6 +104,8 @@ func bindOptions(fs *flag.FlagSet) *options {
 	fs.Int64Var(&o.systemReservedCPU, "system-reserved-cpu", 2, "CPU cores to reserve for system overhead when capping measured pod CPU.")
 	fs.BoolVar(&o.authoritativeCPU, "authoritative-cpu", false, "Allow admission to decrease CPU requests and limits based on measured usage.")
 	fs.BoolVar(&o.authoritativeMemory, "authoritative-memory", false, "Allow admission to decrease memory requests and limits based on measured usage.")
+	fs.BoolVar(&o.authoritativeCPUDryRun, "authoritative-cpu-dry-run", false, "Log CPU decreases that authoritative mode would apply without mutating pods.")
+	fs.BoolVar(&o.authoritativeMemoryDryRun, "authoritative-memory-dry-run", false, "Log memory decreases that authoritative mode would apply without mutating pods.")
 	o.resultsOptions.Bind(fs)
 	return &o
 }
@@ -291,7 +295,7 @@ func mainAdmission(opts *options, cache Cache) {
 		logrus.WithError(err).Fatal("Failed to create pod-scaler reporter.")
 	}
 
-	go admit(opts.port, opts.instrumentationOptions.HealthPort, opts.certDir, client, kubeClient, loaders(cache), opts.mutateResourceLimits, opts.cpuCap, opts.memoryCap, opts.cpuPriorityScheduling, opts.percentageMeasured, opts.measuredPodCPUIncrease, opts.systemReservedCPU, opts.authoritativeCPU, opts.authoritativeMemory, reporter)
+	go admit(opts.port, opts.instrumentationOptions.HealthPort, opts.certDir, client, kubeClient, loaders(cache), opts.mutateResourceLimits, opts.cpuCap, opts.memoryCap, opts.cpuPriorityScheduling, opts.percentageMeasured, opts.measuredPodCPUIncrease, opts.systemReservedCPU, opts.authoritativeCPU, opts.authoritativeMemory, opts.authoritativeCPUDryRun, opts.authoritativeMemoryDryRun, reporter)
 }
 
 func loaders(cache Cache) map[string][]*cacheReloader {

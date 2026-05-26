@@ -228,10 +228,10 @@ func stsConfigMapName(testName string) string {
 }
 
 func (s *multiStageTestStep) createSTSConfigMap(ctx context.Context) error {
-	logrus.Infof("Creating STS AWS config for test %q (hub=%s, target=%s)", s.name, s.stsHubRoleARN, s.stsTargetRoleARN)
+	logrus.Infof("Creating STS AWS config for test %q (home=%s, hub=%s, target=%s)", s.name, s.stsHomeRoleARN, s.stsHubRoleARN, s.stsTargetRoleARN)
 	name := stsConfigMapName(s.name)
 
-	configContent := fmt.Sprintf("[profile hub]\nweb_identity_token_file = %s/token\nrole_arn = %s\n\n[default]\nrole_arn = %s\nsource_profile = hub\n", stsTokenMountPath, s.stsHubRoleARN, s.stsTargetRoleARN)
+	configContent := fmt.Sprintf("[profile home]\nweb_identity_token_file = %s/token\nrole_arn = %s\n\n[profile hub]\nrole_arn = %s\nsource_profile = home\n\n[default]\nrole_arn = %s\nsource_profile = hub\n", stsTokenMountPath, s.stsHomeRoleARN, s.stsHubRoleARN, s.stsTargetRoleARN)
 
 	yes := true
 	cm := &coreapi.ConfigMap{

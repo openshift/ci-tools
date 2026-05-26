@@ -78,8 +78,10 @@ const (
 	ClusterProfileSetEnv          = "CLUSTER_PROFILE_SET_NAME"
 	ClusterProfileParam           = "CLUSTER_PROFILE"
 	ClusterProfileSecretNameParam = "CLUSTER_PROFILE_SECRET_NAME"
+	STSHomeRoleARNParam           = "CI_STS_HOME_ROLE_ARN"
 	STSHubRoleARNParam            = "CI_STS_HUB_ROLE_ARN"
 	STSTargetRoleARNParam         = "CI_STS_TARGET_ROLE_ARN"
+	STSHomeRoleARNSecretKey       = "home_role_arn"
 	STSHubRoleARNSecretKey        = "hub_role_arn"
 	STSTargetRoleARNSecretKey     = "target_role_arn"
 

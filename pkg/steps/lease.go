@@ -47,6 +47,7 @@ type leaseStep struct {
 	clusterProfileSetName    string
 	clusterProfileName       string
 	clusterProfileSecretName string
+	stsHomeRoleARN           string
 	stsHubRoleARN            string
 	stsTargetRoleARN         string
 }
@@ -96,6 +97,8 @@ func (s *leaseStep) Provides() api.ParameterMap {
 	parameters[api.ClusterProfileParam] = func() (string, error) { return s.clusterProfileName, nil }
 	// nolint:unparam
 	parameters[api.ClusterProfileSecretNameParam] = func() (string, error) { return s.clusterProfileSecretName, nil }
+	// nolint:unparam
+	parameters[api.STSHomeRoleARNParam] = func() (string, error) { return s.stsHomeRoleARN, nil }
 	// nolint:unparam
 	parameters[api.STSHubRoleARNParam] = func() (string, error) { return s.stsHubRoleARN, nil }
 	// nolint:unparam
@@ -285,8 +288,16 @@ func (s *leaseStep) handleClusterProfile(ctx context.Context, l *stepLease, name
 		return fmt.Errorf("import secret %s for cluster profile %s: %w", cpDetails.Secret, s.clusterProfileName, err)
 	}
 
+	s.stsHomeRoleARN = string(secretData[api.STSHomeRoleARNSecretKey])
 	s.stsHubRoleARN = string(secretData[api.STSHubRoleARNSecretKey])
 	s.stsTargetRoleARN = string(secretData[api.STSTargetRoleARNSecretKey])
+
+	if s.stsHubRoleARN != "" && s.stsTargetRoleARN != "" && s.stsHomeRoleARN == "" {
+		logrus.Warnf("STS hub and target role ARNs are set for profile %s but home_role_arn is missing "+
+			"from the cluster profile secret; STS will not be activated", s.clusterProfileName)
+		s.stsHubRoleARN = ""
+		s.stsTargetRoleARN = ""
+	}
 
 	s.clusterProfileSecretName = cpDetails.Secret
 	return nil

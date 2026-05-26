@@ -22,7 +22,9 @@ import (
 
 	authenticationv1 "k8s.io/api/authentication/v1"
 	authorizationv1 "k8s.io/api/authorization/v1"
+	aggerrs "k8s.io/apimachinery/pkg/util/errors"
 	"k8s.io/apimachinery/pkg/util/wait"
+	"k8s.io/client-go/tools/clientcmd"
 	ctrlruntimeclient "sigs.k8s.io/controller-runtime/pkg/client"
 	"sigs.k8s.io/prow/pkg/config/secret"
 	"sigs.k8s.io/prow/pkg/interrupts"
@@ -32,18 +34,19 @@ import (
 )
 
 type options struct {
-	listenAddr        string
-	exposedHost       string
-	gracePeriod       time.Duration
-	robotUsernameFile string
-	robotPasswordFile string
-	tokenSecretFile   string
-	tokenValidityRaw  string
-	tokenValidity     time.Duration
-	tlsCertFile       string
-	tlsKeyFile        string
-	intervalRaw       string
-	interval          time.Duration
+	listenAddr             string
+	exposedHost            string
+	gracePeriod            time.Duration
+	robotUsernameFile      string
+	robotPasswordFile      string
+	tokenSecretFile        string
+	tokenValidityRaw       string
+	tokenValidity          time.Duration
+	tlsCertFile            string
+	tlsKeyFile             string
+	intervalRaw            string
+	interval               time.Duration
+	supplementalKubeconfig string
 }
 
 func gatherOptions() (*options, error) {
@@ -59,6 +62,7 @@ func gatherOptions() (*options, error) {
 	fs.StringVar(&o.tlsCertFile, "tls-cert-file", "", "Path to a tls cert file. Must not be empty.")
 	fs.StringVar(&o.tlsKeyFile, "tls-key-file", "", "Path to a tls key file. Must not be empty.")
 	fs.StringVar(&o.intervalRaw, "interval", "30s", "Parseable duration string that specifies the period to refresh robot's quay.io bearer token")
+	fs.StringVar(&o.supplementalKubeconfig, "supplemental-kubeconfig", "", "Supplemental cluster used to check tokens validity")
 	if err := fs.Parse(os.Args[1:]); err != nil {
 		return nil, fmt.Errorf("failed to parse flags: %w", err)
 	}
@@ -132,7 +136,24 @@ func main() {
 	if err != nil {
 		logrus.WithError(err).Fatal("Failed to create proxy handler")
 	}
-	handler := getRouter(proxyHandler, opts.exposedHost, newTokenService(ctx, ocClient), appTokenService, secret.GetSecret, opts.robotUsernameFile, opts.robotPasswordFile)
+
+	var tokenService ClusterTokenService = newTokenService(ctx, inClusterConfig.Host, ocClient)
+	if opts.supplementalKubeconfig != "" {
+		config, err := clientcmd.BuildConfigFromFlags("", opts.supplementalKubeconfig)
+		if err != nil {
+			logrus.WithError(err).Fatal("Failed to read supplemental kubeconfig")
+		}
+
+		supplementalOCClient, err := ctrlruntimeclient.New(config, ctrlruntimeclient.Options{})
+		if err != nil {
+			logrus.WithError(err).Fatal("Failed to create supplemental oc client")
+		}
+
+		supplementalTokenService := newTokenService(ctx, config.Host, supplementalOCClient)
+		tokenService = newMultiClusterTokenService(tokenService, supplementalTokenService)
+	}
+
+	handler := getRouter(proxyHandler, opts.exposedHost, tokenService, appTokenService, secret.GetSecret, opts.robotUsernameFile, opts.robotPasswordFile)
 	interrupts.ListenAndServeTLS(&http.Server{Addr: opts.listenAddr, Handler: handler}, opts.tlsCertFile, opts.tlsKeyFile, opts.gracePeriod)
 	interrupts.WaitForGracefulShutdown()
 }
@@ -374,19 +395,62 @@ type QuayService interface {
 
 type ClusterTokenService interface {
 	Validate(token string) (bool, error)
+	Host() string
 }
 
-type SimpleClusterTokenService struct {
+func newMultiClusterTokenService(clusterTokenServices ...ClusterTokenService) *multiClusterTokenService {
+	return &multiClusterTokenService{
+		clusterTokenServices: clusterTokenServices,
+		logger:               logrus.WithField("subComponent", "newMultiClusterTokenService"),
+	}
+}
+
+type multiClusterTokenService struct {
+	logger               *logrus.Entry
+	clusterTokenServices []ClusterTokenService
+}
+
+func (m *multiClusterTokenService) Validate(token string) (bool, error) {
+	errs := make([]error, 0)
+
+	for _, cts := range m.clusterTokenServices {
+		isValid, err := cts.Validate(token)
+
+		if err != nil {
+			m.logger.WithField("host", cts.Host()).WithError(err).Error("Failed to validate token")
+			errs = append(errs, err)
+			continue
+		}
+
+		if isValid {
+			return true, nil
+		}
+	}
+
+	return false, aggerrs.NewAggregate(errs)
+}
+
+func (m *multiClusterTokenService) Host() string {
+	return ""
+}
+
+type simpleClusterTokenService struct {
 	ctx    context.Context
 	client ctrlruntimeclient.Client
+	host   string
 	logger *logrus.Entry
 }
 
-func newTokenService(ctx context.Context, client ctrlruntimeclient.Client) ClusterTokenService {
-	return &SimpleClusterTokenService{ctx: ctx, client: client, logger: logrus.WithField("subComponent", "simpleClusterTokenService")}
+func newTokenService(ctx context.Context, host string, client ctrlruntimeclient.Client) *simpleClusterTokenService {
+	return &simpleClusterTokenService{
+		ctx:    ctx,
+		client: client,
+		host:   host,
+		logger: logrus.WithField("subComponent", "simpleClusterTokenService").WithField("host", host),
+	}
 }
 
-func (s *SimpleClusterTokenService) Validate(token string) (bool, error) {
+func (s *simpleClusterTokenService) Validate(token string) (bool, error) {
 	t := time.Now()
 	var username string
 	var ret bool
@@ -434,6 +498,10 @@ func (s *SimpleClusterTokenService) Validate(token string) (bool, error) {
 	}
 	ret = sar.Status.Allowed
 	return ret, nil
+}
+
+func (s *simpleClusterTokenService) Host() string {
+	return s.host
 }
 
 type appHandler struct {

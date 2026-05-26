@@ -16,13 +16,32 @@ import (
 )
 
 type fakeClusterTokenService struct {
+	validTokenPattern string
+	errTokenPattern   string
+	host              string
 }
 
 func (s *fakeClusterTokenService) Validate(token string) (bool, error) {
-	if token == "w" {
+	switch token {
+	case s.errTokenPattern:
+		return false, fmt.Errorf("host %s fails to validate %s", s.host, token)
+	case s.validTokenPattern:
+		return true, nil
+	default:
 		return false, nil
 	}
-	return true, nil
+}
+
+func (s *fakeClusterTokenService) Host() string {
+	return ""
+}
+
+func newFakeClusterTokenService(validTokenPattern, errTokenPattern, host string) *fakeClusterTokenService {
+	return &fakeClusterTokenService{
+		validTokenPattern: validTokenPattern,
+		errTokenPattern:   errTokenPattern,
+		host:              host,
+	}
 }
 
 type fakeQuayService struct {
@@ -249,7 +268,7 @@ func TestGetRouter(t *testing.T) {
 			for k, v := range tc.requestHeaders {
 				req.Header.Set(k, v)
 			}
-			handler := getRouter(fakeProxy, "host:12321", &fakeClusterTokenService{}, &fakeAppTokenService{}, func(s string) []byte { return []byte(s) }, "u", "p")
+			handler := getRouter(fakeProxy, "host:12321", newFakeClusterTokenService("p", "e", ""), &fakeAppTokenService{}, func(s string) []byte { return []byte(s) }, "u", "p")
 			rr := httptest.NewRecorder()
 			handler.ServeHTTP(rr, req)
 
@@ -310,6 +329,74 @@ func TestJWTTokenService(t *testing.T) {
 				if diff := cmp.Diff(actualValidateErr, actualValidateErr, testhelper.EquateErrorMessage); diff != "" {
 					t.Errorf("%s actualValidateErr differs from expected:\n%s", tc.name, diff)
 				}
+			}
+		})
+	}
+}
+
+func TestMultiClusterTokenService(t *testing.T) {
+	s := func(cts ...ClusterTokenService) []ClusterTokenService {
+		return cts
+	}
+
+	for _, tc := range []struct {
+		name                 string
+		token                string
+		clusterTokenServices []ClusterTokenService
+		wantIsValid          bool
+		wantErr              string
+	}{
+		{
+			name:                 "single: valid token",
+			token:                "v",
+			clusterTokenServices: s(newFakeClusterTokenService("v", "e", "appci")),
+			wantIsValid:          true,
+		},
+		{
+			name:                 "multi: first service validates token",
+			token:                "v",
+			clusterTokenServices: s(newFakeClusterTokenService("v", "e", "appci"), newFakeClusterTokenService("w", "e", "coreci")),
+			wantIsValid:          true,
+		},
+		{
+			name:                 "multi: second service validates token",
+			token:                "v",
+			clusterTokenServices: s(newFakeClusterTokenService("w", "e", "appci"), newFakeClusterTokenService("v", "e", "coreci")),
+			wantIsValid:          true,
+		},
+		{
+			name:                 "multi: invalid token",
+			token:                "w",
+			clusterTokenServices: s(newFakeClusterTokenService("v", "e", "appci"), newFakeClusterTokenService("v", "e", "coreci")),
+		},
+		{
+			name:                 "multi: first service in error but token is valid",
+			token:                "e",
+			clusterTokenServices: s(newFakeClusterTokenService("v", "e", "appci"), newFakeClusterTokenService("e", "E", "coreci")),
+			wantIsValid:          true,
+		},
+		{
+			name:                 "multi: all services in error",
+			token:                "e",
+			clusterTokenServices: s(newFakeClusterTokenService("v", "e", "appci"), newFakeClusterTokenService("v", "e", "coreci")),
+			wantErr:              "[host appci fails to validate e, host coreci fails to validate e]",
+		},
+	} {
+		t.Run(tc.name, func(t *testing.T) {
+			multi := newMultiClusterTokenService(tc.clusterTokenServices...)
+			gotIsValid, err := multi.Validate(tc.token)
+
+			gotErr := ""
+			if err != nil {
+				gotErr = err.Error()
+			}
+
+			if tc.wantErr != gotErr {
+				t.Errorf("want error %s but got %s", tc.wantErr, gotErr)
+			}
+
+			if tc.wantIsValid != gotIsValid {
+				t.Errorf("want valid %t but got %t", tc.wantIsValid, gotIsValid)
 			}
 		})
 	}

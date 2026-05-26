@@ -20,8 +20,9 @@ import (
 	"github.com/openshift/ci-tools/pkg/testhelper"
 )
 
-// Admission sets up the pod-scaler admission server and returns a transport for talking to it
-func Admission(t testhelper.TestingTInterface, dataDir, kubeconfig string, parent context.Context, stream bool) (string, *http.Transport) {
+// Admission sets up the pod-scaler admission server and returns a transport for talking to it.
+// extraFlags are appended to the pod-scaler admission invocation (e.g. authoritative dry-run flags).
+func Admission(t testhelper.TestingTInterface, dataDir, kubeconfig string, parent context.Context, stream bool, extraFlags ...string) (string, *http.Transport) {
 	authDir := t.TempDir()
 	caCertFile := path.Join(authDir, "ca.crt")
 	caKeyFile := path.Join(authDir, "ca.key")
@@ -63,6 +64,7 @@ func Admission(t testhelper.TestingTInterface, dataDir, kubeconfig string, paren
 		"--metrics-port=9092",
 		"--report-credentials-file=" + credFile,
 	}
+	podScalerFlags = append(podScalerFlags, extraFlags...)
 	podScaler := testhelper.NewAccessory("pod-scaler", podScalerFlags, func(port, healthPort string) []string {
 		t.Logf("pod-scaler admission starting on port %s", port)
 		return []string{"--port", port, "--health-port", healthPort}

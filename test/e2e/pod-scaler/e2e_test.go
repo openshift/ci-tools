@@ -20,9 +20,12 @@ import (
 
 	"github.com/google/go-cmp/cmp"
 	"github.com/openhistogram/circonusllhist"
+	"github.com/prometheus/common/model"
+	jsonpatch "gopkg.in/evanphx/json-patch.v5"
 
 	admissionv1 "k8s.io/api/admission/v1"
 	corev1 "k8s.io/api/core/v1"
+	"k8s.io/apimachinery/pkg/api/resource"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/apimachinery/pkg/runtime"
 	"sigs.k8s.io/prow/pkg/interrupts"
@@ -346,5 +349,187 @@ func TestAdmission(t *testing.T) {
 			}
 			testhelper.CompareWithFixture(t, review.Response.Patch, testhelper.WithSuffix("-patch"))
 		})
+	}
+}
+
+func TestAdmissionAuthoritativeDryRun(t *testing.T) {
+	t.Parallel()
+	T := testhelper.NewT(interrupts.Context(), t)
+	prometheusAddr, _ := prometheus.Initialize(T, T.TempDir(), rand.New(rand.NewSource(4641280330504625122)), false)
+
+	kubeconfigFile := kubernetes.Fake(T, T.TempDir(), kubernetes.Prometheus(prometheusAddr), kubernetes.Builds(map[string]map[string]map[string]string{
+		"namespace": {
+			"withoutlabels": map[string]string{},
+		},
+	}))
+	dataDir := T.TempDir()
+	run.Producer(T, dataDir, kubeconfigFile, 0*time.Second)
+
+	podLabels := map[string]string{
+		"created-by-ci":                    "true",
+		"ci.openshift.io/metadata.org":     "org",
+		"ci.openshift.io/metadata.repo":    "repo",
+		"ci.openshift.io/metadata.branch":  "branch",
+		"ci.openshift.io/metadata.variant": "variant",
+		"ci.openshift.io/metadata.target":  "target",
+		"ci.openshift.io/metadata.step":    "step",
+	}
+	// Producer fixture histograms store counter-scale values; replace with low CPU rates so
+	// admission can exercise authoritative decrease (see TestAdmission for unmodified increase path).
+	seedLowCPURecommendationCache(T, dataDir, podscaler.MetadataFor(podLabels, "pod", "container"), 7)
+
+	// Same Prometheus fixture as TestAdmission "pod for which we have data" (~10 CPU recommendation).
+	const configuredMilli = 100_000                     // 100 CPU
+	wantMilli := int64(float64(configuredMilli) * 0.75) // 25% authoritative cap
+	cpuCap := int64(200)
+
+	highCPU := *resource.NewMilliQuantity(configuredMilli, resource.DecimalSI)
+	wantCPU := *resource.NewMilliQuantity(wantMilli, resource.DecimalSI)
+	basePod := corev1.Pod{
+		ObjectMeta: metav1.ObjectMeta{
+			Name:   "pod",
+			Labels: podLabels,
+		},
+		Spec: corev1.PodSpec{
+			Containers: []corev1.Container{{
+				Name: "container",
+				Resources: corev1.ResourceRequirements{
+					Requests: corev1.ResourceList{
+						corev1.ResourceCPU: highCPU,
+					},
+				},
+			}},
+		},
+	}
+
+	t.Run("dry-run does not decrease CPU", func(t *testing.T) {
+		ctx, cancel := context.WithCancel(interrupts.Context())
+		defer cancel()
+		admissionHost, transport := run.Admission(T, dataDir, kubeconfigFile, ctx, false,
+			"--authoritative-cpu=true",
+			"--authoritative-cpu-dry-run=true",
+			fmt.Sprintf("--cpu-cap=%d", cpuCap),
+		)
+		got := cpuRequestAfterAdmission(t, &basePod, admissionHost, transport)
+		if got.Cmp(highCPU) != 0 {
+			t.Fatalf("dry-run changed CPU request from %s to %s", highCPU.String(), got.String())
+		}
+	})
+
+	t.Run("authoritative decreases CPU", func(t *testing.T) {
+		ctx, cancel := context.WithCancel(interrupts.Context())
+		defer cancel()
+		admissionHost, transport := run.Admission(T, dataDir, kubeconfigFile, ctx, false, "--authoritative-cpu=true", fmt.Sprintf("--cpu-cap=%d", cpuCap))
+		got := cpuRequestAfterAdmission(t, &basePod, admissionHost, transport)
+		if got.Cmp(wantCPU) != 0 {
+			t.Fatalf("authoritative CPU request = %s, want %s", got.String(), wantCPU.String())
+		}
+	})
+}
+
+func cpuRequestAfterAdmission(t *testing.T, pod *corev1.Pod, admissionHost string, transport *http.Transport) resource.Quantity {
+	t.Helper()
+	pod = pod.DeepCopy()
+	pod.TypeMeta = metav1.TypeMeta{Kind: "Pod", APIVersion: "v1"}
+	rawPod, err := json.Marshal(pod)
+	if err != nil {
+		t.Fatalf("marshal pod: %v", err)
+	}
+	request := admissionv1.AdmissionRequest{
+		UID:      "705ab4f5-6393-11e8-b7cc-42010a800003",
+		Kind:     metav1.GroupVersionKind{Group: "", Version: "v1", Kind: "Pod"},
+		Resource: metav1.GroupVersionResource{Group: "", Version: "v1", Resource: "pods"},
+		Object:   runtime.RawExtension{Raw: rawPod},
+	}
+	rawReview, err := json.Marshal(admissionv1.AdmissionReview{
+		TypeMeta: metav1.TypeMeta{Kind: "AdmissionReview", APIVersion: "admission.k8s.io/v1"},
+		Request:  &request,
+	})
+	if err != nil {
+		t.Fatalf("marshal review: %v", err)
+	}
+	client := http.Client{Transport: transport}
+	response, err := client.Post(admissionHost+"/pods", "application/json", bytes.NewBuffer(rawReview))
+	if err != nil {
+		t.Fatalf("post admission: %v", err)
+	}
+	defer response.Body.Close()
+	rawResponse, err := io.ReadAll(response.Body)
+	if err != nil {
+		t.Fatalf("read response: %v", err)
+	}
+	var review admissionv1.AdmissionReview
+	if err := json.Unmarshal(rawResponse, &review); err != nil {
+		t.Fatalf("unmarshal review: %v", err)
+	}
+	if review.Response == nil || !review.Response.Allowed {
+		t.Fatalf("admission not allowed: %+v", review.Response)
+	}
+	patched, err := applyJSONPatchToPod(pod, review.Response.Patch)
+	if err != nil {
+		t.Fatalf("apply patch: %v", err)
+	}
+	cpu := patched.Spec.Containers[0].Resources.Requests[corev1.ResourceCPU]
+	if cpu.IsZero() {
+		t.Fatal("no CPU request on patched pod")
+	}
+	return cpu
+}
+
+func applyJSONPatchToPod(pod *corev1.Pod, patch []byte) (*corev1.Pod, error) {
+	raw, err := json.Marshal(pod)
+	if err != nil {
+		return nil, err
+	}
+	if len(patch) == 0 {
+		out := pod.DeepCopy()
+		return out, nil
+	}
+	decoded, err := jsonpatch.DecodePatch(patch)
+	if err != nil {
+		return nil, err
+	}
+	patched, err := decoded.Apply(raw)
+	if err != nil {
+		return nil, err
+	}
+	var out corev1.Pod
+	if err := json.Unmarshal(patched, &out); err != nil {
+		return nil, err
+	}
+	return &out, nil
+}
+
+func seedLowCPURecommendationCache(t testhelper.TestingTInterface, dataDir string, meta podscaler.FullMetadata, coresAtQuantile float64) {
+	t.Helper()
+	hist := circonusllhist.New(circonusllhist.NoLookup())
+	for i := 0; i < 500; i++ {
+		if err := hist.RecordValue(coresAtQuantile); err != nil {
+			t.Fatalf("record histogram value: %v", err)
+		}
+	}
+	wrapped := circonusllhist.NewHistogramWithoutLookups(hist)
+	fp := model.Fingerprint(0xcafe)
+	for _, prefix := range []string{"steps", "pods", "prowjobs"} {
+		path := filepath.Join(dataDir, prefix, "container_cpu_usage_seconds_total.json")
+		raw, err := os.ReadFile(path)
+		if err != nil {
+			t.Fatalf("read %s CPU cache: %v", prefix, err)
+		}
+		var cache podscaler.CachedQuery
+		if err := json.Unmarshal(raw, &cache); err != nil {
+			t.Fatalf("unmarshal %s CPU cache: %v", prefix, err)
+		}
+		cache.Data = map[model.Fingerprint]*circonusllhist.HistogramWithoutLookups{fp: wrapped}
+		cache.DataByMetaData = map[podscaler.FullMetadata][]podscaler.FingerprintTime{
+			meta: {{Fingerprint: fp, Added: time.Now()}},
+		}
+		encoded, err := json.Marshal(&cache)
+		if err != nil {
+			t.Fatalf("marshal %s CPU cache: %v", prefix, err)
+		}
+		if err := os.WriteFile(path, encoded, 0o644); err != nil {
+			t.Fatalf("write %s CPU cache: %v", prefix, err)
+		}
 	}
 }

@@ -53,6 +53,9 @@ type ProwgenOverrides struct {
 	// Expose declares that jobs should not be hidden from view in deck if they
 	// are private. This field has no effect if private is not set.
 	Expose bool `json:"expose,omitempty"`
+	// DisableSparseCheckout disables the sparse checkout optimization for the
+	// repository clone done by Prow's clonerefs.
+	DisableSparseCheckout bool `json:"disable_sparse_checkout,omitempty"`
 }
 
 // ReleaseBuildConfiguration describes how release

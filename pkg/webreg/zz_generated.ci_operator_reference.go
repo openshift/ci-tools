@@ -351,6 +351,9 @@ const ciOperatorReferenceYaml = "# The list of base images describe\n" +
 	"          tag_by_commit: true\n" +
 	"prowgen:\n" +
 	"    disable_rehearsals: true\n" +
+	"    # DisableSparseCheckout disables the sparse checkout optimization for the\n" +
+	"    # repository clone done by Prow's clonerefs.\n" +
+	"    disable_sparse_checkout: true\n" +
 	"    enable_secrets_store_csi_driver: true\n" +
 	"    # Expose declares that jobs should not be hidden from view in deck if they\n" +
 	"    # are private. This field has no effect if private is not set.\n" +

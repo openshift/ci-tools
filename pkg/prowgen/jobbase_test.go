@@ -122,6 +122,22 @@ func TestProwJobBaseBuilder(t *testing.T) {
 			podSpecBuilder: newFakePodSpecBuilder(),
 		},
 		{
+			name:             "job with images and sparse checkout disabled",
+			info:             defaultInfo,
+			images:           ciop.ImageConfiguration{Items: []ciop.ProjectDirectoryImageBuildStepConfiguration{{From: "base", To: "image"}}},
+			prowgenOverrides: &ciop.ProwgenOverrides{DisableSparseCheckout: true},
+			prefix:           "default",
+			podSpecBuilder:   newFakePodSpecBuilder(),
+		},
+		{
+			name:             "private job with images and sparse checkout disabled",
+			info:             &ciop.Metadata{Org: "vorg", Repo: "vrepo", Branch: "vbranch"},
+			images:           ciop.ImageConfiguration{Items: []ciop.ProjectDirectoryImageBuildStepConfiguration{{From: "base", To: "image"}}},
+			prowgenOverrides: &ciop.ProwgenOverrides{Private: true, DisableSparseCheckout: true},
+			prefix:           "default",
+			podSpecBuilder:   NewCiOperatorPodSpecGenerator(),
+		},
+		{
 			name:           "default job without further configuration, including podspec",
 			info:           defaultInfo,
 			prefix:         "default",

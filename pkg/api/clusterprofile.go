@@ -51,6 +51,7 @@ const (
 	ClusterProfileAWSKonfluxQE            ClusterProfile = "aws-konflux-qe"
 	ClusterProfileAWSRHTAPPerformance     ClusterProfile = "aws-rhtap-performance"
 	ClusterProfileAWSRHDHPerf             ClusterProfile = "aws-rhdh-performance"
+	ClusterProfileAWSRHDHDisconnected     ClusterProfile = "aws-rhdh-disconnected"
 	ClusterProfileAWSServerless           ClusterProfile = "aws-serverless"
 	ClusterProfileAWSTelco                ClusterProfile = "aws-telco"
 	ClusterProfileAWSOpendatahub          ClusterProfile = "aws-opendatahub"
@@ -263,6 +264,7 @@ func ClusterProfiles() []ClusterProfile {
 		ClusterProfileAWSKonfluxQE,
 		ClusterProfileAWSRHTAPPerformance,
 		ClusterProfileAWSRHDHPerf,
+		ClusterProfileAWSRHDHDisconnected,
 		ClusterProfileAWSServerless,
 		ClusterProfileAWSStackrox,
 		ClusterProfileAWSTelco,
@@ -469,6 +471,7 @@ func (p ClusterProfile) ClusterType() string {
 		ClusterProfileAWSKonfluxQE,
 		ClusterProfileAWSRHTAPPerformance,
 		ClusterProfileAWSRHDHPerf,
+		ClusterProfileAWSRHDHDisconnected,
 		ClusterProfileAWSSustAutoRel412,
 		ClusterProfileAWSKubeVirt,
 		ClusterProfileAWSOVNPerfScale,
@@ -806,6 +809,8 @@ func (p ClusterProfile) LeaseType() string {
 		return "aws-rhtap-performance-quota-slice"
 	case ClusterProfileAWSRHDHPerf:
 		return "aws-rhdh-performance-quota-slice"
+	case ClusterProfileAWSRHDHDisconnected:
+		return "aws-rhdh-disconnected-quota-slice"
 	case ClusterProfileAWSServerless:
 		return "aws-serverless-quota-slice"
 	case ClusterProfileAWSStackrox:

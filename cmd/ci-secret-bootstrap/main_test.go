@@ -2323,6 +2323,14 @@ func (f *fakeGSMClient) AddSecretVersion(ctx context.Context, req *secretmanager
 	return nil, fmt.Errorf("not implemented")
 }
 
+func (f *fakeGSMClient) ListSecretVersions(ctx context.Context, req *secretmanagerpb.ListSecretVersionsRequest, opts ...gax.CallOption) *secretmanager.SecretVersionIterator {
+	return nil
+}
+
+func (f *fakeGSMClient) DestroySecretVersion(ctx context.Context, req *secretmanagerpb.DestroySecretVersionRequest, opts ...gax.CallOption) (*secretmanagerpb.SecretVersion, error) {
+	return nil, fmt.Errorf("not implemented")
+}
+
 func TestIntegration(t *testing.T) {
 	testCases := []struct {
 		id               string

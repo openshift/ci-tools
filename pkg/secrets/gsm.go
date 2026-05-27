@@ -65,7 +65,7 @@ func (g *gsmSyncDecorator) SetFieldOnItem(itemName, fieldName string, fieldValue
 	annotations := make(map[string]string)
 	annotations["request-information"] = "Created by periodic-ci-secret-generator."
 
-	if err := gsm.CreateOrUpdateSecret(g.ctx, g.gsmClient, g.config.ProjectIdNumber, secretName, fieldValue, labels, annotations); err != nil {
+	if err := gsm.CreateOrUpdateSecretDestroyingPreviousVersions(g.ctx, g.gsmClient, g.config.ProjectIdNumber, secretName, fieldValue, labels, annotations); err != nil {
 		logrus.WithError(err).Errorf("Failed to sync to GSM: %s", secretName)
 		// Don't fail the Vault write
 	} else {
@@ -78,7 +78,7 @@ func (g *gsmSyncDecorator) SetFieldOnItem(itemName, fieldName string, fieldValue
 func (g *gsmSyncDecorator) UpdateIndexSecret(itemName string, payload []byte) error {
 	annotations := make(map[string]string)
 	annotations["request-information"] = "Created by periodic-ci-secret-generator."
-	if err := gsm.CreateOrUpdateSecret(g.ctx, g.gsmClient, g.config.ProjectIdNumber, gsm.GetIndexSecretName(itemName), payload, nil, annotations); err != nil {
+	if err := gsm.CreateOrUpdateSecretDestroyingPreviousVersions(g.ctx, g.gsmClient, g.config.ProjectIdNumber, gsm.GetIndexSecretName(itemName), payload, nil, annotations); err != nil {
 		return err
 	}
 	return nil

@@ -9,7 +9,7 @@
     type: mrkdwn
   type: section
 - text:
-    text: You can also ask `(@)ship-help` - AI chatbot that can help answer your questions
+    text: You can also ask `(@)chai-bot` - AI chatbot that can help answer your questions
       :ai-generated:.
     type: mrkdwn
   type: section

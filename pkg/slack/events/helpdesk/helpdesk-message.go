@@ -123,7 +123,7 @@ func getContactedHelpdeskResponse(botId, reviewRequestWorkflowID, user string) [
 	} else {
 		sections = append(sections,
 			"In the meantime, check our <https://docs.ci.openshift.org/|documentation> or <https://docs.ci.openshift.org/getting-started/helpdesk-faq/|Helpdesk FAQ>.",
-			"You can also ask `(@)ship-help` - AI chatbot that can help answer your questions :ai-generated:.",
+			"You can also ask `(@)chai-bot` - AI chatbot that can help answer your questions :ai-generated:.",
 			"If this is an urgent CI outage, please ping `(@)dptp-triage`")
 	}
 

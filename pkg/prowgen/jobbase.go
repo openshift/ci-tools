@@ -97,7 +97,10 @@ func NewProwJobBaseBuilder(configSpec *cioperatorapi.ReleaseBuildConfiguration, 
 	if shouldSkipCloning {
 		b.base.UtilityConfig.DecorationConfig.SkipCloning = ptr.To(true)
 	} else {
-		b.base.UtilityConfig.DecorationConfig.SparseCheckoutFiles = sparseFiles
+		disableSparseCheckout := configSpec.Prowgen != nil && configSpec.Prowgen.DisableSparseCheckout
+		if !disableSparseCheckout {
+			b.base.UtilityConfig.DecorationConfig.SparseCheckoutFiles = sparseFiles
+		}
 		if private {
 			b.base.UtilityConfig.DecorationConfig.OauthTokenSecret = &prowv1.OauthTokenSecret{Key: cioperatorapi.OauthTokenSecretKey, Name: cioperatorapi.OauthTokenSecretName}
 		}

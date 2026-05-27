@@ -47,7 +47,7 @@
   					Limits: {},
   					Requests: v1.ResourceList{
 - 						s"cpu":    {i: resource.int64Amount{value: 2}, Format: "DecimalSI"},
-+ 						s"cpu":    {i: resource.int64Amount{value: 6}, s: "6", Format: "DecimalSI"},
++ 						s"cpu":    {i: resource.int64Amount{value: 6000, scale: -3}, s: "6", Format: "DecimalSI"},
 - 						s"memory": {i: resource.int64Amount{value: 100}, Format: "BinarySI"},
 + 						s"memory": {i: resource.int64Amount{value: 240000000}, s: "234375Ki", Format: "BinarySI"},
   					},

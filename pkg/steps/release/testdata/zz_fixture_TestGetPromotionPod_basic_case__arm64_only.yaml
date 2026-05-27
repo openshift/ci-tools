@@ -20,7 +20,7 @@ spec:
       value: /etc/app-ci-kubeconfig/kubeconfig
     - name: KUBECACHEDIR
       value: /tmp/.kube/cache
-    image: registry.ci.openshift.org/ocp-arm64/4.20:cli
+    image: stable:cli
     name: promotion
     resources: {}
     volumeMounts:

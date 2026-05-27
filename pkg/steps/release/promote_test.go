@@ -1,7 +1,9 @@
 package release
 
 import (
+	"context"
 	"fmt"
+	"net/http"
 	"reflect"
 	"sort"
 	"strings"
@@ -10,8 +12,11 @@ import (
 	"github.com/google/go-cmp/cmp"
 
 	coreapi "k8s.io/api/core/v1"
+	meta "k8s.io/apimachinery/pkg/apis/meta/v1"
+	"k8s.io/apimachinery/pkg/runtime"
 	"k8s.io/apimachinery/pkg/util/sets"
 	"k8s.io/utils/diff"
+	"sigs.k8s.io/controller-runtime/pkg/client/fake"
 
 	imageapi "github.com/openshift/api/image/v1"
 
@@ -816,7 +821,7 @@ func TestGetPromotionPod(t *testing.T) {
 
 	for _, testCase := range testCases {
 		t.Run(testCase.name, func(t *testing.T) {
-			testhelper.CompareWithFixture(t, getPromotionPod(testCase.imageMirror, "20240603235401", testCase.namespace, testCase.stepName, "4.20", testCase.nodeArchitectures))
+			testhelper.CompareWithFixture(t, getPromotionPod(testCase.imageMirror, "20240603235401", testCase.namespace, testCase.stepName, "stable:cli", testCase.nodeArchitectures))
 		})
 	}
 }
@@ -1179,6 +1184,143 @@ func TestQuayProxyTagFromISKey(t *testing.T) {
 			}
 			if ok && got != tt.wantTag {
 				t.Errorf("quayProxyTagFromISKey(%q) = %q, want %q", tt.isTagKey, got, tt.wantTag)
+			}
+		})
+	}
+}
+
+func TestPromotionCLIImageInfoFilterOS(t *testing.T) {
+	t.Parallel()
+
+	tests := []struct {
+		name              string
+		nodeArchitectures []string
+		want              string
+	}{
+		{name: "amd64", nodeArchitectures: []string{"amd64"}, want: "linux/amd64"},
+		{name: "arm64 only", nodeArchitectures: []string{"arm64"}, want: "linux/arm64"},
+		{name: "multi", nodeArchitectures: []string{"amd64", "arm64"}, want: "linux/amd64"},
+	}
+	for _, tt := range tests {
+		tt := tt
+		t.Run(tt.name, func(t *testing.T) {
+			t.Parallel()
+			if got := promotionCLIImageInfoFilterOS(tt.nodeArchitectures); got != tt.want {
+				t.Fatalf("got %q, want %q", got, tt.want)
+			}
+		})
+	}
+}
+
+func TestPromotionRegistryCLIReference(t *testing.T) {
+	t.Parallel()
+
+	ref := promotionRegistryCLIReference("4.22")
+	got := api.QuayImageReference(ref)
+	want := api.QCIAPPCIDomain + "/openshift/ci:ocp_4.22_cli"
+	if got != want {
+		t.Fatalf("got %q, want %q", got, want)
+	}
+}
+
+func TestPromotionCLIImageFromRegistry(t *testing.T) {
+	t.Parallel()
+
+	versionResolver := func(*http.Client) (string, error) { return "4.22", nil }
+
+	got, err := promotionCLIImageFromRegistryWithResolver(versionResolver)
+	if err != nil {
+		t.Fatalf("resolve fallback image: %v", err)
+	}
+	if want := api.QCIAPPCIDomain + "/openshift/ci:ocp_4.22_cli"; got != want {
+		t.Fatalf("got %q, want %q", got, want)
+	}
+}
+
+func TestGetPromotionPodFallbackImageDoesNotPinArm64Node(t *testing.T) {
+	t.Parallel()
+
+	pod := getPromotionPod(
+		map[string]string{"registry.ci.openshift.org/ci/bin:latest": "docker-registry.default.svc:5000/ci-op-test/pipeline@sha256:bbb"},
+		"20240603235401",
+		"ci-op-test",
+		"promotion",
+		api.QCIAPPCIDomain+"/openshift/ci:ocp_4.22_cli",
+		[]string{"arm64"},
+	)
+	if got := pod.Spec.NodeSelector["kubernetes.io/arch"]; got != "amd64" {
+		t.Fatalf("expected fallback cli image to run on amd64 node, got selector %v", pod.Spec.NodeSelector)
+	}
+}
+
+func TestPromotionCLIImage(t *testing.T) {
+	t.Parallel()
+
+	versionResolver := func(*http.Client) (string, error) { return "4.22", nil }
+
+	scheme := runtime.NewScheme()
+	if err := imageapi.Install(scheme); err != nil {
+		t.Fatal(err)
+	}
+
+	stableWithCLI := &imageapi.ImageStream{
+		ObjectMeta: meta.ObjectMeta{Name: "stable", Namespace: "ci-ln-test"},
+		Status: imageapi.ImageStreamStatus{
+			PublicDockerImageRepository: "image-registry.openshift-image-registry.svc:5000/ci-ln-test/stable",
+			Tags: []imageapi.NamedTagEventList{{
+				Tag: "cli",
+				Items: []imageapi.TagEvent{{
+					DockerImageReference: "quay.io/openshift-release-dev/ocp-v4.0-art-dev@sha256:abc",
+					Image:                "sha256:abc",
+				}},
+			}},
+		},
+	}
+	emptyStable := &imageapi.ImageStream{
+		ObjectMeta: meta.ObjectMeta{Name: "stable", Namespace: "ci-ln-empty"},
+	}
+
+	tests := []struct {
+		name      string
+		objects   []runtime.Object
+		namespace string
+		want      string
+	}{
+		{
+			name:      "uses stable cli when payload imported",
+			objects:   []runtime.Object{stableWithCLI},
+			namespace: "ci-ln-test",
+			want:      "stable:cli",
+		},
+		{
+			name:      "falls back when stable has no cli tag",
+			objects:   []runtime.Object{emptyStable},
+			namespace: "ci-ln-empty",
+			want:      api.QCIAPPCIDomain + "/openshift/ci:ocp_",
+		},
+		{
+			name:      "falls back when stable imagestream missing",
+			namespace: "ci-ln-missing",
+			want:      api.QCIAPPCIDomain + "/openshift/ci:ocp_",
+		},
+	}
+	for _, tt := range tests {
+		tt := tt
+		t.Run(tt.name, func(t *testing.T) {
+			t.Parallel()
+			c := fake.NewClientBuilder().WithScheme(scheme).WithRuntimeObjects(tt.objects...).Build()
+			got, err := promotionCLIImageWithResolver(context.Background(), c, tt.namespace, versionResolver)
+			if err != nil {
+				t.Fatalf("promotionCLIImage: %v", err)
+			}
+			if tt.want == "stable:cli" {
+				if got != tt.want {
+					t.Fatalf("got %q, want %q", got, tt.want)
+				}
+				return
+			}
+			if !strings.HasPrefix(got, tt.want) || !strings.HasSuffix(got, "_cli") {
+				t.Fatalf("got %q, want prefix %q and _cli suffix", got, tt.want)
 			}
 		})
 	}

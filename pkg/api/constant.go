@@ -34,7 +34,8 @@ const (
 	ReleaseAnnotationSoftDelete = "release.openshift.io/soft-delete"
 
 	// DPTPRequesterLabel is the label on a Kubernates CR whose value indicates the automated tool that requests the CR
-	DPTPRequesterLabel = "dptp.openshift.io/requester"
+	DPTPRequesterLabel    = "dptp.openshift.io/requester"
+	CISecretBootstrapName = "ci-secret-bootstrap"
 
 	KVMDeviceLabel           = "devices.kubevirt.io/kvm"
 	ClusterLabel             = "ci-operator.openshift.io/cluster"

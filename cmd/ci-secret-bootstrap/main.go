@@ -671,19 +671,29 @@ func fetchUserSecrets(secretsMap map[string]map[types.NamespacedName]coreapi.Sec
 				secretsMap[cluster] = map[types.NamespacedName]coreapi.Secret{}
 			}
 			entry, alreadyExists := secretsMap[cluster][secretName]
+			labels, err := generateUserSecretLabels(secretKeys)
+			if err != nil {
+				errs = append(errs, err)
+				continue
+			}
+			labels[api.DPTPRequesterLabel] = api.CISecretBootstrapName
 			if !alreadyExists {
 				entry = coreapi.Secret{
-					ObjectMeta: metav1.ObjectMeta{Namespace: secretName.Namespace, Name: secretName.Name, Labels: map[string]string{api.DPTPRequesterLabel: "ci-secret-bootstrap"}},
-					Data:       map[string][]byte{},
-					Type:       coreapi.SecretTypeOpaque,
+					ObjectMeta: metav1.ObjectMeta{
+						Namespace: secretName.Namespace,
+						Name:      secretName.Name,
+					},
+					Data: map[string][]byte{},
+					Type: coreapi.SecretTypeOpaque,
 				}
 			}
+			entry.ObjectMeta.Labels = labels
 			if entry.Type != coreapi.SecretTypeOpaque {
 				errs = append(errs, fmt.Errorf("secret %s in cluster %s has ci-secret-bootstrap config as non-opaque type and is targeted by user sync from key %s", secretName.String(), cluster, secretKeys[vaultapi.VaultSourceKey]))
 				continue
 			}
 			for vaultKey, vaultValue := range secretKeys {
-				if vaultKey == vaultapi.SecretSyncTargetClusterKey {
+				if vaultKey == vaultapi.SecretSyncTargetClusterKey || vaultKey == vaultapi.SecretSyncTargetLabelsKey {
 					continue
 				}
 				if _, alreadyExists := entry.Data[vaultKey]; alreadyExists {
@@ -698,6 +708,26 @@ func fetchUserSecrets(secretsMap map[string]map[types.NamespacedName]coreapi.Sec
 	}
 
 	return secretsMap, utilerrors.NewAggregate(errs)
+}
+
+func generateUserSecretLabels(secretKeys map[string]string) (map[string]string, error) {
+	labels := map[string]string{}
+	raw, ok := secretKeys[vaultapi.SecretSyncTargetLabelsKey]
+	if !ok {
+		return labels, nil
+	}
+	for _, label := range strings.Split(raw, ",") {
+		label = strings.TrimSpace(label)
+		if label == "" {
+			continue
+		}
+		key, value, ok := strings.Cut(label, ":")
+		if !ok {
+			return nil, fmt.Errorf("invalid label %q: expected key:value", label)
+		}
+		labels[key] = value
+	}
+	return labels, nil
 }
 
 type Getter interface {
@@ -802,6 +832,7 @@ func updateSecrets(getters map[string]Getter, secretsMap map[string][]*coreapi.S
 
 				if !shouldCreate {
 					differentData := !equality.Semantic.DeepEqual(secret.Data, existingSecret.Data)
+					differentLabels := !equality.Semantic.DeepEqual(secret.ObjectMeta.Labels, existingSecret.ObjectMeta.Labels)
 					var addedKeys, changedKeys, removedKeys []string
 					for k, value := range secret.Data {
 						if existingValue, ok := existingSecret.Data[k]; !ok {
@@ -821,7 +852,7 @@ func updateSecrets(getters map[string]Getter, secretsMap map[string][]*coreapi.S
 						errs = append(errs, fmt.Errorf("secret %s:%s/%s needs updating in place (%s), use --force to do so", cluster, secret.Namespace, secret.Name, change))
 						continue
 					}
-					if existingSecret.Labels == nil || existingSecret.Labels[api.DPTPRequesterLabel] != "ci-secret-bootstrap" || differentData {
+					if existingSecret.Labels == nil || existingSecret.Labels[api.DPTPRequesterLabel] != "ci-secret-bootstrap" || differentData || differentLabels {
 						if _, err := secretClient.Update(context.TODO(), secret, metav1.UpdateOptions{DryRun: dryRunOptions}); err != nil {
 							errs = append(errs, fmt.Errorf("error updating secret %s:%s/%s: %w", cluster, secret.Namespace, secret.Name, err))
 							continue

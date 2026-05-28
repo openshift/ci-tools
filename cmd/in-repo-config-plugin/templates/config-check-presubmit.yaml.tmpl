@@ -1,0 +1,29 @@
+name: pull-ci-{{.Org}}-{{.Repo}}-{{.Branch}}-ci-operator-config-check
+agent: kubernetes
+labels:
+  ci.openshift.io/generator: in-repo-config
+always_run: false
+run_if_changed: '\.ci-operator(\.yaml|/)'
+branches:
+  - '{{.BranchRegex}}'
+context: ci/prow/ci-operator-config-check
+decorate: true
+extra_refs:
+  - org: openshift
+    repo: release
+    base_ref: master
+spec:
+  containers:
+    - name: checkconfig
+      image: {{.CheckconfigImage}}
+{{- if .UseDir}}
+      command: ["ci-operator-checkconfig"]
+      args:
+        - "--config-dir={{.ConfigDirPath}}"
+        - "--registry={{.RegistryPath}}"
+        - "--cluster-profiles-config={{.ProfilesPath}}"
+{{- else}}
+      command: ["/bin/sh", "-c"]
+      args:
+        - "d=$(mktemp -d) && cp {{.ConfigFilePath}} \"$d/\" && ci-operator-checkconfig --config-dir=\"$d\" --registry={{.RegistryPath}} --cluster-profiles-config={{.ProfilesPath}}"
+{{- end}}

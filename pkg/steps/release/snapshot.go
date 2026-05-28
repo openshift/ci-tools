@@ -82,22 +82,38 @@ func snapshotStream(ctx context.Context, client loggingclient.LoggingClient, sou
 		}
 		snapshot.ObjectMeta.Annotations[api.ReleaseConfigAnnotation] = value
 	}
+	var source *imagev1.ImageStream
+	if !api.IsCreatedForClusterBotJob(sourceNamespace) {
+		source = &imagev1.ImageStream{}
+		if err := client.Get(ctx, ctrlruntimeclient.ObjectKey{Namespace: sourceNamespace, Name: sourceName}, source); err != nil {
+			return nil, fmt.Errorf("could not resolve source imagestream %s/%s for release %s: %w", sourceNamespace, sourceName, targetRelease, err)
+		}
+	}
 	for _, tag := range integratedStream.Tags {
 		from := &coreapi.ObjectReference{
 			Kind: "DockerImage",
 			Name: api.QuayImageReference(api.ImageStreamTagReference{Namespace: sourceNamespace, Name: sourceName, Tag: tag}),
 		}
-		// a special case for cluster-bot
 		if api.IsCreatedForClusterBotJob(sourceNamespace) {
-			source := &imagev1.ImageStream{}
-			if err := client.Get(ctx, ctrlruntimeclient.ObjectKey{Namespace: sourceNamespace, Name: sourceName}, source); err != nil {
-				return nil, fmt.Errorf("could not resolve source imagestream %s/%s for release %s: %w", sourceNamespace, sourceName, targetRelease, err)
+			if source == nil {
+				source = &imagev1.ImageStream{}
+				if err := client.Get(ctx, ctrlruntimeclient.ObjectKey{Namespace: sourceNamespace, Name: sourceName}, source); err != nil {
+					return nil, fmt.Errorf("could not resolve source imagestream %s/%s for release %s: %w", sourceNamespace, sourceName, targetRelease, err)
+				}
 			}
 			if valid, _ := utils.FindStatusTag(source, tag); valid != nil {
 				from = valid
 			} else {
 				continue
 			}
+		} else if api.ConsolidatedQuayPromotionVersion(sourceName) && source != nil {
+			from = utils.OfficialImageTagFrom(source, api.ImageStreamTagReference{
+				Namespace: sourceNamespace,
+				Name:      sourceName,
+				Tag:       tag,
+			})
+		} else if ref := utils.FindSpecTag(source, tag); ref != nil && ref.Kind == "DockerImage" && ref.Name != "" {
+			from.Name = ref.Name
 		}
 		if refPolicy == nil {
 			sourcePolicy := imagev1.SourceTagReferencePolicy

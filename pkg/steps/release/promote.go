@@ -242,14 +242,9 @@ func getTagCommand(tagSpecs []string, loglevel int) string {
 		loglevel, strings.Join(tagSpecs, " "))
 }
 
-// quayProxyTagFromISKey derives the quay-proxy image tag from an IS tag key of the form
-// "namespace/streamname-quay:tag", which is the format produced by getQuayProxyTarget when
-// ImageStreamTagReference.Name is non-empty (the standard ocp promotion case).
-// Example: "ocp/4.21-quay:ovn-kubernetes" → "quay-proxy.ci.openshift.org/openshift/ci:ocp_4.21_ovn-kubernetes".
-//
-// The stream segment must end with "-quay"; we split namespace/stream from tag using the last ":" in
-// the segment after "/". Using strings.Index(rest, "-quay:") is wrong when the promotion Name (stream
-// base before "-quay") itself contains "-quay", e.g. "something-quay-operator-quay:component".
+// quayProxyTagFromISKey derives the quay-proxy floating tag from an IS tag key.
+// Handles "namespace/stream-quay:tag" (4.23+) and consolidated "ocp/4.13:tag" (4.11–4.22).
+// Example: "ocp/4.13:cli" → "quay-proxy.ci.openshift.org/openshift/ci:ocp_4.13_cli".
 func quayProxyTagFromISKey(isTagKey string) (string, bool) {
 	slashIdx := strings.Index(isTagKey, "/")
 	if slashIdx == -1 {
@@ -267,10 +262,14 @@ func quayProxyTagFromISKey(isTagKey string) (string, bool) {
 		return "", false
 	}
 	const quayStreamSuffix = "-quay"
-	if !strings.HasSuffix(streamPart, quayStreamSuffix) {
+	var streamName string
+	if strings.HasSuffix(streamPart, quayStreamSuffix) {
+		streamName = strings.TrimSuffix(streamPart, quayStreamSuffix)
+	} else if api.ConsolidatedQuayPromotionVersion(streamPart) {
+		streamName = streamPart
+	} else {
 		return "", false
 	}
-	streamName := strings.TrimSuffix(streamPart, quayStreamSuffix)
 	if streamName == "" {
 		return "", false
 	}
@@ -287,7 +286,26 @@ func promotionCLIImageInfoFilterOS(nodeArchitectures []string) string {
 	return "linux/amd64"
 }
 
-const quayPromotionDigestTagAttempts = 5
+const (
+	quayPromotionDigestTagAttempts = 5
+	quayPromotionMirrorAttempts    = 5
+)
+
+// getMirrorRetryShell mirrors images with retries and fails the promotion pod if all attempts fail.
+func getMirrorRetryShell(registryConfig string, images []string, loglevel int) string {
+	mirrorCmd := getMirrorCommand(registryConfig, images, loglevel)
+	n := quayPromotionMirrorAttempts
+	return fmt.Sprintf(`for r in {1..%d}; do
+  echo Mirror attempt $r
+  if %s; then break; fi
+  if [ "${r}" -eq %d ]; then
+    exit 1
+  fi
+  backoff=$(($RANDOM %% 120))s
+  echo Sleeping randomized $backoff before retry
+  sleep $backoff
+done`, n, mirrorCmd, n)
+}
 
 // getResolveAndTagRetryShell resolves quay-proxy digest via oc image info and oc tags the IST; retries when QCI moves after mirror.
 func getResolveAndTagRetryShell(registryConfig, quayProxyTag, isTag string, loglevel int, filterByOS string) string {
@@ -328,10 +346,8 @@ func getPromotionPod(imageMirrorTarget map[string]string, timeStr string, namesp
 	var images []string
 	var pruneImages []string
 	var tags []string
-	// resolveAndTagPairs holds [quayProxyTag, isTag] for concrete *-quay IS targets in a
-	// quay promotion step. These are handled post-mirror via oc image info + oc tag so
-	// that spec.from always carries the exact QCI manifest digest rather than a floating tag.
-	// Non-release namespaces use oc tag directly.
+	// resolveAndTagPairs holds [quayProxyTag, isTag] for official ocp IS targets (consolidated
+	// ocp/4.x:tag and legacy *-quay). Resolved post-mirror via oc image info + oc tag.
 	var resolveAndTagPairs [][2]string
 
 	isQuayStep := name == api.PromotionQuayStepName
@@ -373,29 +389,25 @@ func getPromotionPod(imageMirrorTarget map[string]string, timeStr string, namesp
 
 	// Generate mirror commands if there are images to mirror
 	if len(images) > 0 {
-		mirrorCommand := fmt.Sprintf("for r in {1..5}; do echo Mirror attempt $r; %s && break; backoff=$(($RANDOM %% 120))s; echo Sleeping randomized $backoff before retry; sleep $backoff; done", getMirrorCommand(registryConfig, images, 2))
-		commands = append(commands, mirrorCommand)
+		commands = append(commands, getMirrorRetryShell(registryConfig, images, 2))
 	}
 
-	// Generate tag/resolve-and-tag commands.
-	if isQuayStep && (len(tags) > 0 || len(resolveAndTagPairs) > 0) {
-		// Quay promotion: run under set +e so one failure does not block the rest.
-		tagCommands := []string{"set +e"}
-
-		// Template-based IS tags (contain ${component}): batch-then-individual retry, unchanged.
-		if len(tags) > 0 {
-			singleCmd := fmt.Sprintf(retryLoopTemplate, 2, `"Tag attempt $r (all together)"`, getTagCommand(tags, 2), ":")
-			tagCommands = append(tagCommands, singleCmd)
-			for _, tagPair := range tags {
-				individualCmd := fmt.Sprintf(retryLoopTemplate, 3, `"Tag attempt $r (individual)"`, getTagCommand([]string{tagPair}, 2), retryLoopWithBackoff)
-				tagCommands = append(tagCommands, individualCmd)
-			}
-		}
-
-		// Concrete *-quay IS targets: resolve QCI digest post-mirror, then tag.
+	if isQuayStep {
 		for _, pair := range resolveAndTagPairs {
 			quayProxyTag, isTag := pair[0], pair[1]
-			tagCommands = append(tagCommands, getResolveAndTagRetryShell(registryConfig, quayProxyTag, isTag, 2, promotionCLIImageInfoFilterOS(nodeArchitectures)))
+			commands = append(commands, getResolveAndTagRetryShell(registryConfig, quayProxyTag, isTag, 2, promotionCLIImageInfoFilterOS(nodeArchitectures)))
+		}
+	}
+
+	// Non-official IS tags (ci/ci-quay, ${component} templates) keep best-effort batch tagging.
+	if isQuayStep && len(tags) > 0 {
+		tagCommands := []string{"set +e"}
+
+		singleCmd := fmt.Sprintf(retryLoopTemplate, 2, `"Tag attempt $r (all together)"`, getTagCommand(tags, 2), ":")
+		tagCommands = append(tagCommands, singleCmd)
+		for _, tagPair := range tags {
+			individualCmd := fmt.Sprintf(retryLoopTemplate, 3, `"Tag attempt $r (individual)"`, getTagCommand([]string{tagPair}, 2), retryLoopWithBackoff)
+			tagCommands = append(tagCommands, individualCmd)
 		}
 
 		tagCommands = append(tagCommands, "set -e")

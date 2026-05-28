@@ -43,14 +43,24 @@ func ImageDigestFor(client ctrlruntimeclient.Client, namespace func() string, na
 		if len(image) > 0 {
 			return fmt.Sprintf("%s@%s", registry, image), nil
 		}
-		if ref == nil && findSpecTag(is, tag) == nil {
+		if ref == nil && !hasSpecTag(is, tag) {
 			return "", fmt.Errorf("image stream %q has no tag %q in spec or status", name, tag)
 		}
 		return fmt.Sprintf("%s:%s", registry, tag), nil
 	}
 }
 
-func findSpecTag(is *imagev1.ImageStream, tag string) *coreapi.ObjectReference {
+func hasSpecTag(is *imagev1.ImageStream, tag string) bool {
+	for _, t := range is.Spec.Tags {
+		if t.Name == tag {
+			return true
+		}
+	}
+	return false
+}
+
+// FindSpecTag returns the spec tag's From reference when present.
+func FindSpecTag(is *imagev1.ImageStream, tag string) *coreapi.ObjectReference {
 	for _, t := range is.Spec.Tags {
 		if t.Name != tag {
 			continue
@@ -58,6 +68,44 @@ func findSpecTag(is *imagev1.ImageStream, tag string) *coreapi.ObjectReference {
 		return t.From
 	}
 	return nil
+}
+
+// OfficialImageTagFrom returns an import source from spec, then status, then quay-proxy.
+func OfficialImageTagFrom(source *imagev1.ImageStream, base api.ImageStreamTagReference) *coreapi.ObjectReference {
+	if source != nil {
+		if ref := FindSpecTag(source, base.Tag); ref != nil && ref.Name != "" {
+			return ref
+		}
+		if ref, _ := FindStatusTag(source, base.Tag); ref != nil && ref.Name != "" {
+			return ref
+		}
+	}
+	return &coreapi.ObjectReference{Kind: "DockerImage", Name: api.QuayImageReference(base)}
+}
+
+// ResolveOfficialInputFrom resolves consolidated ocp inputs: stable in job ns, then spec/status/quay on source IS.
+// When ok is false, callers use QuayImageReference with Source policy (e.g. 4.23, 5.0).
+func ResolveOfficialInputFrom(ctx context.Context, client ctrlruntimeclient.Client, jobNamespace string, base api.ImageStreamTagReference) (*coreapi.ObjectReference, bool, error) {
+	if !api.ConsolidatedQuayPromotionVersion(base.Name) || !api.RefersToOfficialImage(base.Namespace, api.WithoutOKD) {
+		return nil, false, nil
+	}
+	stable := &imagev1.ImageStream{}
+	if err := client.Get(ctx, ctrlruntimeclient.ObjectKey{Namespace: jobNamespace, Name: api.StableImageStream}, stable); err == nil {
+		if _, exists, _ := util.ResolvePullSpec(stable, base.Tag, true); exists {
+			return &coreapi.ObjectReference{
+				Kind:      "ImageStreamTag",
+				Namespace: jobNamespace,
+				Name:      fmt.Sprintf("%s:%s", api.StableImageStream, base.Tag),
+			}, true, nil
+		}
+	} else if !kerrors.IsNotFound(err) {
+		return nil, false, fmt.Errorf("get stable imagestream in %s: %w", jobNamespace, err)
+	}
+	source := &imagev1.ImageStream{}
+	if err := client.Get(ctx, ctrlruntimeclient.ObjectKey{Namespace: base.Namespace, Name: base.Name}, source); err != nil && !kerrors.IsNotFound(err) {
+		return nil, false, fmt.Errorf("get source imagestream %s: %w", base.ISTagName(), err)
+	}
+	return OfficialImageTagFrom(source, base), true, nil
 }
 
 // FindStatusTag returns an object reference to a tag if

@@ -61,9 +61,12 @@ func (s *inputImageTagStep) Inputs() (api.InputDefinition, error) {
 		}
 		s.imageName = from.Image.Name
 	} else {
-		imageName := api.QuayImageReference(s.config.BaseImage)
-		logrus.Debugf("Resolved %s to %s.", s.config.BaseImage.ISTagName(), imageName)
-		s.imageName = imageName
+		_, _, pullSpec, err := s.resolveOfficialImport(context.TODO())
+		if err != nil {
+			return nil, err
+		}
+		s.imageName = pullSpec
+		logrus.Debugf("Resolved %s to %s.", s.config.BaseImage.ISTagName(), s.imageName)
 	}
 
 	return api.InputDefinition{s.imageName}, nil
@@ -80,24 +83,30 @@ func (s *inputImageTagStep) run(ctx context.Context) error {
 		return fmt.Errorf("could not resolve inputs for image tag step: %w", err)
 	}
 
-	var objectReferenceName string
+	var from *coreapi.ObjectReference
+	var refPolicy imagev1.TagReferencePolicyType
+	var sourcePullSpec string
+
 	if s.config.ExternalImage != nil {
-		externalPullSpec := externalImageReference(s.config)
-		logrus.Infof("Tagging %s into %s:%s.", externalPullSpec, api.PipelineImageStream, s.config.To)
-		objectReferenceName = externalPullSpec
-	} else {
+		sourcePullSpec = externalImageReference(s.config)
+		logrus.Infof("Tagging %s into %s:%s.", sourcePullSpec, api.PipelineImageStream, s.config.To)
+		from = &coreapi.ObjectReference{Kind: "DockerImage", Name: sourcePullSpec}
+		refPolicy = imagev1.SourceTagReferencePolicy
+	} else if api.IsCreatedForClusterBotJob(s.config.BaseImage.Namespace) {
 		logrus.Infof("Tagging %s into %s:%s.", s.config.BaseImage.ISTagName(), api.PipelineImageStream, s.config.To)
-		objectReferenceName = api.QuayImageReference(s.config.BaseImage)
-	}
-	from := &coreapi.ObjectReference{
-		Kind: "DockerImage",
-		Name: objectReferenceName,
-	}
-	if api.IsCreatedForClusterBotJob(s.config.BaseImage.Namespace) {
 		from = &coreapi.ObjectReference{
 			Kind:      "ImageStreamImage",
 			Name:      fmt.Sprintf("%s@%s", s.config.BaseImage.Name, s.imageName),
 			Namespace: s.config.BaseImage.Namespace,
+		}
+		sourcePullSpec = s.imageName
+		refPolicy = imagev1.SourceTagReferencePolicy
+	} else {
+		logrus.Infof("Tagging %s into %s:%s.", s.config.BaseImage.ISTagName(), api.PipelineImageStream, s.config.To)
+		var err error
+		from, refPolicy, sourcePullSpec, err = s.resolveOfficialImport(ctx)
+		if err != nil {
+			return err
 		}
 	}
 
@@ -107,10 +116,8 @@ func (s *inputImageTagStep) run(ctx context.Context) error {
 			Namespace: s.jobSpec.Namespace(),
 		},
 		Tag: &imagev1.TagReference{
-			ReferencePolicy: imagev1.TagReferencePolicy{
-				Type: imagev1.SourceTagReferencePolicy,
-			},
-			From: from,
+			ReferencePolicy: imagev1.TagReferencePolicy{Type: refPolicy},
+			From:            from,
 			ImportPolicy: imagev1.TagImportPolicy{
 				ImportMode: imagev1.ImportModePreserveOriginal,
 			},
@@ -137,7 +144,7 @@ func (s *inputImageTagStep) run(ctx context.Context) error {
 		ImageStreamName: api.PipelineImageStream,
 		TagName:         string(s.config.To),
 		FullTagName:     s.jobSpec.Namespace() + "/" + api.PipelineImageStream + ":" + string(s.config.To),
-		SourceImage:     objectReferenceName,
+		SourceImage:     sourcePullSpec,
 		SourceImageKind: from.Kind,
 		StartTime:       startTime,
 		CompletionTime:  time.Now(),
@@ -145,6 +152,22 @@ func (s *inputImageTagStep) run(ctx context.Context) error {
 	})
 
 	return nil
+}
+
+func (s *inputImageTagStep) resolveOfficialImport(ctx context.Context) (*coreapi.ObjectReference, imagev1.TagReferencePolicyType, string, error) {
+	from, ok, err := utils.ResolveOfficialInputFrom(ctx, s.client, s.jobSpec.Namespace(), s.config.BaseImage)
+	if err != nil {
+		return nil, imagev1.SourceTagReferencePolicy, "", err
+	}
+	if !ok {
+		pullSpec := api.QuayImageReference(s.config.BaseImage)
+		return &coreapi.ObjectReference{Kind: "DockerImage", Name: pullSpec}, imagev1.SourceTagReferencePolicy, pullSpec, nil
+	}
+	pullSpec := from.Name
+	if from.Kind != "DockerImage" && from.Namespace != "" {
+		pullSpec = fmt.Sprintf("%s/%s", from.Namespace, from.Name)
+	}
+	return from, imagev1.LocalTagReferencePolicy, pullSpec, nil
 }
 
 // waitForTagInSpec waits for the tag on the image stream are to show in spec

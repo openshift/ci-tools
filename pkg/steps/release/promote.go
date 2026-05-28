@@ -105,13 +105,12 @@ func (s *promotionStep) run(ctx context.Context) error {
 		logger.WithError(err).Warn("Failed to ensure namespaces to promote to in central registry.")
 	}
 
-	version, err := getLatestStableCLIVersion(&http.Client{})
+	cliImage, err := promotionCLIImage(ctx, s.client, s.jobSpec.Namespace())
 	if err != nil {
-		logrus.WithError(err).Warn("Failed to determine the stable release version, using 4.20 instead")
-		version = "4.20"
+		return fmt.Errorf("resolve promotion cli image: %w", err)
 	}
 
-	if _, err := steps.RunPod(ctx, s.client, getPromotionPod(imageMirrorTarget, timeStr, s.jobSpec.Namespace(), s.name, version, s.nodeArchitectures), false); err != nil {
+	if _, err := steps.RunPod(ctx, s.client, getPromotionPod(imageMirrorTarget, timeStr, s.jobSpec.Namespace(), s.name, cliImage, s.nodeArchitectures), false); err != nil {
 		return fmt.Errorf("unable to run promotion pod: %w", err)
 	}
 	return nil
@@ -232,6 +231,53 @@ func getLatestStableCLIVersion(client *http.Client) (string, error) {
 	return "", fmt.Errorf("no stable CLI version found in any stream (tried 9-stable through 4-stable)")
 }
 
+func promotionCLIImage(ctx context.Context, client ctrlruntimeclient.Client, namespace string) (string, error) {
+	return promotionCLIImageWithResolver(ctx, client, namespace, getLatestStableCLIVersion)
+}
+
+func promotionCLIImageWithResolver(
+	ctx context.Context,
+	client ctrlruntimeclient.Client,
+	namespace string,
+	stableVersionResolver func(*http.Client) (string, error),
+) (string, error) {
+	streamName := api.ReleaseStreamFor(api.LatestReleaseName)
+	is := &imagev1.ImageStream{}
+	err := client.Get(ctx, ctrlruntimeclient.ObjectKey{Namespace: namespace, Name: streamName}, is)
+	if err != nil {
+		if apierrors.IsNotFound(err) {
+			return promotionCLIImageFromRegistryWithResolver(stableVersionResolver)
+		}
+		return "", fmt.Errorf("get imagestream %s/%s: %w", namespace, streamName, err)
+	}
+	if findDockerImageReference(is, "cli") != "" {
+		cliImage := fmt.Sprintf("%s:cli", streamName)
+		logrus.WithField("image", cliImage).Info("Using payload cli image for promotion")
+		return cliImage, nil
+	}
+	logrus.WithField("stream", streamName).Info("No cli tag on release payload stream; using quay-proxy stable cli for promotion")
+	return promotionCLIImageFromRegistryWithResolver(stableVersionResolver)
+}
+
+func promotionRegistryCLIReference(version string) api.ImageStreamTagReference {
+	return api.ImageStreamTagReference{Namespace: "ocp", Name: version, Tag: "cli"}
+}
+
+func promotionCLIImageFromRegistryWithResolver(stableVersionResolver func(*http.Client) (string, error)) (string, error) {
+	version, err := stableVersionResolver(&http.Client{Timeout: 15 * time.Second})
+	if err != nil {
+		logrus.WithError(err).Warn("Failed to determine the stable release version, using 4.22 instead")
+		version = "4.22"
+	}
+	ref := promotionRegistryCLIReference(version)
+	// registry.ci ocp/*:cli and ocp-arm64/*:cli are not reliably present after
+	// source-reference migration, so use quay-proxy ocp_<version>_cli fallback.
+	// Arm64-only jobs still resolve/tag arm64 payload digests via --filter-by-os.
+	image := api.QuayImageReference(ref)
+	logrus.WithField("image", image).Info("Using quay-proxy cli image for promotion")
+	return image, nil
+}
+
 func getMirrorCommand(registryConfig string, images []string, loglevel int) string {
 	return fmt.Sprintf("oc image mirror --loglevel=%d --keep-manifest-list --registry-config=%s --max-per-registry=10 %s",
 		loglevel, registryConfig, strings.Join(images, " "))
@@ -318,7 +364,7 @@ const (
 	retryLoopWithBackoff = "backoff=$(($RANDOM % 120))s; echo Sleeping randomized $backoff before retry; sleep $backoff"
 )
 
-func getPromotionPod(imageMirrorTarget map[string]string, timeStr string, namespace string, name string, cliVersion string, nodeArchitectures []string) *coreapi.Pod {
+func getPromotionPod(imageMirrorTarget map[string]string, timeStr string, namespace string, name string, cliImage string, nodeArchitectures []string) *coreapi.Pod {
 	keys := make([]string, 0, len(imageMirrorTarget))
 	for k := range imageMirrorTarget {
 		keys = append(keys, k)
@@ -418,12 +464,13 @@ func getPromotionPod(imageMirrorTarget map[string]string, timeStr string, namesp
 	args = append(args, commands...)
 	args = []string{strings.Join(args, "\n")}
 
-	image := fmt.Sprintf("%s/%s/%s:cli", api.DomainForService(api.ServiceRegistry), "ocp", cliVersion)
+	image := cliImage
 	nodeSelector := map[string]string{"kubernetes.io/arch": "amd64"}
 
 	archs := sets.New[string](nodeArchitectures...)
-	if !archs.Has("amd64") && archs.Has("arm64") {
-		image = fmt.Sprintf("%s/%s/%s:cli", api.DomainForService(api.ServiceRegistry), "ocp-arm64", cliVersion)
+	// Keep arm64 pinning only when using payload stable:cli. Registry fallback image
+	// is amd64-only, but promotion logic itself is architecture-agnostic.
+	if cliImage == "stable:cli" && !archs.Has("amd64") && archs.Has("arm64") {
 		nodeSelector = map[string]string{"kubernetes.io/arch": "arm64"}
 	}
 

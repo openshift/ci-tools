@@ -1110,6 +1110,22 @@ func TestGetPublicImageReference(t *testing.T) {
 	}
 }
 
+func TestGetMirrorRetryShell(t *testing.T) {
+	regcfg := "/etc/push-secret/.dockerconfigjson"
+	got := getMirrorRetryShell(regcfg, []string{"src=dst"}, 2)
+	for _, sub := range []string{
+		"for r in {1..5}",
+		"Mirror attempt $r",
+		"oc image mirror",
+		`[ "${r}" -eq 5 ]`,
+		"exit 1",
+	} {
+		if !strings.Contains(got, sub) {
+			t.Fatalf("missing substring %q in:\n%s", sub, got)
+		}
+	}
+}
+
 func TestGetResolveAndTagRetryShell(t *testing.T) {
 	regcfg := "/etc/push-secret/.dockerconfigjson"
 	proxyTag := "quay-proxy.ci.openshift.org/openshift/ci:ocp_4.21_ovn-kubernetes"
@@ -1170,8 +1186,20 @@ func TestQuayProxyTagFromISKey(t *testing.T) {
 			wantOK:   false,
 		},
 		{
-			name:     "no -quay: suffix",
+			name:     "consolidated ocp stream",
+			isTagKey: "ocp/4.13:secondary-scheduler-operator",
+			wantTag:  "quay-proxy.ci.openshift.org/openshift/ci:ocp_4.13_secondary-scheduler-operator",
+			wantOK:   true,
+		},
+		{
+			name:     "consolidated 4.21 stream",
 			isTagKey: "ocp/4.21:ovn-kubernetes",
+			wantTag:  "quay-proxy.ci.openshift.org/openshift/ci:ocp_4.21_ovn-kubernetes",
+			wantOK:   true,
+		},
+		{
+			name:     "non-consolidated stream without -quay",
+			isTagKey: "ocp/4.23:ovn-kubernetes",
 			wantOK:   false,
 		},
 	}

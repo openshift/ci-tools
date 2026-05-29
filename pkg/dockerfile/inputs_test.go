@@ -13,6 +13,7 @@ func TestDetectInputsFromDockerfile(t *testing.T) {
 		name           string
 		dockerfile     string
 		existingInputs map[string]api.ImageBuildInputs
+		baseImages     map[string]api.ImageStreamTagReference
 		expected       map[string]api.ImageStreamTagReference
 		from           api.PipelineImageStreamTagReference
 	}{
@@ -142,20 +143,26 @@ FROM registry.ci.openshift.org/ocp/4.19:base AS runtime
 			},
 		},
 		{
-			name: "from: is specified - should exclude the last and only detected FROM ref",
+			name: "from matches base image - skip duplicate",
 			dockerfile: `FROM registry.ci.openshift.org/ocp/4.19:base
 RUN echo "hello"
 `,
-			from:     "src",
+			from: "src",
+			baseImages: map[string]api.ImageStreamTagReference{
+				"src": {Namespace: "ocp", Name: "4.19", Tag: "base"},
+			},
 			expected: map[string]api.ImageStreamTagReference{},
 		},
 		{
-			name: "from: is specified - should exclude the last detected FROM ref",
+			name: "from matches only its base image in multi-stage",
 			dockerfile: `FROM registry.ci.openshift.org/ocp/4.18:base AS builder
 FROM registry.ci.openshift.org/ocp/4.19:base
 RUN echo "hello"
 `,
 			from: "src",
+			baseImages: map[string]api.ImageStreamTagReference{
+				"src": {Namespace: "ocp", Name: "4.19", Tag: "base"},
+			},
 			expected: map[string]api.ImageStreamTagReference{
 				"ocp_4.18_base": {
 					Namespace: "ocp",
@@ -166,13 +173,35 @@ RUN echo "hello"
 			},
 		},
 		{
-			name: "from: is specified - should exclude the last detected FROM ref with COPY",
+			name: "multi-stage cli with unrelated from",
+			dockerfile: `FROM registry.ci.openshift.org/ocp/4.14:cli AS cli
+FROM quay.io/centos/centos:stream9
+COPY --from=cli /usr/bin/oc /usr/bin/
+`,
+			from: "stream9",
+			baseImages: map[string]api.ImageStreamTagReference{
+				"stream9": {Namespace: "openshift", Name: "centos", Tag: "stream9"},
+			},
+			expected: map[string]api.ImageStreamTagReference{
+				"ocp_4.14_cli": {
+					Namespace: "ocp",
+					Name:      "4.14",
+					Tag:       "cli",
+					As:        "registry.ci.openshift.org/ocp/4.14:cli",
+				},
+			},
+		},
+		{
+			name: "from matches only its base image with COPY",
 			dockerfile: `FROM registry.ci.openshift.org/ocp/4.18:base AS builder
 FROM registry.ci.openshift.org/openshift/release:rhel-9-release-golang-1.24-openshift-4.21
 COPY --from=registry.ci.openshift.org/ocp/4.19:base /something /somewhere
 RUN echo "hello"
 `,
 			from: "src",
+			baseImages: map[string]api.ImageStreamTagReference{
+				"src": {Namespace: "ocp", Name: "4.19", Tag: "base"},
+			},
 			expected: map[string]api.ImageStreamTagReference{
 				"ocp_4.18_base": {
 					Namespace: "ocp",
@@ -180,11 +209,11 @@ RUN echo "hello"
 					Tag:       "base",
 					As:        "registry.ci.openshift.org/ocp/4.18:base",
 				},
-				"ocp_4.19_base": {
-					Namespace: "ocp",
-					Name:      "4.19",
-					Tag:       "base",
-					As:        "registry.ci.openshift.org/ocp/4.19:base",
+				"openshift_release_rhel-9-release-golang-1.24-openshift-4.21": {
+					Namespace: "openshift",
+					Name:      "release",
+					Tag:       "rhel-9-release-golang-1.24-openshift-4.21",
+					As:        "registry.ci.openshift.org/openshift/release:rhel-9-release-golang-1.24-openshift-4.21",
 				},
 			},
 		},
@@ -192,7 +221,7 @@ RUN echo "hello"
 
 	for _, tc := range testCases {
 		t.Run(tc.name, func(t *testing.T) {
-			result := DetectInputsFromDockerfile([]byte(tc.dockerfile), tc.existingInputs, tc.from)
+			result := DetectInputsFromDockerfile([]byte(tc.dockerfile), tc.existingInputs, tc.from, tc.baseImages)
 
 			if diff := cmp.Diff(tc.expected, result); diff != "" {
 				t.Errorf("result differs from expected:\n%s", diff)

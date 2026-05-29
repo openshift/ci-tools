@@ -980,7 +980,7 @@ func readDockerfileForImage(image api.ProjectDirectoryImageBuildStepConfiguratio
 // required InputImageTagStepConfiguration steps to import them, as well as an updated
 // image configuration with the detected inputs added
 func processDetectedBaseImages(baseImages map[string]api.ImageStreamTagReference, image api.ProjectDirectoryImageBuildStepConfiguration, details dockerfileDetails) ([]api.StepConfiguration, api.ProjectDirectoryImageBuildStepConfiguration) {
-	detectedBaseImages := dockerfile.DetectInputsFromDockerfile(details.content, image.Inputs, image.From)
+	detectedBaseImages := dockerfile.DetectInputsFromDockerfile(details.content, image.Inputs, image.From, baseImages)
 	if len(detectedBaseImages) == 0 {
 		return nil, image
 	}

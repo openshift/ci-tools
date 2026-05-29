@@ -2,6 +2,7 @@ package multi_stage
 
 import (
 	"fmt"
+	"os"
 	"path"
 	"strings"
 
@@ -408,6 +409,9 @@ func (s *multiStageTestStep) generateParams(env []api.StepParameter) []coreapi.E
 			value = *env.Default
 		}
 		if v, ok := s.env[env.Name]; ok {
+			value = v
+		}
+		if v := os.Getenv(env.Name); v != "" {
 			value = v
 		}
 		ret = append(ret, coreapi.EnvVar{Name: env.Name, Value: value})

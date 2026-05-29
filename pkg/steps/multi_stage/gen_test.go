@@ -785,3 +785,33 @@ func TestSetSecurityContexts(t *testing.T) {
 		})
 	}
 }
+
+func TestGenerateParamsEnvOverride(t *testing.T) {
+	defaultVal := "from-default"
+	params := []api.StepParameter{
+		{Name: "WITH_DEFAULT", Default: &defaultVal},
+		{Name: "NO_DEFAULT"},
+		{Name: "ENV_OVERRIDE", Default: &defaultVal},
+		{Name: "EMPTY_ENV_NO_OVERRIDE", Default: &defaultVal},
+	}
+	s := &multiStageTestStep{
+		env: api.TestEnvironment{
+			"NO_DEFAULT":   "from-config",
+			"ENV_OVERRIDE": "from-config",
+		},
+	}
+	t.Setenv("ENV_OVERRIDE", "from-pod-env")
+	// Empty env var should not override
+	t.Setenv("EMPTY_ENV_NO_OVERRIDE", "")
+
+	got := s.generateParams(params)
+	expected := []coreapi.EnvVar{
+		{Name: "WITH_DEFAULT", Value: "from-default"},
+		{Name: "NO_DEFAULT", Value: "from-config"},
+		{Name: "ENV_OVERRIDE", Value: "from-pod-env"},
+		{Name: "EMPTY_ENV_NO_OVERRIDE", Value: "from-default"},
+	}
+	if !reflect.DeepEqual(got, expected) {
+		t.Errorf("generateParams env override precedence mismatch:\n%s", diff.ObjectReflectDiff(expected, got))
+	}
+}

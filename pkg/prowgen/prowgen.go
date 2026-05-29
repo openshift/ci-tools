@@ -37,10 +37,6 @@ func GenerateJobs(configSpec *cioperatorapi.ReleaseBuildConfiguration, info *cio
 	postsubmits := map[string][]prowconfig.Postsubmit{}
 	var periodics []prowconfig.Periodic
 	disableAllRehearsals := configSpec.Prowgen != nil && configSpec.Prowgen.DisableRehearsals
-	var skipBranches []string
-	if configSpec.Prowgen != nil {
-		skipBranches = configSpec.Prowgen.SkipBranches
-	}
 
 	for _, element := range configSpec.Tests {
 		shardCount := 1
@@ -95,7 +91,7 @@ func GenerateJobs(configSpec *cioperatorapi.ReleaseBuildConfiguration, info *cio
 				})
 				periodics = append(periodics, *periodic)
 				if element.Presubmit {
-					handlePresubmit(g, element, info, name, disableRehearsal, configSpec.Resources.RequirementsForStep(element.As).Requests, presubmits, orgrepo, true, skipBranches)
+					handlePresubmit(g, element, info, name, disableRehearsal, configSpec.Resources.RequirementsForStep(element.As).Requests, presubmits, orgrepo, true)
 				}
 			} else if element.Postsubmit {
 				postsubmit := generatePostsubmitForTest(g, info, func(options *generatePostsubmitOptions) {
@@ -110,7 +106,7 @@ func GenerateJobs(configSpec *cioperatorapi.ReleaseBuildConfiguration, info *cio
 				}
 				postsubmits[orgrepo] = append(postsubmits[orgrepo], *postsubmit)
 			} else {
-				handlePresubmit(g, element, info, name, disableRehearsal, configSpec.Resources.RequirementsForStep(element.As).Requests, presubmits, orgrepo, false, skipBranches)
+				handlePresubmit(g, element, info, name, disableRehearsal, configSpec.Resources.RequirementsForStep(element.As).Requests, presubmits, orgrepo, false)
 			}
 		}
 	}
@@ -144,7 +140,6 @@ func GenerateJobs(configSpec *cioperatorapi.ReleaseBuildConfiguration, info *cio
 			options.optional = optional
 			options.runIfChanged = configSpec.Images.RunIfChanged
 			options.skipIfOnlyChanged = configSpec.Images.SkipIfOnlyChanged
-			options.skipBranches = skipBranches
 			options.pipelineRunIfChanged = configSpec.Images.PipelineRunIfChanged
 			options.pipelineSkipIfOnlyChanged = configSpec.Images.PipelineSkipIfOnlyChanged
 			options.slackReporterConfig = configSpec.Images.SlackReporterConfig
@@ -202,16 +197,13 @@ func GenerateJobs(configSpec *cioperatorapi.ReleaseBuildConfiguration, info *cio
 			presubmits[orgrepo] = append(presubmits[orgrepo], *generatePresubmitForTest(jobBaseGen, testName, info, func(options *generatePresubmitOptions) {
 				options.optional = bundle.Optional
 				options.Capabilities = bundle.Capabilities
-				options.skipBranches = skipBranches
 			}))
 		}
 		if containsUnnamedBundle {
 			name := string(cioperatorapi.PipelineImageStreamTagReferenceIndexImage)
 			jobBaseGen := newJobBaseBuilder().TestName(name)
 			jobBaseGen.PodSpec.Add(Targets(name))
-			presubmits[orgrepo] = append(presubmits[orgrepo], *generatePresubmitForTest(jobBaseGen, name, info, func(options *generatePresubmitOptions) {
-				options.skipBranches = skipBranches
-			}))
+			presubmits[orgrepo] = append(presubmits[orgrepo], *generatePresubmitForTest(jobBaseGen, name, info))
 		}
 	}
 
@@ -222,7 +214,7 @@ func GenerateJobs(configSpec *cioperatorapi.ReleaseBuildConfiguration, info *cio
 	}, nil
 }
 
-func handlePresubmit(g *prowJobBaseBuilder, element cioperatorapi.TestStepConfiguration, info *cioperatorapi.Metadata, name string, disableRehearsal bool, requests cioperatorapi.ResourceList, presubmits map[string][]prowconfig.Presubmit, orgrepo string, fromPeriodic bool, skipBranches []string) {
+func handlePresubmit(g *prowJobBaseBuilder, element cioperatorapi.TestStepConfiguration, info *cioperatorapi.Metadata, name string, disableRehearsal bool, requests cioperatorapi.ResourceList, presubmits map[string][]prowconfig.Presubmit, orgrepo string, fromPeriodic bool) {
 	slackConfig := element.SlackReporterConfig
 	if fromPeriodic && (slackConfig == nil || !slackConfig.ReportPresubmit) {
 		slackConfig = nil
@@ -233,7 +225,7 @@ func handlePresubmit(g *prowJobBaseBuilder, element cioperatorapi.TestStepConfig
 		options.Capabilities = element.Capabilities
 		options.runIfChanged = element.RunIfChanged
 		options.skipIfOnlyChanged = element.SkipIfOnlyChanged
-		options.skipBranches = skipBranches
+		options.skipBranches = element.SkipBranches
 		options.defaultDisable = element.AlwaysRun != nil && !*element.AlwaysRun
 		options.optional = element.Optional
 		options.disableRehearsal = disableRehearsal

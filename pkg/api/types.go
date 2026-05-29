@@ -56,13 +56,6 @@ type ProwgenOverrides struct {
 	// DisableSparseCheckout disables the sparse checkout optimization for the
 	// repository clone done by Prow's clonerefs.
 	DisableSparseCheckout bool `json:"disable_sparse_checkout,omitempty"`
-	// SkipBranches is a list of branch name regex patterns. Branches matching
-	// any of these patterns will be excluded from running presubmit jobs
-	// generated for this configuration. This maps directly to the upstream
-	// Prow Brancher.SkipBranches field and is useful to prevent feature branch
-	// inheritance (e.g. preventing presubmits configured for "main" from also
-	// running on "main-*" branches).
-	SkipBranches []string `json:"skip_branches,omitempty"`
 }
 
 // ReleaseBuildConfiguration describes how release
@@ -887,6 +880,14 @@ type TestStepConfiguration struct {
 	// SkipIfOnlyChanged is a regex that will result in the test being skipped if all changed files match that regex.
 	// Only applicable to presubmits; postsubmits always run on every merge.
 	SkipIfOnlyChanged string `json:"skip_if_only_changed,omitempty"`
+
+	// SkipBranches is a list of branch name regex patterns. Branches matching
+	// any of these patterns will be excluded from running this presubmit job.
+	// This maps directly to the upstream Prow Brancher.SkipBranches field and
+	// is useful to prevent feature branch inheritance (e.g. preventing a
+	// presubmit configured for "main" from also running on "main-*" branches).
+	// Only applicable to presubmit tests.
+	SkipBranches []string `json:"skip_branches,omitempty"`
 
 	// PipelineSkipIfOnlyChanged is a regex that will result in the test being skipped in second
 	// stage of the pipeline run if all changed files match that regex.

@@ -944,14 +944,11 @@ func TestGenerateJobs(t *testing.T) {
 			},
 		},
 		{
-			id:   "presubmit with skip_branches via prowgen config",
+			id:   "presubmit with per-test skip_branches",
 			keep: true,
 			config: &ciop.ReleaseBuildConfiguration{
-				Prowgen: &ciop.ProwgenOverrides{
-					SkipBranches: []string{"^branch-foo$", "^branch-bar$"},
-				},
 				Tests: []ciop.TestStepConfiguration{
-					{As: "derTest", ContainerTestConfiguration: &ciop.ContainerTestConfiguration{From: "from"}},
+					{As: "derTest", SkipBranches: []string{"^branch-foo$", "^branch-bar$"}, ContainerTestConfiguration: &ciop.ContainerTestConfiguration{From: "from"}},
 				},
 			},
 			repoInfo: &ciop.Metadata{

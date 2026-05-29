@@ -24,10 +24,9 @@ func (ort OrgRepoTag) String() string {
 }
 
 // ExtractRegistryReferences finds all registry.ci.openshift.org and quay-proxy.ci.openshift.org references in the Dockerfile
-func ExtractRegistryReferences(dockerfile []byte, from api.PipelineImageStreamTagReference) []string {
+func ExtractRegistryReferences(dockerfile []byte) []string {
 	var refs []string
 	seen := sets.Set[string]{}
-	lastFromRef := ""
 
 	for _, line := range bytes.Split(dockerfile, []byte("\n")) {
 		upper := bytes.ToUpper(line)
@@ -40,24 +39,10 @@ func ExtractRegistryReferences(dockerfile []byte, from api.PipelineImageStreamTa
 			continue
 		}
 		ref := string(match)
-		if bytes.HasPrefix(upper, []byte("FROM")) {
-			lastFromRef = ref
-		}
-
 		if !seen.Has(ref) {
 			refs = append(refs, ref)
 			seen.Insert(ref)
 		}
-	}
-	if from != "" {
-		// If from is specified, remove the last detected FROM ref, it will be replaced
-		var newRefs []string
-		for _, ref := range refs {
-			if ref != lastFromRef {
-				newRefs = append(newRefs, ref)
-			}
-		}
-		refs = newRefs
 	}
 	return refs
 }

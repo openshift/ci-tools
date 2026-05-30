@@ -36,14 +36,14 @@ tests:
               cpu: 10m
               memory: 10Mi
         - as: latest
-          commands: grep -q 'v1.0.0' <<<"$( cluster-version-operator version )"
+          commands: grep -q '4.18' <<<"$( cluster-version-operator version )"
           from: "release:latest"
           resources:
             requests:
               cpu: 10m
               memory: 10Mi
         - as: latest-cli
-          commands: grep -q 'v4.2.0-alpha' <<<"$( oc version )" # oc has a broken version in integration streams
+          commands: grep -q '4.18' <<<"$( oc version )"
           from: "stable:cli"
           resources:
             requests:

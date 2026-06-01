@@ -2,7 +2,9 @@ package dispatcher
 
 import (
 	"encoding/gob"
+	"fmt"
 	"os"
+	"path/filepath"
 )
 
 func ReadGob(filename string, data interface{}) error {
@@ -13,26 +15,32 @@ func ReadGob(filename string, data interface{}) error {
 	defer file.Close()
 
 	decoder := gob.NewDecoder(file)
-	err = decoder.Decode(data)
-	if err != nil {
-		return err
-	}
-
-	return nil
+	return decoder.Decode(data)
 }
 
+// WriteGob atomically writes data to filename by writing to a temporary file
+// in the same directory and then renaming it. This prevents corruption if the
+// process is interrupted mid-write.
 func WriteGob(filename string, data interface{}) error {
-	file, err := os.Create(filename)
+	dir := filepath.Dir(filename)
+	tmp, err := os.CreateTemp(dir, filepath.Base(filename)+".tmp.*")
 	if err != nil {
-		return err
+		return fmt.Errorf("failed to create temp file: %w", err)
 	}
-	defer file.Close()
+	tmpName := tmp.Name()
 
-	encoder := gob.NewEncoder(file)
-	err = encoder.Encode(data)
-	if err != nil {
-		return err
+	if err := gob.NewEncoder(tmp).Encode(data); err != nil {
+		tmp.Close()
+		os.Remove(tmpName)
+		return fmt.Errorf("failed to encode gob: %w", err)
 	}
-
+	if err := tmp.Close(); err != nil {
+		os.Remove(tmpName)
+		return fmt.Errorf("failed to close temp file: %w", err)
+	}
+	if err := os.Rename(tmpName, filename); err != nil {
+		os.Remove(tmpName)
+		return fmt.Errorf("failed to rename temp file: %w", err)
+	}
 	return nil
 }

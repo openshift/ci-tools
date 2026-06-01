@@ -8,6 +8,7 @@ import (
 	"os"
 	"os/exec"
 	"path/filepath"
+	"regexp"
 	"strings"
 	"time"
 
@@ -44,6 +45,9 @@ type options struct {
 	confirm              bool
 	failOnNonexistentDst bool
 	debug                bool
+
+	excludeBranchPatterns   privateorg.ArrayFlags
+	compiledExcludePatterns []*regexp.Regexp
 }
 
 const defaultPrefix = "https://github.com"
@@ -95,11 +99,29 @@ func (o *options) validate() []error {
 		errs = append(errs, fmt.Errorf("--git-email is not specified"))
 	}
 
+	for _, pattern := range o.excludeBranchPatterns {
+		re, err := regexp.Compile(pattern)
+		if err != nil {
+			errs = append(errs, fmt.Errorf("--exclude-branch-pattern %q is not a valid regex: %w", pattern, err))
+			continue
+		}
+		o.compiledExcludePatterns = append(o.compiledExcludePatterns, re)
+	}
+
 	if err := o.WhitelistOptions.Validate(); err != nil {
 		errs = append(errs, err)
 
 	}
 	return errs
+}
+
+func (o *options) isBranchExcluded(branch string) bool {
+	for _, re := range o.compiledExcludePatterns {
+		if re.MatchString(branch) {
+			return true
+		}
+	}
+	return false
 }
 
 func gatherOptions() options {
@@ -114,6 +136,7 @@ func gatherOptions() options {
 	fs.StringVar(&o.org, "only-org", "", "Mirror only repos that belong to this org")
 	fs.StringVar(&o.repo, "only-repo", "", "Mirror only a single repo")
 	fs.Var(&o.flattenOrgs, "flatten-org", "Organizations whose repos should not have org prefix (can be specified multiple times)")
+	fs.Var(&o.excludeBranchPatterns, "exclude-branch-pattern", "Regex pattern for branches to exclude from sync (can be specified multiple times)")
 	fs.StringVar(&o.gitDir, "git-dir", "", "Path to directory in which to perform Git operations")
 
 	fs.StringVar(&o.gitName, "git-name", "", "The name to use on the git merge command.")
@@ -632,7 +655,7 @@ func main() {
 
 	var errs []error
 
-	locations, whitelistErrors := getWhitelistedLocations(o.WhitelistOptions.WhitelistConfig.Whitelist, syncer.git, o.prefix, token)
+	locations, whitelistErrors := getWhitelistedLocations(o.WhitelistOptions.WhitelistConfig.Whitelist, syncer.git, o.prefix, token, o.isBranchExcluded)
 	errs = append(errs, whitelistErrors...)
 
 	callback := func(_ *api.ReleaseBuildConfiguration, repoInfo *config.Info) error {
@@ -707,7 +730,7 @@ func main() {
 	}
 }
 
-func getWhitelistedLocations(whitelist map[string][]string, git gitFunc, prefix, token string) (map[location]struct{}, []error) {
+func getWhitelistedLocations(whitelist map[string][]string, git gitFunc, prefix, token string, isBranchExcluded func(string) bool) (map[location]struct{}, []error) {
 	var errs []error
 	locations := make(map[location]struct{})
 
@@ -731,6 +754,10 @@ func getWhitelistedLocations(whitelist map[string][]string, git gitFunc, prefix,
 			}
 
 			for branch := range branches {
+				if isBranchExcluded(branch) {
+					logrus.WithFields(logrus.Fields{"org": org, "repo": repo, "branch": branch}).Debug("Skipping excluded branch")
+					continue
+				}
 				locations[location{org: org, repo: repo, branch: branch}] = struct{}{}
 			}
 		}

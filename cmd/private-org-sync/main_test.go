@@ -2,6 +2,7 @@ package main
 
 import (
 	"fmt"
+	"regexp"
 	"strings"
 	"testing"
 	"time"
@@ -881,4 +882,71 @@ func TestDestinationNaming(t *testing.T) {
 			}
 		})
 	}
+}
+
+func TestIsBranchExcluded(t *testing.T) {
+	o := &options{
+		compiledExcludePatterns: []*regexp.Regexp{
+			regexp.MustCompile(`^konflux/`),
+			regexp.MustCompile(`^dependabot/`),
+		},
+	}
+
+	testCases := []struct {
+		branch   string
+		excluded bool
+	}{
+		{branch: "main", excluded: false},
+		{branch: "release-4.18", excluded: false},
+		{branch: "konflux/mintmaker/release-1.6/eslint-plugin-react-7.x", excluded: true},
+		{branch: "dependabot/npm/lodash-4.17.21", excluded: true},
+		{branch: "feature/konflux-support", excluded: false},
+	}
+	for _, tc := range testCases {
+		t.Run(tc.branch, func(t *testing.T) {
+			if got := o.isBranchExcluded(tc.branch); got != tc.excluded {
+				t.Errorf("isBranchExcluded(%q) = %v, want %v", tc.branch, got, tc.excluded)
+			}
+		})
+	}
+}
+
+func TestGetWhitelistedLocationsExcludesBranches(t *testing.T) {
+	git := func(_ *logrus.Entry, _ string, command ...string) (string, int, error) {
+		if command[0] == "ls-remote" {
+			return "sha1 refs/heads/main\nsha2 refs/heads/release-4.18\nsha3 refs/heads/konflux/mintmaker/dep-update\n", 0, nil
+		}
+		return "", 0, nil
+	}
+
+	excludeKonflux := func(branch string) bool {
+		return regexp.MustCompile(`^konflux/`).MatchString(branch)
+	}
+	noExclusions := func(string) bool { return false }
+
+	whitelist := map[string][]string{"org": {"repo"}}
+
+	t.Run("with exclusion pattern", func(t *testing.T) {
+		locations, errs := getWhitelistedLocations(whitelist, git, defaultPrefix, "", excludeKonflux)
+		if len(errs) > 0 {
+			t.Fatalf("unexpected errors: %v", errs)
+		}
+		if len(locations) != 2 {
+			t.Errorf("expected 2 locations, got %d: %v", len(locations), locations)
+		}
+		excluded := location{org: "org", repo: "repo", branch: "konflux/mintmaker/dep-update"}
+		if _, ok := locations[excluded]; ok {
+			t.Error("konflux branch should have been excluded")
+		}
+	})
+
+	t.Run("without exclusion pattern", func(t *testing.T) {
+		locations, errs := getWhitelistedLocations(whitelist, git, defaultPrefix, "", noExclusions)
+		if len(errs) > 0 {
+			t.Fatalf("unexpected errors: %v", errs)
+		}
+		if len(locations) != 3 {
+			t.Errorf("expected 3 locations, got %d: %v", len(locations), locations)
+		}
+	})
 }

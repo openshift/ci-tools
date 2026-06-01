@@ -403,13 +403,11 @@ func preventUnschedulable(resources *corev1.ResourceRequirements, cpuCap int64, 
 }
 
 func mutatePodResources(pod *corev1.Pod, server *resourceServer, mutateResourceLimits bool, cpuCap int64, memoryCap string, isMeasured bool, nodeCache *nodeAllocatableCache, measuredPodCPUIncrease float64, authoritativeCPU, authoritativeMemory, authoritativeCPUDryRun, authoritativeMemoryDryRun bool, reporter results.PodScalerReporter, logger *logrus.Entry) {
-	// Set measured and workload class in metadata
 	workloadClass := pod.Labels[ciWorkloadLabel]
 
 	mutateResources := func(containers []corev1.Container) {
 		for i := range containers {
 			meta := podscaler.MetadataFor(pod.ObjectMeta.Labels, pod.ObjectMeta.Name, containers[i].Name)
-			meta.WorkloadClass = workloadClass
 
 			// Get recommendations from both measured and unmeasured runs, use maximum
 			var resources corev1.ResourceRequirements

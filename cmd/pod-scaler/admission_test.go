@@ -569,6 +569,65 @@ func TestMutatePodResources(t *testing.T) {
 	}
 }
 
+func TestMutatePodResources_ciWorkloadLabelDoesNotBreakCacheLookup(t *testing.T) {
+	logger := logrus.WithField("test", t.Name())
+	cacheMeta := podscaler.FullMetadata{
+		Metadata: api.Metadata{
+			Org:     "org",
+			Repo:    "repo",
+			Branch:  "branch",
+			Variant: "variant",
+		},
+		Target:    "target",
+		Step:      "step",
+		Pod:       "tomutate",
+		Container: "test",
+	}
+	server := &resourceServer{
+		logger: logger,
+		lock:   sync.RWMutex{},
+		byMetaData: map[podscaler.FullMetadata]corev1.ResourceRequirements{
+			cacheMeta: {
+				Requests: corev1.ResourceList{
+					corev1.ResourceCPU: *resource.NewMilliQuantity(5000, resource.DecimalSI),
+				},
+			},
+		},
+	}
+	pod := &corev1.Pod{
+		ObjectMeta: metav1.ObjectMeta{
+			Name: "tomutate",
+			Labels: map[string]string{
+				"ci.openshift.io/metadata.org":     "org",
+				"ci.openshift.io/metadata.repo":    "repo",
+				"ci.openshift.io/metadata.branch":  "branch",
+				"ci.openshift.io/metadata.variant": "variant",
+				"ci.openshift.io/metadata.target":  "target",
+				"ci.openshift.io/metadata.step":    "step",
+				"ci-workload":                      "prowjobs",
+			},
+		},
+		Spec: corev1.PodSpec{
+			Containers: []corev1.Container{{
+				Name: "test",
+				Resources: corev1.ResourceRequirements{
+					Requests: corev1.ResourceList{
+						corev1.ResourceCPU: *resource.NewMilliQuantity(100, resource.DecimalSI),
+					},
+				},
+			}},
+		},
+	}
+
+	mutatePodResources(pod, server, false, 10, "20Gi", false, nil, 50.0, false, false, false, false, &defaultReporter, logger)
+
+	got := pod.Spec.Containers[0].Resources.Requests.Cpu().MilliValue()
+	const want = 6000 // 5000m recommendation inflated by 1.2 in useOursIfLarger
+	if got != want {
+		t.Fatalf("CPU request = %dm, want %dm", got, want)
+	}
+}
+
 func TestUseOursIfLarger(t *testing.T) {
 	var testCases = []struct {
 		name                   string

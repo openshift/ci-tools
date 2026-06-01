@@ -73,6 +73,19 @@ func TestResolveOfficialInputFrom(t *testing.T) {
 			wantFrom: &coreapi.ObjectReference{Kind: "DockerImage", Name: api.QuayImageReference(base)},
 		},
 		{
+			name: "skip stale registry.ci ocp spec",
+			base: api.ImageStreamTagReference{Namespace: "ocp", Name: "4.16", Tag: "base-rhel9"},
+			objects: []runtime.Object{&imagev1.ImageStream{
+				ObjectMeta: metav1.ObjectMeta{Namespace: "ocp", Name: "4.16"},
+				Spec: imagev1.ImageStreamSpec{Tags: []imagev1.TagReference{{
+					Name: "base-rhel9",
+					From: &coreapi.ObjectReference{Kind: "DockerImage", Name: "registry.ci.openshift.org/ocp/4.16@sha256:dead"},
+				}}},
+			}},
+			wantOK:   true,
+			wantFrom: &coreapi.ObjectReference{Kind: "DockerImage", Name: api.QuayImageReference(api.ImageStreamTagReference{Namespace: "ocp", Name: "4.16", Tag: "base-rhel9"})},
+		},
+		{
 			name: "stable first",
 			base: api.ImageStreamTagReference{Namespace: "ocp", Name: "4.22", Tag: "cli"},
 			objects: []runtime.Object{&imagev1.ImageStream{

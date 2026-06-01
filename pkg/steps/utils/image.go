@@ -73,10 +73,10 @@ func FindSpecTag(is *imagev1.ImageStream, tag string) *coreapi.ObjectReference {
 // OfficialImageTagFrom returns an import source from spec, then status, then quay-proxy.
 func OfficialImageTagFrom(source *imagev1.ImageStream, base api.ImageStreamTagReference) *coreapi.ObjectReference {
 	if source != nil {
-		if ref := FindSpecTag(source, base.Tag); ref != nil && ref.Name != "" {
+		if ref := FindSpecTag(source, base.Tag); ref != nil && ref.Name != "" && (ref.Kind != "DockerImage" || !strings.HasPrefix(ref.Name, api.ServiceDomainAPPCIRegistry+"/ocp/")) {
 			return ref
 		}
-		if ref, _ := FindStatusTag(source, base.Tag); ref != nil && ref.Name != "" {
+		if ref, _ := FindStatusTag(source, base.Tag); ref != nil && ref.Name != "" && (ref.Kind != "DockerImage" || !strings.HasPrefix(ref.Name, api.ServiceDomainAPPCIRegistry+"/ocp/")) {
 			return ref
 		}
 	}

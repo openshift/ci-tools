@@ -492,9 +492,15 @@ func handleBuilds(ctx context.Context, buildClient BuildClient, podClient kubern
 	wg.Add(len(builds))
 	for _, build := range builds {
 		go func(b buildapi.Build) {
+			var err error
 			defer wg.Done()
 			metricsAgent.AddNodeWorkload(ctx, b.Namespace, fmt.Sprintf("%s-build", b.Name), b.Name, podClient)
-			if err := handleBuild(ctx, buildClient, podClient, b); err != nil {
+			if buildClient.BuildType() == api.BuildTypeOpenshift {
+				err = handleOpenshiftBuild(ctx, buildClient, podClient, b)
+			} else {
+				err = fmt.Errorf("undefined build type %s", buildClient.BuildType())
+			}
+			if err != nil {
 				errChan <- fmt.Errorf("error occurred handling build %s: %w", b.Name, err)
 			}
 			metricsAgent.RemoveNodeWorkload(b.Name)
@@ -552,7 +558,7 @@ func constructMultiArchBuilds(build buildapi.Build, stepArchitectures []string) 
 	return ret
 }
 
-func handleBuild(ctx context.Context, client BuildClient, podClient kubernetes.PodClient, build buildapi.Build) error {
+func handleOpenshiftBuild(ctx context.Context, buildClient BuildClient, podClient kubernetes.PodClient, build buildapi.Build) error {
 	const attempts = 5
 	ns, name := build.Namespace, build.Name
 	var errs []error
@@ -560,7 +566,7 @@ func handleBuild(ctx context.Context, client BuildClient, podClient kubernetes.P
 		var attempt buildapi.Build
 
 		build.DeepCopyInto(&attempt)
-		if err := client.Create(ctx, &attempt); err == nil {
+		if err := buildClient.Create(ctx, &attempt); err == nil {
 			logrus.Infof("Created build %q", name)
 		} else if kerrors.IsAlreadyExists(err) {
 			logrus.Infof("Found existing build %q", name)
@@ -568,19 +574,19 @@ func handleBuild(ctx context.Context, client BuildClient, podClient kubernetes.P
 			return false, fmt.Errorf("could not create build %s: %w", name, err)
 		}
 
-		client.MetricsAgent().AddNodeWorkload(ctx, ns, fmt.Sprintf("%s-build", name), name, podClient)
-		client.MetricsAgent().StoreMachinesSnapshotForBuildPod(ctx, ns, fmt.Sprintf("%s-build", name), podClient)
-		if err := waitForBuildOrTimeout(ctx, client, podClient, ns, name); err != nil {
+		buildClient.MetricsAgent().AddNodeWorkload(ctx, ns, fmt.Sprintf("%s-build", name), name, podClient)
+		buildClient.MetricsAgent().StoreMachinesSnapshotForBuildPod(ctx, ns, fmt.Sprintf("%s-build", name), podClient)
+		if err := waitForBuildOrTimeout(ctx, buildClient, podClient, ns, name); err != nil {
 			errs = append(errs, err)
-			return false, handleFailedBuild(ctx, client, ns, name, err)
+			return false, handleFailedBuild(ctx, buildClient, ns, name, err)
 		}
-		if err := gatherSuccessfulBuildLog(client, ns, name); err != nil {
+		if err := gatherSuccessfulBuildLog(buildClient, ns, name); err != nil {
 			// log error but do not fail successful build
 			logrus.WithError(err).Warnf("Failed gathering successful build %s logs into artifacts.", name)
 		}
 		return true, nil
 	}); err != nil {
-		if err == wait.ErrWaitTimeout {
+		if wait.Interrupted(err) {
 			return fmt.Errorf("build not successful after %d attempts: %w", attempts, utilerrors.NewAggregate(errs))
 		}
 		return err

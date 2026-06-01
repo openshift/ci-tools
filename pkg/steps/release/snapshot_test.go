@@ -46,6 +46,13 @@ func TestSnapshotImportSource(t *testing.T) {
 			wantFrom: &coreapi.ObjectReference{Kind: "DockerImage", Name: api.QuayImageReference(base)},
 		},
 		{
+			name:     "consolidated missing source imagestream",
+			stream:   "4.22",
+			tag:      base.Tag,
+			wantOK:   true,
+			wantFrom: &coreapi.ObjectReference{Kind: "DockerImage", Name: api.QuayImageReference(api.ImageStreamTagReference{Namespace: "ocp", Name: "4.22", Tag: base.Tag})},
+		},
+		{
 			name:   "non-consolidated spec docker",
 			stream: "4.23",
 			tag:    "cli",

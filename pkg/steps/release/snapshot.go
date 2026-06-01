@@ -8,6 +8,7 @@ import (
 	"github.com/sirupsen/logrus"
 
 	coreapi "k8s.io/api/core/v1"
+	kerrors "k8s.io/apimachinery/pkg/api/errors"
 	meta "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/apimachinery/pkg/util/sets"
 	ctrlruntimeclient "sigs.k8s.io/controller-runtime/pkg/client"
@@ -86,7 +87,10 @@ func snapshotStream(ctx context.Context, client loggingclient.LoggingClient, sou
 	if !api.IsCreatedForClusterBotJob(sourceNamespace) {
 		source = &imagev1.ImageStream{}
 		if err := client.Get(ctx, ctrlruntimeclient.ObjectKey{Namespace: sourceNamespace, Name: sourceName}, source); err != nil {
-			return nil, fmt.Errorf("could not resolve source imagestream %s/%s for release %s: %w", sourceNamespace, sourceName, targetRelease, err)
+			if !kerrors.IsNotFound(err) {
+				return nil, fmt.Errorf("could not resolve source imagestream %s/%s for release %s: %w", sourceNamespace, sourceName, targetRelease, err)
+			}
+			source = nil
 		}
 	}
 	for _, tag := range integratedStream.Tags {
@@ -137,11 +141,13 @@ func snapshotImportSource(sourceNamespace, sourceName, tag string, source *image
 		}
 		return nil, false
 	}
-	if api.ConsolidatedQuayPromotionVersion(sourceName) && source != nil {
+	if api.ConsolidatedQuayPromotionVersion(sourceName) {
 		return utils.OfficialImageTagFrom(source, base), true
 	}
-	if ref := utils.FindSpecTag(source, tag); ref != nil && ref.Kind == "DockerImage" && ref.Name != "" {
-		from.Name = ref.Name
+	if source != nil {
+		if ref := utils.FindSpecTag(source, tag); ref != nil && ref.Kind == "DockerImage" && ref.Name != "" {
+			from.Name = ref.Name
+		}
 	}
 	return from, true
 }

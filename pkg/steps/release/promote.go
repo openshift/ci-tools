@@ -105,13 +105,12 @@ func (s *promotionStep) run(ctx context.Context) error {
 		logger.WithError(err).Warn("Failed to ensure namespaces to promote to in central registry.")
 	}
 
-	version, err := getLatestStableCLIVersion(&http.Client{})
+	cliImage, err := promotionCLIImage(ctx, s.client, s.jobSpec.Namespace())
 	if err != nil {
-		logrus.WithError(err).Warn("Failed to determine the stable release version, using 4.20 instead")
-		version = "4.20"
+		return fmt.Errorf("resolve promotion cli image: %w", err)
 	}
 
-	if _, err := steps.RunPod(ctx, s.client, getPromotionPod(imageMirrorTarget, timeStr, s.jobSpec.Namespace(), s.name, version, s.nodeArchitectures), false); err != nil {
+	if _, err := steps.RunPod(ctx, s.client, getPromotionPod(imageMirrorTarget, timeStr, s.jobSpec.Namespace(), s.name, cliImage, s.nodeArchitectures), false); err != nil {
 		return fmt.Errorf("unable to run promotion pod: %w", err)
 	}
 	return nil
@@ -232,6 +231,53 @@ func getLatestStableCLIVersion(client *http.Client) (string, error) {
 	return "", fmt.Errorf("no stable CLI version found in any stream (tried 9-stable through 4-stable)")
 }
 
+func promotionCLIImage(ctx context.Context, client ctrlruntimeclient.Client, namespace string) (string, error) {
+	return promotionCLIImageWithResolver(ctx, client, namespace, getLatestStableCLIVersion)
+}
+
+func promotionCLIImageWithResolver(
+	ctx context.Context,
+	client ctrlruntimeclient.Client,
+	namespace string,
+	stableVersionResolver func(*http.Client) (string, error),
+) (string, error) {
+	streamName := api.ReleaseStreamFor(api.LatestReleaseName)
+	is := &imagev1.ImageStream{}
+	err := client.Get(ctx, ctrlruntimeclient.ObjectKey{Namespace: namespace, Name: streamName}, is)
+	if err != nil {
+		if apierrors.IsNotFound(err) {
+			return promotionCLIImageFromRegistryWithResolver(stableVersionResolver)
+		}
+		return "", fmt.Errorf("get imagestream %s/%s: %w", namespace, streamName, err)
+	}
+	if findDockerImageReference(is, "cli") != "" {
+		cliImage := fmt.Sprintf("%s:cli", streamName)
+		logrus.WithField("image", cliImage).Info("Using payload cli image for promotion")
+		return cliImage, nil
+	}
+	logrus.WithField("stream", streamName).Info("No cli tag on release payload stream; using quay-proxy stable cli for promotion")
+	return promotionCLIImageFromRegistryWithResolver(stableVersionResolver)
+}
+
+func promotionRegistryCLIReference(version string) api.ImageStreamTagReference {
+	return api.ImageStreamTagReference{Namespace: "ocp", Name: version, Tag: "cli"}
+}
+
+func promotionCLIImageFromRegistryWithResolver(stableVersionResolver func(*http.Client) (string, error)) (string, error) {
+	version, err := stableVersionResolver(&http.Client{Timeout: 15 * time.Second})
+	if err != nil {
+		logrus.WithError(err).Warn("Failed to determine the stable release version, using 4.22 instead")
+		version = "4.22"
+	}
+	ref := promotionRegistryCLIReference(version)
+	// registry.ci ocp/*:cli and ocp-arm64/*:cli are not reliably present after
+	// source-reference migration, so use quay-proxy ocp_<version>_cli fallback.
+	// Arm64-only jobs still resolve/tag arm64 payload digests via --filter-by-os.
+	image := api.QuayImageReference(ref)
+	logrus.WithField("image", image).Info("Using quay-proxy cli image for promotion")
+	return image, nil
+}
+
 func getMirrorCommand(registryConfig string, images []string, loglevel int) string {
 	return fmt.Sprintf("oc image mirror --loglevel=%d --keep-manifest-list --registry-config=%s --max-per-registry=10 %s",
 		loglevel, registryConfig, strings.Join(images, " "))
@@ -242,14 +288,9 @@ func getTagCommand(tagSpecs []string, loglevel int) string {
 		loglevel, strings.Join(tagSpecs, " "))
 }
 
-// quayProxyTagFromISKey derives the quay-proxy image tag from an IS tag key of the form
-// "namespace/streamname-quay:tag", which is the format produced by getQuayProxyTarget when
-// ImageStreamTagReference.Name is non-empty (the standard ocp promotion case).
-// Example: "ocp/4.21-quay:ovn-kubernetes" → "quay-proxy.ci.openshift.org/openshift/ci:ocp_4.21_ovn-kubernetes".
-//
-// The stream segment must end with "-quay"; we split namespace/stream from tag using the last ":" in
-// the segment after "/". Using strings.Index(rest, "-quay:") is wrong when the promotion Name (stream
-// base before "-quay") itself contains "-quay", e.g. "something-quay-operator-quay:component".
+// quayProxyTagFromISKey derives the quay-proxy floating tag from an IS tag key.
+// Handles "namespace/stream-quay:tag" (4.23+) and consolidated "ocp/4.13:tag" (4.11–4.22).
+// Example: "ocp/4.13:cli" → "quay-proxy.ci.openshift.org/openshift/ci:ocp_4.13_cli".
 func quayProxyTagFromISKey(isTagKey string) (string, bool) {
 	slashIdx := strings.Index(isTagKey, "/")
 	if slashIdx == -1 {
@@ -267,10 +308,14 @@ func quayProxyTagFromISKey(isTagKey string) (string, bool) {
 		return "", false
 	}
 	const quayStreamSuffix = "-quay"
-	if !strings.HasSuffix(streamPart, quayStreamSuffix) {
+	var streamName string
+	if strings.HasSuffix(streamPart, quayStreamSuffix) {
+		streamName = strings.TrimSuffix(streamPart, quayStreamSuffix)
+	} else if api.ConsolidatedQuayPromotionVersion(streamPart) {
+		streamName = streamPart
+	} else {
 		return "", false
 	}
-	streamName := strings.TrimSuffix(streamPart, quayStreamSuffix)
 	if streamName == "" {
 		return "", false
 	}
@@ -287,7 +332,26 @@ func promotionCLIImageInfoFilterOS(nodeArchitectures []string) string {
 	return "linux/amd64"
 }
 
-const quayPromotionDigestTagAttempts = 5
+const (
+	quayPromotionDigestTagAttempts = 5
+	quayPromotionMirrorAttempts    = 5
+)
+
+// getMirrorRetryShell mirrors images with retries and fails the promotion pod if all attempts fail.
+func getMirrorRetryShell(registryConfig string, images []string, loglevel int) string {
+	mirrorCmd := getMirrorCommand(registryConfig, images, loglevel)
+	n := quayPromotionMirrorAttempts
+	return fmt.Sprintf(`for r in {1..%d}; do
+  echo Mirror attempt $r
+  if %s; then break; fi
+  if [ "${r}" -eq %d ]; then
+    exit 1
+  fi
+  backoff=$(($RANDOM %% 120))s
+  echo Sleeping randomized $backoff before retry
+  sleep $backoff
+done`, n, mirrorCmd, n)
+}
 
 // getResolveAndTagRetryShell resolves quay-proxy digest via oc image info and oc tags the IST; retries when QCI moves after mirror.
 func getResolveAndTagRetryShell(registryConfig, quayProxyTag, isTag string, loglevel int, filterByOS string) string {
@@ -318,7 +382,7 @@ const (
 	retryLoopWithBackoff = "backoff=$(($RANDOM % 120))s; echo Sleeping randomized $backoff before retry; sleep $backoff"
 )
 
-func getPromotionPod(imageMirrorTarget map[string]string, timeStr string, namespace string, name string, cliVersion string, nodeArchitectures []string) *coreapi.Pod {
+func getPromotionPod(imageMirrorTarget map[string]string, timeStr string, namespace string, name string, cliImage string, nodeArchitectures []string) *coreapi.Pod {
 	keys := make([]string, 0, len(imageMirrorTarget))
 	for k := range imageMirrorTarget {
 		keys = append(keys, k)
@@ -328,10 +392,8 @@ func getPromotionPod(imageMirrorTarget map[string]string, timeStr string, namesp
 	var images []string
 	var pruneImages []string
 	var tags []string
-	// resolveAndTagPairs holds [quayProxyTag, isTag] for concrete *-quay IS targets in a
-	// quay promotion step. These are handled post-mirror via oc image info + oc tag so
-	// that spec.from always carries the exact QCI manifest digest rather than a floating tag.
-	// Non-release namespaces use oc tag directly.
+	// resolveAndTagPairs holds [quayProxyTag, isTag] for official ocp IS targets (consolidated
+	// ocp/4.x:tag and legacy *-quay). Resolved post-mirror via oc image info + oc tag.
 	var resolveAndTagPairs [][2]string
 
 	isQuayStep := name == api.PromotionQuayStepName
@@ -373,29 +435,25 @@ func getPromotionPod(imageMirrorTarget map[string]string, timeStr string, namesp
 
 	// Generate mirror commands if there are images to mirror
 	if len(images) > 0 {
-		mirrorCommand := fmt.Sprintf("for r in {1..5}; do echo Mirror attempt $r; %s && break; backoff=$(($RANDOM %% 120))s; echo Sleeping randomized $backoff before retry; sleep $backoff; done", getMirrorCommand(registryConfig, images, 2))
-		commands = append(commands, mirrorCommand)
+		commands = append(commands, getMirrorRetryShell(registryConfig, images, 2))
 	}
 
-	// Generate tag/resolve-and-tag commands.
-	if isQuayStep && (len(tags) > 0 || len(resolveAndTagPairs) > 0) {
-		// Quay promotion: run under set +e so one failure does not block the rest.
-		tagCommands := []string{"set +e"}
-
-		// Template-based IS tags (contain ${component}): batch-then-individual retry, unchanged.
-		if len(tags) > 0 {
-			singleCmd := fmt.Sprintf(retryLoopTemplate, 2, `"Tag attempt $r (all together)"`, getTagCommand(tags, 2), ":")
-			tagCommands = append(tagCommands, singleCmd)
-			for _, tagPair := range tags {
-				individualCmd := fmt.Sprintf(retryLoopTemplate, 3, `"Tag attempt $r (individual)"`, getTagCommand([]string{tagPair}, 2), retryLoopWithBackoff)
-				tagCommands = append(tagCommands, individualCmd)
-			}
-		}
-
-		// Concrete *-quay IS targets: resolve QCI digest post-mirror, then tag.
+	if isQuayStep {
 		for _, pair := range resolveAndTagPairs {
 			quayProxyTag, isTag := pair[0], pair[1]
-			tagCommands = append(tagCommands, getResolveAndTagRetryShell(registryConfig, quayProxyTag, isTag, 2, promotionCLIImageInfoFilterOS(nodeArchitectures)))
+			commands = append(commands, getResolveAndTagRetryShell(registryConfig, quayProxyTag, isTag, 2, promotionCLIImageInfoFilterOS(nodeArchitectures)))
+		}
+	}
+
+	// Non-official IS tags (ci/ci-quay, ${component} templates) keep best-effort batch tagging.
+	if isQuayStep && len(tags) > 0 {
+		tagCommands := []string{"set +e"}
+
+		singleCmd := fmt.Sprintf(retryLoopTemplate, 2, `"Tag attempt $r (all together)"`, getTagCommand(tags, 2), ":")
+		tagCommands = append(tagCommands, singleCmd)
+		for _, tagPair := range tags {
+			individualCmd := fmt.Sprintf(retryLoopTemplate, 3, `"Tag attempt $r (individual)"`, getTagCommand([]string{tagPair}, 2), retryLoopWithBackoff)
+			tagCommands = append(tagCommands, individualCmd)
 		}
 
 		tagCommands = append(tagCommands, "set -e")
@@ -418,12 +476,13 @@ func getPromotionPod(imageMirrorTarget map[string]string, timeStr string, namesp
 	args = append(args, commands...)
 	args = []string{strings.Join(args, "\n")}
 
-	image := fmt.Sprintf("%s/%s/%s:cli", api.DomainForService(api.ServiceRegistry), "ocp", cliVersion)
+	image := cliImage
 	nodeSelector := map[string]string{"kubernetes.io/arch": "amd64"}
 
 	archs := sets.New[string](nodeArchitectures...)
-	if !archs.Has("amd64") && archs.Has("arm64") {
-		image = fmt.Sprintf("%s/%s/%s:cli", api.DomainForService(api.ServiceRegistry), "ocp-arm64", cliVersion)
+	// Keep arm64 pinning only when using payload stable:cli. Registry fallback image
+	// is amd64-only, but promotion logic itself is architecture-agnostic.
+	if cliImage == "stable:cli" && !archs.Has("amd64") && archs.Has("arm64") {
 		nodeSelector = map[string]string{"kubernetes.io/arch": "arm64"}
 	}
 

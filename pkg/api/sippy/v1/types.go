@@ -22,4 +22,6 @@ type ReleaseConfig struct {
 
 	// InformingJobs is the list of informing payload jobs
 	InformingJobs []string `yaml:"informingJobs,omitempty"`
+
+	Synthetic bool `yaml:"synthetic,omitempty"`
 }

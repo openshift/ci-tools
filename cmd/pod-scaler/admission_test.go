@@ -791,6 +791,26 @@ func TestUseOursIfLarger_authoritative(t *testing.T) {
 			},
 		},
 		{
+			name:             "cpu decrease never below 10m",
+			authoritativeCPU: true,
+			ours: corev1.ResourceRequirements{
+				Requests: corev1.ResourceList{
+					corev1.ResourceCPU: resource.MustParse("1m"),
+				},
+			},
+			theirs: corev1.ResourceRequirements{
+				Requests: corev1.ResourceList{
+					corev1.ResourceCPU: resource.MustParse("12m"),
+				},
+			},
+			expected: corev1.ResourceRequirements{
+				Limits: corev1.ResourceList{},
+				Requests: corev1.ResourceList{
+					corev1.ResourceCPU: resource.MustParse("10m"),
+				},
+			},
+		},
+		{
 			name:             "measured pod skips reduction",
 			authoritativeCPU: true,
 			isMeasured:       true,

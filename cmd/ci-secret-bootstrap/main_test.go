@@ -31,6 +31,7 @@ import (
 	"github.com/openshift/ci-tools/pkg/api"
 	"github.com/openshift/ci-tools/pkg/api/secretbootstrap"
 	"github.com/openshift/ci-tools/pkg/api/secretgenerator"
+	vaultapi "github.com/openshift/ci-tools/pkg/api/vault"
 	gsm "github.com/openshift/ci-tools/pkg/gsm-secrets"
 	"github.com/openshift/ci-tools/pkg/secrets"
 	"github.com/openshift/ci-tools/pkg/testhelper"
@@ -1017,6 +1018,7 @@ Code: 404. Errors:
 					Data: map[string]string{
 						"secretsync/target-namespace": "some-namespace",
 						"secretsync/target-name":      "some-name",
+						"secretsync/target-labels":    "label:value",
 						"some-data-key":               "a-secret",
 					},
 				},
@@ -1024,7 +1026,7 @@ Code: 404. Errors:
 			config: secretbootstrap.Config{UserSecretsTargetClusters: []string{"a", "b"}},
 			expected: map[string][]*coreapi.Secret{
 				"a": {{
-					ObjectMeta: metav1.ObjectMeta{Namespace: "some-namespace", Name: "some-name", Labels: map[string]string{"dptp.openshift.io/requester": "ci-secret-bootstrap"}},
+					ObjectMeta: metav1.ObjectMeta{Namespace: "some-namespace", Name: "some-name", Labels: map[string]string{"dptp.openshift.io/requester": "ci-secret-bootstrap", "label": "value"}},
 					Type:       coreapi.SecretTypeOpaque,
 					Data: map[string][]byte{
 						"some-data-key":                []byte("a-secret"),
@@ -1032,7 +1034,7 @@ Code: 404. Errors:
 					},
 				}},
 				"b": {{
-					ObjectMeta: metav1.ObjectMeta{Namespace: "some-namespace", Name: "some-name", Labels: map[string]string{"dptp.openshift.io/requester": "ci-secret-bootstrap"}},
+					ObjectMeta: metav1.ObjectMeta{Namespace: "some-namespace", Name: "some-name", Labels: map[string]string{"dptp.openshift.io/requester": "ci-secret-bootstrap", "label": "value"}},
 					Type:       coreapi.SecretTypeOpaque,
 					Data: map[string][]byte{
 						"some-data-key":                []byte("a-secret"),
@@ -1064,6 +1066,79 @@ Code: 404. Errors:
 					},
 				}},
 			},
+		},
+		{
+			name: "Usersecret with multiple labels",
+			items: map[string]vaultclient.KVData{
+				"my/vault/secret": {
+					Data: map[string]string{
+						"secretsync/target-namespace": "some-namespace",
+						"secretsync/target-name":      "some-name",
+						"secretsync/target-clusters":  "a",
+						"secretsync/target-labels":    "some.dns.name/path:value,label:value",
+						"some-data-key":               "a-secret",
+					},
+				},
+			},
+			config: secretbootstrap.Config{UserSecretsTargetClusters: []string{"a"}},
+			expected: map[string][]*coreapi.Secret{
+				"a": {{
+					ObjectMeta: metav1.ObjectMeta{
+						Namespace: "some-namespace",
+						Name:      "some-name",
+						Labels:    map[string]string{"dptp.openshift.io/requester": "ci-secret-bootstrap", "some.dns.name/path": "value", "label": "value"}},
+					Type: coreapi.SecretTypeOpaque,
+					Data: map[string][]byte{
+						"some-data-key":                []byte("a-secret"),
+						"secretsync-vault-source-path": []byte("prefix/my/vault/secret"),
+					},
+				}},
+			},
+		},
+		{
+			name: "Usersecret with empty labels",
+			items: map[string]vaultclient.KVData{
+				"my/vault/secret": {
+					Data: map[string]string{
+						"secretsync/target-namespace": "some-namespace",
+						"secretsync/target-name":      "some-name",
+						"secretsync/target-clusters":  "a",
+						"secretsync/target-labels":    " ",
+						"some-data-key":               "a-secret",
+					},
+				},
+			},
+			config: secretbootstrap.Config{UserSecretsTargetClusters: []string{"a"}},
+			expected: map[string][]*coreapi.Secret{
+				"a": {{
+					ObjectMeta: metav1.ObjectMeta{
+						Namespace: "some-namespace",
+						Name:      "some-name",
+						Labels:    map[string]string{"dptp.openshift.io/requester": "ci-secret-bootstrap"}},
+					Type: coreapi.SecretTypeOpaque,
+					Data: map[string][]byte{
+						"some-data-key":                []byte("a-secret"),
+						"secretsync-vault-source-path": []byte("prefix/my/vault/secret"),
+					},
+				}},
+			},
+		},
+		{
+			name: "Usersecret with invalid label format",
+			items: map[string]vaultclient.KVData{
+				"my/vault/secret": {
+					Data: map[string]string{
+						"secretsync/target-namespace": "some-namespace",
+						"secretsync/target-name":      "some-name",
+						"secretsync/target-clusters":  "a",
+						"secretsync/target-labels":    "key@value",
+						"some-data-key":               "a-secret",
+					},
+				},
+			},
+			config:        secretbootstrap.Config{UserSecretsTargetClusters: []string{"a"}},
+			expectedError: `invalid label "key@value": expected key:value`,
+			expected:      map[string][]*coreapi.Secret{},
 		},
 		{
 			name: "Usersecret for multiple but not all clusters",
@@ -1131,7 +1206,7 @@ Code: 404. Errors:
 			},
 		},
 		{
-			name: "Secret gets combined from user- and dptp secret ",
+			name: "Secret gets combined from user and dptp secret ",
 			items: map[string]vaultclient.KVData{
 				"my/vault/secret": {
 					Data: map[string]string{
@@ -2320,6 +2395,14 @@ func (f *fakeGSMClient) CreateSecret(ctx context.Context, req *secretmanagerpb.C
 }
 
 func (f *fakeGSMClient) AddSecretVersion(ctx context.Context, req *secretmanagerpb.AddSecretVersionRequest, opts ...gax.CallOption) (*secretmanagerpb.SecretVersion, error) {
+	return nil, fmt.Errorf("not implemented")
+}
+
+func (f *fakeGSMClient) ListSecretVersions(ctx context.Context, req *secretmanagerpb.ListSecretVersionsRequest, opts ...gax.CallOption) *secretmanager.SecretVersionIterator {
+	return nil
+}
+
+func (f *fakeGSMClient) DestroySecretVersion(ctx context.Context, req *secretmanagerpb.DestroySecretVersionRequest, opts ...gax.CallOption) (*secretmanagerpb.SecretVersion, error) {
 	return nil, fmt.Errorf("not implemented")
 }
 
@@ -4523,6 +4606,57 @@ func TestMergeSecretMaps(t *testing.T) {
 			}
 
 			equal(t, "merged secrets", tc.expected, actual)
+		})
+	}
+}
+
+func TestGenerateUserSecretLabels(t *testing.T) {
+	testCases := []struct {
+		name          string
+		secretKeys    map[string]string
+		expected      map[string]string
+		expectedError string
+	}{
+		{
+			name: "no labels, return empty",
+			secretKeys: map[string]string{
+				"secretKey": "secretValue",
+			},
+			expected: map[string]string{},
+		},
+		{
+			name: "single label",
+			secretKeys: map[string]string{
+				vaultapi.SecretSyncTargetLabelsKey: "labelKey:labelValue",
+			},
+			expected: map[string]string{"labelKey": "labelValue"},
+		},
+		{
+			name: "invalid label",
+			secretKeys: map[string]string{
+				vaultapi.SecretSyncTargetLabelsKey: "labelKey@labelValue",
+			},
+			expected:      map[string]string{},
+			expectedError: `invalid label "labelKey@labelValue": expected key:value`,
+		},
+		{
+			name: "multiple labels",
+			secretKeys: map[string]string{
+				vaultapi.SecretSyncTargetLabelsKey: "labelKey:labelValue,key:value",
+			},
+			expected: map[string]string{"labelKey": "labelValue", "key": "value"},
+		},
+	}
+
+	for _, tc := range testCases {
+		t.Run(tc.name, func(t *testing.T) {
+			label, err := generateUserSecretLabels(tc.secretKeys)
+
+			if err != nil && err.Error() != tc.expectedError {
+				t.Errorf("expected error: %q, got: %q", tc.expectedError, err.Error())
+			} else if tc.expectedError == "" {
+				equal(t, "labels", tc.expected, label)
+			}
 		})
 	}
 }

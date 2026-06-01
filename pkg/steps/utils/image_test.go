@@ -11,6 +11,7 @@ import (
 
 	coreapi "k8s.io/api/core/v1"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
+	"k8s.io/apimachinery/pkg/runtime"
 	"k8s.io/apimachinery/pkg/util/sets"
 	"k8s.io/client-go/kubernetes/scheme"
 	ctrlruntimeclient "sigs.k8s.io/controller-runtime/pkg/client"
@@ -18,12 +19,91 @@ import (
 
 	imagev1 "github.com/openshift/api/image/v1"
 
+	"github.com/openshift/ci-tools/pkg/api"
 	"github.com/openshift/ci-tools/pkg/testhelper"
 )
 
 func init() {
 	if err := imagev1.AddToScheme(scheme.Scheme); err != nil {
 		panic(fmt.Sprintf("failed to register imagev1 scheme: %v", err))
+	}
+}
+
+func TestResolveOfficialInputFrom(t *testing.T) {
+	specPull := "quay-proxy.ci.openshift.org/openshift/ci@sha256:abc"
+	base := api.ImageStreamTagReference{Namespace: "ocp", Name: "4.22", Tag: "hyperkube"}
+	tests := []struct {
+		name     string
+		base     api.ImageStreamTagReference
+		objects  []runtime.Object
+		wantOK   bool
+		wantFrom *coreapi.ObjectReference
+	}{
+		{name: "non-consolidated", base: api.ImageStreamTagReference{Namespace: "ocp", Name: "5.0", Tag: "cli"}, wantOK: false},
+		{
+			name: "spec docker",
+			base: base,
+			objects: []runtime.Object{&imagev1.ImageStream{
+				ObjectMeta: metav1.ObjectMeta{Namespace: "ocp", Name: "4.22"},
+				Spec: imagev1.ImageStreamSpec{Tags: []imagev1.TagReference{{
+					Name: "hyperkube",
+					From: &coreapi.ObjectReference{Kind: "DockerImage", Name: specPull},
+				}}},
+			}},
+			wantOK:   true,
+			wantFrom: &coreapi.ObjectReference{Kind: "DockerImage", Name: specPull},
+		},
+		{
+			name: "spec image stream image",
+			base: api.ImageStreamTagReference{Namespace: "ocp", Name: "4.22", Tag: "cli"},
+			objects: []runtime.Object{&imagev1.ImageStream{
+				ObjectMeta: metav1.ObjectMeta{Namespace: "ocp", Name: "4.22"},
+				Spec: imagev1.ImageStreamSpec{Tags: []imagev1.TagReference{{
+					Name: "cli",
+					From: &coreapi.ObjectReference{Kind: "ImageStreamImage", Name: "4.22@sha256:deadbeef", Namespace: "ocp"},
+				}}},
+			}},
+			wantOK:   true,
+			wantFrom: &coreapi.ObjectReference{Kind: "ImageStreamImage", Name: "4.22@sha256:deadbeef", Namespace: "ocp"},
+		},
+		{
+			name:     "quay fallback",
+			base:     base,
+			wantOK:   true,
+			wantFrom: &coreapi.ObjectReference{Kind: "DockerImage", Name: api.QuayImageReference(base)},
+		},
+		{
+			name: "stable first",
+			base: api.ImageStreamTagReference{Namespace: "ocp", Name: "4.22", Tag: "cli"},
+			objects: []runtime.Object{&imagev1.ImageStream{
+				ObjectMeta: metav1.ObjectMeta{Namespace: "job-ns", Name: api.StableImageStream},
+				Spec:       imagev1.ImageStreamSpec{Tags: []imagev1.TagReference{{Name: "cli"}}},
+				Status: imagev1.ImageStreamStatus{
+					PublicDockerImageRepository: "registry/job-ns/stable",
+					Tags:                        []imagev1.NamedTagEventList{{Tag: "cli", Items: []imagev1.TagEvent{{Image: "sha256:1111"}}}},
+				},
+			}},
+			wantOK:   true,
+			wantFrom: &coreapi.ObjectReference{Kind: "ImageStreamTag", Name: "stable:cli", Namespace: "job-ns"},
+		},
+	}
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			client := fakectrlruntimeclient.NewClientBuilder().WithScheme(scheme.Scheme).WithRuntimeObjects(tt.objects...).Build()
+			from, ok, err := ResolveOfficialInputFrom(context.Background(), client, "job-ns", tt.base)
+			if err != nil {
+				t.Fatalf("ResolveOfficialInputFrom() error = %v", err)
+			}
+			if ok != tt.wantOK {
+				t.Fatalf("ok = %v, want %v", ok, tt.wantOK)
+			}
+			if !ok {
+				return
+			}
+			if from.Kind != tt.wantFrom.Kind || from.Name != tt.wantFrom.Name || from.Namespace != tt.wantFrom.Namespace {
+				t.Fatalf("from = %+v, want %+v", from, tt.wantFrom)
+			}
+		})
 	}
 }
 
@@ -458,5 +538,39 @@ func TestGetEvaluator(t *testing.T) {
 				t.Errorf("%s: actual does not match expected, diff: %s", testCase.name, diff)
 			}
 		}
+	}
+}
+
+func TestImageDigestForSpecTagWithoutFrom(t *testing.T) {
+	is := &imagev1.ImageStream{
+		ObjectMeta: metav1.ObjectMeta{Namespace: "ns", Name: "pipeline"},
+		Spec: imagev1.ImageStreamSpec{
+			Tags: []imagev1.TagReference{{Name: "pending"}},
+		},
+		Status: imagev1.ImageStreamStatus{
+			PublicDockerImageRepository: "registry/ns/pipeline",
+		},
+	}
+	client := fakectrlruntimeclient.NewClientBuilder().WithScheme(scheme.Scheme).WithRuntimeObjects(is).Build()
+	got, err := ImageDigestFor(client, func() string { return "ns" }, "pipeline", "pending")()
+	if err != nil {
+		t.Fatalf("ImageDigestFor() error = %v", err)
+	}
+	if got != "registry/ns/pipeline:pending" {
+		t.Fatalf("ImageDigestFor() = %q, want %q", got, "registry/ns/pipeline:pending")
+	}
+}
+
+func TestImageDigestForMissingTag(t *testing.T) {
+	is := &imagev1.ImageStream{
+		ObjectMeta: metav1.ObjectMeta{Namespace: "ns", Name: "pipeline"},
+		Status: imagev1.ImageStreamStatus{
+			PublicDockerImageRepository: "registry/ns/pipeline",
+		},
+	}
+	client := fakectrlruntimeclient.NewClientBuilder().WithScheme(scheme.Scheme).WithRuntimeObjects(is).Build()
+	_, err := ImageDigestFor(client, func() string { return "ns" }, "pipeline", "missing")()
+	if err == nil {
+		t.Fatal("ImageDigestFor() expected error for missing tag")
 	}
 }

@@ -230,6 +230,8 @@ func mutatePodLabels(pod *corev1.Pod, build *buildv1.Build) {
 
 const authoritativeMaxReductionPercent = 0.25
 
+var authoritativeMinCPURequest = resource.MustParse("10m")
+
 // useOursIfLarger updates fields in theirs when ours are larger, or lowers them when authoritative mode allows.
 func useOursIfLarger(allOfOurs, allOfTheirs *corev1.ResourceRequirements, workloadName, workloadType string, isMeasured bool, workloadClass string, authoritativeCPU, authoritativeMemory, authoritativeCPUDryRun, authoritativeMemoryDryRun bool, reporter results.PodScalerReporter, logger *logrus.Entry) {
 	for _, item := range []*corev1.ResourceRequirements{allOfOurs, allOfTheirs} {
@@ -254,8 +256,12 @@ func useOursIfLarger(allOfOurs, allOfTheirs *corev1.ResourceRequirements, worklo
 			}
 			//TODO(sgoeddel): this is a temporary experiment to see what effect setting values that are 120% of what has
 			// been determined has on the rate of OOMKilled and similar termination of workloads
-			increased := our.AsApproximateFloat64() * 1.2
-			our.Set(int64(increased))
+			if field == corev1.ResourceCPU {
+				our.SetMilli(int64(float64(our.MilliValue()) * 1.2))
+			} else {
+				increased := our.AsApproximateFloat64() * 1.2
+				our.Set(int64(increased))
+			}
 
 			their := (*pair.theirs)[field]
 			fieldLogger := logger.WithFields(logrus.Fields{
@@ -289,6 +295,14 @@ func useOursIfLarger(allOfOurs, allOfTheirs *corev1.ResourceRequirements, worklo
 				}
 				theirValue := their.AsApproximateFloat64()
 				if theirValue == 0 {
+					if field == corev1.ResourceCPU {
+						if our.Cmp(authoritativeMinCPURequest) < 0 {
+							our = authoritativeMinCPURequest
+						}
+						if our.Cmp(their) >= 0 {
+							continue
+						}
+					}
 					if dryRun {
 						fieldLogger.WithFields(logrus.Fields{
 							"event":         "authoritative_decrease_dry_run",
@@ -307,8 +321,20 @@ func useOursIfLarger(allOfOurs, allOfTheirs *corev1.ResourceRequirements, worklo
 				}
 				capped := false
 				if 1.0-(ourValue/theirValue) > authoritativeMaxReductionPercent {
-					our.Set(int64(theirValue * (1.0 - authoritativeMaxReductionPercent)))
+					if field == corev1.ResourceCPU {
+						our.SetMilli(int64(float64(their.MilliValue()) * (1.0 - authoritativeMaxReductionPercent)))
+					} else {
+						our.Set(int64(theirValue * (1.0 - authoritativeMaxReductionPercent)))
+					}
 					capped = true
+				}
+				if field == corev1.ResourceCPU {
+					if our.Cmp(authoritativeMinCPURequest) < 0 {
+						our = authoritativeMinCPURequest
+					}
+					if our.Cmp(their) >= 0 {
+						continue
+					}
 				}
 				if dryRun {
 					fieldLogger.WithFields(logrus.Fields{

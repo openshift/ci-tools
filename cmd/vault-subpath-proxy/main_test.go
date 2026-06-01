@@ -206,6 +206,22 @@ path "secret/metadata/team-1/*" {
 			data: map[string]string{"key": "data"},
 		},
 		{
+			name: "Multiple labels are allowed",
+			data: map[string]string{"secretsync/target-labels": "dns.is.allowed/path:value,key:value"},
+		},
+		{
+			name:               "Invalid key name",
+			data:               map[string]string{"secretsync/target-labels": "@key:value"},
+			expectedStatusCode: 400,
+			expectedErrors:     []string{"invalid label key for secret secretsync/target-labels: '@key'"},
+		},
+		{
+			name:               "Invalid key value",
+			data:               map[string]string{"secretsync/target-labels": "key:@value"},
+			expectedStatusCode: 400,
+			expectedErrors:     []string{"invalid label value for secret secretsync/target-labels: '@value'"},
+		},
+		{
 			name: "Multiple namespaces are allowed",
 			data: map[string]string{"secretsync/target-namespace": "one-namespace,another-namespace"},
 		},

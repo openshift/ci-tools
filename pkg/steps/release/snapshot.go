@@ -8,6 +8,7 @@ import (
 	"github.com/sirupsen/logrus"
 
 	coreapi "k8s.io/api/core/v1"
+	kerrors "k8s.io/apimachinery/pkg/api/errors"
 	meta "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/apimachinery/pkg/util/sets"
 	ctrlruntimeclient "sigs.k8s.io/controller-runtime/pkg/client"
@@ -82,22 +83,26 @@ func snapshotStream(ctx context.Context, client loggingclient.LoggingClient, sou
 		}
 		snapshot.ObjectMeta.Annotations[api.ReleaseConfigAnnotation] = value
 	}
-	for _, tag := range integratedStream.Tags {
-		from := &coreapi.ObjectReference{
-			Kind: "DockerImage",
-			Name: api.QuayImageReference(api.ImageStreamTagReference{Namespace: sourceNamespace, Name: sourceName, Tag: tag}),
+	var source *imagev1.ImageStream
+	if !api.IsCreatedForClusterBotJob(sourceNamespace) {
+		source = &imagev1.ImageStream{}
+		if err := client.Get(ctx, ctrlruntimeclient.ObjectKey{Namespace: sourceNamespace, Name: sourceName}, source); err != nil {
+			if !kerrors.IsNotFound(err) {
+				return nil, fmt.Errorf("could not resolve source imagestream %s/%s for release %s: %w", sourceNamespace, sourceName, targetRelease, err)
+			}
+			source = nil
 		}
-		// a special case for cluster-bot
-		if api.IsCreatedForClusterBotJob(sourceNamespace) {
-			source := &imagev1.ImageStream{}
+	}
+	for _, tag := range integratedStream.Tags {
+		if api.IsCreatedForClusterBotJob(sourceNamespace) && source == nil {
+			source = &imagev1.ImageStream{}
 			if err := client.Get(ctx, ctrlruntimeclient.ObjectKey{Namespace: sourceNamespace, Name: sourceName}, source); err != nil {
 				return nil, fmt.Errorf("could not resolve source imagestream %s/%s for release %s: %w", sourceNamespace, sourceName, targetRelease, err)
 			}
-			if valid, _ := utils.FindStatusTag(source, tag); valid != nil {
-				from = valid
-			} else {
-				continue
-			}
+		}
+		from, ok := snapshotImportSource(sourceNamespace, sourceName, tag, source)
+		if !ok {
+			continue
 		}
 		if refPolicy == nil {
 			sourcePolicy := imagev1.SourceTagReferencePolicy
@@ -122,6 +127,29 @@ func snapshotStream(ctx context.Context, client loggingclient.LoggingClient, sou
 	}
 	logrus.Infof("Imported tags on imagestream (after taking snapshot) %s/%s", created.Namespace, created.Name)
 	return snapshot, nil
+}
+
+func snapshotImportSource(sourceNamespace, sourceName, tag string, source *imagev1.ImageStream) (*coreapi.ObjectReference, bool) {
+	base := api.ImageStreamTagReference{Namespace: sourceNamespace, Name: sourceName, Tag: tag}
+	from := &coreapi.ObjectReference{
+		Kind: "DockerImage",
+		Name: api.QuayImageReference(base),
+	}
+	if api.IsCreatedForClusterBotJob(sourceNamespace) {
+		if valid, _ := utils.FindStatusTag(source, tag); valid != nil {
+			return valid, true
+		}
+		return nil, false
+	}
+	if api.ConsolidatedQuayPromotionVersion(sourceName) {
+		return utils.OfficialImageTagFrom(source, base), true
+	}
+	if source != nil {
+		if ref := utils.FindSpecTag(source, tag); ref != nil && ref.Kind == "DockerImage" && ref.Name != "" {
+			from.Name = ref.Name
+		}
+	}
+	return from, true
 }
 
 func (r *releaseSnapshotStep) Name() string {

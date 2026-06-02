@@ -47,7 +47,7 @@ func admit(port, healthPort int, certDir string, client buildclientv1.BuildV1Int
 		}).Info("authoritative decrease dry-run enabled")
 	}
 	health := pjutil.NewHealthOnPort(healthPort)
-	resources := newResourceServer(loaders, health)
+	resources := newResourceServer(loaders, health, cpuCap, memoryCap)
 	decoder := admission.NewDecoder(scheme.Scheme)
 
 	// Initialize node allocatable CPU cache
@@ -378,7 +378,15 @@ func reconcileLimits(resources *corev1.ResourceRequirements) {
 	}
 }
 
+func capDigestRequests(resources *corev1.ResourceRequirements, cpuCap, memoryCap resource.Quantity, logger *logrus.Entry) {
+	preventUnschedulableWithCaps(resources, cpuCap, memoryCap, logger.WithField("stage", "digest"))
+}
+
 func preventUnschedulable(resources *corev1.ResourceRequirements, cpuCap int64, memoryCap string, logger *logrus.Entry) {
+	preventUnschedulableWithCaps(resources, *resource.NewQuantity(cpuCap, resource.DecimalSI), resource.MustParse(memoryCap), logger)
+}
+
+func preventUnschedulableWithCaps(resources *corev1.ResourceRequirements, cpuCap, memoryCap resource.Quantity, logger *logrus.Entry) {
 	if resources.Requests == nil {
 		logger.Debug("no requests, skipping")
 		return
@@ -386,18 +394,16 @@ func preventUnschedulable(resources *corev1.ResourceRequirements, cpuCap int64, 
 
 	if _, ok := resources.Requests[corev1.ResourceCPU]; ok {
 		// TODO(DPTP-2525): Make cluster-specific?
-		cpuRequestCap := *resource.NewQuantity(cpuCap, resource.DecimalSI)
-		if resources.Requests.Cpu().Cmp(cpuRequestCap) == 1 {
+		if resources.Requests.Cpu().Cmp(cpuCap) == 1 {
 			logger.Debugf("setting original CPU request of: %s to cap", resources.Requests.Cpu())
-			resources.Requests[corev1.ResourceCPU] = cpuRequestCap
+			resources.Requests[corev1.ResourceCPU] = cpuCap
 		}
 	}
 
 	if _, ok := resources.Requests[corev1.ResourceMemory]; ok {
-		memoryRequestCap := resource.MustParse(memoryCap)
-		if resources.Requests.Memory().Cmp(memoryRequestCap) == 1 {
+		if resources.Requests.Memory().Cmp(memoryCap) == 1 {
 			logger.Debugf("setting original memory request of: %s to cap", resources.Requests.Memory())
-			resources.Requests[corev1.ResourceMemory] = memoryRequestCap
+			resources.Requests[corev1.ResourceMemory] = memoryCap
 		}
 	}
 }

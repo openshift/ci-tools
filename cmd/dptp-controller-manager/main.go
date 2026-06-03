@@ -147,7 +147,7 @@ func newOpts() (*options, error) {
 	fs.Var(&opts.imagePusherOptions.imageStreamsRaw, "imagePusherOptions.image-stream", "An imagestream that will be synced. It must be in namespace/name format (e.G `ci/clonerefs`). Can be passed multiple times.")
 	fs.Var(&opts.promotionReconcilerOptions.ignoreImageStreamsRaw, "promotionReconcilerOptions.ignore-image-stream", "The image stream to ignore. It is an regular expression (e.G ^openshift-priv/.+). Can be passed multiple times.")
 	fs.StringVar(&opts.promotionReconcilerOptions.sinceRaw, "promotionReconcilerOptions.since", "360h", "The image stream tags to reconcile if it is younger than a relative duration like 5s, 2m, or 3h. Defaults to 360h, i.e., 15 days")
-	fs.StringVar(&opts.ephemeralClusterProvisinerOptions.pollingRaw, "ephemeralClusterProvisionerOptions.polling", "5s", "Set how often the reconciler checks for the ephemeral cluster before it gets provisioned. Defaults to 5s.")
+	fs.StringVar(&opts.ephemeralClusterProvisinerOptions.pollingRaw, "ephemeralClusterProvisionerOptions.polling", "1m", "Set how often the reconciler checks for the ephemeral cluster before it gets provisioned.")
 	fs.StringVar(&opts.ephemeralClusterProvisinerOptions.cliISTagRef, "ephemeralClusterProvisionerOptions.cliISTagRef", "ocp/4.21:cli", "Set the cli image into the ci-operator base images in the form of `<namespace>/<name>:<tag>`. Defaults to `ocp/4.21:cli`.")
 	fs.BoolVar(&opts.dryRun, "dry-run", true, "Whether to run the controller-manager with dry-run")
 	fs.StringVar(&opts.releaseRepoGitSyncPath, "release-repo-git-sync-path", "", "Path to release repository dir")

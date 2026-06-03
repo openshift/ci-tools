@@ -724,6 +724,7 @@ func TestGetPromotionPod(t *testing.T) {
 	var testCases = []struct {
 		name              string
 		stepName          string
+		registry          string
 		imageMirror       map[string]string
 		nodeArchitectures []string
 		namespace         string
@@ -733,6 +734,7 @@ func TestGetPromotionPod(t *testing.T) {
 		{
 			name:              "basic case",
 			stepName:          "promotion",
+			registry:          "registry.ci.openshift.org",
 			nodeArchitectures: []string{"amd64"},
 			imageMirror: map[string]string{
 				"registry.ci.openshift.org/ci/applyconfig:latest": "docker-registry.default.svc:5000/ci-op-y2n8rsh3/pipeline@sha256:afd71aa3cbbf7d2e00cd8696747b2abf164700147723c657919c20b13d13ec62",
@@ -742,7 +744,8 @@ func TestGetPromotionPod(t *testing.T) {
 		},
 		{
 			name:              "promotion-quay",
-			stepName:          "promotion-quay",
+			stepName:          api.PromotionQuayStepName,
+			registry:          api.QuayOpenShiftCIRepo,
 			nodeArchitectures: []string{"amd64"},
 			imageMirror: map[string]string{
 				"quay.io/openshift/ci:20240603235401_prune_ci_a_latest": "quay.io/openshift/ci:ci_a_latest",
@@ -756,7 +759,8 @@ func TestGetPromotionPod(t *testing.T) {
 		},
 		{
 			name:              "promotion-quay-multiple-tags",
-			stepName:          "promotion-quay",
+			stepName:          api.PromotionQuayStepName,
+			registry:          api.QuayOpenShiftCIRepo,
 			nodeArchitectures: []string{"amd64"},
 			imageMirror: map[string]string{
 				"quay.io/openshift/ci:20240603235401_prune_ovn-kubernetes":            "quay.io/openshift/ci:ocp_4.21_ovn-kubernetes",
@@ -773,7 +777,8 @@ func TestGetPromotionPod(t *testing.T) {
 		},
 		{
 			name:              "promotion-quay-4.12",
-			stepName:          "promotion-quay",
+			stepName:          api.PromotionQuayStepName,
+			registry:          api.QuayOpenShiftCIRepo,
 			nodeArchitectures: []string{"amd64"},
 			imageMirror: map[string]string{
 				"quay.io/openshift/ci:20240603235401_prune_ovn-kubernetes":      "quay.io/openshift/ci:ocp_4.12_ovn-kubernetes",
@@ -787,7 +792,8 @@ func TestGetPromotionPod(t *testing.T) {
 		},
 		{
 			name:              "promotion-quay-non-release-namespace",
-			stepName:          "promotion-quay",
+			stepName:          api.PromotionQuayStepName,
+			registry:          api.QuayOpenShiftCIRepo,
 			nodeArchitectures: []string{"amd64"},
 			imageMirror: map[string]string{
 				"quay.io/openshift/ci:ocp_4.21_ovn-kubernetes":  "registry.build02.ci.openshift.org/ci-op-y2n8rsh3/pipeline@sha256:aaa",
@@ -800,6 +806,7 @@ func TestGetPromotionPod(t *testing.T) {
 		{
 			name:              "basic case - arm64 only",
 			stepName:          "promotion",
+			registry:          "registry.ci.openshift.org",
 			nodeArchitectures: []string{"arm64"},
 			imageMirror: map[string]string{
 				"registry.ci.openshift.org/ci/applyconfig:latest": "docker-registry.default.svc:5000/ci-op-y2n8rsh3/pipeline@sha256:afd71aa3cbbf7d2e00cd8696747b2abf164700147723c657919c20b13d13ec62",
@@ -810,6 +817,7 @@ func TestGetPromotionPod(t *testing.T) {
 		{
 			name:              "basic case - multi architecture",
 			stepName:          "promotion",
+			registry:          "registry.ci.openshift.org",
 			nodeArchitectures: []string{"amd64", "arm64"},
 			imageMirror: map[string]string{
 				"registry.ci.openshift.org/ci/applyconfig:latest": "docker-registry.default.svc:5000/ci-op-y2n8rsh3/pipeline@sha256:afd71aa3cbbf7d2e00cd8696747b2abf164700147723c657919c20b13d13ec62",
@@ -821,7 +829,7 @@ func TestGetPromotionPod(t *testing.T) {
 
 	for _, testCase := range testCases {
 		t.Run(testCase.name, func(t *testing.T) {
-			testhelper.CompareWithFixture(t, getPromotionPod(testCase.imageMirror, "20240603235401", testCase.namespace, testCase.stepName, "stable:cli", testCase.nodeArchitectures))
+			testhelper.CompareWithFixture(t, getPromotionPod(testCase.imageMirror, "20240603235401", testCase.namespace, testCase.stepName, testCase.registry, "stable:cli", testCase.nodeArchitectures))
 		})
 	}
 }
@@ -1137,8 +1145,8 @@ func TestGetResolveAndTagRetryShell(t *testing.T) {
 		"for r in {1..5}",
 		"oc image info --registry-config=" + regcfg + " --filter-by-os=linux/amd64 " + quayIOTag,
 		"oc tag --source=docker --loglevel=2 --reference-policy='source' --import-mode='PreserveOriginal' --reference quay-proxy.ci.openshift.org/openshift/ci@${_digest} " + isTag,
-		"promotion-quay: digest-tag failed for " + isTag,
-		"promotion-quay: retrying digest-tag for " + isTag,
+		"promotion: digest-tag failed for " + isTag,
+		"promotion: retrying digest-tag for " + isTag,
 		`[ "${r}" -eq 5 ]`,
 		"exit 1",
 		"$(($RANDOM % 120))",
@@ -1187,21 +1195,28 @@ func TestQuayProxyTagFromISKey(t *testing.T) {
 			wantOK:   false,
 		},
 		{
-			name:     "consolidated ocp stream",
+			name:     "ocp stream",
 			isTagKey: "ocp/4.13:secondary-scheduler-operator",
 			wantTag:  "quay-proxy.ci.openshift.org/openshift/ci:ocp_4.13_secondary-scheduler-operator",
 			wantOK:   true,
 		},
 		{
-			name:     "consolidated 4.21 stream",
+			name:     "ocp 4.21 stream",
 			isTagKey: "ocp/4.21:ovn-kubernetes",
 			wantTag:  "quay-proxy.ci.openshift.org/openshift/ci:ocp_4.21_ovn-kubernetes",
 			wantOK:   true,
 		},
 		{
-			name:     "non-consolidated stream without -quay",
+			name:     "ocp 4.23 stream",
 			isTagKey: "ocp/4.23:ovn-kubernetes",
-			wantOK:   false,
+			wantTag:  "quay-proxy.ci.openshift.org/openshift/ci:ocp_4.23_ovn-kubernetes",
+			wantOK:   true,
+		},
+		{
+			name:     "ocp 5.0 stream",
+			isTagKey: "ocp/5.0:ansible",
+			wantTag:  "quay-proxy.ci.openshift.org/openshift/ci:ocp_5.0_ansible",
+			wantOK:   true,
 		},
 	}
 	for _, tt := range tests {
@@ -1274,6 +1289,7 @@ func TestGetPromotionPodFallbackImageDoesNotPinArm64Node(t *testing.T) {
 		"20240603235401",
 		"ci-op-test",
 		"promotion",
+		"registry.ci.openshift.org",
 		api.QCIAPPCIDomain+"/openshift/ci:ocp_4.22_cli",
 		[]string{"arm64"},
 	)

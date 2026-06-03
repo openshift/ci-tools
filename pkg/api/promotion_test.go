@@ -187,7 +187,7 @@ func TestQuayCombinedMirrorFunc(t *testing.T) {
 		expected map[string]string
 	}{
 		{
-			name:   "4.12 consolidated quay proxy target",
+			name:   "4.12 quay proxy target",
 			source: "registry.build02.ci.openshift.org/ci-op-abc/pipeline@sha256:abc123",
 			target: "quay.io/openshift/ci:ocp_4.12_ovn-kubernetes",
 			tag: ImageStreamTagReference{
@@ -231,7 +231,7 @@ func TestQuayCombinedMirrorFunc(t *testing.T) {
 			expected: map[string]string{
 				"quay.io/openshift/ci:ocp__ovn-kubernetes":                      "registry.build02.ci.openshift.org/ci-op-abc/pipeline@sha256:def456",
 				"quay.io/openshift/ci:20241024103000_prune_ocp__ovn-kubernetes": "quay.io/openshift/ci:ocp__ovn-kubernetes",
-				"ocp/ovn-kubernetes-quay:ovn-kubernetes":                        "quay-proxy.ci.openshift.org/openshift/ci@sha256:def456",
+				"ocp/ovn-kubernetes:latest":                                     "quay-proxy.ci.openshift.org/openshift/ci@sha256:def456",
 			},
 		},
 		{
@@ -277,7 +277,7 @@ func TestQuayCombinedMirrorFunc(t *testing.T) {
 			expected: map[string]string{
 				"quay.io/openshift/ci:ocp_release_payload_images":                      "registry.build02.ci.openshift.org/ci-op-abc/pipeline@sha256:abc123",
 				"quay.io/openshift/ci:20241024102030_prune_ocp_release_payload_images": "quay.io/openshift/ci:ocp_release_payload_images",
-				"ocp/release-quay:payload_images":                                      "quay-proxy.ci.openshift.org/openshift/ci@sha256:abc123",
+				"ocp/release:payload_images":                                           "quay-proxy.ci.openshift.org/openshift/ci@sha256:abc123",
 			},
 		},
 		{
@@ -293,7 +293,7 @@ func TestQuayCombinedMirrorFunc(t *testing.T) {
 			expected: map[string]string{
 				"quay.io/openshift/ci:ocp__ci_a_latest":                      "registry.build02.ci.openshift.org/ci-op-abc/pipeline@sha256:def456",
 				"quay.io/openshift/ci:20241024103000_prune_ocp__ci_a_latest": "quay.io/openshift/ci:ocp__ci_a_latest",
-				"ocp/ovn-kubernetes-quay:ci_a_latest":                        "quay-proxy.ci.openshift.org/openshift/ci@sha256:def456",
+				"ocp/ovn-kubernetes:ci_a_latest":                             "quay-proxy.ci.openshift.org/openshift/ci@sha256:def456",
 			},
 		},
 		{

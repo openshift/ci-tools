@@ -39,7 +39,8 @@ func TestResolveOfficialInputFrom(t *testing.T) {
 		wantOK   bool
 		wantFrom *coreapi.ObjectReference
 	}{
-		{name: "non-consolidated", base: api.ImageStreamTagReference{Namespace: "ocp", Name: "5.0", Tag: "cli"}, wantOK: false},
+		{name: "official ocp 5.0", base: api.ImageStreamTagReference{Namespace: "ocp", Name: "5.0", Tag: "cli"}, wantOK: true, wantFrom: &coreapi.ObjectReference{Kind: "DockerImage", Name: api.QuayImageReference(api.ImageStreamTagReference{Namespace: "ocp", Name: "5.0", Tag: "cli"})}},
+		{name: "non-official namespace", base: api.ImageStreamTagReference{Namespace: "ci", Name: "5.0", Tag: "cli"}, wantOK: false},
 		{
 			name: "spec docker",
 			base: base,
@@ -86,8 +87,8 @@ func TestResolveOfficialInputFrom(t *testing.T) {
 			wantFrom: &coreapi.ObjectReference{Kind: "DockerImage", Name: api.QuayImageReference(api.ImageStreamTagReference{Namespace: "ocp", Name: "4.16", Tag: "base-rhel9"})},
 		},
 		{
-			name: "stable first",
-			base: api.ImageStreamTagReference{Namespace: "ocp", Name: "4.22", Tag: "cli"},
+			name: "stable stream in job namespace",
+			base: api.ImageStreamTagReference{Namespace: "ocp", Name: api.StableImageStream, Tag: "cli"},
 			objects: []runtime.Object{&imagev1.ImageStream{
 				ObjectMeta: metav1.ObjectMeta{Namespace: "job-ns", Name: api.StableImageStream},
 				Spec:       imagev1.ImageStreamSpec{Tags: []imagev1.TagReference{{Name: "cli"}}},
@@ -98,6 +99,20 @@ func TestResolveOfficialInputFrom(t *testing.T) {
 			}},
 			wantOK:   true,
 			wantFrom: &coreapi.ObjectReference{Kind: "ImageStreamTag", Name: "stable:cli", Namespace: "job-ns"},
+		},
+		{
+			name: "versioned ocp stream not redirected to job stable",
+			base: api.ImageStreamTagReference{Namespace: "ocp", Name: "5.0", Tag: "cli"},
+			objects: []runtime.Object{&imagev1.ImageStream{
+				ObjectMeta: metav1.ObjectMeta{Namespace: "job-ns", Name: api.StableImageStream},
+				Spec:       imagev1.ImageStreamSpec{Tags: []imagev1.TagReference{{Name: "cli"}}},
+				Status: imagev1.ImageStreamStatus{
+					PublicDockerImageRepository: "registry/job-ns/stable",
+					Tags:                        []imagev1.NamedTagEventList{{Tag: "cli", Items: []imagev1.TagEvent{{Image: "sha256:1111"}}}},
+				},
+			}},
+			wantOK:   true,
+			wantFrom: &coreapi.ObjectReference{Kind: "DockerImage", Name: api.QuayImageReference(api.ImageStreamTagReference{Namespace: "ocp", Name: "5.0", Tag: "cli"})},
 		},
 	}
 	for _, tt := range tests {

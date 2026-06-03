@@ -110,7 +110,7 @@ func (s *promotionStep) run(ctx context.Context) error {
 		return fmt.Errorf("resolve promotion cli image: %w", err)
 	}
 
-	if _, err := steps.RunPod(ctx, s.client, getPromotionPod(imageMirrorTarget, timeStr, s.jobSpec.Namespace(), s.name, cliImage, s.nodeArchitectures), false); err != nil {
+	if _, err := steps.RunPod(ctx, s.client, getPromotionPod(imageMirrorTarget, timeStr, s.jobSpec.Namespace(), s.name, s.registry, cliImage, s.nodeArchitectures), false); err != nil {
 		return fmt.Errorf("unable to run promotion pod: %w", err)
 	}
 	return nil
@@ -289,7 +289,7 @@ func getTagCommand(tagSpecs []string, loglevel int) string {
 }
 
 // quayProxyTagFromISKey derives the quay-proxy floating tag from an IS tag key.
-// Handles "namespace/stream-quay:tag" (4.23+) and consolidated "ocp/4.13:tag" (4.11–4.22).
+// Handles "ocp/4.13:cli" and legacy "namespace/stream-quay:tag" (ci templates).
 // Example: "ocp/4.13:cli" → "quay-proxy.ci.openshift.org/openshift/ci:ocp_4.13_cli".
 func quayProxyTagFromISKey(isTagKey string) (string, bool) {
 	slashIdx := strings.Index(isTagKey, "/")
@@ -311,7 +311,7 @@ func quayProxyTagFromISKey(isTagKey string) (string, bool) {
 	var streamName string
 	if strings.HasSuffix(streamPart, quayStreamSuffix) {
 		streamName = strings.TrimSuffix(streamPart, quayStreamSuffix)
-	} else if api.ConsolidatedQuayPromotionVersion(streamPart) {
+	} else if api.RefersToOfficialImage(namespace, api.WithOKD) {
 		streamName = streamPart
 	} else {
 		return "", false
@@ -363,11 +363,11 @@ func getResolveAndTagRetryShell(registryConfig, quayProxyTag, isTag string, logl
   if [ -n "${_digest}" ] && oc tag --source=docker --loglevel=%d --reference-policy='source' --import-mode='PreserveOriginal' --reference %s@${_digest} %s; then
     break
   fi
-  echo "promotion-quay: digest-tag failed for %s attempt ${r}/%d (QCI digest may have moved after mirror)" >&2
+  echo "promotion: digest-tag failed for %s attempt ${r}/%d (QCI digest may have moved after mirror)" >&2
   if [ "${r}" -eq %d ]; then
     exit 1
   fi
-  echo "promotion-quay: retrying digest-tag for %s (attempt $((r+1))/%d after randomized backoff)" >&2
+  echo "promotion: retrying digest-tag for %s (attempt $((r+1))/%d after randomized backoff)" >&2
   backoff=$(($RANDOM %% %d))s
   sleep "${backoff}"
 done
@@ -383,7 +383,7 @@ const (
 	retryLoopWithBackoff = "backoff=$(($RANDOM % 120))s; echo Sleeping randomized $backoff before retry; sleep $backoff"
 )
 
-func getPromotionPod(imageMirrorTarget map[string]string, timeStr string, namespace string, name string, cliImage string, nodeArchitectures []string) *coreapi.Pod {
+func getPromotionPod(imageMirrorTarget map[string]string, timeStr string, namespace string, name string, registry string, cliImage string, nodeArchitectures []string) *coreapi.Pod {
 	keys := make([]string, 0, len(imageMirrorTarget))
 	for k := range imageMirrorTarget {
 		keys = append(keys, k)
@@ -393,11 +393,11 @@ func getPromotionPod(imageMirrorTarget map[string]string, timeStr string, namesp
 	var images []string
 	var pruneImages []string
 	var tags []string
-	// resolveAndTagPairs holds [quayProxyTag, isTag] for official ocp IS targets (consolidated
-	// ocp/4.x:tag and legacy *-quay). Resolved post-mirror via oc image info + oc tag.
+	// resolveAndTagPairs holds [quayProxyTag, isTag] for official ocp IS targets.
+	// Resolved post-mirror via oc image info on quay.io + oc tag with quay-proxy@digest.
 	var resolveAndTagPairs [][2]string
 
-	isQuayStep := name == api.PromotionQuayStepName
+	isQuayStep := registry == api.QuayOpenShiftCIRepo
 
 	for _, k := range keys {
 		if strings.Contains(k, fmt.Sprintf("%s_prune_", timeStr)) {

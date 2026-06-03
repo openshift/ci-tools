@@ -1132,9 +1132,10 @@ func TestGetResolveAndTagRetryShell(t *testing.T) {
 	isTag := "ocp/4.21-quay:ovn-kubernetes"
 	got := getResolveAndTagRetryShell(regcfg, proxyTag, isTag, 2, "linux/amd64")
 
+	quayIOTag := "quay.io/openshift/ci:ocp_4.21_ovn-kubernetes"
 	for _, sub := range []string{
 		"for r in {1..5}",
-		"oc image info --registry-config=" + regcfg + " --filter-by-os=linux/amd64 " + proxyTag,
+		"oc image info --registry-config=" + regcfg + " --filter-by-os=linux/amd64 " + quayIOTag,
 		"oc tag --source=docker --loglevel=2 --reference-policy='source' --import-mode='PreserveOriginal' --reference quay-proxy.ci.openshift.org/openshift/ci@${_digest} " + isTag,
 		"promotion-quay: digest-tag failed for " + isTag,
 		"promotion-quay: retrying digest-tag for " + isTag,

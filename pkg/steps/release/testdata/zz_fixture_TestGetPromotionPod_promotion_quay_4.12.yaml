@@ -20,7 +20,7 @@ spec:
         sleep $backoff
       done
       for r in {1..5}; do
-        _digest=$(oc image info --registry-config=/etc/push-secret/.dockerconfigjson --filter-by-os=linux/amd64 quay-proxy.ci.openshift.org/openshift/ci:ocp_4.12_ovn-kubernetes | sed -n '/^Digest:[[:space:]]/s/^Digest:[[:space:]]*//p' | head -n1)
+        _digest=$(oc image info --registry-config=/etc/push-secret/.dockerconfigjson --filter-by-os=linux/amd64 quay.io/openshift/ci:ocp_4.12_ovn-kubernetes | sed -n '/^Digest:[[:space:]]/s/^Digest:[[:space:]]*//p' | head -n1)
         if [ -n "${_digest}" ] && oc tag --source=docker --loglevel=2 --reference-policy='source' --import-mode='PreserveOriginal' --reference quay-proxy.ci.openshift.org/openshift/ci@${_digest} ocp/4.12:ovn-kubernetes; then
           break
         fi
@@ -34,7 +34,7 @@ spec:
       done
 
       for r in {1..5}; do
-        _digest=$(oc image info --registry-config=/etc/push-secret/.dockerconfigjson --filter-by-os=linux/amd64 quay-proxy.ci.openshift.org/openshift/ci:ocp_4.12_ovn-kubernetes-base | sed -n '/^Digest:[[:space:]]/s/^Digest:[[:space:]]*//p' | head -n1)
+        _digest=$(oc image info --registry-config=/etc/push-secret/.dockerconfigjson --filter-by-os=linux/amd64 quay.io/openshift/ci:ocp_4.12_ovn-kubernetes-base | sed -n '/^Digest:[[:space:]]/s/^Digest:[[:space:]]*//p' | head -n1)
         if [ -n "${_digest}" ] && oc tag --source=docker --loglevel=2 --reference-policy='source' --import-mode='PreserveOriginal' --reference quay-proxy.ci.openshift.org/openshift/ci@${_digest} ocp/4.12:ovn-kubernetes-base; then
           break
         fi

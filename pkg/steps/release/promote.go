@@ -353,9 +353,10 @@ func getMirrorRetryShell(registryConfig string, images []string, loglevel int) s
 done`, n, mirrorCmd, n)
 }
 
-// getResolveAndTagRetryShell resolves quay-proxy digest via oc image info and oc tags the IST; retries when QCI moves after mirror.
+// getResolveAndTagRetryShell resolves digest from quay.io (push-secret) and tags the IST with quay-proxy@digest.
 func getResolveAndTagRetryShell(registryConfig, quayProxyTag, isTag string, loglevel int, filterByOS string) string {
 	repo := quayProxyTag[:strings.LastIndex(quayProxyTag, ":")]
+	quayIOTag := strings.Replace(quayProxyTag, api.QCIAPPCIDomain, "quay.io", 1)
 	n := quayPromotionDigestTagAttempts
 	return fmt.Sprintf(`for r in {1..%d}; do
   _digest=$(oc image info --registry-config=%s --filter-by-os=%s %s | sed -n '/^Digest:[[:space:]]/s/^Digest:[[:space:]]*//p' | head -n1)
@@ -370,7 +371,7 @@ func getResolveAndTagRetryShell(registryConfig, quayProxyTag, isTag string, logl
   backoff=$(($RANDOM %% %d))s
   sleep "${backoff}"
 done
-`, n, registryConfig, filterByOS, quayProxyTag, loglevel, repo, isTag,
+`, n, registryConfig, filterByOS, quayIOTag, loglevel, repo, isTag,
 		isTag, n,
 		n,
 		isTag, n,

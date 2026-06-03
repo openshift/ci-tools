@@ -138,6 +138,13 @@ func TestProwJobBaseBuilder(t *testing.T) {
 			podSpecBuilder:   NewCiOperatorPodSpecGenerator(),
 		},
 		{
+			name:           "job with images and build_if_affected disables sparse checkout",
+			info:           defaultInfo,
+			images:         ciop.ImageConfiguration{BuildIfAffected: true, Items: []ciop.ProjectDirectoryImageBuildStepConfiguration{{From: "base", To: "image"}}},
+			prefix:         "default",
+			podSpecBuilder: newFakePodSpecBuilder(),
+		},
+		{
 			name:           "default job without further configuration, including podspec",
 			info:           defaultInfo,
 			prefix:         "default",

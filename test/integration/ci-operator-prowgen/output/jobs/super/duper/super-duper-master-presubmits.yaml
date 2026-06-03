@@ -239,9 +239,7 @@ presubmits:
     - ^master-
     context: ci/prow/images-build-affected-images
     decorate: true
-    decoration_config:
-      sparse_checkout_files:
-      - Dockerfile
+    decoration_config: {}
     labels:
       ci-operator.openshift.io/variant: images-build-affected
       ci.openshift.io/generator: prowgen
@@ -297,9 +295,7 @@ presubmits:
     - ^master-
     context: ci/prow/images-build-affected-unit
     decorate: true
-    decoration_config:
-      sparse_checkout_files:
-      - Dockerfile
+    decoration_config: {}
     labels:
       ci-operator.openshift.io/variant: images-build-affected
       ci.openshift.io/generator: prowgen

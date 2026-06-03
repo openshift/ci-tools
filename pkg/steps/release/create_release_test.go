@@ -127,20 +127,14 @@ func TestBuildOcAdmReleaseNewCommand(t *testing.T) {
 	})
 
 	t.Run("assemble_script", func(t *testing.T) {
-		srcPol := imagev1.SourceTagReferencePolicy
-		config := &api.ReleaseTagConfiguration{Name: "4.12", ReferencePolicy: &srcPol}
-		got := buildOcAdmReleaseNewCommand(config, "test-ns", "stable", "cvo-pullspec", "dest:tag", "0.0.1-ver")
 		want := `_CI_RELEASE_IS_FILE="/tmp/ci-operator-release-is-stable.yaml"
 if oc get imagestream "stable" -n "test-ns" -o yaml > "${_CI_RELEASE_IS_FILE}" 2>/dev/null; then
-  oc adm release new --max-per-registry=32 -n test-ns --from-image-stream-file ${_CI_RELEASE_IS_FILE} --to-image-base cvo-pullspec --to-image dest:tag --name 0.0.1-ver --keep-manifest-list || oc adm release new --max-per-registry=32 -n test-ns --from-image-stream stable --to-image-base cvo-pullspec --to-image dest:tag --name 0.0.1-ver --keep-manifest-list
+  oc adm release new --max-per-registry=32 -n test-ns --from-image-stream-file ${_CI_RELEASE_IS_FILE} --to-image-base cvo-pullspec --to-image dest:tag --name 0.0.1-ver --reference-mode=source --keep-manifest-list || oc adm release new --max-per-registry=32 -n test-ns --from-image-stream stable --to-image-base cvo-pullspec --to-image dest:tag --name 0.0.1-ver --reference-mode=source --keep-manifest-list
 else
-  oc adm release new --max-per-registry=32 -n test-ns --from-image-stream stable --to-image-base cvo-pullspec --to-image dest:tag --name 0.0.1-ver --keep-manifest-list
+  oc adm release new --max-per-registry=32 -n test-ns --from-image-stream stable --to-image-base cvo-pullspec --to-image dest:tag --name 0.0.1-ver --reference-mode=source --keep-manifest-list
 fi`
-		if diff := cmp.Diff(want, got); diff != "" {
-			t.Fatalf("buildOcAdmReleaseNewCommand() mismatch (-want +got):\n%s", diff)
-		}
-		got = buildOcAdmReleaseNewCommand(&api.ReleaseTagConfiguration{Name: "4.23", ReferencePolicy: &srcPol}, "test-ns", "stable", "cvo-pullspec", "dest:tag", "0.0.1-ver")
-		want = "oc adm release new --max-per-registry=32 -n test-ns --from-image-stream stable --to-image-base cvo-pullspec --to-image dest:tag --name 0.0.1-ver --reference-mode=source --keep-manifest-list"
+		config := &api.ReleaseTagConfiguration{Name: "4.23", ReferencePolicy: &sourceTagReference}
+		got := buildOcAdmReleaseNewCommand(config, "test-ns", "stable", "cvo-pullspec", "dest:tag", "0.0.1-ver")
 		if diff := cmp.Diff(want, got); diff != "" {
 			t.Fatalf("buildOcAdmReleaseNewCommand() mismatch (-want +got):\n%s", diff)
 		}

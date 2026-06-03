@@ -302,7 +302,7 @@ EOF`, loglevel, strings.Join(tagSpecs, "\n"))
 }
 
 // quayProxyTagFromISKey derives the quay-proxy floating tag from an IS tag key.
-// Handles "namespace/stream-quay:tag" (4.23+) and consolidated "ocp/4.13:tag" (4.11–4.22).
+// Handles "ocp/4.13:cli" and legacy "namespace/stream-quay:tag" (ci templates).
 // Example: "ocp/4.13:cli" → "quay-proxy.ci.openshift.org/openshift/ci:ocp_4.13_cli".
 func quayProxyTagFromISKey(isTagKey string) (string, bool) {
 	slashIdx := strings.Index(isTagKey, "/")
@@ -324,7 +324,7 @@ func quayProxyTagFromISKey(isTagKey string) (string, bool) {
 	var streamName string
 	if strings.HasSuffix(streamPart, quayStreamSuffix) {
 		streamName = strings.TrimSuffix(streamPart, quayStreamSuffix)
-	} else if api.ConsolidatedQuayPromotionVersion(streamPart) {
+	} else if api.RefersToOfficialImage(namespace, api.WithOKD) {
 		streamName = streamPart
 	} else {
 		return "", false
@@ -486,11 +486,11 @@ func getResolveAndTagRetryShell(registryConfig, quayProxyTag, isTag string, logl
   if [ -n "${_digest}" ] && oc tag --source=docker --loglevel=%d --reference-policy='source' --import-mode='PreserveOriginal' --reference %s@${_digest} %s; then
     break
   fi
-  echo "promotion-quay: digest-tag failed for %s attempt ${r}/%d (QCI digest may have moved after mirror)" >&2
+  echo "promotion: digest-tag failed for %s attempt ${r}/%d (QCI digest may have moved after mirror)" >&2
   if [ "${r}" -eq %d ]; then
     exit 1
   fi
-  echo "promotion-quay: retrying digest-tag for %s (attempt $((r+1))/%d after randomized backoff)" >&2
+  echo "promotion: retrying digest-tag for %s (attempt $((r+1))/%d after randomized backoff)" >&2
   backoff=$(($RANDOM %% %d))s
   sleep "${backoff}"
 done

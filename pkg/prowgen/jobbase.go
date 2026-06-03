@@ -97,7 +97,7 @@ func NewProwJobBaseBuilder(configSpec *cioperatorapi.ReleaseBuildConfiguration, 
 	if shouldSkipCloning {
 		b.base.UtilityConfig.DecorationConfig.SkipCloning = ptr.To(true)
 	} else {
-		disableSparseCheckout := configSpec.Prowgen != nil && configSpec.Prowgen.DisableSparseCheckout
+		disableSparseCheckout := (configSpec.Prowgen != nil && configSpec.Prowgen.DisableSparseCheckout) || configSpec.Images.BuildIfAffected
 		if !disableSparseCheckout {
 			b.base.UtilityConfig.DecorationConfig.SparseCheckoutFiles = sparseFiles
 		}

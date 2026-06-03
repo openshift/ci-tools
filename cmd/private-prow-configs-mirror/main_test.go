@@ -596,6 +596,70 @@ func TestInjectPrivateLGTMPlugin(t *testing.T) {
 	}
 }
 
+func TestInjectPrivateTriggers(t *testing.T) {
+	testCases := []struct {
+		id       string
+		triggers []plugins.Trigger
+		expected []plugins.Trigger
+	}{
+		{
+			id: "no changes expected",
+			triggers: []plugins.Trigger{
+				{
+					Repos:       []string{"openshift/anotherRepo1", "testshift/anotherRepo2"},
+					TrustedApps: []string{"openshift-merge-bot"},
+				},
+				{
+					Repos:       []string{"openshift/anotherRepo3", "testshift/anotherRepo4"},
+					TrustedApps: []string{"openshift-merge-bot"},
+				},
+			},
+			expected: []plugins.Trigger{
+				{
+					Repos:       []string{"openshift/anotherRepo1", "testshift/anotherRepo2"},
+					TrustedApps: []string{"openshift-merge-bot"},
+				},
+				{
+					Repos:       []string{"openshift/anotherRepo3", "testshift/anotherRepo4"},
+					TrustedApps: []string{"openshift-merge-bot"},
+				},
+			},
+		},
+		{
+			id: "changes expected",
+			triggers: []plugins.Trigger{
+				{
+					Repos:       []string{"openshift/testRepo1", "testshift/anotherRepo2", "openshift-priv/testRepo3"},
+					TrustedApps: []string{"openshift-merge-bot"},
+				},
+				{
+					Repos:       []string{"openshift/anotherRepo3", "testshift/testRepo3", "openshift-priv/testRepo100"},
+					TrustedApps: []string{"openshift-merge-bot"},
+				},
+			},
+			expected: []plugins.Trigger{
+				{
+					Repos:       []string{"openshift-priv/testRepo1", "openshift/testRepo1", "testshift/anotherRepo2"},
+					TrustedApps: []string{"openshift-merge-bot"},
+				},
+				{
+					Repos:       []string{"openshift-priv/testshift-testRepo3", "openshift/anotherRepo3", "testshift/testRepo3"},
+					TrustedApps: []string{"openshift-merge-bot"},
+				},
+			},
+		},
+	}
+
+	for _, tc := range testCases {
+		t.Run(tc.id, func(t *testing.T) {
+			injectPrivateTriggers(tc.triggers, orgRepos)
+			if !reflect.DeepEqual(tc.triggers, tc.expected) {
+				t.Fatal(cmp.Diff(tc.triggers, tc.expected))
+			}
+		})
+	}
+}
+
 func TestInjectPrivateBugzillaPlugin(t *testing.T) {
 	testCases := []struct {
 		id       string

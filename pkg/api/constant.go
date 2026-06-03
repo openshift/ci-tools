@@ -82,9 +82,10 @@ const (
 	STSHomeRoleARNParam           = "CI_STS_HOME_ROLE_ARN"
 	STSHubRoleARNParam            = "CI_STS_HUB_ROLE_ARN"
 	STSTargetRoleARNParam         = "CI_STS_TARGET_ROLE_ARN"
-	STSHomeRoleARNSecretKey       = "home_role_arn"
+	STSHomeRoleARNKey             = "home_role_arn"
 	STSHubRoleARNSecretKey        = "hub_role_arn"
 	STSTargetRoleARNSecretKey     = "target_role_arn"
+	STSClusterSecretName          = "aws-sts-cluster-config"
 
 	// SkipCensoringLabel is the label we use to mark a secret as not needing to be censored
 	SkipCensoringLabel = "ci.openshift.io/skip-censoring"

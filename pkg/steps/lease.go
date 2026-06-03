@@ -12,6 +12,7 @@ import (
 	"github.com/sirupsen/logrus"
 
 	coreapi "k8s.io/api/core/v1"
+	kerrors "k8s.io/apimachinery/pkg/api/errors"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	utilerrors "k8s.io/apimachinery/pkg/util/errors"
 	ctrlruntimeclient "sigs.k8s.io/controller-runtime/pkg/client"
@@ -288,15 +289,27 @@ func (s *leaseStep) handleClusterProfile(ctx context.Context, l *stepLease, name
 		return fmt.Errorf("import secret %s for cluster profile %s: %w", cpDetails.Secret, s.clusterProfileName, err)
 	}
 
-	s.stsHomeRoleARN = string(secretData[api.STSHomeRoleARNSecretKey])
 	s.stsHubRoleARN = string(secretData[api.STSHubRoleARNSecretKey])
 	s.stsTargetRoleARN = string(secretData[api.STSTargetRoleARNSecretKey])
 
-	if s.stsHubRoleARN != "" && s.stsTargetRoleARN != "" && s.stsHomeRoleARN == "" {
-		logrus.Warnf("STS hub and target role ARNs are set for profile %s but home_role_arn is missing "+
-			"from the cluster profile secret; STS will not be activated", s.clusterProfileName)
-		s.stsHubRoleARN = ""
-		s.stsTargetRoleARN = ""
+	if s.stsHubRoleARN != "" && s.stsTargetRoleARN != "" {
+		secret := &coreapi.Secret{}
+		objKey := ctrlruntimeclient.ObjectKey{Namespace: "ci", Name: api.STSClusterSecretName}
+		if err := s.kubeClient.Get(ctx, objKey, secret); err != nil && !kerrors.IsNotFound(err) {
+			return fmt.Errorf("read Secret %s: %w", api.STSClusterSecretName, err)
+		}
+		if arn := string(secret.Data[api.STSHomeRoleARNKey]); arn != "" {
+			s.stsHomeRoleARN = arn
+			logrus.Infof("Resolved home_role_arn from Secret %s", api.STSClusterSecretName)
+		}
+
+		if s.stsHomeRoleARN == "" {
+			logrus.Warnf("STS hub and target role ARNs are set for profile %s but home_role_arn "+
+				"was not found in Secret %s; STS will not be activated",
+				s.clusterProfileName, api.STSClusterSecretName)
+			s.stsHubRoleARN = ""
+			s.stsTargetRoleARN = ""
+		}
 	}
 
 	s.clusterProfileSecretName = cpDetails.Secret

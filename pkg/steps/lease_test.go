@@ -475,18 +475,28 @@ func TestAcquireLeases(t *testing.T) {
 					Name: "us-east-1--aws-quota-slice-0",
 				},
 			},
-			objects: []ctrlruntimeclient.Object{&corev1.Secret{
-				ObjectMeta: v1.ObjectMeta{
-					Namespace: "ci",
-					Name:      "cluster-secrets-aws",
+			objects: []ctrlruntimeclient.Object{
+				&corev1.Secret{
+					ObjectMeta: v1.ObjectMeta{
+						Namespace: "ci",
+						Name:      "cluster-secrets-aws",
+					},
+					Data: map[string][]byte{
+						"k1":                          []byte("v1"),
+						api.STSHubRoleARNSecretKey:    []byte("arn:aws:iam::111:role/hub"),
+						api.STSTargetRoleARNSecretKey: []byte("arn:aws:iam::222:role/target"),
+					},
 				},
-				Data: map[string][]byte{
-					"k1":                          []byte("v1"),
-					api.STSHomeRoleARNSecretKey:   []byte("arn:aws:iam::000:role/home"),
-					api.STSHubRoleARNSecretKey:    []byte("arn:aws:iam::111:role/hub"),
-					api.STSTargetRoleARNSecretKey: []byte("arn:aws:iam::222:role/target"),
+				&corev1.Secret{
+					ObjectMeta: v1.ObjectMeta{
+						Namespace: "ci",
+						Name:      api.STSClusterSecretName,
+					},
+					Data: map[string][]byte{
+						api.STSHomeRoleARNKey: []byte("arn:aws:iam::000:role/home"),
+					},
 				},
-			}},
+			},
 			clusterProfiles: map[string]*api.ClusterProfileDetails{
 				"aws": {
 					Secret:    "cluster-secrets-aws",
@@ -508,12 +518,21 @@ func TestAcquireLeases(t *testing.T) {
 					{
 						ObjectMeta: v1.ObjectMeta{
 							Namespace:       "ci",
+							Name:            api.STSClusterSecretName,
+							ResourceVersion: "999",
+						},
+						Data: map[string][]byte{
+							api.STSHomeRoleARNKey: []byte("arn:aws:iam::000:role/home"),
+						},
+					},
+					{
+						ObjectMeta: v1.ObjectMeta{
+							Namespace:       "ci",
 							Name:            "cluster-secrets-aws",
 							ResourceVersion: "999",
 						},
 						Data: map[string][]byte{
 							"k1":                          []byte("v1"),
-							api.STSHomeRoleARNSecretKey:   []byte("arn:aws:iam::000:role/home"),
 							api.STSHubRoleARNSecretKey:    []byte("arn:aws:iam::111:role/hub"),
 							api.STSTargetRoleARNSecretKey: []byte("arn:aws:iam::222:role/target"),
 						},
@@ -526,7 +545,175 @@ func TestAcquireLeases(t *testing.T) {
 						},
 						Data: map[string][]byte{
 							"k1":                          []byte("v1"),
-							api.STSHomeRoleARNSecretKey:   []byte("arn:aws:iam::000:role/home"),
+							api.STSHubRoleARNSecretKey:    []byte("arn:aws:iam::111:role/hub"),
+							api.STSTargetRoleARNSecretKey: []byte("arn:aws:iam::222:role/target"),
+						},
+						Immutable: ptr.To(true),
+					},
+				},
+			},
+			wantCalls: []string{
+				"acquireWaitWithPriority owner aws free leased random",
+				"releaseone owner us-east-1--aws-quota-slice-0 free",
+			},
+		},
+		{
+			name: "STS deactivated when cluster secret missing",
+			leases: []api.StepLease{{
+				ResourceType:   "aws",
+				Env:            api.DefaultLeaseEnv,
+				Count:          1,
+				ClusterProfile: "aws",
+			}},
+			resources: map[string]*common.Resource{
+				"acquireWaitWithPriority_aws_free_leased_random": {
+					Name: "us-east-1--aws-quota-slice-0",
+				},
+			},
+			objects: []ctrlruntimeclient.Object{&corev1.Secret{
+				ObjectMeta: v1.ObjectMeta{
+					Namespace: "ci",
+					Name:      "cluster-secrets-aws",
+				},
+				Data: map[string][]byte{
+					"k1":                          []byte("v1"),
+					api.STSHubRoleARNSecretKey:    []byte("arn:aws:iam::111:role/hub"),
+					api.STSTargetRoleARNSecretKey: []byte("arn:aws:iam::222:role/target"),
+				},
+			}},
+			clusterProfiles: map[string]*api.ClusterProfileDetails{
+				"aws": {
+					Secret:    "cluster-secrets-aws",
+					LeaseType: "aws-quota-slice",
+				},
+			},
+			wantProvides: map[string]string{
+				"parameter":                       "map",
+				api.ClusterProfileSetEnv:          "",
+				api.ClusterProfileParam:           "aws",
+				api.ClusterProfileSecretNameParam: "cluster-secrets-aws",
+				api.STSHomeRoleARNParam:           "",
+				api.STSHubRoleARNParam:            "",
+				api.STSTargetRoleARNParam:         "",
+				api.DefaultLeaseEnv:               "us-east-1",
+			},
+			wantSecrets: corev1.SecretList{
+				Items: []corev1.Secret{
+					{
+						ObjectMeta: v1.ObjectMeta{
+							Namespace:       "ci",
+							Name:            "cluster-secrets-aws",
+							ResourceVersion: "999",
+						},
+						Data: map[string][]byte{
+							"k1":                          []byte("v1"),
+							api.STSHubRoleARNSecretKey:    []byte("arn:aws:iam::111:role/hub"),
+							api.STSTargetRoleARNSecretKey: []byte("arn:aws:iam::222:role/target"),
+						},
+					},
+					{
+						ObjectMeta: v1.ObjectMeta{
+							Namespace:       ns,
+							Name:            "cluster-secrets-aws",
+							ResourceVersion: "1",
+						},
+						Data: map[string][]byte{
+							"k1":                          []byte("v1"),
+							api.STSHubRoleARNSecretKey:    []byte("arn:aws:iam::111:role/hub"),
+							api.STSTargetRoleARNSecretKey: []byte("arn:aws:iam::222:role/target"),
+						},
+						Immutable: ptr.To(true),
+					},
+				},
+			},
+			wantCalls: []string{
+				"acquireWaitWithPriority owner aws free leased random",
+				"releaseone owner us-east-1--aws-quota-slice-0 free",
+			},
+		},
+		{
+			name: "STS deactivated when cluster secret has empty home_role_arn",
+			leases: []api.StepLease{{
+				ResourceType:   "aws",
+				Env:            api.DefaultLeaseEnv,
+				Count:          1,
+				ClusterProfile: "aws",
+			}},
+			resources: map[string]*common.Resource{
+				"acquireWaitWithPriority_aws_free_leased_random": {
+					Name: "us-east-1--aws-quota-slice-0",
+				},
+			},
+			objects: []ctrlruntimeclient.Object{
+				&corev1.Secret{
+					ObjectMeta: v1.ObjectMeta{
+						Namespace: "ci",
+						Name:      "cluster-secrets-aws",
+					},
+					Data: map[string][]byte{
+						"k1":                          []byte("v1"),
+						api.STSHubRoleARNSecretKey:    []byte("arn:aws:iam::111:role/hub"),
+						api.STSTargetRoleARNSecretKey: []byte("arn:aws:iam::222:role/target"),
+					},
+				},
+				&corev1.Secret{
+					ObjectMeta: v1.ObjectMeta{
+						Namespace: "ci",
+						Name:      api.STSClusterSecretName,
+					},
+					Data: map[string][]byte{
+						api.STSHomeRoleARNKey: []byte(""),
+					},
+				},
+			},
+			clusterProfiles: map[string]*api.ClusterProfileDetails{
+				"aws": {
+					Secret:    "cluster-secrets-aws",
+					LeaseType: "aws-quota-slice",
+				},
+			},
+			wantProvides: map[string]string{
+				"parameter":                       "map",
+				api.ClusterProfileSetEnv:          "",
+				api.ClusterProfileParam:           "aws",
+				api.ClusterProfileSecretNameParam: "cluster-secrets-aws",
+				api.STSHomeRoleARNParam:           "",
+				api.STSHubRoleARNParam:            "",
+				api.STSTargetRoleARNParam:         "",
+				api.DefaultLeaseEnv:               "us-east-1",
+			},
+			wantSecrets: corev1.SecretList{
+				Items: []corev1.Secret{
+					{
+						ObjectMeta: v1.ObjectMeta{
+							Namespace:       "ci",
+							Name:            api.STSClusterSecretName,
+							ResourceVersion: "999",
+						},
+						Data: map[string][]byte{
+							api.STSHomeRoleARNKey: []byte(""),
+						},
+					},
+					{
+						ObjectMeta: v1.ObjectMeta{
+							Namespace:       "ci",
+							Name:            "cluster-secrets-aws",
+							ResourceVersion: "999",
+						},
+						Data: map[string][]byte{
+							"k1":                          []byte("v1"),
+							api.STSHubRoleARNSecretKey:    []byte("arn:aws:iam::111:role/hub"),
+							api.STSTargetRoleARNSecretKey: []byte("arn:aws:iam::222:role/target"),
+						},
+					},
+					{
+						ObjectMeta: v1.ObjectMeta{
+							Namespace:       ns,
+							Name:            "cluster-secrets-aws",
+							ResourceVersion: "1",
+						},
+						Data: map[string][]byte{
+							"k1":                          []byte("v1"),
 							api.STSHubRoleARNSecretKey:    []byte("arn:aws:iam::111:role/hub"),
 							api.STSTargetRoleARNSecretKey: []byte("arn:aws:iam::222:role/target"),
 						},

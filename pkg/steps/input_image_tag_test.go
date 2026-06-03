@@ -270,7 +270,7 @@ func TestInputImageTagStepOCPBuilderReference(t *testing.T) {
 	}
 }
 
-func TestInputImageTagStepLegacyStream(t *testing.T) {
+func TestInputImageTagStepConsolidatedStream(t *testing.T) {
 	baseImage := api.ImageStreamTagReference{Namespace: "ocp", Name: "5.0", Tag: "cli"}
 	config := api.InputImageTagStepConfiguration{
 		InputImage: api.InputImage{To: "cli", BaseImage: baseImage},
@@ -320,7 +320,7 @@ func TestInputImageTagStepLegacyStream(t *testing.T) {
 }
 
 func TestInputImageTagStepStableFirst(t *testing.T) {
-	baseImage := api.ImageStreamTagReference{Namespace: "ocp", Name: "4.22", Tag: "cli"}
+	baseImage := api.ImageStreamTagReference{Namespace: "ocp", Name: api.StableImageStream, Tag: "cli"}
 	config := api.InputImageTagStepConfiguration{
 		InputImage: api.InputImage{To: "ocp_4_22_cli", BaseImage: baseImage},
 	}

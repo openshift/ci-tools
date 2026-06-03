@@ -26,7 +26,7 @@ func TestSnapshotImportSource(t *testing.T) {
 		wantFrom  *coreapi.ObjectReference
 	}{
 		{
-			name:   "consolidated spec first",
+			name:   "ocp spec first",
 			stream: "4.18",
 			tag:    base.Tag,
 			source: &imagev1.ImageStream{
@@ -48,14 +48,14 @@ func TestSnapshotImportSource(t *testing.T) {
 			wantFrom: &coreapi.ObjectReference{Kind: "DockerImage", Name: api.QuayImageReference(base)},
 		},
 		{
-			name:     "consolidated missing source imagestream",
+			name:     "ocp missing source imagestream",
 			stream:   "4.22",
 			tag:      base.Tag,
 			wantOK:   true,
 			wantFrom: &coreapi.ObjectReference{Kind: "DockerImage", Name: api.QuayImageReference(api.ImageStreamTagReference{Namespace: "ocp", Name: "4.22", Tag: base.Tag})},
 		},
 		{
-			name:   "non-consolidated uses computed quay",
+			name:   "ocp spec docker 4.23",
 			stream: "4.23",
 			tag:    "cli",
 			source: &imagev1.ImageStream{
@@ -66,7 +66,7 @@ func TestSnapshotImportSource(t *testing.T) {
 				}}},
 			},
 			wantOK:   true,
-			wantFrom: &coreapi.ObjectReference{Kind: "DockerImage", Name: api.QuayImageReference(api.ImageStreamTagReference{Namespace: "ocp", Name: "4.23", Tag: "cli"})},
+			wantFrom: &coreapi.ObjectReference{Kind: "DockerImage", Name: specPull},
 		},
 		{
 			name:     "default quay float",

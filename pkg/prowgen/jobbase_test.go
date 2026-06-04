@@ -22,11 +22,12 @@ func TestProwJobBaseBuilder(t *testing.T) {
 	testCases := []struct {
 		name string
 
-		inputs           ciop.InputConfiguration
-		images           ciop.ImageConfiguration
-		binCommand       string
-		testBinCommand   string
-		prowgenOverrides *ciop.ProwgenOverrides
+		inputs               ciop.InputConfiguration
+		images               ciop.ImageConfiguration
+		binCommand           string
+		testBinCommand       string
+		prowgenOverrides     *ciop.ProwgenOverrides
+		unresolvedConfigPath string
 
 		podSpecBuilder CiOperatorPodSpecGenerator
 		info           *ciop.Metadata
@@ -187,6 +188,13 @@ func TestProwJobBaseBuilder(t *testing.T) {
 			prefix:           "default",
 			podSpecBuilder:   NewCiOperatorPodSpecGenerator(),
 		},
+		{
+			name:                 "job with unresolved config, including podspec",
+			info:                 defaultInfo,
+			unresolvedConfigPath: ".ci-operator.yaml",
+			prefix:               "default",
+			podSpecBuilder:       NewCiOperatorPodSpecGenerator(),
+		},
 	}
 
 	for _, tc := range testCases {
@@ -200,6 +208,7 @@ func TestProwJobBaseBuilder(t *testing.T) {
 				TestBinaryBuildCommands: tc.testBinCommand,
 				Metadata:                *tc.info,
 				Prowgen:                 tc.prowgenOverrides,
+				UnresolvedConfigPath:    tc.unresolvedConfigPath,
 			}
 			b := NewProwJobBaseBuilder(ciopconfig, tc.info, tc.podSpecBuilder).Build(tc.prefix)
 			testhelper.CompareWithFixture(t, b)

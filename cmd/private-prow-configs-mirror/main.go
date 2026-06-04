@@ -404,6 +404,29 @@ func injectPrivateLGTMPlugin(lgtms []plugins.Lgtm, orgRepos orgReposWithOfficial
 	}
 }
 
+func injectPrivateTriggers(triggers []plugins.Trigger, orgRepos orgReposWithOfficialImages) {
+	logrus.Info("Processing...")
+
+	for index, trigger := range triggers {
+		repos := sets.New[string]()
+		for _, orgRepo := range trigger.Repos {
+			if strings.HasPrefix(orgRepo, fmt.Sprintf("%s/", openshiftPrivOrg)) {
+				continue
+			}
+			repos.Insert(orgRepo)
+		}
+
+		for orgRepo := range repos {
+			if privateOrgRepoName, ok := orgRepos.privateOrgRepoFull(orgRepo); ok {
+				logrus.WithField("source_repo", orgRepo).WithField("private_repo", privateOrgRepoName).Info("Found")
+				repos.Insert(privateOrgRepoName)
+			}
+		}
+
+		triggers[index].Repos = sets.List(repos)
+	}
+}
+
 func injectPrivateBugzillaPlugin(bugzillaPlugins plugins.Bugzilla, orgRepos orgReposWithOfficialImages) {
 	logrus.Info("Processing...")
 
@@ -563,6 +586,7 @@ func main() {
 	injectPrivateLGTMPlugin(pluginsConfig.Lgtm, orgRepos)
 	injectPrivatePlugins(pluginsConfig.Plugins, orgRepos)
 	injectPrivateBugzillaPlugin(pluginsConfig.Bugzilla, orgRepos)
+	injectPrivateTriggers(pluginsConfig.Triggers, orgRepos)
 
 	if err := updateProwConfig(filepath.Join(o.releaseRepoPath, config.ConfigInRepoPath), prowConfig); err != nil {
 		logrus.WithError(err).Fatal("couldn't update prow config file")
@@ -582,6 +606,21 @@ func cleanStalePluginConfigs(config *plugins.Configuration) *plugins.Configurati
 		cleanedPlugins[orgOrRepo] = val
 	}
 	config.Plugins = cleanedPlugins
+
+	var cleanedTriggers []plugins.Trigger
+	for _, trigger := range config.Triggers {
+		var repos []string
+		for _, repo := range trigger.Repos {
+			if !strings.HasPrefix(repo, fmt.Sprintf("%s/", openshiftPrivOrg)) {
+				repos = append(repos, repo)
+			}
+		}
+		if len(repos) > 0 {
+			trigger.Repos = repos
+			cleanedTriggers = append(cleanedTriggers, trigger)
+		}
+	}
+	config.Triggers = cleanedTriggers
 
 	return config
 }

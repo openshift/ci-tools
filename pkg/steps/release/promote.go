@@ -288,6 +288,11 @@ func getTagCommand(tagSpecs []string, loglevel int) string {
 		loglevel, strings.Join(tagSpecs, " "))
 }
 
+type quayOfficialISTag struct {
+	quayProxy string
+	isTag     string
+}
+
 // quayProxyTagFromISKey derives the quay-proxy floating tag from an IS tag key.
 // Handles "namespace/stream-quay:tag" (4.23+) and consolidated "ocp/4.13:tag" (4.11–4.22).
 // Example: "ocp/4.13:cli" → "quay-proxy.ci.openshift.org/openshift/ci:ocp_4.13_cli".
@@ -393,9 +398,7 @@ func getPromotionPod(imageMirrorTarget map[string]string, timeStr string, namesp
 	var images []string
 	var pruneImages []string
 	var tags []string
-	// resolveAndTagPairs holds [quayProxyTag, isTag] for official ocp IS targets (consolidated
-	// ocp/4.x:tag and legacy *-quay). Resolved post-mirror via oc image info + oc tag.
-	var resolveAndTagPairs [][2]string
+	var officialQuayISTags []quayOfficialISTag
 
 	isQuayStep := name == api.PromotionQuayStepName
 
@@ -415,7 +418,7 @@ func getPromotionPod(imageMirrorTarget map[string]string, timeStr string, namesp
 				if ok {
 					ns := k[:strings.Index(k, "/")]
 					if api.RefersToOfficialImage(ns, api.WithOKD) {
-						resolveAndTagPairs = append(resolveAndTagPairs, [2]string{quayProxyTag, k})
+						officialQuayISTags = append(officialQuayISTags, quayOfficialISTag{quayProxy: quayProxyTag, isTag: k})
 						continue
 					}
 				}
@@ -432,17 +435,16 @@ func getPromotionPod(imageMirrorTarget map[string]string, timeStr string, namesp
 	registryConfig := filepath.Join(api.RegistryPushCredentialsCICentralSecretMountPath, coreapi.DockerConfigJsonKey)
 	command := []string{"/bin/sh", "-c"}
 
-	var commands []string
+	var mirrorCommands []string
+	var postMirrorCommands []string
 
-	// Generate mirror commands if there are images to mirror
 	if len(images) > 0 {
-		commands = append(commands, getMirrorRetryShell(registryConfig, images, 2))
+		mirrorCommands = append(mirrorCommands, getMirrorRetryShell(registryConfig, images, 2))
 	}
 
 	if isQuayStep {
-		for _, pair := range resolveAndTagPairs {
-			quayProxyTag, isTag := pair[0], pair[1]
-			commands = append(commands, getResolveAndTagRetryShell(registryConfig, quayProxyTag, isTag, 2, promotionCLIImageInfoFilterOS(nodeArchitectures)))
+		for _, tag := range officialQuayISTags {
+			postMirrorCommands = append(postMirrorCommands, getResolveAndTagRetryShell(registryConfig, tag.quayProxy, tag.isTag, 2, promotionCLIImageInfoFilterOS(nodeArchitectures)))
 		}
 	}
 
@@ -458,24 +460,93 @@ func getPromotionPod(imageMirrorTarget map[string]string, timeStr string, namesp
 		}
 
 		tagCommands = append(tagCommands, "set -e")
-		commands = append(commands, strings.Join(tagCommands, "\n"))
+		postMirrorCommands = append(postMirrorCommands, strings.Join(tagCommands, "\n"))
 	} else if len(tags) > 0 {
 		// For regular promotion, use the original retry logic
 		tagCommand := fmt.Sprintf(retryLoopTemplate, 5, "Tag attempt $r", getTagCommand(tags, 2), retryLoopWithBackoff)
-		commands = append(commands, tagCommand)
+		postMirrorCommands = append(postMirrorCommands, tagCommand)
 	}
 
-	var args []string
+	var pruneMirror string
 	if len(pruneImages) > 0 {
 		// See https://github.com/openshift/release/blob/2080ec4a49337c27577a4b2ff08a538e96436e65/hack/qci_registry_pruner.py for details.
 		// Note that we don't retry here and we ignore failures because (a) it may be the first time an image tag is
 		// being promoted to and trying to add a pruning tag to the existing image is doomed to fail. (b) pruning tags
 		// help eliminate a rare race condition. The cost of an occasional failure in establishing them is very low.
-		args = append(args, fmt.Sprintf("%s || true", getMirrorCommand(registryConfig, pruneImages, 2)))
+		pruneMirror = fmt.Sprintf("%s || true", getMirrorCommand(registryConfig, pruneImages, 2))
 	}
 
-	args = append(args, commands...)
-	args = []string{strings.Join(args, "\n")}
+	var args []string
+	if isQuayStep {
+		filterByOS := promotionCLIImageInfoFilterOS(nodeArchitectures)
+		var mirrorFailureRollback, postFailureRollback string
+		if len(pruneImages) > 0 {
+			restoreSpecs := make([]string, 0, len(pruneImages))
+			for _, spec := range pruneImages {
+				live, prune, ok := strings.Cut(spec, "=")
+				if ok && live != "" && prune != "" {
+					restoreSpecs = append(restoreSpecs, fmt.Sprintf("%s=%s", prune, live))
+				}
+			}
+			if len(restoreSpecs) > 0 {
+				mirrorFailureRollback = fmt.Sprintf(`echo "promotion-quay: restoring quay floating tags from prune backups after promotion failure" >&2
+%s || true`, getMirrorCommand(registryConfig, restoreSpecs, 2))
+				postFailureRollback = mirrorFailureRollback
+				if len(officialQuayISTags) > 0 {
+					postFailureRollback += "\necho \"promotion-quay: re-syncing app.ci imagestreams from restored quay tags\" >&2"
+					for _, tag := range officialQuayISTags {
+						repo := tag.quayProxy[:strings.LastIndex(tag.quayProxy, ":")]
+						quayIOTag := strings.Replace(tag.quayProxy, api.QCIAPPCIDomain, "quay.io", 1)
+						postFailureRollback += fmt.Sprintf(`
+_digest=$(oc image info --registry-config=%s --filter-by-os=%s %s | sed -n '/^Digest:[[:space:]]/s/^Digest:[[:space:]]*//p' | head -n1)
+[ -n "${_digest}" ] && oc tag --source=docker --loglevel=2 --reference-policy='source' --import-mode='PreserveOriginal' --reference %s@${_digest} %s || true`,
+							registryConfig, filterByOS, quayIOTag, repo, tag.isTag)
+					}
+				}
+			}
+		}
+
+		var parts []string
+		if pruneMirror != "" {
+			parts = append(parts, pruneMirror)
+		}
+		parts = append(parts, "_mirror_exit=0")
+		if len(mirrorCommands) > 0 {
+			parts = append(parts, "set +e")
+			parts = append(parts, mirrorCommands...)
+			parts = append(parts, "_mirror_exit=$?", "set -e")
+			if mirrorFailureRollback != "" {
+				parts = append(parts, fmt.Sprintf(`if [ "${_mirror_exit}" -ne 0 ]; then
+%s
+exit "${_mirror_exit}"
+fi`, mirrorFailureRollback))
+			} else {
+				parts = append(parts, `if [ "${_mirror_exit}" -ne 0 ]; then exit "${_mirror_exit}"; fi`)
+			}
+		}
+		if len(postMirrorCommands) > 0 {
+			parts = append(parts, "set +e")
+			parts = append(parts, postMirrorCommands...)
+			parts = append(parts, "_promotion_exit=$?", "set -e")
+			if postFailureRollback != "" {
+				parts = append(parts, fmt.Sprintf(`if [ "${_promotion_exit}" -ne 0 ]; then
+%s
+fi`, postFailureRollback))
+			}
+			parts = append(parts, `exit "${_promotion_exit}"`)
+		}
+		args = []string{strings.Join(parts, "\n")}
+	} else {
+		var promotionCommands []string
+		promotionCommands = append(promotionCommands, mirrorCommands...)
+		promotionCommands = append(promotionCommands, postMirrorCommands...)
+		var parts []string
+		if pruneMirror != "" {
+			parts = append(parts, pruneMirror)
+		}
+		parts = append(parts, strings.Join(promotionCommands, "\n"))
+		args = []string{strings.Join(parts, "\n")}
+	}
 
 	image := cliImage
 	nodeSelector := map[string]string{"kubernetes.io/arch": "amd64"}

@@ -7,8 +7,10 @@ metadata:
 spec:
   containers:
   - args:
-    - |
+    - |-
       oc image mirror --loglevel=2 --keep-manifest-list --registry-config=/etc/push-secret/.dockerconfigjson --max-per-registry=10 quay.io/openshift/ci:ocp_4.21_ovn-kubernetes=quay.io/openshift/ci:20240603235401_prune_ovn-kubernetes quay.io/openshift/ci:ocp_4.21_ovn-kubernetes-base=quay.io/openshift/ci:20240603235401_prune_ovn-kubernetes-base quay.io/openshift/ci:ocp_4.21_ovn-kubernetes-microshift=quay.io/openshift/ci:20240603235401_prune_ovn-kubernetes-microshift || true
+      _mirror_exit=0
+      set +e
       for r in {1..5}; do
         echo Mirror attempt $r
         if oc image mirror --loglevel=2 --keep-manifest-list --registry-config=/etc/push-secret/.dockerconfigjson --max-per-registry=10 registry.build02.ci.openshift.org/ci-op-y2n8rsh3/pipeline@sha256:aaa=quay.io/openshift/ci:ocp_4.21_ovn-kubernetes registry.build02.ci.openshift.org/ci-op-y2n8rsh3/pipeline@sha256:bbb=quay.io/openshift/ci:ocp_4.21_ovn-kubernetes-base registry.build02.ci.openshift.org/ci-op-y2n8rsh3/pipeline@sha256:ccc=quay.io/openshift/ci:ocp_4.21_ovn-kubernetes-microshift; then break; fi
@@ -19,6 +21,14 @@ spec:
         echo Sleeping randomized $backoff before retry
         sleep $backoff
       done
+      _mirror_exit=$?
+      set -e
+      if [ "${_mirror_exit}" -ne 0 ]; then
+      echo "promotion-quay: restoring quay floating tags from prune backups after promotion failure" >&2
+      oc image mirror --loglevel=2 --keep-manifest-list --registry-config=/etc/push-secret/.dockerconfigjson --max-per-registry=10 quay.io/openshift/ci:20240603235401_prune_ovn-kubernetes=quay.io/openshift/ci:ocp_4.21_ovn-kubernetes quay.io/openshift/ci:20240603235401_prune_ovn-kubernetes-base=quay.io/openshift/ci:ocp_4.21_ovn-kubernetes-base quay.io/openshift/ci:20240603235401_prune_ovn-kubernetes-microshift=quay.io/openshift/ci:ocp_4.21_ovn-kubernetes-microshift || true
+      exit "${_mirror_exit}"
+      fi
+      set +e
       for r in {1..5}; do
         _digest=$(oc image info --registry-config=/etc/push-secret/.dockerconfigjson --filter-by-os=linux/amd64 quay.io/openshift/ci:ocp_4.21_ovn-kubernetes | sed -n '/^Digest:[[:space:]]/s/^Digest:[[:space:]]*//p' | head -n1)
         if [ -n "${_digest}" ] && oc tag --source=docker --loglevel=2 --reference-policy='source' --import-mode='PreserveOriginal' --reference quay-proxy.ci.openshift.org/openshift/ci@${_digest} ocp/4.21:ovn-kubernetes; then
@@ -60,6 +70,21 @@ spec:
         backoff=$(($RANDOM % 120))s
         sleep "${backoff}"
       done
+
+      _promotion_exit=$?
+      set -e
+      if [ "${_promotion_exit}" -ne 0 ]; then
+      echo "promotion-quay: restoring quay floating tags from prune backups after promotion failure" >&2
+      oc image mirror --loglevel=2 --keep-manifest-list --registry-config=/etc/push-secret/.dockerconfigjson --max-per-registry=10 quay.io/openshift/ci:20240603235401_prune_ovn-kubernetes=quay.io/openshift/ci:ocp_4.21_ovn-kubernetes quay.io/openshift/ci:20240603235401_prune_ovn-kubernetes-base=quay.io/openshift/ci:ocp_4.21_ovn-kubernetes-base quay.io/openshift/ci:20240603235401_prune_ovn-kubernetes-microshift=quay.io/openshift/ci:ocp_4.21_ovn-kubernetes-microshift || true
+      echo "promotion-quay: re-syncing app.ci imagestreams from restored quay tags" >&2
+      _digest=$(oc image info --registry-config=/etc/push-secret/.dockerconfigjson --filter-by-os=linux/amd64 quay.io/openshift/ci:ocp_4.21_ovn-kubernetes | sed -n '/^Digest:[[:space:]]/s/^Digest:[[:space:]]*//p' | head -n1)
+      [ -n "${_digest}" ] && oc tag --source=docker --loglevel=2 --reference-policy='source' --import-mode='PreserveOriginal' --reference quay-proxy.ci.openshift.org/openshift/ci@${_digest} ocp/4.21:ovn-kubernetes || true
+      _digest=$(oc image info --registry-config=/etc/push-secret/.dockerconfigjson --filter-by-os=linux/amd64 quay.io/openshift/ci:ocp_4.21_ovn-kubernetes-base | sed -n '/^Digest:[[:space:]]/s/^Digest:[[:space:]]*//p' | head -n1)
+      [ -n "${_digest}" ] && oc tag --source=docker --loglevel=2 --reference-policy='source' --import-mode='PreserveOriginal' --reference quay-proxy.ci.openshift.org/openshift/ci@${_digest} ocp/4.21:ovn-kubernetes-base || true
+      _digest=$(oc image info --registry-config=/etc/push-secret/.dockerconfigjson --filter-by-os=linux/amd64 quay.io/openshift/ci:ocp_4.21_ovn-kubernetes-microshift | sed -n '/^Digest:[[:space:]]/s/^Digest:[[:space:]]*//p' | head -n1)
+      [ -n "${_digest}" ] && oc tag --source=docker --loglevel=2 --reference-policy='source' --import-mode='PreserveOriginal' --reference quay-proxy.ci.openshift.org/openshift/ci@${_digest} ocp/4.21:ovn-kubernetes-microshift || true
+      fi
+      exit "${_promotion_exit}"
     command:
     - /bin/sh
     - -c

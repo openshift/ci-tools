@@ -9,6 +9,8 @@ spec:
   - args:
     - |-
       oc image mirror --loglevel=2 --keep-manifest-list --registry-config=/etc/push-secret/.dockerconfigjson --max-per-registry=10 quay.io/openshift/ci:ci_a_latest=quay.io/openshift/ci:20240603235401_prune_ci_a_latest quay.io/openshift/ci:ci_c_latest=quay.io/openshift/ci:20240603235401_prune_ci_c_latest || true
+      _mirror_exit=0
+      set +e
       for r in {1..5}; do
         echo Mirror attempt $r
         if oc image mirror --loglevel=2 --keep-manifest-list --registry-config=/etc/push-secret/.dockerconfigjson --max-per-registry=10 registry.build02.ci.openshift.org/ci-op-y2n8rsh3/pipeline@sha256:bbb=quay.io/openshift/ci:ci_a_latest registry.build02.ci.openshift.org/ci-op-y2n8rsh3/pipeline@sha256:ddd=quay.io/openshift/ci:ci_c_latest; then break; fi
@@ -19,11 +21,26 @@ spec:
         echo Sleeping randomized $backoff before retry
         sleep $backoff
       done
+      _mirror_exit=$?
+      set -e
+      if [ "${_mirror_exit}" -ne 0 ]; then
+      echo "promotion-quay: restoring quay floating tags from prune backups after promotion failure" >&2
+      oc image mirror --loglevel=2 --keep-manifest-list --registry-config=/etc/push-secret/.dockerconfigjson --max-per-registry=10 quay.io/openshift/ci:20240603235401_prune_ci_a_latest=quay.io/openshift/ci:ci_a_latest quay.io/openshift/ci:20240603235401_prune_ci_c_latest=quay.io/openshift/ci:ci_c_latest || true
+      exit "${_mirror_exit}"
+      fi
+      set +e
       set +e
       for r in {1..2}; do echo "Tag attempt $r (all together)"; oc tag --source=docker --loglevel=2 --reference-policy='source' --import-mode='PreserveOriginal' --reference quay-proxy.ci.openshift.org/openshift/ci@sha256:ddd ci/${component}-quay:c quay-proxy.ci.openshift.org/openshift/ci@sha256:bbb ci/ci-quay:${component} && break; :; done
       for r in {1..3}; do echo "Tag attempt $r (individual)"; oc tag --source=docker --loglevel=2 --reference-policy='source' --import-mode='PreserveOriginal' --reference quay-proxy.ci.openshift.org/openshift/ci@sha256:ddd ci/${component}-quay:c && break; backoff=$(($RANDOM % 120))s; echo Sleeping randomized $backoff before retry; sleep $backoff; done
       for r in {1..3}; do echo "Tag attempt $r (individual)"; oc tag --source=docker --loglevel=2 --reference-policy='source' --import-mode='PreserveOriginal' --reference quay-proxy.ci.openshift.org/openshift/ci@sha256:bbb ci/ci-quay:${component} && break; backoff=$(($RANDOM % 120))s; echo Sleeping randomized $backoff before retry; sleep $backoff; done
       set -e
+      _promotion_exit=$?
+      set -e
+      if [ "${_promotion_exit}" -ne 0 ]; then
+      echo "promotion-quay: restoring quay floating tags from prune backups after promotion failure" >&2
+      oc image mirror --loglevel=2 --keep-manifest-list --registry-config=/etc/push-secret/.dockerconfigjson --max-per-registry=10 quay.io/openshift/ci:20240603235401_prune_ci_a_latest=quay.io/openshift/ci:ci_a_latest quay.io/openshift/ci:20240603235401_prune_ci_c_latest=quay.io/openshift/ci:ci_c_latest || true
+      fi
+      exit "${_promotion_exit}"
     command:
     - /bin/sh
     - -c

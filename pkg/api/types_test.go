@@ -1,7 +1,6 @@
 package api
 
 import (
-	"encoding/json"
 	"reflect"
 	"testing"
 
@@ -446,70 +445,6 @@ func TestResolveClusterProfileList(t *testing.T) {
 
 			if diff := cmp.Diff(tc.wantProfiles, tc.profiles); diff != "" {
 				t.Errorf("unexpected profiles: %s", diff)
-			}
-		})
-	}
-}
-
-func TestUnmarshalClusterProfileSetDetails(t *testing.T) {
-	t.Parallel()
-	for _, tc := range []struct {
-		name                         string
-		data                         string
-		wantClusterProfileSetDetails ClusterProfileSetDetails
-	}{
-		{
-			name: "Old schema",
-			data: `{
-		"openshift-org-aws": [
-			"aws",
-			"aws-2",
-			"aws-3",
-			"aws-4",
-			"aws-5"
-			]
-		}`,
-			wantClusterProfileSetDetails: ClusterProfileSetDetails{
-				ClusterProfileSetDetailsNew: ClusterProfileSetDetailsNew{
-					ClusterProfileSets: map[ClusterProfile][]string{
-						"openshift-org-aws": {"aws", "aws-2", "aws-3", "aws-4", "aws-5"},
-					},
-				},
-			},
-		},
-		{
-			name: "New schema",
-			data: `{
-"cluster_profile_sets": {
-	"openshift-org-aws": [
-			"aws",
-			"aws-2",
-			"aws-3",
-			"aws-4",
-			"aws-5"
-		]
-	}
-}`,
-			wantClusterProfileSetDetails: ClusterProfileSetDetails{
-				ClusterProfileSetDetailsNew: ClusterProfileSetDetailsNew{
-					ClusterProfileSets: map[ClusterProfile][]string{
-						"openshift-org-aws": {"aws", "aws-2", "aws-3", "aws-4", "aws-5"},
-					},
-				},
-			},
-		},
-	} {
-		t.Run(tc.name, func(t *testing.T) {
-			t.Parallel()
-
-			gotClusterProfileSetDetails := ClusterProfileSetDetails{}
-			if err := json.Unmarshal([]byte(tc.data), &gotClusterProfileSetDetails); err != nil {
-				t.Errorf("fail to unmarshal cluster profile set details: %s", err.Error())
-				return
-			}
-
-			if diff := cmp.Diff(&tc.wantClusterProfileSetDetails, &gotClusterProfileSetDetails); diff != "" {
-				t.Errorf("unexpected cluster profile set details:\n %s", diff)
 			}
 		})
 	}

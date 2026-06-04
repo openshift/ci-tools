@@ -2476,10 +2476,8 @@ func TestValidateClusterProfiles(t *testing.T) {
 			metadata:       &api.Metadata{},
 			clusterProfile: "azure-2",
 			cpsDetails: api.ClusterProfileSetDetails{
-				ClusterProfileSetDetailsNew: api.ClusterProfileSetDetailsNew{
-					ClusterProfileSets: map[api.ClusterProfile][]string{
-						"openshift-org-azure": {"azure-2"},
-					},
+				ClusterProfileSets: map[api.ClusterProfile][]string{
+					"openshift-org-azure": {"azure-2"},
 				},
 			},
 			wantErrs: []error{errors.New(`foo: invalid cluster profile "azure-2", use the cluster profile set "openshift-org-azure" instead`)},
@@ -2490,13 +2488,11 @@ func TestValidateClusterProfiles(t *testing.T) {
 			testName:       "e2e-aws-ovn",
 			clusterProfile: "azure-2",
 			cpsDetails: api.ClusterProfileSetDetails{
-				ClusterProfileSetDetailsNew: api.ClusterProfileSetDetailsNew{
-					ClusterProfileSets: map[api.ClusterProfile][]string{
-						"openshift-org-azure": {"azure-2"},
-					},
-					TestsAllowlist: map[utilregexp.Regexp]map[utilregexp.Regexp]map[utilregexp.Regexp][]utilregexp.Regexp{
-						re("openshift/ci-tools"): {re("main"): {re(""): {re("e2e-aws-ovn")}}},
-					},
+				ClusterProfileSets: map[api.ClusterProfile][]string{
+					"openshift-org-azure": {"azure-2"},
+				},
+				TestsAllowlist: map[utilregexp.Regexp]map[utilregexp.Regexp]map[utilregexp.Regexp][]utilregexp.Regexp{
+					re("openshift/ci-tools"): {re("main"): {re(""): {re("e2e-aws-ovn")}}},
 				},
 			},
 		},
@@ -2506,13 +2502,11 @@ func TestValidateClusterProfiles(t *testing.T) {
 			testName:       "aws-ipi-public-ipv4-pool-byo-subnet-amd-f28-destructive",
 			clusterProfile: "azure-2",
 			cpsDetails: api.ClusterProfileSetDetails{
-				ClusterProfileSetDetailsNew: api.ClusterProfileSetDetailsNew{
-					ClusterProfileSets: map[api.ClusterProfile][]string{
-						"openshift-org-azure": {"azure-2"},
-					},
-					TestsAllowlist: map[utilregexp.Regexp]map[utilregexp.Regexp]map[utilregexp.Regexp][]utilregexp.Regexp{
-						re("openshift(-priv)?/openshift-tests-private"): {re("main"): {re("daily|nightly"): {re(".*-ipi-public-ipv4-pool-.*")}}},
-					},
+				ClusterProfileSets: map[api.ClusterProfile][]string{
+					"openshift-org-azure": {"azure-2"},
+				},
+				TestsAllowlist: map[utilregexp.Regexp]map[utilregexp.Regexp]map[utilregexp.Regexp][]utilregexp.Regexp{
+					re("openshift(-priv)?/openshift-tests-private"): {re("main"): {re("daily|nightly"): {re(".*-ipi-public-ipv4-pool-.*")}}},
 				},
 			},
 		},

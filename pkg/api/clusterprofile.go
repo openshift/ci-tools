@@ -1,10 +1,8 @@
 package api
 
 import (
-	"encoding/json"
 	"fmt"
 	"slices"
-	"strings"
 
 	aggerrs "k8s.io/apimachinery/pkg/util/errors"
 	"k8s.io/apimachinery/pkg/util/sets"
@@ -1275,33 +1273,9 @@ type ClusterProfileOwners struct {
 }
 type ClusterClaimOwnersMap map[string]ClusterClaimDetails
 
-// +kubebuilder:object:generate=false
-type ClusterProfileSetDetails struct {
-	ClusterProfileSetDetailsNew
-}
-
-func (cps *ClusterProfileSetDetails) UnmarshalJSON(data []byte) error {
-	cpsDetails := make(map[ClusterProfile][]string)
-
-	if strings.Contains(string(data), `"cluster_profile_sets"`) {
-		newCPSDetails := ClusterProfileSetDetailsNew{}
-		if err := json.Unmarshal(data, &newCPSDetails); err != nil {
-			return fmt.Errorf("new ClusterProfileSetDetails schema: %w", err)
-		}
-		cps.ClusterProfileSetDetailsNew = newCPSDetails
-	} else {
-		if err := json.Unmarshal(data, &cpsDetails); err != nil {
-			return fmt.Errorf("old ClusterProfileSetDetails schema: %w", err)
-		}
-		cps.ClusterProfileSets = cpsDetails
-	}
-
-	return nil
-}
-
 // TODO: This will replace `ClusterProfileSetDetails` once the migration is complete.
 // +kubebuilder:object:generate=false
-type ClusterProfileSetDetailsNew struct {
+type ClusterProfileSetDetails struct {
 	ClusterProfileSets map[ClusterProfile][]string `json:"cluster_profile_sets,omitempty"`
 
 	// TestsAllowlist holds a list of tests for which we do not enfoce policy
@@ -1311,7 +1285,7 @@ type ClusterProfileSetDetailsNew struct {
 	TestsAllowlist map[utilregexp.Regexp]map[utilregexp.Regexp]map[utilregexp.Regexp][]utilregexp.Regexp `json:"tests_allowlist,omitempty"`
 }
 
-func (cps ClusterProfileSetDetailsNew) FindSetByProfile(profile ClusterProfile) (ClusterProfile, bool) {
+func (cps ClusterProfileSetDetails) FindSetByProfile(profile ClusterProfile) (ClusterProfile, bool) {
 	for cpsName, cpDetails := range cps.ClusterProfileSets {
 		if slices.Contains(cpDetails, string(profile)) {
 			return cpsName, true
@@ -1320,7 +1294,7 @@ func (cps ClusterProfileSetDetailsNew) FindSetByProfile(profile ClusterProfile) 
 	return "", false
 }
 
-func (cps ClusterProfileSetDetailsNew) IsTestAllowlisted(test string, metadata Metadata) bool {
+func (cps ClusterProfileSetDetails) IsTestAllowlisted(test string, metadata Metadata) bool {
 	if cps.TestsAllowlist == nil {
 		return false
 	}

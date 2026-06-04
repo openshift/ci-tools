@@ -150,6 +150,7 @@ const (
 	ClusterProfilePacket                  ClusterProfile = "packet"
 	ClusterProfilePacketAssisted          ClusterProfile = "packet-assisted"
 	ClusterProfilePacketSNO               ClusterProfile = "packet-sno"
+	ClusterProfilePacketOSAC              ClusterProfile = "packet-osac"
 	ClusterProfileVSphereDis2             ClusterProfile = "vsphere-dis-2"
 	ClusterProfileVSphereMultizone2       ClusterProfile = "vsphere-multizone-2"
 	ClusterProfileVSphereConnected2       ClusterProfile = "vsphere-connected-2"
@@ -370,6 +371,7 @@ func ClusterProfiles() []ClusterProfile {
 		ClusterProfilePacket,
 		ClusterProfilePacketAssisted,
 		ClusterProfilePacketSNO,
+		ClusterProfilePacketOSAC,
 
 		ClusterProfileVSphereDis2,
 		ClusterProfileVSphereMultizone2,
@@ -677,7 +679,8 @@ func (p ClusterProfile) ClusterType() string {
 		return "packet"
 	case
 		ClusterProfilePacketAssisted,
-		ClusterProfilePacketSNO:
+		ClusterProfilePacketSNO,
+		ClusterProfilePacketOSAC:
 		return "packet-edge"
 	case ClusterProfileKubevirt:
 		return "kubevirt"
@@ -1012,7 +1015,8 @@ func (p ClusterProfile) LeaseType() string {
 		return "packet-quota-slice"
 	case
 		ClusterProfilePacketAssisted,
-		ClusterProfilePacketSNO:
+		ClusterProfilePacketSNO,
+		ClusterProfilePacketOSAC:
 		return "packet-edge-quota-slice"
 	case ClusterProfileVSphereDis2:
 		return "vsphere-dis-2-quota-slice"

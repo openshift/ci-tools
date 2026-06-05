@@ -122,6 +122,7 @@ const (
 	ClusterProfileLibvirtS390x2           ClusterProfile = "libvirt-s390x-2"
 	ClusterProfileLibvirtS390xAmd64       ClusterProfile = "libvirt-s390x-amd64"
 	ClusterProfileLibvirtS390xVPN         ClusterProfile = "libvirt-s390x-vpn"
+	ClusterProfileLibvirtS390xVPNOZ       ClusterProfile = "libvirt-s390x-vpn-oz"
 	ClusterProfileMetalPerfscaleBMCPT     ClusterProfile = "metal-perfscale-cpt"
 	ClusterProfileMetalPerfscaleJetlag    ClusterProfile = "metal-perfscale-jetlag"
 	ClusterProfileMetalPerfscaleOSP       ClusterProfile = "metal-perfscale-osp"
@@ -342,6 +343,7 @@ func ClusterProfiles() []ClusterProfile {
 		ClusterProfileLibvirtS390x2,
 		ClusterProfileLibvirtS390xAmd64,
 		ClusterProfileLibvirtS390xVPN,
+		ClusterProfileLibvirtS390xVPNOZ,
 		ClusterProfileMetalPerfscaleBMCPT,
 		ClusterProfileMetalPerfscaleJetlag,
 		ClusterProfileMetalPerfscaleOSP,
@@ -618,6 +620,8 @@ func (p ClusterProfile) ClusterType() string {
 		return "libvirt-s390x-amd64"
 	case ClusterProfileLibvirtS390xVPN:
 		return "libvirt-s390x-vpn"
+	case ClusterProfileLibvirtS390xVPNOZ:
+		return "libvirt-s390x-vpn-oz"
 	case ClusterProfileMetalRHgs:
 		return "metal-redhat-gs"
 	case ClusterProfileMetalPerfscaleBMCPT:
@@ -961,6 +965,8 @@ func (p ClusterProfile) LeaseType() string {
 		return "libvirt-s390x-amd64-quota-slice"
 	case ClusterProfileLibvirtS390xVPN:
 		return "libvirt-s390x-vpn-quota-slice"
+	case ClusterProfileLibvirtS390xVPNOZ:
+		return "libvirt-s390x-vpn-oz-quota-slice"
 	case ClusterProfileMetalPerfscaleBMCPT:
 		return "metal-perfscale-cpt-quota-slice"
 	case ClusterProfileMetalPerfscaleJetlag:
@@ -1178,7 +1184,7 @@ func LeaseTypeFromClusterType(t string) (string, error) {
 		"aws", "aws-us-east-1", "aws-c2s", "aws-china", "aws-usgov", "aws-sc2s", "aws-eusc", "aws-osd-msp", "aws-opendatahub",
 		"alibaba", "azure-2", "azure4", "azure-arm64", "azurestack", "azuremag", "equinix-ocp-metal",
 		"gcp", "gcp-arm64", "gcp-opendatahub", "libvirt-ppc64le", "libvirt-ppc64le-s2s", "libvirt-s390x",
-		"libvirt-s390x-1", "libvirt-s390x-2", "libvirt-s390x-amd64", "libvirt-s390x-vpn", "ibmcloud-multi-ppc64le",
+		"libvirt-s390x-1", "libvirt-s390x-2", "libvirt-s390x-amd64", "libvirt-s390x-vpn", "libvirt-s390x-vpn-oz", "ibmcloud-multi-ppc64le",
 		"ibmcloud-multi-s390x", "nutanix", "nutanix-qe", "nutanix-qe-dis", "nutanix-qe-zone", "nutanix-qe-gpu",
 		"nutanix-qe-flow", "openstack", "openstack-osuosl", "openstack-vexxhost", "openstack-ppc64le",
 		"openstack-nerc-dev", "vsphere", "ovirt", "packet", "packet-edge", "powervc-1", "powervs-multi-1",

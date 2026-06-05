@@ -240,6 +240,14 @@ func TestGeneratePresubmitForTest(t *testing.T) {
 				options.maxConcurrency = 4
 			},
 		},
+		{
+			description: "presubmit with skip_branches",
+			test:        "testname",
+			repoInfo:    &ciop.Metadata{Org: "org", Repo: "repo", Branch: "branch"},
+			generateOption: func(options *generatePresubmitOptions) {
+				options.skipBranches = []string{"^branch-foo$", "^branch-bar$"}
+			},
+		},
 	}
 	for _, tc := range tests {
 		t.Run(tc.description, func(t *testing.T) {
@@ -935,8 +943,21 @@ func TestGenerateJobs(t *testing.T) {
 				Branch: "branch",
 			},
 		},
+		{
+			id:   "presubmit with per-test skip_branches",
+			keep: true,
+			config: &ciop.ReleaseBuildConfiguration{
+				Tests: []ciop.TestStepConfiguration{
+					{As: "derTest", SkipBranches: []string{"^branch-foo$", "^branch-bar$"}, ContainerTestConfiguration: &ciop.ContainerTestConfiguration{From: "from"}},
+				},
+			},
+			repoInfo: &ciop.Metadata{
+				Org:    "organization",
+				Repo:   "repository",
+				Branch: "branch",
+			},
+		},
 	}
-
 	for _, tc := range tests {
 		t.Run(tc.id, func(t *testing.T) {
 			jobConfig, err := GenerateJobs(tc.config, tc.repoInfo)

@@ -8,6 +8,7 @@ import (
 	"path"
 	"path/filepath"
 	"runtime"
+	"sort"
 	"strings"
 
 	"github.com/ghodss/yaml"
@@ -404,10 +405,10 @@ func injectPrivateLGTMPlugin(lgtms []plugins.Lgtm, orgRepos orgReposWithOfficial
 	}
 }
 
-func injectPrivateTriggers(triggers []plugins.Trigger, orgRepos orgReposWithOfficialImages) {
+func injectPrivateTriggers(triggers *[]plugins.Trigger, orgRepos orgReposWithOfficialImages) {
 	logrus.Info("Processing...")
 
-	for index, trigger := range triggers {
+	for index, trigger := range *triggers {
 		repos := sets.New[string]()
 		for _, orgRepo := range trigger.Repos {
 			if strings.HasPrefix(orgRepo, fmt.Sprintf("%s/", openshiftPrivOrg)) {
@@ -420,10 +421,51 @@ func injectPrivateTriggers(triggers []plugins.Trigger, orgRepos orgReposWithOffi
 			if privateOrgRepoName, ok := orgRepos.privateOrgRepoFull(orgRepo); ok {
 				logrus.WithField("source_repo", orgRepo).WithField("private_repo", privateOrgRepoName).Info("Found")
 				repos.Insert(privateOrgRepoName)
+			} else if !strings.Contains(orgRepo, "/") {
+				if _, ok := orgRepos[orgRepo]; ok {
+					logrus.WithField("source_org", orgRepo).WithField("private_org", openshiftPrivOrg).Info("Found")
+					repos.Insert(openshiftPrivOrg)
+				}
 			}
 		}
 
-		triggers[index].Repos = sets.List(repos)
+		(*triggers)[index].Repos = sets.List(repos)
+	}
+
+	sortedOrgs := make([]string, 0, len(orgRepos))
+	for org := range orgRepos {
+		sortedOrgs = append(sortedOrgs, org)
+	}
+	sort.Strings(sortedOrgs)
+	for _, org := range sortedOrgs {
+		repos := orgRepos[org]
+		var orgTrigger *plugins.Trigger
+		for i := range *triggers {
+			for _, repo := range (*triggers)[i].Repos {
+				if repo == org {
+					orgTrigger = &(*triggers)[i]
+					break
+				}
+			}
+			if orgTrigger != nil {
+				break
+			}
+		}
+		if orgTrigger == nil {
+			continue
+		}
+		privateRepoNames := make([]string, 0, len(repos))
+		for repo := range repos {
+			privateRepoNames = append(privateRepoNames, repos[repo])
+		}
+		sort.Strings(privateRepoNames)
+		for _, privateRepoName := range privateRepoNames {
+			privateOrgRepo := fmt.Sprintf("%s/%s", openshiftPrivOrg, privateRepoName)
+			repoTrigger := *orgTrigger
+			repoTrigger.Repos = []string{privateOrgRepo}
+			*triggers = append(*triggers, repoTrigger)
+			logrus.WithField("source_org", org).WithField("private_repo", privateOrgRepo).Info("Injecting repo-level trigger")
+		}
 	}
 }
 
@@ -586,7 +628,7 @@ func main() {
 	injectPrivateLGTMPlugin(pluginsConfig.Lgtm, orgRepos)
 	injectPrivatePlugins(pluginsConfig.Plugins, orgRepos)
 	injectPrivateBugzillaPlugin(pluginsConfig.Bugzilla, orgRepos)
-	injectPrivateTriggers(pluginsConfig.Triggers, orgRepos)
+	injectPrivateTriggers(&pluginsConfig.Triggers, orgRepos)
 
 	if err := updateProwConfig(filepath.Join(o.releaseRepoPath, config.ConfigInRepoPath), prowConfig); err != nil {
 		logrus.WithError(err).Fatal("couldn't update prow config file")

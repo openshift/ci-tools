@@ -603,7 +603,7 @@ func TestInjectPrivateTriggers(t *testing.T) {
 		expected []plugins.Trigger
 	}{
 		{
-			id: "no changes expected",
+			id: "no changes expected for repos not in orgRepos",
 			triggers: []plugins.Trigger{
 				{
 					Repos:       []string{"openshift/anotherRepo1", "testshift/anotherRepo2"},
@@ -626,7 +626,7 @@ func TestInjectPrivateTriggers(t *testing.T) {
 			},
 		},
 		{
-			id: "changes expected",
+			id: "repo-level mapping and stale priv entries removed",
 			triggers: []plugins.Trigger{
 				{
 					Repos:       []string{"openshift/testRepo1", "testshift/anotherRepo2", "openshift-priv/testRepo3"},
@@ -648,11 +648,34 @@ func TestInjectPrivateTriggers(t *testing.T) {
 				},
 			},
 		},
+		{
+			id: "org-level trigger creates org and repo-level entries",
+			triggers: []plugins.Trigger{
+				{
+					Repos:       []string{"openshift"},
+					TrustedApps: []string{"openshift-merge-bot"},
+				},
+			},
+			expected: []plugins.Trigger{
+				{
+					Repos:       []string{"openshift", "openshift-priv"},
+					TrustedApps: []string{"openshift-merge-bot"},
+				},
+				{
+					Repos:       []string{"openshift-priv/testRepo1"},
+					TrustedApps: []string{"openshift-merge-bot"},
+				},
+				{
+					Repos:       []string{"openshift-priv/testRepo2"},
+					TrustedApps: []string{"openshift-merge-bot"},
+				},
+			},
+		},
 	}
 
 	for _, tc := range testCases {
 		t.Run(tc.id, func(t *testing.T) {
-			injectPrivateTriggers(tc.triggers, orgRepos)
+			injectPrivateTriggers(&tc.triggers, orgRepos)
 			if !reflect.DeepEqual(tc.triggers, tc.expected) {
 				t.Fatal(cmp.Diff(tc.triggers, tc.expected))
 			}

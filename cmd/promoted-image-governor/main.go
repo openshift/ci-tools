@@ -256,7 +256,7 @@ func generateMappings(promotedTags []api.ImageStreamTagReference, mappingConfig 
 						if _, ok := mappings[filename]; !ok {
 							mappings[filename] = map[string]sets.Set[string]{}
 						}
-						src := api.QuayImageReference(api.ImageStreamTagReference{
+						src := api.QuayImage(api.ImageStreamTagReference{
 							Namespace: mappingConfig.SourceNamespace,
 							Name:      tag.Name,
 							Tag:       tag.Tag,

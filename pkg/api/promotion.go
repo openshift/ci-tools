@@ -107,43 +107,11 @@ func quayImageWithTime(timestamp string, tag ImageStreamTagReference) string {
 	return fmt.Sprintf("%s:%s_prune_%s_%s_%s", QuayOpenShiftCIRepo, timestamp, tag.Namespace, tag.Name, tag.Tag)
 }
 
-func ConsolidatedQuayPromotion(c *ReleaseBuildConfiguration) bool {
-	if c == nil {
-		return false
-	}
-	if c.ReleaseTagConfiguration != nil && ConsolidatedQuayPromotionVersion(c.ReleaseTagConfiguration.Name) {
-		return true
-	}
-	for _, target := range PromotionTargets(c.PromotionConfiguration) {
-		if ConsolidatedQuayPromotionVersion(target.Name) {
-			return true
-		}
-	}
-	return false
-}
-
-func ConsolidatedQuayPromotionVersion(name string) bool {
-	var major, minor int
-	if _, err := fmt.Sscanf(name, "%d.%d", &major, &minor); err != nil {
-		return false
-	}
-	return major == 4 && minor >= 11 && minor <= 22
-}
-
-func quayProxyStreamSuffix(tag ImageStreamTagReference) string {
-	if ConsolidatedQuayPromotionVersion(tag.Name) {
-		return ""
-	}
-	return "-quay"
-}
-
-// getQuayProxyTarget creates the quay-proxy target imagestream tag reference.
-// Format: namespace/imagestream-name-quay:tag
+// getQuayProxyTarget creates the quay-proxy app.ci imagestream tag reference.
+// Format: namespace/imagestream-name:tag (e.g. ocp/4.22:ovn-kubernetes).
 func getQuayProxyTarget(target string, tag ImageStreamTagReference) string {
-	suffix := quayProxyStreamSuffix(tag)
 	if tag.Name != "" {
-		proxyTarget := fmt.Sprintf("%s/%s%s:%s", tag.Namespace, tag.Name, suffix, tag.Tag)
-		return proxyTarget
+		return fmt.Sprintf("%s/%s:%s", tag.Namespace, tag.Name, tag.Tag)
 	}
 
 	// For tag-based promotion, parse the target string to extract component name
@@ -157,15 +125,19 @@ func getQuayProxyTarget(target string, tag ImageStreamTagReference) string {
 			tagStart := len(tagPart) - len(tagSuffix)
 			targetComponent := tagPart[first+1 : tagStart]
 			if targetComponent != "" {
-				proxyTarget := fmt.Sprintf("%s/%s%s:%s", targetNamespace, targetComponent, suffix, tag.Tag)
-				return proxyTarget
+				return fmt.Sprintf("%s/%s:%s", targetNamespace, targetComponent, tag.Tag)
+			}
+		}
+		if first > 0 && tag.Tag != "" {
+			targetNamespace := tagPart[:first]
+			remainder := tagPart[first+1:]
+			if componentPrefix := tag.Tag + "_"; strings.HasPrefix(remainder, componentPrefix) {
+				return fmt.Sprintf("%s/%s:%s", targetNamespace, tag.Tag, remainder[len(componentPrefix):])
 			}
 		}
 	}
 
-	// Fallback: use namespace and tag
-	proxyTarget := fmt.Sprintf("%s/%s%s:%s", tag.Namespace, tag.Tag, suffix, tag.Tag)
-	return proxyTarget
+	return fmt.Sprintf("%s/%s:%s", tag.Namespace, tag.Tag, tag.Tag)
 }
 
 func qciPullSpec(pipelineSource string) (string, bool) {

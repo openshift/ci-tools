@@ -24,11 +24,11 @@ spec:
         if [ -n "${_digest}" ] && oc tag --source=docker --loglevel=2 --reference-policy='source' --import-mode='PreserveOriginal' --reference quay-proxy.ci.openshift.org/openshift/ci@${_digest} ocp/4.21:ovn-kubernetes; then
           break
         fi
-        echo "promotion-quay: digest-tag failed for ocp/4.21:ovn-kubernetes attempt ${r}/5 (QCI digest may have moved after mirror)" >&2
+        echo "promotion: digest-tag failed for ocp/4.21:ovn-kubernetes attempt ${r}/5 (QCI digest may have moved after mirror)" >&2
         if [ "${r}" -eq 5 ]; then
           exit 1
         fi
-        echo "promotion-quay: retrying digest-tag for ocp/4.21:ovn-kubernetes (attempt $((r+1))/5 after randomized backoff)" >&2
+        echo "promotion: retrying digest-tag for ocp/4.21:ovn-kubernetes (attempt $((r+1))/5 after randomized backoff)" >&2
         backoff=$(($RANDOM % 120))s
         sleep "${backoff}"
       done
@@ -38,11 +38,11 @@ spec:
         if [ -n "${_digest}" ] && oc tag --source=docker --loglevel=2 --reference-policy='source' --import-mode='PreserveOriginal' --reference quay-proxy.ci.openshift.org/openshift/ci@${_digest} ocp/4.21:ovn-kubernetes-base; then
           break
         fi
-        echo "promotion-quay: digest-tag failed for ocp/4.21:ovn-kubernetes-base attempt ${r}/5 (QCI digest may have moved after mirror)" >&2
+        echo "promotion: digest-tag failed for ocp/4.21:ovn-kubernetes-base attempt ${r}/5 (QCI digest may have moved after mirror)" >&2
         if [ "${r}" -eq 5 ]; then
           exit 1
         fi
-        echo "promotion-quay: retrying digest-tag for ocp/4.21:ovn-kubernetes-base (attempt $((r+1))/5 after randomized backoff)" >&2
+        echo "promotion: retrying digest-tag for ocp/4.21:ovn-kubernetes-base (attempt $((r+1))/5 after randomized backoff)" >&2
         backoff=$(($RANDOM % 120))s
         sleep "${backoff}"
       done
@@ -52,11 +52,11 @@ spec:
         if [ -n "${_digest}" ] && oc tag --source=docker --loglevel=2 --reference-policy='source' --import-mode='PreserveOriginal' --reference quay-proxy.ci.openshift.org/openshift/ci@${_digest} ocp/4.21:ovn-kubernetes-microshift; then
           break
         fi
-        echo "promotion-quay: digest-tag failed for ocp/4.21:ovn-kubernetes-microshift attempt ${r}/5 (QCI digest may have moved after mirror)" >&2
+        echo "promotion: digest-tag failed for ocp/4.21:ovn-kubernetes-microshift attempt ${r}/5 (QCI digest may have moved after mirror)" >&2
         if [ "${r}" -eq 5 ]; then
           exit 1
         fi
-        echo "promotion-quay: retrying digest-tag for ocp/4.21:ovn-kubernetes-microshift (attempt $((r+1))/5 after randomized backoff)" >&2
+        echo "promotion: retrying digest-tag for ocp/4.21:ovn-kubernetes-microshift (attempt $((r+1))/5 after randomized backoff)" >&2
         backoff=$(($RANDOM % 120))s
         sleep "${backoff}"
       done

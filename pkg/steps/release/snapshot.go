@@ -141,7 +141,7 @@ func snapshotImportSource(sourceNamespace, sourceName, tag string, source *image
 		}
 		return nil, false
 	}
-	if api.ConsolidatedQuayPromotionVersion(sourceName) {
+	if api.RefersToOfficialImage(sourceNamespace, api.WithoutOKD) {
 		return utils.OfficialImageTagFrom(source, base), true
 	}
 	if source != nil {

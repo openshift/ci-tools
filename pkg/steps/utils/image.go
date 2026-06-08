@@ -83,23 +83,25 @@ func OfficialImageTagFrom(source *imagev1.ImageStream, base api.ImageStreamTagRe
 	return &coreapi.ObjectReference{Kind: "DockerImage", Name: api.QuayImageReference(base)}
 }
 
-// ResolveOfficialInputFrom resolves consolidated ocp inputs: stable in job ns, then spec/status/quay on source IS.
-// When ok is false, callers use QuayImageReference with Source policy (e.g. 4.23, 5.0).
+// ResolveOfficialInputFrom resolves official ocp inputs: stable in job ns, then spec/status/quay on source IS.
+// When ok is false, callers use QuayImageReference with Source policy.
 func ResolveOfficialInputFrom(ctx context.Context, client ctrlruntimeclient.Client, jobNamespace string, base api.ImageStreamTagReference) (*coreapi.ObjectReference, bool, error) {
-	if !api.ConsolidatedQuayPromotionVersion(base.Name) || !api.RefersToOfficialImage(base.Namespace, api.WithoutOKD) {
+	if !api.RefersToOfficialImage(base.Namespace, api.WithoutOKD) {
 		return nil, false, nil
 	}
-	stable := &imagev1.ImageStream{}
-	if err := client.Get(ctx, ctrlruntimeclient.ObjectKey{Namespace: jobNamespace, Name: api.StableImageStream}, stable); err == nil {
-		if _, exists, _ := util.ResolvePullSpec(stable, base.Tag, true); exists {
-			return &coreapi.ObjectReference{
-				Kind:      "ImageStreamTag",
-				Namespace: jobNamespace,
-				Name:      fmt.Sprintf("%s:%s", api.StableImageStream, base.Tag),
-			}, true, nil
+	if base.Name == api.StableImageStream || api.IsReleaseStream(base.Name) {
+		stable := &imagev1.ImageStream{}
+		if err := client.Get(ctx, ctrlruntimeclient.ObjectKey{Namespace: jobNamespace, Name: api.StableImageStream}, stable); err == nil {
+			if _, exists, _ := util.ResolvePullSpec(stable, base.Tag, true); exists {
+				return &coreapi.ObjectReference{
+					Kind:      "ImageStreamTag",
+					Namespace: jobNamespace,
+					Name:      fmt.Sprintf("%s:%s", api.StableImageStream, base.Tag),
+				}, true, nil
+			}
+		} else if !kerrors.IsNotFound(err) {
+			return nil, false, fmt.Errorf("get stable imagestream in %s: %w", jobNamespace, err)
 		}
-	} else if !kerrors.IsNotFound(err) {
-		return nil, false, fmt.Errorf("get stable imagestream in %s: %w", jobNamespace, err)
 	}
 	source := &imagev1.ImageStream{}
 	if err := client.Get(ctx, ctrlruntimeclient.ObjectKey{Namespace: base.Namespace, Name: base.Name}, source); err != nil && !kerrors.IsNotFound(err) {

@@ -303,7 +303,7 @@ func fromConfig(ctx context.Context, cfg *Config) ([]api.Step, []api.Step, error
 			return nil, nil, fmt.Errorf("cannot promote images, no promotion configuration defined")
 		}
 
-		if !api.ConsolidatedQuayPromotion(cfg.CIConfig) {
+		if !api.PromotesOfficialImages(cfg.CIConfig, api.WithoutOKD) {
 			promotionSteps = append(promotionSteps, releasesteps.PromotionStep(api.PromotionStepName, cfg.CIConfig, requiredNames, cfg.JobSpec, cfg.podClient, cfg.PushSecret, registryDomain(cfg.CIConfig.PromotionConfiguration), api.DefaultMirrorFunc, api.DefaultTargetNameFunc, cfg.NodeArchitectures))
 		}
 		// Used primarily (only?) by the ci-chat-bot

@@ -1703,11 +1703,11 @@ func TestFromConfig(t *testing.T) {
 		expectedSteps: []string{"[output-images]", "[images]"},
 		expectedPost:  []string{"[promotion]", "[promotion-quay]"},
 	}, {
-		name: "promote 4.12 consolidated quay",
+		name: "promote 4.12 quay only",
 		config: api.ReleaseBuildConfiguration{
 			PromotionConfiguration: &api.PromotionConfiguration{
 				Targets: []api.PromotionTarget{{
-					Namespace: ns,
+					Namespace: "ocp",
 					Name:      "4.12",
 					Tag:       "tag",
 				}},
@@ -1717,11 +1717,11 @@ func TestFromConfig(t *testing.T) {
 		expectedSteps: []string{"[output-images]", "[images]"},
 		expectedPost:  []string{"[promotion-quay]"},
 	}, {
-		name: "promote 4.23 legacy quay",
+		name: "promote 4.23 quay only",
 		config: api.ReleaseBuildConfiguration{
 			PromotionConfiguration: &api.PromotionConfiguration{
 				Targets: []api.PromotionTarget{{
-					Namespace: ns,
+					Namespace: "ocp",
 					Name:      "4.23",
 					Tag:       "tag",
 				}},
@@ -1729,13 +1729,13 @@ func TestFromConfig(t *testing.T) {
 		},
 		promote:       true,
 		expectedSteps: []string{"[output-images]", "[images]"},
-		expectedPost:  []string{"[promotion]", "[promotion-quay]"},
+		expectedPost:  []string{"[promotion-quay]"},
 	}, {
-		name: "promote 5.0 legacy quay",
+		name: "promote 5.0 quay only",
 		config: api.ReleaseBuildConfiguration{
 			PromotionConfiguration: &api.PromotionConfiguration{
 				Targets: []api.PromotionTarget{{
-					Namespace: ns,
+					Namespace: "ocp",
 					Name:      "5.0",
 					Tag:       "tag",
 				}},
@@ -1743,7 +1743,7 @@ func TestFromConfig(t *testing.T) {
 		},
 		promote:       true,
 		expectedSteps: []string{"[output-images]", "[images]"},
-		expectedPost:  []string{"[promotion]", "[promotion-quay]"},
+		expectedPost:  []string{"[promotion-quay]"},
 	}, {
 		name: "duplicate input images",
 		config: api.ReleaseBuildConfiguration{

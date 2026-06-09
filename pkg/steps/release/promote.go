@@ -338,8 +338,8 @@ const (
 )
 
 // getMirrorRetryShell mirrors images with retries and fails the promotion pod if all attempts fail.
-func getMirrorRetryShell(registryConfig string, images []string, loglevel int) string {
-	mirrorCmd := getMirrorCommand(registryConfig, images, loglevel)
+func getMirrorRetryShell(registryConfig string, images []string) string {
+	mirrorCmd := getMirrorCommand(registryConfig, images, 2)
 	n := quayPromotionMirrorAttempts
 	return fmt.Sprintf(`for r in {1..%d}; do
   echo Mirror attempt $r
@@ -381,7 +381,63 @@ done
 const (
 	retryLoopTemplate    = "for r in {1..%d}; do echo %s; %s && break; %s; done"
 	retryLoopWithBackoff = "backoff=$(($RANDOM % 120))s; echo Sleeping randomized $backoff before retry; sleep $backoff"
+
+	quayImageIncomingSuffix = "_incoming"
+	quayImagePreSuffix      = "__pre"
+	quayImagePost1Suffix    = "__post1"
 )
+
+type quayFloatPromotion struct {
+	floatTag string
+	newSrc   string
+	pruneTag string
+}
+
+// getStagedQuayFloatPromotionShell returns shell that repoints floatTag from its incoming staging tag.
+// If floatTag already exists on the registry, the current image is copied to pruneTag (when set) and
+// floatTag+quayImagePreSuffix before the repoint; floatTag+quayImagePost1Suffix is added afterward.
+func getStagedQuayFloatPromotionShell(registryConfig, floatTag, pruneTag string) string {
+	incomingTag := floatTag + quayImageIncomingSuffix
+	preTag := floatTag + quayImagePreSuffix
+	post1Tag := floatTag + quayImagePost1Suffix
+
+	checkOld := fmt.Sprintf(`_OLD_EXISTS=false
+if oc image info --registry-config=%s %s >/dev/null 2>&1; then _OLD_EXISTS=true; fi`, registryConfig, floatTag)
+
+	var backupOld string
+	if pruneTag != "" {
+		backupOld = fmt.Sprintf(`if [ "${_OLD_EXISTS}" = "true" ]; then
+%s
+%s
+fi`,
+			indentShell(getMirrorRetryShell(registryConfig, []string{fmt.Sprintf("%s=%s", floatTag, pruneTag)})),
+			indentShell(getMirrorRetryShell(registryConfig, []string{fmt.Sprintf("%s=%s", floatTag, preTag)})),
+		)
+	} else {
+		backupOld = fmt.Sprintf(`if [ "${_OLD_EXISTS}" = "true" ]; then
+%s
+fi`, indentShell(getMirrorRetryShell(registryConfig, []string{fmt.Sprintf("%s=%s", floatTag, preTag)})))
+	}
+
+	latch := getMirrorRetryShell(registryConfig, []string{fmt.Sprintf("%s=%s", incomingTag, floatTag)})
+
+	postLatch := fmt.Sprintf(`if [ "${_OLD_EXISTS}" = "true" ]; then
+%s
+fi`, indentShell(getMirrorRetryShell(registryConfig, []string{fmt.Sprintf("%s=%s", floatTag, post1Tag)})))
+
+	return strings.Join([]string{checkOld, backupOld, latch, postLatch}, "\n")
+}
+
+func indentShell(script string) string {
+	const prefix = "  "
+	lines := strings.Split(script, "\n")
+	for i, line := range lines {
+		if line != "" {
+			lines[i] = prefix + line
+		}
+	}
+	return strings.Join(lines, "\n")
+}
 
 func getPromotionPod(imageMirrorTarget map[string]string, timeStr string, namespace string, name string, cliImage string, nodeArchitectures []string) *coreapi.Pod {
 	keys := make([]string, 0, len(imageMirrorTarget))
@@ -391,7 +447,10 @@ func getPromotionPod(imageMirrorTarget map[string]string, timeStr string, namesp
 	sort.Strings(keys)
 
 	var images []string
+	var incomingImages []string
 	var pruneImages []string
+	var quayFloatPromotions []quayFloatPromotion
+	pruneTagForFloat := map[string]string{}
 	var tags []string
 	// resolveAndTagPairs holds [quayProxyTag, isTag] for official ocp IS targets (consolidated
 	// ocp/4.x:tag and legacy *-quay). Resolved post-mirror via oc image info + oc tag.
@@ -401,12 +460,25 @@ func getPromotionPod(imageMirrorTarget map[string]string, timeStr string, namesp
 
 	for _, k := range keys {
 		if strings.Contains(k, fmt.Sprintf("%s_prune_", timeStr)) {
-			pruneImages = append(pruneImages, fmt.Sprintf("%s=%s", imageMirrorTarget[k], k))
+			floatTag := imageMirrorTarget[k]
+			if isQuayStep {
+				pruneTagForFloat[floatTag] = k
+			} else {
+				pruneImages = append(pruneImages, fmt.Sprintf("%s=%s", floatTag, k))
+			}
 		} else {
 			src := imageMirrorTarget[k]
 			if strings.HasPrefix(k, api.QuayOpenShiftCIRepo+":") {
 				// Images promoted into quay.io/openshift/ci always use oc image mirror (tag or digest sources).
-				images = append(images, fmt.Sprintf("%s=%s", src, k))
+				if isQuayStep {
+					incomingImages = append(incomingImages, fmt.Sprintf("%s=%s", src, k+quayImageIncomingSuffix))
+					quayFloatPromotions = append(quayFloatPromotions, quayFloatPromotion{
+						floatTag: k,
+						newSrc:   src,
+					})
+				} else {
+					images = append(images, fmt.Sprintf("%s=%s", src, k))
+				}
 			} else if isQuayStep && !strings.Contains(k, api.ComponentFormatReplacement) {
 				// Concrete quay IS target: resolve the QCI digest after mirroring instead of
 				// using a pre-computed (potentially tag-only) source so spec.from is always digest-based.
@@ -429,6 +501,10 @@ func getPromotionPod(imageMirrorTarget map[string]string, timeStr string, namesp
 		}
 	}
 
+	for i := range quayFloatPromotions {
+		quayFloatPromotions[i].pruneTag = pruneTagForFloat[quayFloatPromotions[i].floatTag]
+	}
+
 	registryConfig := filepath.Join(api.RegistryPushCredentialsCICentralSecretMountPath, coreapi.DockerConfigJsonKey)
 	command := []string{"/bin/sh", "-c"}
 
@@ -436,7 +512,7 @@ func getPromotionPod(imageMirrorTarget map[string]string, timeStr string, namesp
 
 	// Generate mirror commands if there are images to mirror
 	if len(images) > 0 {
-		commands = append(commands, getMirrorRetryShell(registryConfig, images, 2))
+		commands = append(commands, getMirrorRetryShell(registryConfig, images))
 	}
 
 	if isQuayStep {
@@ -466,6 +542,17 @@ func getPromotionPod(imageMirrorTarget map[string]string, timeStr string, namesp
 	}
 
 	var args []string
+	if isQuayStep && len(incomingImages) > 0 {
+		args = append(args, getMirrorRetryShell(registryConfig, incomingImages))
+	}
+	if isQuayStep && len(quayFloatPromotions) > 0 {
+		sort.Slice(quayFloatPromotions, func(i, j int) bool {
+			return quayFloatPromotions[i].floatTag < quayFloatPromotions[j].floatTag
+		})
+		for _, promotion := range quayFloatPromotions {
+			args = append(args, getStagedQuayFloatPromotionShell(registryConfig, promotion.floatTag, promotion.pruneTag))
+		}
+	}
 	if len(pruneImages) > 0 {
 		// See https://github.com/openshift/release/blob/2080ec4a49337c27577a4b2ff08a538e96436e65/hack/qci_registry_pruner.py for details.
 		// Note that we don't retry here and we ignore failures because (a) it may be the first time an image tag is

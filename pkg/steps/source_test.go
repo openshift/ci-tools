@@ -265,6 +265,17 @@ func TestBuildFromSource(t *testing.T) {
 		ref                           string
 	}{
 		{
+			name: "pod scaler opt-out",
+			jobSpec: &api.JobSpec{
+				DisablePodScaler: true,
+				JobSpec: downwardapi.JobSpec{
+					Job:       "job",
+					BuildID:   "buildId",
+					ProwJobID: "prowJobId",
+				},
+			},
+		},
+		{
 			name: "build args",
 			jobSpec: &api.JobSpec{
 				JobSpec: downwardapi.JobSpec{

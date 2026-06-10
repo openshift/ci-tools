@@ -64,6 +64,9 @@ const (
 
 	AutoScalePodsLabel = "ci.openshift.io/scale-pods"
 
+	// WorkloadAutoscalerScaleAnnotation opts a pod out of pod-scaler admission when set to "false".
+	WorkloadAutoscalerScaleAnnotation = "ci-workload-autoscaler.openshift.io/scale"
+
 	NamespaceDir = "build-resources"
 
 	APPCIKubeAPIURL = "https://api.ci.l2s4.p1.openshiftapps.com:6443"

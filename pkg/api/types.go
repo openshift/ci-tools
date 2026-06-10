@@ -895,6 +895,9 @@ type TestStepConfiguration struct {
 	// DisableRehearsal prevents this specific test from being picked up for rehearsals.
 	DisableRehearsal bool `json:"disable_rehearsal,omitempty"`
 
+	// DisablePodScaler opts generated test and image build pods out of pod-scaler admission.
+	DisablePodScaler bool `json:"disable_pod_scaler,omitempty"`
+
 	// RestrictNetworkAccess restricts network access to RedHat intranet.
 	RestrictNetworkAccess *bool `json:"restrict_network_access,omitempty"`
 

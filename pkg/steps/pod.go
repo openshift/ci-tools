@@ -218,6 +218,12 @@ func PodStep(name string, config PodStepConfiguration, resources api.ResourceCon
 	}
 }
 
+func applyPodScalerOptOut(jobSpec *api.JobSpec, annotations map[string]string) {
+	if jobSpec != nil && jobSpec.DisablePodScaler {
+		annotations[api.WorkloadAutoscalerScaleAnnotation] = "false"
+	}
+}
+
 func GenerateBasePod(
 	jobSpec *api.JobSpec,
 	baseLabels map[string]string,
@@ -238,15 +244,17 @@ func GenerateBasePod(
 	if err != nil {
 		return nil, err
 	}
+	annotations := map[string]string{
+		JobSpecAnnotation:                     jobSpec.RawSpec(),
+		annotationContainersForSubTestResults: containerName,
+	}
+	applyPodScalerOptOut(jobSpec, annotations)
 	pod := &coreapi.Pod{
 		ObjectMeta: meta.ObjectMeta{
-			Namespace: jobSpec.Namespace(),
-			Name:      name,
-			Labels:    LabelsFor(jobSpec, baseLabels, ""),
-			Annotations: map[string]string{
-				JobSpecAnnotation:                     jobSpec.RawSpec(),
-				annotationContainersForSubTestResults: containerName,
-			},
+			Namespace:   jobSpec.Namespace(),
+			Name:        name,
+			Labels:      LabelsFor(jobSpec, baseLabels, ""),
+			Annotations: annotations,
 		},
 		Spec: coreapi.PodSpec{
 			NodeName:      nodeName,

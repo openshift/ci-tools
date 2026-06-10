@@ -150,7 +150,7 @@ func (m *podMutator) Handle(ctx context.Context, req admission.Request) admissio
 }
 
 func shouldScalePod(pod *corev1.Pod) (bool, error) {
-	scale, present := pod.Annotations["ci-workload-autoscaler.openshift.io/scale"]
+	scale, present := pod.Annotations[api.WorkloadAutoscalerScaleAnnotation]
 	if present {
 		return strconv.ParseBool(scale)
 	}

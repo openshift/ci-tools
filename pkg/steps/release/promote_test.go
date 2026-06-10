@@ -1266,6 +1266,54 @@ func TestPromotionCLIImageFromRegistry(t *testing.T) {
 	}
 }
 
+func TestGetPromotionPodKeepsStagedFlowForManyFloatTags(t *testing.T) {
+	t.Parallel()
+
+	imageMirror := map[string]string{}
+	digest := "registry.build02.ci.openshift.org/ci-op-y2n8rsh3/pipeline@sha256:" + strings.Repeat("a", 64)
+	for i := 0; i < 80; i++ {
+		floatTag := fmt.Sprintf("quay.io/openshift/ci:ci_tool_%d", i)
+		imageMirror[floatTag] = digest
+		imageMirror[fmt.Sprintf("quay.io/openshift/ci:20240603235401_prune_ci_tool_%d", i)] = floatTag
+		imageMirror[fmt.Sprintf("ci/ci-quay:tool-%d", i)] = "quay-proxy.ci.openshift.org/openshift/ci@sha256:" + strings.Repeat("b", 64)
+	}
+
+	pod := getPromotionPod(imageMirror, "20240603235401", "ci-op-large", "promotion-quay", "stable:cli", []string{"amd64"})
+	if len(pod.Spec.Containers[0].Args) != 1 {
+		t.Fatalf("expected inline promotion script, got args %v", pod.Spec.Containers[0].Args)
+	}
+	script := pod.Spec.Containers[0].Args[0]
+	for _, marker := range []string{"_HAD_OLD_0", "_BACKUP_PAIRS", "_incoming", "__pre", "__post1"} {
+		if !strings.Contains(script, marker) {
+			t.Fatalf("expected staged promotion marker %q in script", marker)
+		}
+	}
+}
+
+func TestGetBatchedStagedQuayFloatPromotionShell(t *testing.T) {
+	t.Parallel()
+
+	registryConfig := "/etc/push-secret/.dockerconfigjson"
+	promotions := []quayFloatPromotion{
+		{floatTag: "quay.io/openshift/ci:ci_a", pruneTag: "quay.io/openshift/ci:20240603235401_prune_ci_a"},
+		{floatTag: "quay.io/openshift/ci:ci_b"},
+	}
+
+	script := getBatchedStagedQuayFloatPromotionShell(registryConfig, promotions)
+	for _, want := range []string{
+		"_HAD_OLD_0",
+		"_HAD_OLD_1",
+		"_BACKUP_PAIRS",
+		"quay.io/openshift/ci:ci_a__pre",
+		"quay.io/openshift/ci:ci_a_incoming=quay.io/openshift/ci:ci_a",
+		"__post1",
+	} {
+		if !strings.Contains(script, want) {
+			t.Fatalf("expected %q in batched staged shell", want)
+		}
+	}
+}
+
 func TestGetPromotionPodFallbackImageDoesNotPinArm64Node(t *testing.T) {
 	t.Parallel()
 

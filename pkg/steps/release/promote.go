@@ -385,6 +385,9 @@ const (
 	quayImageIncomingSuffix = "_incoming"
 	quayImagePreSuffix      = "__pre"
 	quayImagePost1Suffix    = "__post1"
+
+	// promotionMirrorChunkSize limits pairs per oc image mirror invocation to avoid argv overflow inside the pod.
+	promotionMirrorChunkSize = 15
 )
 
 type quayFloatPromotion struct {
@@ -393,50 +396,100 @@ type quayFloatPromotion struct {
 	pruneTag string
 }
 
-// getStagedQuayFloatPromotionShell returns shell that repoints floatTag from its incoming staging tag.
-// If floatTag already exists on the registry, the current image is copied to pruneTag (when set) and
-// floatTag+quayImagePreSuffix before the repoint; floatTag+quayImagePost1Suffix is added afterward.
-func getStagedQuayFloatPromotionShell(registryConfig, floatTag, pruneTag string) string {
-	incomingTag := floatTag + quayImageIncomingSuffix
-	preTag := floatTag + quayImagePreSuffix
-	post1Tag := floatTag + quayImagePost1Suffix
-
-	checkOld := fmt.Sprintf(`_OLD_EXISTS=false
-if oc image info --registry-config=%s %s >/dev/null 2>&1; then _OLD_EXISTS=true; fi`, registryConfig, floatTag)
-
-	var backupOld string
-	if pruneTag != "" {
-		backupOld = fmt.Sprintf(`if [ "${_OLD_EXISTS}" = "true" ]; then
-%s
-%s
-fi`,
-			indentShell(getMirrorRetryShell(registryConfig, []string{fmt.Sprintf("%s=%s", floatTag, pruneTag)})),
-			indentShell(getMirrorRetryShell(registryConfig, []string{fmt.Sprintf("%s=%s", floatTag, preTag)})),
-		)
-	} else {
-		backupOld = fmt.Sprintf(`if [ "${_OLD_EXISTS}" = "true" ]; then
-%s
-fi`, indentShell(getMirrorRetryShell(registryConfig, []string{fmt.Sprintf("%s=%s", floatTag, preTag)})))
+// getMirrorRetryShellChunked mirrors image pairs in fixed-size chunks to keep oc image mirror argv bounded.
+func getMirrorRetryShellChunked(registryConfig string, images []string, chunkSize int) string {
+	if len(images) == 0 {
+		return ""
 	}
-
-	latch := getMirrorRetryShell(registryConfig, []string{fmt.Sprintf("%s=%s", incomingTag, floatTag)})
-
-	postLatch := fmt.Sprintf(`if [ "${_OLD_EXISTS}" = "true" ]; then
-%s
-fi`, indentShell(getMirrorRetryShell(registryConfig, []string{fmt.Sprintf("%s=%s", floatTag, post1Tag)})))
-
-	return strings.Join([]string{checkOld, backupOld, latch, postLatch}, "\n")
+	if chunkSize <= 0 {
+		chunkSize = len(images)
+	}
+	var sections []string
+	for start := 0; start < len(images); start += chunkSize {
+		end := start + chunkSize
+		if end > len(images) {
+			end = len(images)
+		}
+		sections = append(sections, getMirrorRetryShell(registryConfig, images[start:end]))
+	}
+	return strings.Join(sections, "\n")
 }
 
-func indentShell(script string) string {
-	const prefix = "  "
-	lines := strings.Split(script, "\n")
-	for i, line := range lines {
-		if line != "" {
-			lines[i] = prefix + line
-		}
+// getMirrorRetryShellFromPairsVar mirrors pairs collected in a shell variable (space-separated src=dest).
+func getMirrorRetryShellFromPairsVar(registryConfig, pairsVar string) string {
+	mirrorCmd := fmt.Sprintf("oc image mirror --loglevel=2 --keep-manifest-list --registry-config=%s --max-per-registry=10 ${%s}", registryConfig, pairsVar)
+	n := quayPromotionMirrorAttempts
+	return fmt.Sprintf(`if [ -n "${%s}" ]; then
+for r in {1..%d}; do
+  echo Mirror attempt $r
+  if %s; then break; fi
+  if [ "${r}" -eq %d ]; then
+    exit 1
+  fi
+  backoff=$(($RANDOM %% 120))s
+  echo Sleeping randomized $backoff before retry
+  sleep $backoff
+done
+fi`, pairsVar, n, mirrorCmd, n)
+}
+
+// getBatchedStagedQuayFloatPromotionShell runs staged quay float promotion in ordered phases:
+// check existing floats, batch backup mirrors, batch latch incoming->float, batch __post1 mirrors.
+// Mirror steps are chunked so both the pod argv and per-oc-image-mirror argv stay bounded.
+func getBatchedStagedQuayFloatPromotionShell(registryConfig string, promotions []quayFloatPromotion) string {
+	if len(promotions) == 0 {
+		return ""
 	}
-	return strings.Join(lines, "\n")
+
+	var checks []string
+	var backupSections []string
+	var latchPairs []string
+	var post1Sections []string
+
+	for i, promotion := range promotions {
+		floatTag := promotion.floatTag
+		incomingTag := floatTag + quayImageIncomingSuffix
+		preTag := floatTag + quayImagePreSuffix
+		post1Tag := floatTag + quayImagePost1Suffix
+
+		checks = append(checks, fmt.Sprintf(`_HAD_OLD_%d=false
+if oc image info --registry-config=%s %s >/dev/null 2>&1; then _HAD_OLD_%d=true; fi`, i, registryConfig, floatTag, i))
+
+		latchPairs = append(latchPairs, fmt.Sprintf("%s=%s", incomingTag, floatTag))
+
+		if promotion.pruneTag != "" {
+			backupSections = append(backupSections, fmt.Sprintf(`if [ "${_HAD_OLD_%d}" = "true" ]; then _BACKUP_PAIRS="${_BACKUP_PAIRS}%s=%s %s=%s "; fi`, i, floatTag, promotion.pruneTag, floatTag, preTag))
+		} else {
+			backupSections = append(backupSections, fmt.Sprintf(`if [ "${_HAD_OLD_%d}" = "true" ]; then _BACKUP_PAIRS="${_BACKUP_PAIRS}%s=%s "; fi`, i, floatTag, preTag))
+		}
+
+		post1Sections = append(post1Sections, fmt.Sprintf(`if [ "${_HAD_OLD_%d}" = "true" ]; then _POST1_PAIRS="${_POST1_PAIRS}%s=%s "; fi`, i, floatTag, post1Tag))
+	}
+
+	sections := []string{strings.Join(checks, "\n")}
+	sections = append(sections, getConditionalMirrorRetryShellChunks(registryConfig, "_BACKUP_PAIRS", backupSections)...)
+	sections = append(sections, getMirrorRetryShellChunked(registryConfig, latchPairs, promotionMirrorChunkSize))
+	sections = append(sections, getConditionalMirrorRetryShellChunks(registryConfig, "_POST1_PAIRS", post1Sections)...)
+
+	return strings.Join(sections, "\n")
+}
+
+// getConditionalMirrorRetryShellChunks builds pair variables and mirror retries in fixed-size chunks.
+func getConditionalMirrorRetryShellChunks(registryConfig, pairsVar string, pairBuilders []string) []string {
+	if len(pairBuilders) == 0 {
+		return nil
+	}
+	var sections []string
+	for start := 0; start < len(pairBuilders); start += promotionMirrorChunkSize {
+		end := start + promotionMirrorChunkSize
+		if end > len(pairBuilders) {
+			end = len(pairBuilders)
+		}
+		sections = append(sections, fmt.Sprintf(`%s=""`, pairsVar))
+		sections = append(sections, pairBuilders[start:end]...)
+		sections = append(sections, getMirrorRetryShellFromPairsVar(registryConfig, pairsVar))
+	}
+	return sections
 }
 
 func getPromotionPod(imageMirrorTarget map[string]string, timeStr string, namespace string, name string, cliImage string, nodeArchitectures []string) *coreapi.Pod {
@@ -506,7 +559,6 @@ func getPromotionPod(imageMirrorTarget map[string]string, timeStr string, namesp
 	}
 
 	registryConfig := filepath.Join(api.RegistryPushCredentialsCICentralSecretMountPath, coreapi.DockerConfigJsonKey)
-	command := []string{"/bin/sh", "-c"}
 
 	var commands []string
 
@@ -543,15 +595,13 @@ func getPromotionPod(imageMirrorTarget map[string]string, timeStr string, namesp
 
 	var args []string
 	if isQuayStep && len(incomingImages) > 0 {
-		args = append(args, getMirrorRetryShell(registryConfig, incomingImages))
+		args = append(args, getMirrorRetryShellChunked(registryConfig, incomingImages, promotionMirrorChunkSize))
 	}
 	if isQuayStep && len(quayFloatPromotions) > 0 {
 		sort.Slice(quayFloatPromotions, func(i, j int) bool {
 			return quayFloatPromotions[i].floatTag < quayFloatPromotions[j].floatTag
 		})
-		for _, promotion := range quayFloatPromotions {
-			args = append(args, getStagedQuayFloatPromotionShell(registryConfig, promotion.floatTag, promotion.pruneTag))
-		}
+		args = append(args, getBatchedStagedQuayFloatPromotionShell(registryConfig, quayFloatPromotions))
 	}
 	if len(pruneImages) > 0 {
 		// See https://github.com/openshift/release/blob/2080ec4a49337c27577a4b2ff08a538e96436e65/hack/qci_registry_pruner.py for details.
@@ -562,7 +612,6 @@ func getPromotionPod(imageMirrorTarget map[string]string, timeStr string, namesp
 	}
 
 	args = append(args, commands...)
-	args = []string{strings.Join(args, "\n")}
 
 	image := cliImage
 	nodeSelector := map[string]string{"kubernetes.io/arch": "amd64"}
@@ -587,8 +636,8 @@ func getPromotionPod(imageMirrorTarget map[string]string, timeStr string, namesp
 				{
 					Name:    "promotion",
 					Image:   image,
-					Command: command,
-					Args:    args,
+					Command: []string{"/bin/sh", "-c"},
+					Args:    []string{strings.Join(args, "\n")},
 					Env: []coreapi.EnvVar{
 						// Discovery cache only: without KUBECACHEDIR, client-go defaults to $HOME/.kube/cache; with no
 						// writable HOME in the container that becomes /.kube and logs many INFO lines ("permission denied").

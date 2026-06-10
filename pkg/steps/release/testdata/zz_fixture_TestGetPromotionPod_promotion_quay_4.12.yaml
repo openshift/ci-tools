@@ -18,33 +18,17 @@ spec:
         echo Sleeping randomized $backoff before retry
         sleep $backoff
       done
-      _OLD_EXISTS=false
-      if oc image info --registry-config=/etc/push-secret/.dockerconfigjson quay.io/openshift/ci:ocp_4.12_ovn-kubernetes >/dev/null 2>&1; then _OLD_EXISTS=true; fi
-      if [ "${_OLD_EXISTS}" = "true" ]; then
-        for r in {1..5}; do
-          echo Mirror attempt $r
-          if oc image mirror --loglevel=2 --keep-manifest-list --registry-config=/etc/push-secret/.dockerconfigjson --max-per-registry=10 quay.io/openshift/ci:ocp_4.12_ovn-kubernetes=quay.io/openshift/ci:20240603235401_prune_ovn-kubernetes; then break; fi
-          if [ "${r}" -eq 5 ]; then
-            exit 1
-          fi
-          backoff=$(($RANDOM % 120))s
-          echo Sleeping randomized $backoff before retry
-          sleep $backoff
-        done
-        for r in {1..5}; do
-          echo Mirror attempt $r
-          if oc image mirror --loglevel=2 --keep-manifest-list --registry-config=/etc/push-secret/.dockerconfigjson --max-per-registry=10 quay.io/openshift/ci:ocp_4.12_ovn-kubernetes=quay.io/openshift/ci:ocp_4.12_ovn-kubernetes__pre; then break; fi
-          if [ "${r}" -eq 5 ]; then
-            exit 1
-          fi
-          backoff=$(($RANDOM % 120))s
-          echo Sleeping randomized $backoff before retry
-          sleep $backoff
-        done
-      fi
+      _HAD_OLD_0=false
+      if oc image info --registry-config=/etc/push-secret/.dockerconfigjson quay.io/openshift/ci:ocp_4.12_ovn-kubernetes >/dev/null 2>&1; then _HAD_OLD_0=true; fi
+      _HAD_OLD_1=false
+      if oc image info --registry-config=/etc/push-secret/.dockerconfigjson quay.io/openshift/ci:ocp_4.12_ovn-kubernetes-base >/dev/null 2>&1; then _HAD_OLD_1=true; fi
+      _BACKUP_PAIRS=""
+      if [ "${_HAD_OLD_0}" = "true" ]; then _BACKUP_PAIRS="${_BACKUP_PAIRS}quay.io/openshift/ci:ocp_4.12_ovn-kubernetes=quay.io/openshift/ci:20240603235401_prune_ovn-kubernetes quay.io/openshift/ci:ocp_4.12_ovn-kubernetes=quay.io/openshift/ci:ocp_4.12_ovn-kubernetes__pre "; fi
+      if [ "${_HAD_OLD_1}" = "true" ]; then _BACKUP_PAIRS="${_BACKUP_PAIRS}quay.io/openshift/ci:ocp_4.12_ovn-kubernetes-base=quay.io/openshift/ci:20240603235401_prune_ovn-kubernetes-base quay.io/openshift/ci:ocp_4.12_ovn-kubernetes-base=quay.io/openshift/ci:ocp_4.12_ovn-kubernetes-base__pre "; fi
+      if [ -n "${_BACKUP_PAIRS}" ]; then
       for r in {1..5}; do
         echo Mirror attempt $r
-        if oc image mirror --loglevel=2 --keep-manifest-list --registry-config=/etc/push-secret/.dockerconfigjson --max-per-registry=10 quay.io/openshift/ci:ocp_4.12_ovn-kubernetes_incoming=quay.io/openshift/ci:ocp_4.12_ovn-kubernetes; then break; fi
+        if oc image mirror --loglevel=2 --keep-manifest-list --registry-config=/etc/push-secret/.dockerconfigjson --max-per-registry=10 ${_BACKUP_PAIRS}; then break; fi
         if [ "${r}" -eq 5 ]; then
           exit 1
         fi
@@ -52,45 +36,10 @@ spec:
         echo Sleeping randomized $backoff before retry
         sleep $backoff
       done
-      if [ "${_OLD_EXISTS}" = "true" ]; then
-        for r in {1..5}; do
-          echo Mirror attempt $r
-          if oc image mirror --loglevel=2 --keep-manifest-list --registry-config=/etc/push-secret/.dockerconfigjson --max-per-registry=10 quay.io/openshift/ci:ocp_4.12_ovn-kubernetes=quay.io/openshift/ci:ocp_4.12_ovn-kubernetes__post1; then break; fi
-          if [ "${r}" -eq 5 ]; then
-            exit 1
-          fi
-          backoff=$(($RANDOM % 120))s
-          echo Sleeping randomized $backoff before retry
-          sleep $backoff
-        done
-      fi
-      _OLD_EXISTS=false
-      if oc image info --registry-config=/etc/push-secret/.dockerconfigjson quay.io/openshift/ci:ocp_4.12_ovn-kubernetes-base >/dev/null 2>&1; then _OLD_EXISTS=true; fi
-      if [ "${_OLD_EXISTS}" = "true" ]; then
-        for r in {1..5}; do
-          echo Mirror attempt $r
-          if oc image mirror --loglevel=2 --keep-manifest-list --registry-config=/etc/push-secret/.dockerconfigjson --max-per-registry=10 quay.io/openshift/ci:ocp_4.12_ovn-kubernetes-base=quay.io/openshift/ci:20240603235401_prune_ovn-kubernetes-base; then break; fi
-          if [ "${r}" -eq 5 ]; then
-            exit 1
-          fi
-          backoff=$(($RANDOM % 120))s
-          echo Sleeping randomized $backoff before retry
-          sleep $backoff
-        done
-        for r in {1..5}; do
-          echo Mirror attempt $r
-          if oc image mirror --loglevel=2 --keep-manifest-list --registry-config=/etc/push-secret/.dockerconfigjson --max-per-registry=10 quay.io/openshift/ci:ocp_4.12_ovn-kubernetes-base=quay.io/openshift/ci:ocp_4.12_ovn-kubernetes-base__pre; then break; fi
-          if [ "${r}" -eq 5 ]; then
-            exit 1
-          fi
-          backoff=$(($RANDOM % 120))s
-          echo Sleeping randomized $backoff before retry
-          sleep $backoff
-        done
       fi
       for r in {1..5}; do
         echo Mirror attempt $r
-        if oc image mirror --loglevel=2 --keep-manifest-list --registry-config=/etc/push-secret/.dockerconfigjson --max-per-registry=10 quay.io/openshift/ci:ocp_4.12_ovn-kubernetes-base_incoming=quay.io/openshift/ci:ocp_4.12_ovn-kubernetes-base; then break; fi
+        if oc image mirror --loglevel=2 --keep-manifest-list --registry-config=/etc/push-secret/.dockerconfigjson --max-per-registry=10 quay.io/openshift/ci:ocp_4.12_ovn-kubernetes_incoming=quay.io/openshift/ci:ocp_4.12_ovn-kubernetes quay.io/openshift/ci:ocp_4.12_ovn-kubernetes-base_incoming=quay.io/openshift/ci:ocp_4.12_ovn-kubernetes-base; then break; fi
         if [ "${r}" -eq 5 ]; then
           exit 1
         fi
@@ -98,17 +47,20 @@ spec:
         echo Sleeping randomized $backoff before retry
         sleep $backoff
       done
-      if [ "${_OLD_EXISTS}" = "true" ]; then
-        for r in {1..5}; do
-          echo Mirror attempt $r
-          if oc image mirror --loglevel=2 --keep-manifest-list --registry-config=/etc/push-secret/.dockerconfigjson --max-per-registry=10 quay.io/openshift/ci:ocp_4.12_ovn-kubernetes-base=quay.io/openshift/ci:ocp_4.12_ovn-kubernetes-base__post1; then break; fi
-          if [ "${r}" -eq 5 ]; then
-            exit 1
-          fi
-          backoff=$(($RANDOM % 120))s
-          echo Sleeping randomized $backoff before retry
-          sleep $backoff
-        done
+      _POST1_PAIRS=""
+      if [ "${_HAD_OLD_0}" = "true" ]; then _POST1_PAIRS="${_POST1_PAIRS}quay.io/openshift/ci:ocp_4.12_ovn-kubernetes=quay.io/openshift/ci:ocp_4.12_ovn-kubernetes__post1 "; fi
+      if [ "${_HAD_OLD_1}" = "true" ]; then _POST1_PAIRS="${_POST1_PAIRS}quay.io/openshift/ci:ocp_4.12_ovn-kubernetes-base=quay.io/openshift/ci:ocp_4.12_ovn-kubernetes-base__post1 "; fi
+      if [ -n "${_POST1_PAIRS}" ]; then
+      for r in {1..5}; do
+        echo Mirror attempt $r
+        if oc image mirror --loglevel=2 --keep-manifest-list --registry-config=/etc/push-secret/.dockerconfigjson --max-per-registry=10 ${_POST1_PAIRS}; then break; fi
+        if [ "${r}" -eq 5 ]; then
+          exit 1
+        fi
+        backoff=$(($RANDOM % 120))s
+        echo Sleeping randomized $backoff before retry
+        sleep $backoff
+      done
       fi
       for r in {1..5}; do
         _digest=$(oc image info --registry-config=/etc/push-secret/.dockerconfigjson --filter-by-os=linux/amd64 quay.io/openshift/ci:ocp_4.12_ovn-kubernetes | sed -n '/^Digest:[[:space:]]/s/^Digest:[[:space:]]*//p' | head -n1)

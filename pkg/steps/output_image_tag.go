@@ -132,9 +132,11 @@ func (s *outputImageTagStep) Provides() api.ParameterMap {
 		return nil
 	}
 	return api.ParameterMap{
-		utils.StableImageEnv(s.config.To.As): utils.ImageDigestFor(s.client, func() string {
-			return s.config.To.Namespace
-		}, s.config.To.Name, s.config.To.Tag),
+		utils.StableImageEnv(s.config.To.As): func() (any, error) {
+			return utils.ImageDigestFor(s.client, func() string {
+				return s.config.To.Namespace
+			}, s.config.To.Name, s.config.To.Tag)()
+		},
 	}
 }
 

@@ -121,7 +121,7 @@ func TestGeneratePods(t *testing.T) {
 			}},
 			paramsFunc: func() api.Parameters {
 				params := api.NewDeferredParameters(nil)
-				params.Add(api.ClusterProfileSecretNameParam, func() (string, error) {
+				params.Add(api.ClusterProfileSecretNameParam, func() (any, error) {
 					return "cluster-secrets-aws-5", nil
 				})
 				return params
@@ -186,7 +186,7 @@ func TestGeneratePods(t *testing.T) {
 			},
 			paramsFunc: func() api.Parameters {
 				params := api.NewDeferredParameters(nil)
-				params.Add(api.ClusterProfileSecretNameParam, func() (string, error) {
+				params.Add(api.ClusterProfileSecretNameParam, func() (any, error) {
 					return "cluster-secrets-aws-5", nil
 				})
 				return params

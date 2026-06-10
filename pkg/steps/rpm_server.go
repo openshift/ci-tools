@@ -370,7 +370,7 @@ func (s *rpmServerStep) Creates() []api.StepLink {
 	return []api.StepLink{api.RPMRepoLink()}
 }
 
-func (s *rpmServerStep) rpmRepoURL() (string, error) {
+func (s *rpmServerStep) rpmRepoURL() (any, error) {
 	host, err := admittedHostForRoute(s.client, s.jobSpec.Namespace(), RPMRepoName, time.Minute)
 	if err != nil {
 		return "", fmt.Errorf("unable to calculate rpm repo URL: %w", err)

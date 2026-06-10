@@ -94,11 +94,11 @@ func fromConfig(ctx context.Context, cfg *Config) ([]api.Step, []api.Step, error
 	for _, target := range cfg.RequiredTargets {
 		requiredNames.Insert(target)
 	}
-	cfg.params.Add("JOB_NAME", func() (string, error) { return cfg.JobSpec.Job, nil })
-	cfg.params.Add("JOB_NAME_HASH", func() (string, error) { return cfg.JobSpec.JobNameHash(), nil })
-	cfg.params.Add("JOB_NAME_SAFE", func() (string, error) { return strings.Replace(cfg.JobSpec.Job, "_", "-", -1), nil })
-	cfg.params.Add("UNIQUE_HASH", func() (string, error) { return cfg.JobSpec.UniqueHash(), nil })
-	cfg.params.Add("NAMESPACE", func() (string, error) { return cfg.JobSpec.Namespace(), nil })
+	cfg.params.Add("JOB_NAME", func() (any, error) { return cfg.JobSpec.Job, nil })
+	cfg.params.Add("JOB_NAME_HASH", func() (any, error) { return cfg.JobSpec.JobNameHash(), nil })
+	cfg.params.Add("JOB_NAME_SAFE", func() (any, error) { return strings.Replace(cfg.JobSpec.Job, "_", "-", -1), nil })
+	cfg.params.Add("UNIQUE_HASH", func() (any, error) { return cfg.JobSpec.UniqueHash(), nil })
+	cfg.params.Add("NAMESPACE", func() (any, error) { return cfg.JobSpec.Namespace(), nil })
 	inputImages := make(inputImageSet)
 	var overridableSteps []api.Step
 	var buildSteps []api.Step
@@ -1082,7 +1082,7 @@ func sourceStepForRef(ref *prowapi.Refs, primaryRef bool) api.StepConfiguration 
 	}}
 }
 
-func paramsHasAllParametersAsInput(p api.Parameters, params map[string]func() (string, error)) (map[string]string, bool) {
+func paramsHasAllParametersAsInput(p api.Parameters, params map[string]func() (any, error)) (map[string]string, bool) {
 	if len(params) == 0 {
 		return nil, false
 	}

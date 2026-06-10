@@ -49,7 +49,7 @@ func (stepNeedsLease) Creates() []api.StepLink { return []api.StepLink{api.Image
 
 func (stepNeedsLease) Provides() api.ParameterMap {
 	return api.ParameterMap{
-		"parameter": func() (string, error) { return "map", nil },
+		"parameter": func() (any, error) { return "map", nil },
 	}
 }
 
@@ -268,7 +268,7 @@ func TestAcquireLeases(t *testing.T) {
 		resources               map[string]*common.Resource
 		objects                 []ctrlruntimeclient.Object
 		clusterProfiles         map[string]*api.ClusterProfileDetails
-		wantProvides            map[string]string
+		wantProvides            map[string]any
 		wantSecrets             corev1.SecretList
 		wantCalls               []string
 	}{
@@ -291,7 +291,7 @@ func TestAcquireLeases(t *testing.T) {
 					Name: "res-type-1--slice-0",
 				},
 			},
-			wantProvides: map[string]string{
+			wantProvides: map[string]any{
 				api.ClusterProfileSetEnv:          "",
 				api.ClusterProfileParam:           "",
 				api.ClusterProfileSecretNameParam: "",
@@ -339,7 +339,7 @@ func TestAcquireLeases(t *testing.T) {
 					LeaseType: "aws-quota-slice",
 				},
 			},
-			wantProvides: map[string]string{
+			wantProvides: map[string]any{
 				"parameter":                       "map",
 				api.ClusterProfileSetEnv:          "",
 				api.ClusterProfileParam:           "aws",
@@ -417,7 +417,7 @@ func TestAcquireLeases(t *testing.T) {
 					LeaseType: "aws-quota-slice",
 				},
 			},
-			wantProvides: map[string]string{
+			wantProvides: map[string]any{
 				"parameter":                       "map",
 				api.ClusterProfileSetEnv:          "",
 				api.ClusterProfileParam:           "aws",
@@ -503,7 +503,7 @@ func TestAcquireLeases(t *testing.T) {
 					LeaseType: "aws-quota-slice",
 				},
 			},
-			wantProvides: map[string]string{
+			wantProvides: map[string]any{
 				"parameter":                       "map",
 				api.ClusterProfileSetEnv:          "",
 				api.ClusterProfileParam:           "aws",
@@ -587,7 +587,7 @@ func TestAcquireLeases(t *testing.T) {
 					LeaseType: "aws-quota-slice",
 				},
 			},
-			wantProvides: map[string]string{
+			wantProvides: map[string]any{
 				"parameter":                       "map",
 				api.ClusterProfileSetEnv:          "",
 				api.ClusterProfileParam:           "aws",
@@ -672,7 +672,7 @@ func TestAcquireLeases(t *testing.T) {
 					LeaseType: "aws-quota-slice",
 				},
 			},
-			wantProvides: map[string]string{
+			wantProvides: map[string]any{
 				"parameter":                       "map",
 				api.ClusterProfileSetEnv:          "",
 				api.ClusterProfileParam:           "aws",
@@ -758,7 +758,7 @@ func TestAcquireLeases(t *testing.T) {
 					LeaseType: "aws-quota-slice",
 				},
 			},
-			wantProvides: map[string]string{
+			wantProvides: map[string]any{
 				"parameter":                       "map",
 				api.ClusterProfileSetEnv:          "aws-set",
 				api.ClusterProfileParam:           "aws",
@@ -816,7 +816,7 @@ func TestAcquireLeases(t *testing.T) {
 				t.Errorf("unexpected run error: %s", err)
 			}
 
-			gotProvides := make(map[string]string)
+			gotProvides := make(map[string]any)
 			for k, f := range provides {
 				v, err := f()
 				if err != nil {

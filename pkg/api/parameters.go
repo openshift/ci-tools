@@ -16,56 +16,26 @@ type Parameters interface {
 	Get(name string) (string, error)
 }
 
-type overrideParameters struct {
-	params    Parameters
-	overrides map[string]string
-}
-
-func (p *overrideParameters) Has(name string) bool {
-	if _, ok := p.overrides[name]; ok {
-		return true
-	}
-	return p.params.Has(name)
-}
-
-func (p *overrideParameters) HasInput(name string) bool {
-	return p.params.HasInput(name)
-}
-
-func (p *overrideParameters) Get(name string) (string, error) {
-	if value, ok := p.overrides[name]; ok {
-		return value, nil
-	}
-	return p.params.Get(name)
-}
-
-func NewOverrideParameters(params Parameters, overrides map[string]string) Parameters {
-	return &overrideParameters{
-		params:    params,
-		overrides: overrides,
-	}
-}
-
 // +k8s:deepcopy-gen=false
 type DeferredParameters struct {
 	lock   sync.Mutex
 	params Parameters
-	fns    ParameterMap
-	values map[string]string
+	fns    map[string]func() (any, error)
+	values map[string]any
 }
 
 func NewDeferredParameters(params Parameters) *DeferredParameters {
 	return &DeferredParameters{
 		params: params,
-		fns:    make(ParameterMap),
-		values: make(map[string]string),
+		fns:    make(map[string]func() (any, error)),
+		values: make(map[string]any),
 	}
 }
 
-func (p *DeferredParameters) Map() (map[string]string, error) {
+func (p *DeferredParameters) Map() (map[string]any, error) {
 	p.lock.Lock()
 	defer p.lock.Unlock()
-	m := make(map[string]string, len(p.fns))
+	m := make(map[string]any, len(p.fns))
 	for k, fn := range p.fns {
 		if v, ok := p.values[k]; ok {
 			m[k] = v
@@ -81,7 +51,7 @@ func (p *DeferredParameters) Map() (map[string]string, error) {
 	return m, nil
 }
 
-func (p *DeferredParameters) Set(name, value string) {
+func (p *DeferredParameters) Set(name string, value any) {
 	p.lock.Lock()
 	defer p.lock.Unlock()
 	if _, ok := p.fns[name]; ok {
@@ -95,7 +65,7 @@ func (p *DeferredParameters) Set(name, value string) {
 	p.values[name] = value
 }
 
-func (p *DeferredParameters) Add(name string, fn func() (string, error)) {
+func (p *DeferredParameters) Add(name string, fn func() (any, error)) {
 	p.lock.Lock()
 	defer p.lock.Unlock()
 	if _, ok := p.fns[name]; ok {
@@ -141,34 +111,44 @@ func (p *DeferredParameters) has(name string) bool {
 }
 
 func (p *DeferredParameters) Get(name string) (string, error) {
-	if ret, err := p.get(name); ret != "" {
-		return ret, nil
-	} else if err != nil {
-		return ret, err
+	ret, err := p.get(name)
+	if err != nil {
+		return "", err
 	}
+
+	if retStr, ok := ret.(string); ok && retStr != "" {
+		return retStr, nil
+	}
+
 	if p.params != nil {
 		return p.params.Get(name)
 	}
+
 	return "", nil
 }
 
-func (p *DeferredParameters) get(name string) (string, error) {
+func (p *DeferredParameters) get(name string) (any, error) {
 	p.lock.Lock()
 	defer p.lock.Unlock()
+
 	if value, ok := p.values[name]; ok {
 		return value, nil
 	}
+
 	if value, ok := os.LookupEnv(name); ok {
 		p.values[name] = value
 		return value, nil
 	}
+
 	if fn, ok := p.fns[name]; ok {
 		value, err := fn()
 		if err != nil {
-			return "", fmt.Errorf("could not lazily evaluate deferred parameter %q: %w", name, err)
+			return nil, fmt.Errorf("could not lazily evaluate deferred parameter %q: %w", name, err)
 		}
+
 		p.values[name] = value
 		return value, nil
 	}
-	return "", nil
+
+	return nil, nil
 }

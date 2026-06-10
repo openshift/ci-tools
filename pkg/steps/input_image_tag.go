@@ -207,7 +207,9 @@ func (s *inputImageTagStep) Creates() []api.StepLink {
 func (s *inputImageTagStep) Provides() api.ParameterMap {
 	tag := s.config.To
 	return api.ParameterMap{
-		utils.PipelineImageEnvFor(tag): utils.ImageDigestFor(s.client, s.jobSpec.Namespace, api.PipelineImageStream, string(tag)),
+		utils.PipelineImageEnvFor(tag): func() (any, error) {
+			return utils.ImageDigestFor(s.client, s.jobSpec.Namespace, api.PipelineImageStream, string(tag))()
+		},
 	}
 }
 

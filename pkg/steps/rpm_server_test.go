@@ -26,7 +26,7 @@ func TestRPMServerStepProvides(t *testing.T) {
 	for _, tc := range []struct {
 		name     string
 		jobSpec  api.JobSpec
-		expected [][2]string
+		expected [][2]any
 	}{{
 		name: "no refs",
 	}, {
@@ -36,7 +36,7 @@ func TestRPMServerStepProvides(t *testing.T) {
 				Refs: &prowapi.Refs{Org: "org", Repo: "repo"},
 			},
 		},
-		expected: [][2]string{{"RPM_REPO_ORG_REPO", "http://host"}},
+		expected: [][2]any{{"RPM_REPO_ORG_REPO", "http://host"}},
 	}, {
 		name: "extra refs",
 		jobSpec: api.JobSpec{
@@ -47,7 +47,7 @@ func TestRPMServerStepProvides(t *testing.T) {
 				},
 			},
 		},
-		expected: [][2]string{
+		expected: [][2]any{
 			{"RPM_REPO_ORG0_REPO0", "http://host"},
 			{"RPM_REPO_ORG1_REPO1", "http://host"},
 		},
@@ -62,7 +62,7 @@ func TestRPMServerStepProvides(t *testing.T) {
 				},
 			},
 		},
-		expected: [][2]string{
+		expected: [][2]any{
 			{"RPM_REPO_ORG0_REPO0", "http://host"},
 			{"RPM_REPO_ORG1_REPO1", "http://host"},
 			{"RPM_REPO_ORG_REPO", "http://host"},
@@ -86,13 +86,13 @@ func TestRPMServerStepProvides(t *testing.T) {
 			tc.jobSpec.SetNamespace(ns)
 			step := RPMServerStep(api.RPMServeStepConfiguration{}, client, &tc.jobSpec)
 			providesMap := step.Provides()
-			var provides [][2]string
+			var provides [][2]any
 			for _, k := range util.SortedKeys(providesMap) {
 				s, err := providesMap[k]()
 				if err != nil {
 					t.Fatal(err)
 				}
-				provides = append(provides, [2]string{k, s})
+				provides = append(provides, [2]any{k, s})
 			}
 			testhelper.Diff(t, "parameter map", provides, tc.expected)
 		})

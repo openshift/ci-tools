@@ -91,7 +91,9 @@ func (s *pipelineImageCacheStep) Provides() api.ParameterMap {
 		return nil
 	}
 	return api.ParameterMap{
-		utils.PipelineImageEnvFor(s.config.To): utils.ImageDigestFor(s.client, s.jobSpec.Namespace, api.PipelineImageStream, string(s.config.To)),
+		utils.PipelineImageEnvFor(s.config.To): func() (any, error) {
+			return utils.ImageDigestFor(s.client, s.jobSpec.Namespace, api.PipelineImageStream, string(s.config.To))()
+		},
 	}
 }
 

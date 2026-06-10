@@ -1112,7 +1112,7 @@ func TestGetPublicImageReference(t *testing.T) {
 
 func TestGetMirrorRetryShell(t *testing.T) {
 	regcfg := "/etc/push-secret/.dockerconfigjson"
-	got := getMirrorRetryShell(regcfg, []string{"src=dst"}, 2)
+	got := getMirrorRetryShell(regcfg, []string{"src=dst"})
 	for _, sub := range []string{
 		"for r in {1..5}",
 		"Mirror attempt $r",

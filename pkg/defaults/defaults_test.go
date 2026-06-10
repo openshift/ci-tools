@@ -1337,7 +1337,7 @@ func TestFromConfig(t *testing.T) {
 		enableLeaseClient   bool
 		expectedSteps       []string
 		expectedPost        []string
-		expectedParams      map[string]string
+		expectedParams      map[string]any
 		expectedErr         error
 	}{{
 		name:          "no steps",
@@ -1356,14 +1356,14 @@ func TestFromConfig(t *testing.T) {
 			"[output-images]",
 			"[images]",
 		},
-		expectedParams: map[string]string{
+		expectedParams: map[string]any{
 			"LOCAL_IMAGE_BASE_IMAGE": "public_docker_image_repository:base_image",
 		},
 	}, {
 		name:          "source build",
 		refs:          &prowapi.Refs{Org: "org", Repo: "repo"},
 		expectedSteps: []string{"src", "[output-images]", "[images]"},
-		expectedParams: map[string]string{
+		expectedParams: map[string]any{
 			"LOCAL_IMAGE_SRC": "public_docker_image_repository:src",
 		},
 	}, {
@@ -1384,7 +1384,7 @@ func TestFromConfig(t *testing.T) {
 			"[output-images]",
 			"[images]",
 		},
-		expectedParams: map[string]string{
+		expectedParams: map[string]any{
 			"LOCAL_IMAGE_CI_BUNDLE0": "public_docker_image_repository:ci-bundle0",
 			"LOCAL_IMAGE_CI_INDEX":   "public_docker_image_repository:ci-index",
 		},
@@ -1401,7 +1401,7 @@ func TestFromConfig(t *testing.T) {
 			"[output-images]",
 			"[images]",
 		},
-		expectedParams: map[string]string{
+		expectedParams: map[string]any{
 			"LOCAL_IMAGE_TO": "public_docker_image_repository:to",
 		},
 	}, {
@@ -1455,7 +1455,7 @@ func TestFromConfig(t *testing.T) {
 			"[output-images]",
 			"[images]",
 		},
-		expectedParams: map[string]string{
+		expectedParams: map[string]any{
 			"LOCAL_IMAGE_BASE_RPM_IMAGE_WITHOUT_RPMS": "public_docker_image_repository:base_rpm_image-without-rpms",
 		},
 	}, {
@@ -1485,7 +1485,7 @@ func TestFromConfig(t *testing.T) {
 			"[output-images]",
 			"[images]",
 		},
-		expectedParams: map[string]string{
+		expectedParams: map[string]any{
 			"LOCAL_IMAGE_BASE_RPM_IMAGE_ORG.REPO1_WITHOUT_RPMS": "public_docker_image_repository:base_rpm_image-org.repo1-without-rpms",
 			"LOCAL_IMAGE_BASE_RPM_IMAGE_ORG.REPO2_WITHOUT_RPMS": "public_docker_image_repository:base_rpm_image-org.repo2-without-rpms",
 		},
@@ -1500,7 +1500,7 @@ func TestFromConfig(t *testing.T) {
 			"[output-images]",
 			"[images]",
 		},
-		expectedParams: map[string]string{
+		expectedParams: map[string]any{
 			"LOCAL_IMAGE_RPMS": "public_docker_image_repository:rpms",
 		},
 	}, {
@@ -1526,7 +1526,7 @@ func TestFromConfig(t *testing.T) {
 			"[output-images]",
 			"[images]",
 		},
-		expectedParams: map[string]string{
+		expectedParams: map[string]any{
 			"LOCAL_IMAGE_RPMS_ORG.REPO1": "public_docker_image_repository:rpms-org.repo1",
 			"LOCAL_IMAGE_RPMS_ORG.REPO2": "public_docker_image_repository:rpms-org.repo2",
 		},
@@ -1546,7 +1546,7 @@ func TestFromConfig(t *testing.T) {
 			"[release-inputs]",
 			"[images]",
 		},
-		expectedParams: map[string]string{
+		expectedParams: map[string]any{
 			"IMAGE_FORMAT":          "public_docker_image_repository/ns/stable:${component}",
 			"RELEASE_IMAGE_INITIAL": "public_docker_image_repository:initial",
 			"RELEASE_IMAGE_LATEST":  "public_docker_image_repository:latest",
@@ -1572,7 +1572,7 @@ func TestFromConfig(t *testing.T) {
 			"[release-inputs]",
 			"[images]",
 		},
-		expectedParams: map[string]string{
+		expectedParams: map[string]any{
 			"IMAGE_FORMAT":                  "public_docker_image_repository/ns/stable:${component}",
 			"RELEASE_IMAGE_INITIAL":         "public_docker_image_repository:initial",
 			"RELEASE_IMAGE_LATEST":          "public_docker_image_repository:latest",
@@ -1588,7 +1588,7 @@ func TestFromConfig(t *testing.T) {
 			},
 		},
 		expectedSteps: []string{"[release:release]", "[images]"},
-		expectedParams: map[string]string{
+		expectedParams: map[string]any{
 			utils.ReleaseImageEnv("release"): "public_docker_image_repository:release",
 			"ORIGINAL_RELEASE_IMAGE_RELEASE": "",
 		},
@@ -1607,7 +1607,7 @@ func TestFromConfig(t *testing.T) {
 			},
 		},
 		expectedSteps: []string{"[release:release]", "[images]"},
-		expectedParams: map[string]string{
+		expectedParams: map[string]any{
 			utils.ReleaseImageEnv("release"): "public_docker_image_repository:release",
 			"ORIGINAL_RELEASE_IMAGE_RELEASE": "",
 		},
@@ -1783,7 +1783,7 @@ func TestFromConfig(t *testing.T) {
 			"[output-images]",
 			"[output:stable:machine-os-content]",
 		},
-		expectedParams: map[string]string{
+		expectedParams: map[string]any{
 			"LOCAL_IMAGE_MACHINE_OS_CONTENT": "public_docker_image_repository:machine-os-content",
 		},
 	}, {
@@ -1843,7 +1843,7 @@ func TestFromConfig(t *testing.T) {
 			"[output-images]",
 			"[images]",
 		},
-		expectedParams: map[string]string{
+		expectedParams: map[string]any{
 			"LOCAL_IMAGE_TOOL1": "public_docker_image_repository:tool1",
 			"LOCAL_IMAGE_TOOL2": "public_docker_image_repository:tool2",
 		},
@@ -1867,14 +1867,14 @@ func TestFromConfig(t *testing.T) {
 			"[output-images]",
 			"[images]",
 		},
-		expectedParams: map[string]string{
+		expectedParams: map[string]any{
 			"LOCAL_IMAGE_TOOL1": "public_docker_image_repository:tool1",
 		},
 	}, {
 		name:              "enable lease proxy server",
 		enableLeaseClient: true,
 		expectedSteps:     []string{"[output-images]", "[images]", "lease-proxy-server"},
-		expectedParams: map[string]string{
+		expectedParams: map[string]any{
 			"LEASE_PROXY_SERVER_URL": "http://10.0.0.1:8080",
 		},
 	}} {
@@ -1892,7 +1892,7 @@ func TestFromConfig(t *testing.T) {
 			}
 			params := api.NewDeferredParameters(tc.env)
 			for k, v := range tc.params {
-				params.Add(k, func() (string, error) { return v, nil })
+				params.Add(k, func() (any, error) { return v, nil })
 			}
 			graphConf := FromConfigStatic(&tc.config)
 			cfg := &Config{
@@ -1944,7 +1944,7 @@ func TestFromConfig(t *testing.T) {
 				t.Fatal(err)
 			}
 			if tc.expectedParams == nil {
-				tc.expectedParams = map[string]string{}
+				tc.expectedParams = map[string]any{}
 			}
 			for k, v := range map[string]string{
 				"JOB_NAME":      "job_name",

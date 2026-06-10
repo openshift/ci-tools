@@ -42,11 +42,17 @@ func (s *writeParametersStep) run() error {
 		return fmt.Errorf("failed to resolve parameters: %w", err)
 	}
 	for k, v := range values {
-		if safeEnv.MatchString(v) {
-			params = append(params, fmt.Sprintf("%s=%s", k, v))
+		vStr, ok := v.(string)
+		if !ok {
+			logrus.Debugf("Skipping non-string parameter %q (type %T)", k, v)
 			continue
 		}
-		params = append(params, fmt.Sprintf("%s='%s'", k, strings.Replace(strings.Replace(v, "\\", "\\\\", -1), "'", "\\'", -1)))
+
+		if safeEnv.MatchString(vStr) {
+			params = append(params, fmt.Sprintf("%s=%s", k, vStr))
+			continue
+		}
+		params = append(params, fmt.Sprintf("%s='%s'", k, strings.Replace(strings.Replace(vStr, "\\", "\\\\", -1), "'", "\\'", -1)))
 	}
 
 	sort.Strings(params)

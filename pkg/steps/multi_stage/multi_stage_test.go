@@ -420,7 +420,7 @@ func TestProfileSecretName(t *testing.T) {
 			stepName: "step-0",
 			paramsFunc: func() api.Parameters {
 				params := api.NewDeferredParameters(nil)
-				params.Add(api.ClusterProfileSecretNameParam, func() (string, error) {
+				params.Add(api.ClusterProfileSecretNameParam, func() (any, error) {
 					return "foobar", nil
 				})
 				return params

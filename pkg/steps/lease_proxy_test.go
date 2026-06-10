@@ -18,16 +18,16 @@ func TestLeaseProxyProvides(t *testing.T) {
 	for _, tc := range []struct {
 		name           string
 		httpSrvAddr    string
-		expectedParams map[string]string
+		expectedParams map[string]any
 	}{
 		{
 			name:           "Empty HTTP server addr",
-			expectedParams: map[string]string{api.LeaseProxyServerURLEnvVarName: ""},
+			expectedParams: map[string]any{api.LeaseProxyServerURLEnvVarName: ""},
 		},
 		{
 			name:           "Non empty HTTP server addr",
 			httpSrvAddr:    "http://10.0.0.1:8080",
-			expectedParams: map[string]string{api.LeaseProxyServerURLEnvVarName: "http://10.0.0.1:8080"},
+			expectedParams: map[string]any{api.LeaseProxyServerURLEnvVarName: "http://10.0.0.1:8080"},
 		},
 	} {
 		t.Run(tc.name, func(t *testing.T) {
@@ -35,7 +35,7 @@ func TestLeaseProxyProvides(t *testing.T) {
 
 			step := LeaseProxyStep(logrus.NewEntry(&logrus.Logger{}), tc.httpSrvAddr, &http.ServeMux{}, nil)
 
-			gotParams := make(map[string]string)
+			gotParams := make(map[string]any)
 			for k, f := range step.Provides() {
 				v, err := f()
 				if err != nil {

@@ -11,51 +11,51 @@ func TestDeferredParametersMap(t *testing.T) {
 	var testCases = []struct {
 		purpose  string
 		dp       *DeferredParameters
-		expected map[string]string
+		expected map[string]any
 	}{{
 		purpose: "values[N]=V, fns[N] is not set, so returned map does not have key 'N'",
 		dp: &DeferredParameters{
-			values: map[string]string{"K1": "V1"},
-			fns:    map[string]func() (string, error){},
+			values: map[string]any{"K1": "V1"},
+			fns:    map[string]func() (any, error){},
 		},
-		expected: map[string]string{},
+		expected: map[string]any{},
 	}, {
 		purpose: "fns[N] is set, values[N] is not, so returned map has key 'N' set to fns[N]()",
 		dp: &DeferredParameters{
-			values: map[string]string{},
-			fns:    map[string]func() (string, error){"K1": func() (string, error) { return "V1", nil }},
+			values: map[string]any{},
+			fns:    map[string]func() (any, error){"K1": func() (any, error) { return "V1", nil }},
 		},
-		expected: map[string]string{"K1": "V1"},
+		expected: map[string]any{"K1": "V1"},
 	}, {
 		purpose: "fns[N] is set, values[N] is set, so returned map has key 'N' set to values[N]",
 		dp: &DeferredParameters{
-			values: map[string]string{"K1": "V1"},
-			fns:    map[string]func() (string, error){"K1": func() (string, error) { return "F1", nil }},
+			values: map[string]any{"K1": "V1"},
+			fns:    map[string]func() (any, error){"K1": func() (any, error) { return "F1", nil }},
 		},
-		expected: map[string]string{"K1": "V1"},
+		expected: map[string]any{"K1": "V1"},
 	}, {
 		purpose: "returned map contains all names",
 		dp: &DeferredParameters{
-			values: map[string]string{"K1": "V1", "K2": "V2"},
-			fns: map[string]func() (string, error){
-				"K1": func() (string, error) { return "should not be returned", nil },
-				"K2": func() (string, error) { return "should not be returned", nil },
-				"K3": func() (string, error) { return "F3", nil },
-				"K4": func() (string, error) { return "F4", nil },
+			values: map[string]any{"K1": "V1", "K2": "V2"},
+			fns: map[string]func() (any, error){
+				"K1": func() (any, error) { return "should not be returned", nil },
+				"K2": func() (any, error) { return "should not be returned", nil },
+				"K3": func() (any, error) { return "F3", nil },
+				"K4": func() (any, error) { return "F4", nil },
 			},
 		},
-		expected: map[string]string{"K1": "V1", "K2": "V2", "K3": "F3", "K4": "F4"},
+		expected: map[string]any{"K1": "V1", "K2": "V2", "K3": "F3", "K4": "F4"},
 	}, {
 		purpose: "parent values are not returned",
 		dp: &DeferredParameters{
 			params: &DeferredParameters{
-				values: map[string]string{"K1": "V1"},
-				fns: map[string]func() (string, error){
-					"K2": func() (string, error) { return "V2", nil },
+				values: map[string]any{"K1": "V1"},
+				fns: map[string]func() (any, error){
+					"K2": func() (any, error) { return "V2", nil },
 				},
 			},
 		},
-		expected: map[string]string{},
+		expected: map[string]any{},
 	}}
 
 	for _, tc := range testCases {
@@ -89,7 +89,7 @@ func TestDeferredParametersGetSet(t *testing.T) {
 		purpose: "Existing key is not overwritten",
 		dp: &DeferredParameters{
 			fns:    make(ParameterMap),
-			values: map[string]string{"key": "oldValue"},
+			values: map[string]any{"key": "oldValue"},
 		},
 		name:     "key",
 		callSet:  true,
@@ -100,10 +100,10 @@ func TestDeferredParametersGetSet(t *testing.T) {
 	}, {
 		purpose: "Existing key is not set if lazy evaluation func is set",
 		dp: &DeferredParameters{
-			fns: map[string]func() (string, error){
-				"key": func() (string, error) { return "lazyValue", nil },
+			fns: map[string]func() (any, error){
+				"key": func() (any, error) { return "lazyValue", nil },
 			},
-			values: map[string]string{},
+			values: map[string]any{},
 		},
 		name:     "key",
 		callSet:  true,
@@ -139,55 +139,55 @@ func TestDeferredParametersParent(t *testing.T) {
 	}{{
 		name: "values, no parent",
 		params: &DeferredParameters{
-			values: map[string]string{"K": "expected"},
-			fns:    map[string]func() (string, error){},
+			values: map[string]any{"K": "expected"},
+			fns:    map[string]func() (any, error){},
 		},
 	}, {
 		name: "fns, no parent",
 		params: &DeferredParameters{
-			values: map[string]string{},
-			fns: map[string]func() (string, error){
-				"K": func() (string, error) { return "expected", nil },
+			values: map[string]any{},
+			fns: map[string]func() (any, error){
+				"K": func() (any, error) { return "expected", nil },
 			},
 		},
 	}, {
 		name: "values, parent",
 		params: &DeferredParameters{
-			values: map[string]string{"K": "expected"},
-			fns:    map[string]func() (string, error){},
+			values: map[string]any{"K": "expected"},
+			fns:    map[string]func() (any, error){},
 			params: &DeferredParameters{
-				values: map[string]string{"K": "unexpected"},
+				values: map[string]any{"K": "unexpected"},
 			},
 		},
 	}, {
 		name: "fns, parent",
 		params: &DeferredParameters{
-			values: map[string]string{},
-			fns: map[string]func() (string, error){
-				"K": func() (string, error) { return "expected", nil },
+			values: map[string]any{},
+			fns: map[string]func() (any, error){
+				"K": func() (any, error) { return "expected", nil },
 			},
 			params: &DeferredParameters{
-				values: map[string]string{"K": "unexpected"},
+				values: map[string]any{"K": "unexpected"},
 			},
 		},
 	}, {
 		name: "from parent's values",
 		params: &DeferredParameters{
-			values: map[string]string{},
-			fns:    map[string]func() (string, error){},
+			values: map[string]any{},
+			fns:    map[string]func() (any, error){},
 			params: &DeferredParameters{
-				values: map[string]string{"K": "expected"},
+				values: map[string]any{"K": "expected"},
 			},
 		},
 	}, {
 		name: "from parent's fns",
 		params: &DeferredParameters{
-			values: map[string]string{},
-			fns:    map[string]func() (string, error){},
+			values: map[string]any{},
+			fns:    map[string]func() (any, error){},
 			params: &DeferredParameters{
-				values: map[string]string{},
-				fns: map[string]func() (string, error){
-					"K": func() (string, error) { return "expected", nil },
+				values: map[string]any{},
+				fns: map[string]func() (any, error){
+					"K": func() (any, error) { return "expected", nil },
 				},
 			},
 		},

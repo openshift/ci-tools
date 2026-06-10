@@ -269,7 +269,9 @@ func (s *assembleReleaseStep) Creates() []api.StepLink {
 
 func (s *assembleReleaseStep) Provides() api.ParameterMap {
 	return api.ParameterMap{
-		utils.ReleaseImageEnv(s.name): utils.ImageDigestFor(s.client, s.jobSpec.Namespace, api.ReleaseImageStream, s.name),
+		utils.ReleaseImageEnv(s.name): func() (any, error) {
+			return utils.ImageDigestFor(s.client, s.jobSpec.Namespace, api.ReleaseImageStream, s.name)()
+		},
 	}
 }
 

@@ -170,7 +170,7 @@ func (s *releaseImagesTagStep) Provides() api.ParameterMap {
 	}
 }
 
-func (s *releaseImagesTagStep) imageFormat() (string, error) {
+func (s *releaseImagesTagStep) imageFormat() (any, error) {
 	spec, err := s.repositoryPullSpec()
 	if err != nil {
 		return "REGISTRY", err

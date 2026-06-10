@@ -149,7 +149,7 @@ func (blockingStep) Creates() []api.StepLink { return []api.StepLink{api.ImagesR
 
 func (blockingStep) Provides() api.ParameterMap {
 	return api.ParameterMap{
-		"parameter": func() (string, error) { return "map", nil },
+		"parameter": func() (any, error) { return "map", nil },
 	}
 }
 

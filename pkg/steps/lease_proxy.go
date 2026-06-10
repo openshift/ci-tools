@@ -41,7 +41,7 @@ func (*stepLeaseProxyServer) Creates() []api.StepLink {
 func (s *stepLeaseProxyServer) Provides() api.ParameterMap {
 	return api.ParameterMap{
 		//nolint:unparam // Remove this as soon as this functions can return an error as well.
-		api.LeaseProxyServerURLEnvVarName: func() (string, error) {
+		api.LeaseProxyServerURLEnvVarName: func() (any, error) {
 			return s.srvAddr, nil
 		},
 	}

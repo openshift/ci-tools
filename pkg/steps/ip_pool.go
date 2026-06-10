@@ -87,7 +87,7 @@ func (s *ipPoolStep) Provides() api.ParameterMap {
 
 	// Disable unparam lint as we need to confirm to this interface, but there will never be an error
 	//nolint:unparam
-	parameters[api.DefaultIPPoolLeaseEnv] = func() (string, error) {
+	parameters[api.DefaultIPPoolLeaseEnv] = func() (any, error) {
 		if !s.stepRun.Load() {
 			return "", nil
 		}

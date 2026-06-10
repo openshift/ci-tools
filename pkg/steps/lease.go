@@ -93,21 +93,21 @@ func (s *leaseStep) Provides() api.ParameterMap {
 	}
 
 	// nolint:unparam
-	parameters[api.ClusterProfileSetEnv] = func() (string, error) { return s.clusterProfileSetName, nil }
+	parameters[api.ClusterProfileSetEnv] = func() (any, error) { return s.clusterProfileSetName, nil }
 	// nolint:unparam
-	parameters[api.ClusterProfileParam] = func() (string, error) { return s.clusterProfileName, nil }
+	parameters[api.ClusterProfileParam] = func() (any, error) { return s.clusterProfileName, nil }
 	// nolint:unparam
-	parameters[api.ClusterProfileSecretNameParam] = func() (string, error) { return s.clusterProfileSecretName, nil }
+	parameters[api.ClusterProfileSecretNameParam] = func() (any, error) { return s.clusterProfileSecretName, nil }
 	// nolint:unparam
-	parameters[api.STSHomeRoleARNParam] = func() (string, error) { return s.stsHomeRoleARN, nil }
+	parameters[api.STSHomeRoleARNParam] = func() (any, error) { return s.stsHomeRoleARN, nil }
 	// nolint:unparam
-	parameters[api.STSHubRoleARNParam] = func() (string, error) { return s.stsHubRoleARN, nil }
+	parameters[api.STSHubRoleARNParam] = func() (any, error) { return s.stsHubRoleARN, nil }
 	// nolint:unparam
-	parameters[api.STSTargetRoleARNParam] = func() (string, error) { return s.stsTargetRoleARN, nil }
+	parameters[api.STSTargetRoleARNParam] = func() (any, error) { return s.stsTargetRoleARN, nil }
 
 	for _, l := range s.leases {
 		// nolint:unparam
-		parameters[l.Env] = func() (string, error) {
+		parameters[l.Env] = func() (any, error) {
 			if len(l.resources) == 0 {
 				return "", nil
 			}

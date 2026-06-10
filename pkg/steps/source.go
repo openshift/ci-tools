@@ -325,14 +325,16 @@ func buildFromSource(jobSpec *api.JobSpec, fromTag, toTag api.PipelineImageStrea
 
 	layer := buildapi.ImageOptimizationSkipLayers
 	labels := LabelsFor(jobSpec, map[string]string{CreatesLabel: buildName}, ref)
+	buildAnnotations := map[string]string{
+		JobSpecAnnotation: jobSpec.RawSpec(),
+	}
+	applyPodScalerOptOut(jobSpec, buildAnnotations)
 	build := &buildapi.Build{
 		ObjectMeta: metav1.ObjectMeta{
-			Name:      buildName,
-			Namespace: jobSpec.Namespace(),
-			Labels:    labels,
-			Annotations: map[string]string{
-				JobSpecAnnotation: jobSpec.RawSpec(),
-			},
+			Name:        buildName,
+			Namespace:   jobSpec.Namespace(),
+			Labels:      labels,
+			Annotations: buildAnnotations,
 		},
 		Spec: buildapi.BuildSpec{
 			CommonSpec: buildapi.CommonSpec{

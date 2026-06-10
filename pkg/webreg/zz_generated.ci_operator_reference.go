@@ -655,6 +655,8 @@ const ciOperatorReferenceYaml = "# The list of base images describe\n" +
 	"        # of pull request workflows. Setting this field will\n" +
 	"        # create a periodic job instead of a presubmit\n" +
 	"        cron: \"\"\n" +
+	"        # DisablePodScaler opts generated test and image build pods out of pod-scaler admission.\n" +
+	"        disable_pod_scaler: true\n" +
 	"        # DisableRehearsal prevents this specific test from being picked up for rehearsals.\n" +
 	"        disable_rehearsal: true\n" +
 	"        # Interval is how frequently the test should be run based\n" +
@@ -1587,6 +1589,8 @@ const ciOperatorReferenceYaml = "# The list of base images describe\n" +
 	"      # of pull request workflows. Setting this field will\n" +
 	"      # create a periodic job instead of a presubmit\n" +
 	"      cron: \"\"\n" +
+	"      # DisablePodScaler opts generated test and image build pods out of pod-scaler admission.\n" +
+	"      disable_pod_scaler: true\n" +
 	"      # DisableRehearsal prevents this specific test from being picked up for rehearsals.\n" +
 	"      disable_rehearsal: true\n" +
 	"      # Interval is how frequently the test should be run based\n" +

@@ -297,6 +297,20 @@ func (ps *podStatusChangingClient) Create(ctx context.Context, o ctrlruntimeclie
 	return ps.WithWatch.Create(ctx, o, opts...)
 }
 
+func TestGenerateBasePodDisablePodScaler(t *testing.T) {
+	ps := expectedPodStepTemplate()
+	ps.jobSpec.DisablePodScaler = true
+	pod, err := GenerateBasePod(ps.jobSpec, nil, ps.config.As, ps.config.NodeName, ps.name,
+		[]string{"/bin/bash"}, "image", corev1.ResourceRequirements{}, "artifacts",
+		ps.jobSpec.DecorationConfig, ps.jobSpec.RawSpec(), nil, &GeneratePodOptions{})
+	if err != nil {
+		t.Fatalf("GenerateBasePod: %v", err)
+	}
+	if got := pod.Annotations[api.WorkloadAutoscalerScaleAnnotation]; got != "false" {
+		t.Fatalf("annotation %q, want false", got)
+	}
+}
+
 func TestTestStepAndRequires(t *testing.T) {
 	tests := []struct {
 		name     string

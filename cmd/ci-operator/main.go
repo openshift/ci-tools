@@ -702,6 +702,7 @@ func (o *options) Complete() error {
 	}
 
 	handleTargetAdditionalSuffix(o)
+	setDisablePodScalerFromTarget(o)
 
 	if o.enableSecretsStoreCSIDriver {
 		if err := api.LoadGSMConfigFromFile(o.gsmConfigPath, &o.gsmConfig); err != nil {
@@ -764,6 +765,18 @@ func parseKeyValParams(input []string, paramType string) (map[string]string, err
 	}
 
 	return params, nil
+}
+
+func setDisablePodScalerFromTarget(o *options) {
+	if o.jobSpec.Target == "" || o.jobSpec.Target == "all" {
+		return
+	}
+	for _, test := range o.configSpec.Tests {
+		if test.As == o.jobSpec.Target && test.DisablePodScaler {
+			o.jobSpec.DisablePodScaler = true
+			return
+		}
+	}
 }
 
 func handleTargetAdditionalSuffix(o *options) {

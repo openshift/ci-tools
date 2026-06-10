@@ -103,10 +103,11 @@ func (q *CachedQuery) Record(clusterName string, r TimeRange, matrix model.Matri
 			hist = circonusllhist.New(circonusllhist.NoLookup())
 		}
 		for _, value := range stream.Values {
-			if math.IsNaN(float64(value.Value)) {
+			v := float64(value.Value)
+			if math.IsNaN(v) || math.IsInf(v, 0) || v < 0 {
 				continue
 			}
-			err := hist.RecordValue(float64(value.Value))
+			err := hist.RecordValue(v)
 			if err != nil {
 				logger.WithError(err).Warn("Failed to insert data into histogram. This should never happen.")
 			}

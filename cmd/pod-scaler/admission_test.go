@@ -870,6 +870,26 @@ func TestUseOursIfLarger_authoritative(t *testing.T) {
 			},
 		},
 		{
+			name:             "zero cpu recommendation ignored",
+			authoritativeCPU: true,
+			ours: corev1.ResourceRequirements{
+				Requests: corev1.ResourceList{
+					corev1.ResourceCPU: resource.Quantity{},
+				},
+			},
+			theirs: corev1.ResourceRequirements{
+				Requests: corev1.ResourceList{
+					corev1.ResourceCPU: resource.MustParse("500m"),
+				},
+			},
+			expected: corev1.ResourceRequirements{
+				Limits: corev1.ResourceList{},
+				Requests: corev1.ResourceList{
+					corev1.ResourceCPU: resource.MustParse("500m"),
+				},
+			},
+		},
+		{
 			name:             "measured pod skips reduction",
 			authoritativeCPU: true,
 			isMeasured:       true,
@@ -1199,7 +1219,7 @@ func TestPreventUnschedulable(t *testing.T) {
 	}
 	for _, tc := range testCases {
 		t.Run(tc.name, func(t *testing.T) {
-			preventUnschedulable(tc.resources, cpuCap, memoryCap, logrus.WithField("test", tc.name))
+			capDigestRequests(tc.resources, *resource.NewQuantity(cpuCap, resource.DecimalSI), resource.MustParse(memoryCap), logrus.WithField("test", tc.name))
 			if diff := cmp.Diff(tc.expected, tc.resources); diff != "" {
 				t.Fatalf("result doesn't match expected, diff: %s", diff)
 			}

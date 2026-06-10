@@ -407,7 +407,7 @@ func main() {
 			})
 		})
 		eventServer.RegisterHandleIssueCommentEvent(func(l *logrus.Entry, event github.IssueCommentEvent) {
-			if !event.Issue.IsPullRequest() || event.Action != github.IssueCommentActionCreated {
+			if !event.Issue.IsPullRequest() || event.Action != github.IssueCommentActionCreated || !commentRegex.MatchString(event.Comment.Body) {
 				return
 			}
 			dispatcher.dispatch(l, func() {

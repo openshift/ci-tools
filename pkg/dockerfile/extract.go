@@ -14,6 +14,9 @@ import (
 // RegistryRegex matches registry references to registry.ci.openshift.org or quay-proxy.ci.openshift.org
 var RegistryRegex = regexp.MustCompile(`(registry\.(?:svc\.)?ci\.openshift\.org|quay-proxy\.ci\.openshift\.org)/[^\s\\]+`)
 
+// dockerfileLineContinuation matches Dockerfile backslash line continuations.
+var dockerfileLineContinuation = regexp.MustCompile(`\\\r?\n[ \t]*`)
+
 // OrgRepoTag represents a parsed image reference
 type OrgRepoTag struct {
 	Org, Repo, Tag string
@@ -23,16 +26,26 @@ func (ort OrgRepoTag) String() string {
 	return ort.Org + "_" + ort.Repo + "_" + ort.Tag
 }
 
-// ExtractRegistryReferences finds all registry.ci.openshift.org and quay-proxy.ci.openshift.org references in the Dockerfile
+// ExtractRegistryReferences finds registry.ci.openshift.org and quay-proxy.ci.openshift.org references in
+// Dockerfile FROM, COPY --from=, and RUN instructions (e.g. podman pull).
 func ExtractRegistryReferences(dockerfile []byte, from api.PipelineImageStreamTagReference) []string {
+	dockerfile = dockerfileLineContinuation.ReplaceAll(dockerfile, []byte(" "))
+
 	var refs []string
 	seen := sets.Set[string]{}
-	lastFromRef := ""
+	var lastFromLineRegistryRef string
 
 	for _, line := range bytes.Split(dockerfile, []byte("\n")) {
 		upper := bytes.ToUpper(line)
-		if !bytes.Contains(upper, []byte("FROM")) && !bytes.Contains(upper, []byte("COPY")) {
+		if !bytes.Contains(upper, []byte("FROM")) && !bytes.Contains(upper, []byte("COPY")) && !bytes.Contains(upper, []byte("RUN")) {
 			continue
+		}
+
+		if bytes.HasPrefix(upper, []byte("FROM")) {
+			lastFromLineRegistryRef = ""
+			if match := RegistryRegex.Find(line); match != nil {
+				lastFromLineRegistryRef = string(match)
+			}
 		}
 
 		match := RegistryRegex.Find(line)
@@ -40,20 +53,17 @@ func ExtractRegistryReferences(dockerfile []byte, from api.PipelineImageStreamTa
 			continue
 		}
 		ref := string(match)
-		if bytes.HasPrefix(upper, []byte("FROM")) {
-			lastFromRef = ref
-		}
 
 		if !seen.Has(ref) {
 			refs = append(refs, ref)
 			seen.Insert(ref)
 		}
 	}
-	if from != "" {
-		// If from is specified, remove the last detected FROM ref, it will be replaced
+	if from != "" && lastFromLineRegistryRef != "" {
+		// images[].from replaces the final Dockerfile stage; exclude only that stage's registry.ci reference
 		var newRefs []string
 		for _, ref := range refs {
-			if ref != lastFromRef {
+			if ref != lastFromLineRegistryRef {
 				newRefs = append(newRefs, ref)
 			}
 		}

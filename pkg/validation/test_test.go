@@ -1095,6 +1095,63 @@ func TestValidateTestSteps(t *testing.T) {
 			errors.New("test best-effort contains best_effort without timeout"),
 		},
 	}, {
+		name: "SA token mount path collides with credential mount path",
+		steps: []api.TestStep{{
+			LiteralTestStep: &api.LiteralTestStep{
+				As:        "as",
+				From:      "from",
+				Commands:  "commands",
+				Resources: resources,
+				Credentials: []api.CredentialReference{{
+					Namespace: "ns", Name: "cred", MountPath: "/var/run/secrets/creds",
+				}},
+				ServiceAccountTokens: []api.ServiceAccountTokenVolume{{
+					Audience: "aud", MountPath: "/var/run/secrets/creds",
+				}},
+			},
+		}},
+		errs: []error{
+			errors.New(`test[0].service_account_tokens[0].mount_path: collides with credentials[0] mount path "/var/run/secrets/creds"`),
+		},
+	}, {
+		name: "SA token mount path under credential mount path",
+		steps: []api.TestStep{{
+			LiteralTestStep: &api.LiteralTestStep{
+				As:        "as",
+				From:      "from",
+				Commands:  "commands",
+				Resources: resources,
+				Credentials: []api.CredentialReference{{
+					Namespace: "ns", Name: "cred", MountPath: "/var/run/secrets",
+				}},
+				ServiceAccountTokens: []api.ServiceAccountTokenVolume{{
+					Audience: "aud", MountPath: "/var/run/secrets/wif",
+				}},
+			},
+		}},
+		errs: []error{
+			errors.New("test[0].service_account_tokens[0].mount_path: /var/run/secrets/wif is under credentials[0] mount path /var/run/secrets"),
+		},
+	}, {
+		name: "credential mount path under SA token mount path",
+		steps: []api.TestStep{{
+			LiteralTestStep: &api.LiteralTestStep{
+				As:        "as",
+				From:      "from",
+				Commands:  "commands",
+				Resources: resources,
+				Credentials: []api.CredentialReference{{
+					Namespace: "ns", Name: "cred", MountPath: "/var/run/secrets/wif/nested",
+				}},
+				ServiceAccountTokens: []api.ServiceAccountTokenVolume{{
+					Audience: "aud", MountPath: "/var/run/secrets/wif",
+				}},
+			},
+		}},
+		errs: []error{
+			errors.New("test[0].service_account_tokens[0].mount_path: credentials[0] mount path /var/run/secrets/wif/nested is under /var/run/secrets/wif"),
+		},
+	}, {
 		name: "cluster claim release",
 		steps: []api.TestStep{{
 			LiteralTestStep: &api.LiteralTestStep{
@@ -1106,7 +1163,7 @@ func TestValidateTestSteps(t *testing.T) {
 		clusterClaim: api.ClaimRelease{ReleaseName: "myclaim-as", OverrideName: "myclaim"},
 	}} {
 		t.Run(tc.name, func(t *testing.T) {
-			context := newContext("test", nil, tc.releases, make(testInputImages))
+			context := newContext("test", nil, tc.releases, make(testInputImages), nil)
 			if tc.seen != nil {
 				context.namesSeen = tc.seen
 			}
@@ -1147,7 +1204,7 @@ func TestValidatePostSteps(t *testing.T) {
 		}},
 	}} {
 		t.Run(tc.name, func(t *testing.T) {
-			context := newContext("test", nil, tc.releases, make(testInputImages))
+			context := newContext("test", nil, tc.releases, make(testInputImages), nil)
 			if tc.seen != nil {
 				context.namesSeen = tc.seen
 			}
@@ -1185,7 +1242,7 @@ func TestValidateParameters(t *testing.T) {
 	}} {
 		t.Run(tc.name, func(t *testing.T) {
 			v := NewValidator(nil, nil)
-			err := v.validateLiteralTestStep(newContext("test", tc.env, tc.releases, make(testInputImages)), testStageTest, api.LiteralTestStep{
+			err := v.validateLiteralTestStep(newContext("test", tc.env, tc.releases, make(testInputImages), nil), testStageTest, api.LiteralTestStep{
 				As:       "as",
 				From:     "from",
 				Commands: "commands",

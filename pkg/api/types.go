@@ -1155,6 +1155,27 @@ type LiteralTestStep struct {
 	// NodeArchitecture is the architecture for the node where the test will run.
 	// If set, the generated test pod will include a nodeSelector for this architecture.
 	NodeArchitecture *NodeArchitecture `json:"node_architecture,omitempty"`
+	// ServiceAccountTokens configures additional projected service account token
+	// volumes with custom audiences, mounted into the step container. This is
+	// useful for workloads that need to exchange tokens with external identity
+	// providers (e.g., GCP Workload Identity Federation).
+	ServiceAccountTokens []ServiceAccountTokenVolume `json:"service_account_tokens,omitempty"`
+}
+
+// ServiceAccountTokenVolume configures a projected service account token volume
+// with a custom audience mounted into the step container. The kubelet handles
+// the token request transparently — no additional RBAC is required beyond pod
+// creation.
+type ServiceAccountTokenVolume struct {
+	// Audience is the intended audience of the token. The token will only be
+	// valid for recipients that identify themselves with this audience.
+	Audience string `json:"audience"`
+	// MountPath is the path where the token will be mounted in the container.
+	MountPath string `json:"mount_path"`
+	// ExpirationSeconds is the requested duration of validity of the token,
+	// in seconds. The kubelet will automatically rotate the token at 80% of
+	// its TTL. Defaults to 3600 (1 hour) if not set.
+	ExpirationSeconds *int64 `json:"expiration_seconds,omitempty"`
 }
 
 // StepParameter is a variable set by the test, with an optional default.
@@ -1820,6 +1841,21 @@ type ClusterClaimDetails struct {
 type ClusterClaimOwnerDetails struct {
 	Org   string   `yaml:"org"`
 	Repos []string `yaml:"repos,omitempty"`
+}
+
+// AllowedAudiencesMap maps audience strings to their ownership details.
+// Audiences in this map are restricted to configs from the listed org/repo owners.
+// Audiences not in this map are unrestricted.
+type AllowedAudiencesMap map[string]AllowedAudienceDetails
+
+type AllowedAudienceDetails struct {
+	Audience string                  `yaml:"audience" json:"audience"`
+	Owners   []AllowedAudienceOwners `yaml:"owners,omitempty" json:"owners,omitempty"`
+}
+
+type AllowedAudienceOwners struct {
+	Org   string   `yaml:"org" json:"org"`
+	Repos []string `yaml:"repos,omitempty" json:"repos,omitempty"`
 }
 
 const (

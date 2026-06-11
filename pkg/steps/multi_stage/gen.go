@@ -153,10 +153,12 @@ func (s *multiStageTestStep) generatePods(
 		pod.Annotations[base_steps.AnnotationSaveContainerLogs] = "true"
 		pod.Labels[MultiStageTestLabel] = s.name
 		needsKubeConfig := isKubeconfigNeeded(&step, genPodOpts)
-		if needsKubeConfig {
+		if needsKubeConfig || len(step.ServiceAccountTokens) > 0 {
 			pod.Spec.ServiceAccountName = s.name
 		} else {
 			pod.Spec.ServiceAccountName = ""
+		}
+		if !needsKubeConfig {
 			no := false
 			pod.Spec.AutomountServiceAccountToken = &no
 		}
@@ -258,6 +260,7 @@ func (s *multiStageTestStep) generatePods(
 		if step.RunAsScript != nil && *step.RunAsScript {
 			addCommandScript(commandConfigMapForTest(s.name), pod)
 		}
+		addServiceAccountTokenVolumes(step.ServiceAccountTokens, pod)
 		if s.vpnConf != nil {
 			caps := coreapi.Capabilities{
 				Add:  []coreapi.Capability{"NET_ADMIN"},
@@ -696,6 +699,35 @@ func addCommandScript(name string, pod *coreapi.Pod) {
 		Name:      volumeName,
 		MountPath: CommandScriptMountPath,
 	})
+}
+
+func addServiceAccountTokenVolumes(tokens []api.ServiceAccountTokenVolume, pod *coreapi.Pod) {
+	for i, token := range tokens {
+		volumeName := fmt.Sprintf("sa-token-%d", i)
+		expSeconds := int64(3600)
+		if token.ExpirationSeconds != nil {
+			expSeconds = *token.ExpirationSeconds
+		}
+		pod.Spec.Volumes = append(pod.Spec.Volumes, coreapi.Volume{
+			Name: volumeName,
+			VolumeSource: coreapi.VolumeSource{
+				Projected: &coreapi.ProjectedVolumeSource{
+					Sources: []coreapi.VolumeProjection{{
+						ServiceAccountToken: &coreapi.ServiceAccountTokenProjection{
+							Audience:          token.Audience,
+							ExpirationSeconds: &expSeconds,
+							Path:              "token",
+						},
+					}},
+				},
+			},
+		})
+		pod.Spec.Containers[0].VolumeMounts = append(pod.Spec.Containers[0].VolumeMounts, coreapi.VolumeMount{
+			Name:      volumeName,
+			MountPath: token.MountPath,
+			ReadOnly:  true,
+		})
+	}
 }
 
 func addLeaseProxyScripts(pod *coreapi.Pod, c *coreapi.Container) {

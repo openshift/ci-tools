@@ -35,6 +35,7 @@ type options struct {
 	clusterProfiles          api.ClusterProfilesMap
 	clusterClaimOwners       api.ClusterClaimOwnersMap
 	clusterProfileSetDetails api.ClusterProfileSetDetails
+	allowedAudiences         api.AllowedAudiencesMap
 }
 
 func (o *options) parse() error {
@@ -42,6 +43,7 @@ func (o *options) parse() error {
 	var profilesConfigPath string
 	var clusterClaimConfigPath string
 	var clusterProfileSetDetailsPath string
+	var allowedAudiencesConfigPath string
 
 	fs := flag.NewFlagSet("", flag.ExitOnError)
 
@@ -49,6 +51,7 @@ func (o *options) parse() error {
 	fs.StringVar(&profilesConfigPath, "cluster-profiles-config", "", "Path to the cluster profile config file")
 	fs.StringVar(&clusterClaimConfigPath, "cluster-claim-owners-config", "", "Path to the cluster claim owners config file")
 	fs.StringVar(&clusterProfileSetDetailsPath, "cluster-profile-set-details", "", "Path to the cluster profile set details file")
+	fs.StringVar(&allowedAudiencesConfigPath, "allowed-audiences-config", "", "Path to the allowed audiences config file")
 	o.Options.Bind(fs)
 
 	if err := fs.Parse(os.Args[1:]); err != nil {
@@ -70,6 +73,14 @@ func (o *options) parse() error {
 		return fmt.Errorf("failed to load cluster claim owners config: %w", err)
 	}
 	o.clusterClaimOwners = claimOwners
+
+	if allowedAudiencesConfigPath != "" {
+		allowedAudiences, err := load.AllowedAudiencesConfig(allowedAudiencesConfigPath)
+		if err != nil {
+			return fmt.Errorf("failed to load allowed audiences config: %w", err)
+		}
+		o.allowedAudiences = allowedAudiences
+	}
 
 	ciOPConfigAgent, err := agents.NewConfigAgent(o.ConfigDir, nil, agents.WithOrg(o.Org), agents.WithRepo(o.Repo))
 	if err != nil {
@@ -111,7 +122,8 @@ func (o *options) validate() (ret []error) {
 	errCh := make(chan error)
 	map_ := func() error {
 		validator := validation.NewValidator(o.clusterProfiles, o.clusterClaimOwners,
-			validation.WithClusterProfileSetDetails(o.clusterProfileSetDetails))
+			validation.WithClusterProfileSetDetails(o.clusterProfileSetDetails),
+			validation.WithAllowedAudiences(o.allowedAudiences))
 		for c := range inputCh {
 			if err := o.validateConfiguration(&validator, outputCh, c); err != nil {
 				errCh <- fmt.Errorf("failed to validate configuration %s: %w", c.Metadata.RelativePath(), err)

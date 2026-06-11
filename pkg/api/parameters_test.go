@@ -1,6 +1,7 @@
 package api
 
 import (
+	"errors"
 	"reflect"
 	"testing"
 
@@ -68,6 +69,8 @@ func TestDeferredParametersMap(t *testing.T) {
 }
 
 func TestDeferredParametersGetSet(t *testing.T) {
+	t.Parallel()
+
 	var testCases = []struct {
 		purpose  string
 		dp       *DeferredParameters
@@ -117,17 +120,20 @@ func TestDeferredParametersGetSet(t *testing.T) {
 		name:     "key",
 		callSet:  false,
 		setValue: "THIS SHOULD NOT BE USED",
-
 		getValue: "",
 		getError: nil,
 	}}
 	for _, tc := range testCases {
-		if tc.callSet {
-			tc.dp.Set(tc.name, tc.setValue)
-		}
-		if value, err := tc.dp.Get(tc.name); value != tc.getValue || err != tc.getError {
-			t.Errorf("%s: Get(%s) returned (%s, %v), expected (%s, %v)", tc.purpose, tc.name, value, err, tc.getValue, tc.getError)
-		}
+		t.Run(tc.purpose, func(t *testing.T) {
+			t.Parallel()
+
+			if tc.callSet {
+				tc.dp.Set(tc.name, tc.setValue)
+			}
+			if value, err := tc.dp.GetString(tc.name); value != tc.getValue || err != tc.getError {
+				t.Errorf("Get(%s) returned (%s, %v), expected (%s, %v)", tc.name, value, err, tc.getValue, tc.getError)
+			}
+		})
 	}
 }
 
@@ -193,7 +199,7 @@ func TestDeferredParametersParent(t *testing.T) {
 		},
 	}} {
 		t.Run(tc.name, func(t *testing.T) {
-			ret, err := tc.params.Get("K")
+			ret, err := tc.params.GetString("K")
 			if err != tc.expectedErr {
 				t.Errorf("err: want %v, got %v", tc.expectedErr, err)
 			}
@@ -201,5 +207,110 @@ func TestDeferredParametersParent(t *testing.T) {
 				t.Errorf("got unexpected value %q", ret)
 			}
 		})
+	}
+}
+
+func TestGet(t *testing.T) {
+	t.Parallel()
+
+	// String from values
+	wantValueStr := "bar"
+	params := NewDeferredParameters(nil)
+	params.Set("foo", wantValueStr)
+
+	gotValueStr, err := params.Get("foo")
+	if err != nil {
+		t.Errorf("get string - unexpected error: %s", err)
+	}
+
+	gotValueStrTyped, ok := gotValueStr.(string)
+	if !ok {
+		t.Errorf("want type %T but got %T", "str", gotValueStrTyped)
+	}
+
+	if gotValueStrTyped != wantValueStr {
+		t.Errorf("want %s but got %s", wantValueStr, gotValueStr)
+	}
+
+	// Int from fns
+	wantValueInt := 1
+	params = NewDeferredParameters(nil)
+	params.Add("foo", func() (any, error) { return wantValueInt, nil })
+
+	gotValueInt, err := params.Get("foo")
+	if err != nil {
+		t.Errorf("get int - unexpected error: %s", err)
+	}
+
+	gotValueIntTyped, ok := gotValueInt.(int)
+	if !ok {
+		t.Errorf("want type %T but got %T", "str", gotValueIntTyped)
+	}
+
+	if gotValueIntTyped != wantValueInt {
+		t.Errorf("want %d but got %d", wantValueInt, gotValueIntTyped)
+	}
+
+	// Struct from inner params
+	wantValueStruct := struct{ data string }{data: "bar"}
+	inner := NewDeferredParameters(nil)
+	inner.Add("foo", func() (any, error) { return wantValueStruct, nil })
+	params = NewDeferredParameters(inner)
+
+	gotValueStruct, err := params.Get("foo")
+	if err != nil {
+		t.Errorf("get struct - unexpected error: %s", err)
+	}
+
+	gotValueStructTyped, ok := gotValueStruct.(struct{ data string })
+	if !ok {
+		t.Errorf("want type %T but got %T", wantValueStruct, gotValueStructTyped)
+	}
+
+	if gotValueStructTyped != wantValueStruct {
+		t.Errorf("want %+v but got %+v", wantValueStruct, gotValueStructTyped)
+	}
+
+	// Err not found
+	params = &DeferredParameters{
+		values: make(map[string]any),
+	}
+
+	_, err = params.Get("void")
+	if err == nil || !errors.Is(err, &ErrParamNotFound{}) {
+		t.Errorf("want error %T but got: %T", &ErrParamNotFound{}, err)
+	}
+}
+
+func TestGetParamTyped(t *testing.T) {
+	t.Parallel()
+
+	// Get a string
+	wantValue := "bar"
+	params := &DeferredParameters{values: map[string]any{"foo": wantValue}}
+
+	gotValue, err := GetParamTyped[string](params, "foo")
+	if err != nil {
+		t.Errorf("get string - unexpected error: %s", err)
+	}
+
+	if gotValue != wantValue {
+		t.Errorf("want %s but got %s", wantValue, gotValue)
+	}
+
+	// Err type mismatch
+	params = &DeferredParameters{values: map[string]any{"foo": "bar"}}
+
+	_, err = GetParamTyped[int](params, "foo")
+	if err == nil || !errors.Is(err, &ErrParamTypeMismatch{}) {
+		t.Errorf("want error %T but got: %T", &ErrParamTypeMismatch{}, err)
+	}
+
+	// Err not Found over type mismatch
+	params = &DeferredParameters{values: map[string]any{"foo": "bar"}}
+
+	_, err = GetParamTyped[int](params, "void")
+	if err == nil || !errors.Is(err, &ErrParamNotFound{}) {
+		t.Errorf("want error %T but got: %T", &ErrParamNotFound{}, err)
 	}
 }

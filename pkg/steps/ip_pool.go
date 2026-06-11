@@ -134,7 +134,7 @@ func (s *ipPoolStep) run(ctx context.Context, minute time.Duration) error {
 	s.stepRun.Store(true)
 	l := &s.ipPoolLease
 
-	region, err := s.params.Get(api.DefaultLeaseEnv)
+	region, err := s.params.GetString(api.DefaultLeaseEnv)
 	if err != nil || region == "" {
 		return results.ForReason("acquiring_ip_pool_lease").WithError(err).Errorf("failed to determine region to acquire lease for %s", l.ResourceType)
 	}

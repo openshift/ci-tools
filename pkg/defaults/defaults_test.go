@@ -1214,7 +1214,7 @@ func sortStepConfig(in []api.StepConfiguration) []api.StepConfiguration {
 }
 
 type environmentOverride struct {
-	m map[string]string
+	m map[string]any
 }
 
 func (e environmentOverride) Has(name string) bool {
@@ -1226,7 +1226,21 @@ func (e environmentOverride) HasInput(name string) bool {
 	return e.Has(name)
 }
 
-func (e environmentOverride) Get(name string) (string, error) {
+func (e environmentOverride) GetString(name string) (string, error) {
+	v, ok := e.m[name]
+	if !ok {
+		return "", nil
+	}
+
+	vStr, ok := v.(string)
+	if !ok {
+		return "", nil
+	}
+
+	return vStr, nil
+}
+
+func (e environmentOverride) Get(name string) (any, error) {
 	return e.m[name], nil
 }
 
@@ -1562,7 +1576,7 @@ func TestFromConfig(t *testing.T) {
 			},
 		},
 		env: environmentOverride{
-			m: map[string]string{
+			m: map[string]any{
 				utils.ReleaseImageEnv(api.LatestReleaseName): "latest",
 			},
 		},
@@ -1601,8 +1615,8 @@ func TestFromConfig(t *testing.T) {
 				},
 			},
 		},
-		env: environmentOverride{
-			m: map[string]string{
+		env: &environmentOverride{
+			m: map[string]any{
 				utils.ReleaseImageEnv("release"): "release",
 			},
 		},
@@ -1675,7 +1689,7 @@ func TestFromConfig(t *testing.T) {
 			Tests: []api.TestStepConfiguration{{
 				As: "test",
 				MultiStageTestConfigurationLiteral: &api.MultiStageTestConfigurationLiteral{
-					ClusterProfileLiteral: &api.ClusterProfileDetails{Name: api.ClusterProfileAWS},
+					ClusterProfileDetails: &api.ClusterProfileDetails{Name: api.ClusterProfileAWS},
 				},
 			}},
 		},

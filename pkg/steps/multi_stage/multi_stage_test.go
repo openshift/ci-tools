@@ -34,7 +34,7 @@ func TestRequires(t *testing.T) {
 	}{{
 		name: "step has a cluster profile and requires a release image, should not have ReleaseImagesLink",
 		steps: api.MultiStageTestConfigurationLiteral{
-			ClusterProfileLiteral: &api.ClusterProfileDetails{
+			ClusterProfileDetails: &api.ClusterProfileDetails{
 				Name:        api.ClusterProfileAWS,
 				ClusterType: "aws",
 				LeaseType:   "aws-quota-slice",
@@ -331,7 +331,7 @@ func TestAddCredentialsToCensoring(t *testing.T) {
 	}
 }
 
-type fakeStepParams map[string]string
+type fakeStepParams map[string]any
 
 func (f fakeStepParams) Has(key string) bool {
 	_, ok := f[key]
@@ -342,8 +342,23 @@ func (f fakeStepParams) HasInput(_ string) bool {
 	panic("This should not be used")
 }
 
-func (f fakeStepParams) Get(key string) (string, error) {
-	return f[key], nil
+func (f fakeStepParams) GetString(key string) (string, error) {
+	v, ok := f[key]
+	if !ok {
+		return "", nil
+	}
+
+	vStr, ok := v.(string)
+	if !ok {
+		return "", nil
+	}
+
+	return vStr, nil
+}
+
+func (f fakeStepParams) Get(key string) (any, error) {
+	v := f[key]
+	return v, nil
 }
 
 func TestEnvironment(t *testing.T) {

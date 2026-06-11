@@ -1211,7 +1211,7 @@ func ClusterProfileFromParams(params Parameters) (ClusterProfile, error) {
 	if params == nil {
 		return "", nil
 	}
-	cp, err := params.Get(ClusterProfileParam)
+	cp, err := params.GetString(ClusterProfileParam)
 	return ClusterProfile(cp), err
 }
 

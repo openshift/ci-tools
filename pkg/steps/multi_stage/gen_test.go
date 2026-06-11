@@ -82,7 +82,7 @@ func TestGeneratePods(t *testing.T) {
 				Tests: []api.TestStepConfiguration{{
 					As: "test",
 					MultiStageTestConfigurationLiteral: &api.MultiStageTestConfigurationLiteral{
-						ClusterProfileLiteral: &api.ClusterProfileDetails{
+						ClusterProfileDetails: &api.ClusterProfileDetails{
 							Name:        api.ClusterProfileAWS,
 							ClusterType: "aws",
 							LeaseType:   "aws-quota-slice",
@@ -175,7 +175,7 @@ func TestGeneratePods(t *testing.T) {
 				Tests: []api.TestStepConfiguration{{
 					As: "e2e-aws",
 					MultiStageTestConfigurationLiteral: &api.MultiStageTestConfigurationLiteral{
-						ClusterProfileLiteral: &api.ClusterProfileDetails{
+						ClusterProfileDetails: &api.ClusterProfileDetails{
 							Name:        api.ClusterProfileAWS,
 							ClusterType: "aws",
 							LeaseType:   "aws-quota-slice",
@@ -236,7 +236,7 @@ func TestGenerateObservers(t *testing.T) {
 		Tests: []api.TestStepConfiguration{{
 			As: "test",
 			MultiStageTestConfigurationLiteral: &api.MultiStageTestConfigurationLiteral{
-				ClusterProfileLiteral: &api.ClusterProfileDetails{
+				ClusterProfileDetails: &api.ClusterProfileDetails{
 					Name:        api.ClusterProfileAWS,
 					ClusterType: "aws",
 					LeaseType:   "aws-quota-slice",

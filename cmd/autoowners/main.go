@@ -141,7 +141,51 @@ type httpResult struct {
 
 // resolveOwnerAliases computes the resolved (simple or full config) format of the OWNERS file
 func (r httpResult) resolveOwnerAliases(cleaner ownersCleaner) interface{} {
-	if !r.simpleConfig.Empty() {
+	// If we have filters, we must use FullConfig format (even if we also have top-level config)
+	if len(r.fullConfig.Filters) > 0 {
+		fc := FullConfig{
+			Filters: map[string]repoowners.Config{},
+			Options: r.fullConfig.Options,
+		}
+
+		// Process all specific filters from fullConfig first
+		for k, v := range r.fullConfig.Filters {
+			cfg := repoowners.Config{
+				Approvers:         cleaner(sets.List(r.repoAliases.ExpandAliases(repoowners.NormLogins(v.Approvers)))),
+				Reviewers:         cleaner(sets.List(r.repoAliases.ExpandAliases(repoowners.NormLogins(v.Reviewers)))),
+				RequiredReviewers: cleaner(sets.List(r.repoAliases.ExpandAliases(repoowners.NormLogins(v.RequiredReviewers)))),
+				Labels:            sets.List(sets.New[string](v.Labels...)),
+			}
+			if len(cfg.Reviewers) == 0 {
+				cfg.Reviewers = cfg.Approvers
+			}
+			fc.Filters[k] = cfg
+		}
+
+		// If we also have top-level config, merge it into the ".*" catch-all filter
+		if !r.simpleConfig.Empty() {
+			topLevelCfg := repoowners.Config{
+				Approvers:         cleaner(sets.List(r.repoAliases.ExpandAliases(repoowners.NormLogins(r.simpleConfig.Approvers)))),
+				Reviewers:         cleaner(sets.List(r.repoAliases.ExpandAliases(repoowners.NormLogins(r.simpleConfig.Reviewers)))),
+				RequiredReviewers: cleaner(sets.List(r.repoAliases.ExpandAliases(repoowners.NormLogins(r.simpleConfig.RequiredReviewers)))),
+				Labels:            sets.List(sets.New[string](r.simpleConfig.Labels...)),
+			}
+			if len(topLevelCfg.Reviewers) == 0 {
+				topLevelCfg.Reviewers = topLevelCfg.Approvers
+			}
+
+			// Merge with existing ".*" filter if one exists
+			if existing, ok := fc.Filters[".*"]; ok {
+				topLevelCfg.Approvers = sets.List(sets.New[string](append(topLevelCfg.Approvers, existing.Approvers...)...))
+				topLevelCfg.Reviewers = sets.List(sets.New[string](append(topLevelCfg.Reviewers, existing.Reviewers...)...))
+				topLevelCfg.RequiredReviewers = sets.List(sets.New[string](append(topLevelCfg.RequiredReviewers, existing.RequiredReviewers...)...))
+				topLevelCfg.Labels = sets.List(sets.New[string](append(topLevelCfg.Labels, existing.Labels...)...))
+			}
+			fc.Filters[".*"] = topLevelCfg
+		}
+		return fc
+	} else if !r.simpleConfig.Empty() {
+		// No filters, just use SimpleConfig
 		sc := SimpleConfig{
 			Config: repoowners.Config{
 				Approvers:         cleaner(sets.List(r.repoAliases.ExpandAliases(repoowners.NormLogins(r.simpleConfig.Approvers)))),
@@ -155,25 +199,9 @@ func (r httpResult) resolveOwnerAliases(cleaner ownersCleaner) interface{} {
 			sc.Reviewers = sc.Approvers
 		}
 		return sc
-	} else {
-		fc := FullConfig{
-			Filters: map[string]repoowners.Config{},
-			Options: r.fullConfig.Options,
-		}
-		for k, v := range r.fullConfig.Filters {
-			cfg := repoowners.Config{
-				Approvers:         cleaner(sets.List(r.repoAliases.ExpandAliases(repoowners.NormLogins(v.Approvers)))),
-				Reviewers:         cleaner(sets.List(r.repoAliases.ExpandAliases(repoowners.NormLogins(v.Reviewers)))),
-				RequiredReviewers: cleaner(sets.List(r.repoAliases.ExpandAliases(repoowners.NormLogins(v.RequiredReviewers)))),
-				Labels:            sets.List(sets.New[string](v.Labels...)),
-			}
-			if len(cfg.Reviewers) == 0 {
-				cfg.Reviewers = cfg.Approvers
-			}
-			fc.Filters[k] = cfg
-		}
-		return fc
 	}
+	// Empty config - should not happen but return empty SimpleConfig
+	return SimpleConfig{}
 }
 
 type FileGetter interface {
@@ -210,18 +238,31 @@ func getOwnersHTTP(fg FileGetter, orgRepo orgRepo, filenames ownersconfig.Filena
 		switch filename {
 		case filenames.Owners:
 			httpResult.ownersFileExists = true
+			// Try to load as SimpleConfig first (this works for all valid OWNERS files)
 			simple, err := repoowners.LoadSimpleConfig(data)
 			if err != nil {
 				logrus.WithError(err).Error("Unable to load simple config.")
 				return httpResult, err
 			}
-			httpResult.simpleConfig = simple
-			if httpResult.simpleConfig.Empty() {
-				full, err := repoowners.LoadFullConfig(data)
-				if err != nil {
-					logrus.WithError(err).Error("Unable to load full config.")
-					return httpResult, err
+
+			// If SimpleConfig is not empty, store it for top-level approvers/reviewers
+			if !simple.Empty() {
+				httpResult.simpleConfig = simple
+			}
+
+			// Also try to load as FullConfig to check for filters
+			full, err := repoowners.LoadFullConfig(data)
+			if err != nil {
+				// If FullConfig fails but we have SimpleConfig, that's OK
+				if !simple.Empty() {
+					break
 				}
+				logrus.WithError(err).Error("Unable to load full config.")
+				return httpResult, err
+			}
+
+			// If the file has filters, store FullConfig
+			if len(full.Filters) > 0 {
 				httpResult.fullConfig = full
 			}
 		case filenames.OwnersAliases:

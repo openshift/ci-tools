@@ -50,6 +50,7 @@ lint:
 # Example:
 #   make test
 test: cmd/vault-secret-collection-manager/index.js
+	go install gotest.tools/gotestsum@latest
 	TESTFLAGS="$(TESTFLAGS)" hack/test-go.sh
 .PHONY: test
 
@@ -140,6 +141,7 @@ PACKAGES ?= ./test/e2e/...
 #   make e2e PACKAGES=test/e2e/pod-scaler TESTFLAGS='--run TestProduce'
 #   make e2e PACKAGES=test/e2e/pod-scaler TESTFLAGS='--count 1'
 e2e: $(TMPDIR)/.boskos-credentials
+	go install gotest.tools/gotestsum@latest
 	BOSKOS_CREDENTIALS_FILE="$(TMPDIR)/.boskos-credentials" PACKAGES="$(PACKAGES)" TESTFLAGS="$(TESTFLAGS) -tags $(TAGS) -timeout 70m -parallel 100" hack/test-go.sh
 .PHONY: e2e
 

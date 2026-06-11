@@ -289,9 +289,10 @@ func (s *server) commentAffectedJobsOnPR(pullRequest *github.PullRequest, logger
 }
 
 func (s *server) handleIssueComment(l *logrus.Entry, event github.IssueCommentEvent) {
-	if !event.Issue.IsPullRequest() || github.IssueCommentActionCreated != event.Action {
+	if !event.Issue.IsPullRequest() || github.IssueCommentActionCreated != event.Action || !commentRegex.MatchString(event.Comment.Body) {
 		return
 	}
+
 	org := event.Repo.Owner.Login
 	repo := event.Repo.Name
 	number := event.Issue.Number

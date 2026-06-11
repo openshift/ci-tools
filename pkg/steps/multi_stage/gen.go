@@ -242,11 +242,7 @@ func (s *multiStageTestStep) generatePods(
 				errs = append(errs, fmt.Errorf("step %s sets no_kubeconfig but the test has STS enabled (home_role_arn=%s, hub_role_arn=%s, target_role_arn=%s); STS requires kubeconfig", step.As, s.stsHomeRoleARN, s.stsHubRoleARN, s.stsTargetRoleARN))
 				continue
 			}
-			profileSecret, err := s.profileSecretName()
-			if err != nil {
-				return nil, nil, fmt.Errorf("get profile secret name: %w", err)
-			}
-			addProfile(profileSecret, *s.profile, stsEnabled, pod)
+			addProfile(s.profileSecretName(), *s.profile, stsEnabled, pod)
 		}
 		if step.Cli != "" {
 			dependency := api.StepDependency{Name: fmt.Sprintf("%s:cli", api.ReleaseStreamFor(step.Cli))}

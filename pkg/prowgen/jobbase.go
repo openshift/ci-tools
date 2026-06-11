@@ -171,7 +171,7 @@ func NewProwJobBaseBuilderForTest(configSpec *cioperatorapi.ReleaseBuildConfigur
 	switch {
 	case test.MultiStageTestConfigurationLiteral != nil:
 		p.PodSpec.Add(LeaseClient())
-		if clusterProfile := test.MultiStageTestConfigurationLiteral.ClusterProfileDetails; clusterProfile != nil {
+		if clusterProfile := test.MultiStageTestConfigurationLiteral.ClusterProfileLiteral; clusterProfile != nil {
 			p.WithLabel(cioperatorapi.CloudClusterProfileLabel, string(clusterProfile.Name))
 			p.WithLabel(cioperatorapi.CloudLabel, clusterProfile.ClusterType)
 		}

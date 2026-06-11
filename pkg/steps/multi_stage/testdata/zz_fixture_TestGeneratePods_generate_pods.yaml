@@ -176,7 +176,7 @@
       name: dshm
     - name: cluster-profile
       secret:
-        secretName: cluster-secrets-aws-5
+        secretName: cluster-secrets-aws
     - name: test
       secret:
         secretName: test
@@ -356,7 +356,7 @@
       name: entrypoint-wrapper
     - name: cluster-profile
       secret:
-        secretName: cluster-secrets-aws-5
+        secretName: cluster-secrets-aws
     - name: test
       secret:
         secretName: test
@@ -536,7 +536,7 @@
       name: entrypoint-wrapper
     - name: cluster-profile
       secret:
-        secretName: cluster-secrets-aws-5
+        secretName: cluster-secrets-aws
     - name: test
       secret:
         secretName: test
@@ -728,7 +728,7 @@
       name: entrypoint-wrapper
     - name: cluster-profile
       secret:
-        secretName: cluster-secrets-aws-5
+        secretName: cluster-secrets-aws
     - name: test
       secret:
         secretName: test
@@ -910,7 +910,7 @@
       name: entrypoint-wrapper
     - name: cluster-profile
       secret:
-        secretName: cluster-secrets-aws-5
+        secretName: cluster-secrets-aws
     - name: test
       secret:
         secretName: test
@@ -1092,7 +1092,7 @@
       name: entrypoint-wrapper
     - name: cluster-profile
       secret:
-        secretName: cluster-secrets-aws-5
+        secretName: cluster-secrets-aws
     - name: test
       secret:
         secretName: test

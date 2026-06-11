@@ -214,11 +214,16 @@ func GetParamTyped[T any](params Parameters, name string) (T, error) {
 		return zero, err
 	}
 
+	got := "nil"
+	if raw != nil {
+		got = reflect.TypeOf(raw).String()
+	}
+
 	value, ok := raw.(T)
 	if !ok {
 		return zero, &ErrParamTypeMismatch{
 			want: reflect.TypeFor[T]().String(),
-			got:  reflect.TypeOf(raw).String(),
+			got:  got,
 		}
 	}
 

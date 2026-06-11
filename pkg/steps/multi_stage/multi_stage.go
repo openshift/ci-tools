@@ -2,6 +2,7 @@ package multi_stage
 
 import (
 	"context"
+	"errors"
 	"fmt"
 	"path"
 	"strings"
@@ -183,7 +184,7 @@ func newMultiStageTestStep(
 		name:                             testConfig.As,
 		additionalSuffix:                 targetAdditionalSuffix,
 		nodeName:                         nodeName,
-		profile:                          ms.ClusterProfileDetails,
+		profile:                          ms.ClusterProfileLiteral,
 		config:                           config,
 		params:                           params,
 		env:                              ms.Environment,
@@ -209,17 +210,11 @@ func newMultiStageTestStep(
 	return s
 }
 
-func (s *multiStageTestStep) profileSecretName() (string, error) {
-	if s.params == nil {
-		return "", nil
+func (s *multiStageTestStep) profileSecretName() string {
+	if s.profile != nil {
+		return s.profile.Secret
 	}
-
-	cpSecretName, err := s.params.GetString(api.ClusterProfileSecretNameParam)
-	if err != nil {
-		return "", fmt.Errorf("get param %s: %w", api.ClusterProfileSecretNameParam, err)
-	}
-
-	return cpSecretName, nil
+	return ""
 }
 
 func (s *multiStageTestStep) retrieveSTSRoleARNParams() error {
@@ -270,14 +265,14 @@ func (s *multiStageTestStep) Run(ctx context.Context) error {
 func (s *multiStageTestStep) run(ctx context.Context) error {
 	logrus.Infof("Running multi-stage test %s", s.name)
 
-	// FIXME: cluster profile
-	// clusterProfile, err := api.ClusterProfileFromParams(s.params)
-	// if err != nil {
-	// 	return fmt.Errorf("get cluster profile from parameters: %w", err)
-	// }
-	// if clusterProfile != "" {
-	// 	s.profile = clusterProfile
-	// }
+	clusterProfile, err := api.ClusterProfileFromParams(s.params)
+	if err != nil {
+		if !errors.Is(err, &api.ErrParamNotFound{}) {
+			return fmt.Errorf("get cluster profile from parameters: %w", err)
+		}
+	} else if clusterProfile != nil {
+		s.profile = clusterProfile
+	}
 
 	if err := s.retrieveSTSRoleARNParams(); err != nil {
 		return fmt.Errorf("retrieve STS role ARN params: %w", err)
@@ -475,10 +470,7 @@ func (s *multiStageTestStep) SubTests() []*junit.TestCase { return s.subTests }
 // namespace and to gather information used when generating the test pods.
 func (s *multiStageTestStep) getProfileData(ctx context.Context) error {
 	var secret coreapi.Secret
-	name, err := s.profileSecretName()
-	if err != nil {
-		return fmt.Errorf("get profile secret name: %w", err)
-	}
+	name := s.profileSecretName()
 	if err := s.client.Get(ctx, ctrlruntimeclient.ObjectKey{Namespace: s.jobSpec.Namespace(), Name: name}, &secret); err != nil {
 		return fmt.Errorf("could not get cluster profile secret %q: %w", name, err)
 	}

@@ -1765,7 +1765,7 @@ func TestGetClusterProfileNamesFromTargets(t *testing.T) {
 						{
 							As: "target-test-1",
 							MultiStageTestConfigurationLiteral: &api.MultiStageTestConfigurationLiteral{
-								ClusterProfileDetails: profile1,
+								ClusterProfileLiteral: profile1,
 							},
 						},
 					},
@@ -1782,13 +1782,13 @@ func TestGetClusterProfileNamesFromTargets(t *testing.T) {
 						{
 							As: "target-test-1",
 							MultiStageTestConfigurationLiteral: &api.MultiStageTestConfigurationLiteral{
-								ClusterProfileDetails: profile1,
+								ClusterProfileLiteral: profile1,
 							},
 						},
 						{
 							As: "target-test-2",
 							MultiStageTestConfigurationLiteral: &api.MultiStageTestConfigurationLiteral{
-								ClusterProfileDetails: profile2,
+								ClusterProfileLiteral: profile2,
 							},
 						},
 					},

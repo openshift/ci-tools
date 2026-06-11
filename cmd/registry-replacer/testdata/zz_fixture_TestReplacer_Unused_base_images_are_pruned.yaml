@@ -20,7 +20,7 @@ images:
 tests:
 - as: ""
   literal_steps:
-    cluster_profile_details: null
+    cluster_profile_literal: null
     test:
     - from: fresh_image
       resources: {}

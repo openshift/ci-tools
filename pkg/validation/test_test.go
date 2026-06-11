@@ -214,7 +214,7 @@ func TestValidateTests(t *testing.T) {
 				{
 					As: "test",
 					MultiStageTestConfigurationLiteral: &api.MultiStageTestConfigurationLiteral{
-						ClusterProfileDetails: &api.ClusterProfileDetails{
+						ClusterProfileLiteral: &api.ClusterProfileDetails{
 							Name: api.ClusterProfileGCP,
 						},
 					},

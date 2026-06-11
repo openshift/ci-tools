@@ -139,7 +139,10 @@ func (f fakeStepParams) GetString(key string) (string, error) {
 }
 
 func (f fakeStepParams) Get(key string) (any, error) {
-	v := f[key]
+	v, ok := f[key]
+	if !ok {
+		return nil, &api.ErrParamNotFound{}
+	}
 	return v, nil
 }
 
@@ -360,6 +363,7 @@ func TestRun(t *testing.T) {
 				namespace: func() string {
 					return ciOpNamespace
 				},
+				params:  fakeStepParams{},
 				wrapped: &stepNeedsLease{},
 				stepRun: &atomic.Bool{},
 			},
@@ -415,7 +419,7 @@ func TestIPPoolStepForward(t *testing.T) {
 		LeaseType:   "aws-quota-slice",
 		Secret:      "cluster-secrets-aws",
 	}
-	withIPPool := IPPoolStep(nil, nil, &step, nil, emptyNamespace, nil, cpAWS, "main")
+	withIPPool := IPPoolStep(nil, nil, &step, nil, emptyNamespace, nil, &cpAWS, "main")
 	t.Run("SubTests", func(t *testing.T) {
 		s, l := step.SubTests(), withIPPool.(SubtestReporter).SubTests()
 		if diff := cmp.Diff(s, l); diff != "" {

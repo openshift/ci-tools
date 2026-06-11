@@ -44,13 +44,13 @@ type leaseStep struct {
 	clusterProfileGetter ClusterProfileGetter
 
 	// for sending heartbeats during lease acquisition
-	namespace                func() string
-	clusterProfileSetName    string
-	clusterProfileName       string
-	clusterProfileSecretName string
-	stsHomeRoleARN           string
-	stsHubRoleARN            string
-	stsTargetRoleARN         string
+	namespace             func() string
+	clusterProfileSetName string
+	clusterProfileName    string
+	clusterProfile        *api.ClusterProfileDetails
+	stsHomeRoleARN        string
+	stsHubRoleARN         string
+	stsTargetRoleARN      string
 }
 
 func LeaseStep(client *lease.Client, leases []api.StepLease, wrapped api.Step, namespace func() string, metricsAgent *metrics.MetricsAgent,
@@ -95,9 +95,7 @@ func (s *leaseStep) Provides() api.ParameterMap {
 	// nolint:unparam
 	parameters[api.ClusterProfileSetEnv] = func() (any, error) { return s.clusterProfileSetName, nil }
 	// nolint:unparam
-	parameters[api.ClusterProfileParam] = func() (any, error) { return s.clusterProfileName, nil }
-	// nolint:unparam
-	parameters[api.ClusterProfileSecretNameParam] = func() (any, error) { return s.clusterProfileSecretName, nil }
+	parameters[api.ClusterProfileParam] = func() (any, error) { return s.clusterProfile, nil }
 	// nolint:unparam
 	parameters[api.STSHomeRoleARNParam] = func() (any, error) { return s.stsHomeRoleARN, nil }
 	// nolint:unparam
@@ -312,7 +310,7 @@ func (s *leaseStep) handleClusterProfile(ctx context.Context, l *stepLease, name
 		}
 	}
 
-	s.clusterProfileSecretName = cpDetails.Secret
+	s.clusterProfile = cpDetails
 	return nil
 }
 

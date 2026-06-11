@@ -158,7 +158,8 @@
     - emptyDir: {}
       name: entrypoint-wrapper
     - name: cluster-profile
-      secret: {}
+      secret:
+        secretName: cluster-secrets-aws
     - name: test
       secret:
         secretName: test
@@ -326,7 +327,8 @@
     - emptyDir: {}
       name: entrypoint-wrapper
     - name: cluster-profile
-      secret: {}
+      secret:
+        secretName: cluster-secrets-aws
     - name: test
       secret:
         secretName: test

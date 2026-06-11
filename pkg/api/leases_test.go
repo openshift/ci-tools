@@ -19,7 +19,7 @@ func TestLeasesForTest(t *testing.T) {
 		name: "cluster profile, lease",
 		tests: TestStepConfiguration{
 			MultiStageTestConfigurationLiteral: &MultiStageTestConfigurationLiteral{
-				ClusterProfileDetails: &ClusterProfileDetails{
+				ClusterProfileLiteral: &ClusterProfileDetails{
 					Name:        ClusterProfileAWS,
 					ClusterType: "aws",
 					LeaseType:   "aws-quota-slice",
@@ -71,7 +71,7 @@ func TestIPPoolLeaseForTest(t *testing.T) {
 		{
 			name: "aws",
 			tests: MultiStageTestConfigurationLiteral{
-				ClusterProfileDetails: &ClusterProfileDetails{
+				ClusterProfileLiteral: &ClusterProfileDetails{
 					Name:        ClusterProfileAWSUSEast1,
 					ClusterType: "aws",
 					LeaseType:   "aws-quota-slice",
@@ -88,7 +88,7 @@ func TestIPPoolLeaseForTest(t *testing.T) {
 		{
 			name: "other cluster profile",
 			tests: MultiStageTestConfigurationLiteral{
-				ClusterProfileDetails: &ClusterProfileDetails{
+				ClusterProfileLiteral: &ClusterProfileDetails{
 					Name:        ClusterProfileAWS2,
 					ClusterType: "aws",
 					LeaseType:   "aws-quota-slice",
@@ -99,7 +99,7 @@ func TestIPPoolLeaseForTest(t *testing.T) {
 		{
 			name: "aws, with 4.16 branch",
 			tests: MultiStageTestConfigurationLiteral{
-				ClusterProfileDetails: &ClusterProfileDetails{
+				ClusterProfileLiteral: &ClusterProfileDetails{
 					Name:        ClusterProfileAWSUSEast1,
 					ClusterType: "aws",
 					LeaseType:   "aws-quota-slice",
@@ -116,7 +116,7 @@ func TestIPPoolLeaseForTest(t *testing.T) {
 		{
 			name: "aws, but older release branch",
 			tests: MultiStageTestConfigurationLiteral{
-				ClusterProfileDetails: &ClusterProfileDetails{
+				ClusterProfileLiteral: &ClusterProfileDetails{
 					Name:        ClusterProfileAWSUSEast1,
 					ClusterType: "aws",
 					LeaseType:   "aws-quota-slice",
@@ -128,7 +128,7 @@ func TestIPPoolLeaseForTest(t *testing.T) {
 		{
 			name: "aws, with 5.0 branch (should be valid)",
 			tests: MultiStageTestConfigurationLiteral{
-				ClusterProfileDetails: &ClusterProfileDetails{
+				ClusterProfileLiteral: &ClusterProfileDetails{
 					Name:        ClusterProfileAWSUSEast1,
 					ClusterType: "aws",
 					LeaseType:   "aws-quota-slice",
@@ -145,7 +145,7 @@ func TestIPPoolLeaseForTest(t *testing.T) {
 		{
 			name: "aws, with openshift-5.0 branch (should be valid)",
 			tests: MultiStageTestConfigurationLiteral{
-				ClusterProfileDetails: &ClusterProfileDetails{
+				ClusterProfileLiteral: &ClusterProfileDetails{
 					Name:        ClusterProfileAWSUSEast1,
 					ClusterType: "aws",
 					LeaseType:   "aws-quota-slice",
@@ -162,7 +162,7 @@ func TestIPPoolLeaseForTest(t *testing.T) {
 		{
 			name: "aws, with 5.1 branch (should be valid)",
 			tests: MultiStageTestConfigurationLiteral{
-				ClusterProfileDetails: &ClusterProfileDetails{
+				ClusterProfileLiteral: &ClusterProfileDetails{
 					Name:        ClusterProfileAWSUSEast1,
 					ClusterType: "aws",
 					LeaseType:   "aws-quota-slice",
@@ -179,7 +179,7 @@ func TestIPPoolLeaseForTest(t *testing.T) {
 	}
 	for _, tc := range testCases {
 		t.Run(tc.name, func(t *testing.T) {
-			ret := IPPoolLeaseForTest(tc.tests.ClusterProfileDetails.Name, tc.metadata.Branch)
+			ret := IPPoolLeaseForTest(tc.tests.ClusterProfileLiteral.Name, tc.metadata.Branch)
 			if diff := cmp.Diff(tc.expected, ret); diff != "" {
 				t.Errorf("incorrect lease returned, diff: %s", diff)
 			}

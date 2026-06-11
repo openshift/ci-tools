@@ -1207,12 +1207,8 @@ func LeaseTypeFromClusterType(t string) (string, error) {
 	}
 }
 
-func ClusterProfileFromParams(params Parameters) (ClusterProfile, error) {
-	if params == nil {
-		return "", nil
-	}
-	cp, err := params.GetString(ClusterProfileParam)
-	return ClusterProfile(cp), err
+func ClusterProfileFromParams(params Parameters) (*ClusterProfileDetails, error) {
+	return GetParamTyped[*ClusterProfileDetails](params, ClusterProfileParam)
 }
 
 type ClusterProfileKonfluxConfig struct {

@@ -313,4 +313,16 @@ func TestGetParamTyped(t *testing.T) {
 	if err == nil || !errors.Is(err, &ErrParamNotFound{}) {
 		t.Errorf("want error %T but got: %T", &ErrParamNotFound{}, err)
 	}
+
+	// Handle untyped nil
+	params = &DeferredParameters{values: map[string]any{"foo": nil}}
+
+	gotValueDefStr, err := GetParamTyped[string](params, "foo")
+	if err != nil {
+		t.Errorf("get untyped nil - unexpected error: %s", err)
+	}
+
+	if gotValueDefStr != "" {
+		t.Errorf("want \"\" but got: %v", gotValueDefStr)
+	}
 }

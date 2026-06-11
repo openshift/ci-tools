@@ -214,16 +214,18 @@ func GetParamTyped[T any](params Parameters, name string) (T, error) {
 		return zero, err
 	}
 
-	got := "nil"
-	if raw != nil {
-		got = reflect.TypeOf(raw).String()
+	// The param exists but it's untyped: we have an untyped nil here.
+	// Return the zero of T since we have now way to compare T's type
+	// with an untyped nil.
+	if raw == nil {
+		return zero, nil
 	}
 
 	value, ok := raw.(T)
 	if !ok {
 		return zero, &ErrParamTypeMismatch{
 			want: reflect.TypeFor[T]().String(),
-			got:  got,
+			got:  reflect.TypeOf(raw).String(),
 		}
 	}
 

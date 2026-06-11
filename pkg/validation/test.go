@@ -448,17 +448,17 @@ func validateTestStepDependencies(config *api.ReleaseBuildConfiguration) []error
 	return errs
 }
 
-func (v *Validator) validateClusterProfile(fieldRoot string, p api.ClusterProfile, test string, metadata *api.Metadata) []error {
+func (v *Validator) validateClusterProfile(fieldRoot string, profileName string, test string, metadata *api.Metadata) []error {
 	if v.validClusterProfiles != nil {
-		if _, ok := v.validClusterProfiles[p]; ok {
-			if err := verifyClusterProfileOwnership(v.validClusterProfiles[p], metadata); err != nil {
+		if _, ok := v.validClusterProfiles[api.ClusterProfile(profileName)]; ok {
+			if err := verifyClusterProfileOwnership(v.validClusterProfiles[api.ClusterProfile(profileName)], metadata); err != nil {
 				return []error{err}
 			}
 		}
 	}
 
-	if !slices.Contains(api.ClusterProfiles(), p) {
-		return []error{fmt.Errorf("%s: invalid cluster profile %q", fieldRoot, p)}
+	if !slices.Contains(api.ClusterProfiles(), api.ClusterProfile(profileName)) {
+		return []error{fmt.Errorf("%s: invalid cluster profile %q", fieldRoot, profileName)}
 	}
 
 	if metadata == nil {
@@ -466,8 +466,8 @@ func (v *Validator) validateClusterProfile(fieldRoot string, p api.ClusterProfil
 	}
 
 	if !v.cpsDetails.IsTestAllowlisted(test, *metadata) {
-		if set, ok := v.cpsDetails.FindSetByProfile(p); ok {
-			return []error{fmt.Errorf("%s: invalid cluster profile %q, use the cluster profile set %q instead", fieldRoot, p, set)}
+		if set, ok := v.cpsDetails.FindSetByProfile(profileName); ok {
+			return []error{fmt.Errorf("%s: invalid cluster profile %q, use the cluster profile set %q instead", fieldRoot, profileName, set)}
 		}
 	}
 
@@ -622,7 +622,7 @@ func (v *Validator) validateTestConfigurationType(
 		typeCount++
 		if testConfig.ClusterProfile != "" {
 			clusterCount++
-			validationErrors = append(validationErrors, v.validateClusterProfile(fieldRoot, testConfig.ClusterProfile, test.As, metadata)...)
+			validationErrors = append(validationErrors, v.validateClusterProfile(fieldRoot, string(testConfig.ClusterProfile), test.As, metadata)...)
 		}
 		context := newContext(fieldPath(fieldRoot), testConfig.Environment, releases, inputImagesSeen)
 		validationErrors = append(validationErrors, validateLeases(context.addField("leases"), testConfig.Leases)...)
@@ -636,9 +636,9 @@ func (v *Validator) validateTestConfigurationType(
 	if testConfig := test.MultiStageTestConfigurationLiteral; testConfig != nil {
 		typeCount++
 		context := newContext(fieldPath(fieldRoot).addField("steps"), testConfig.Environment, releases, inputImagesSeen)
-		if testConfig.ClusterProfile != "" {
+		if testConfig.ClusterProfileLiteral != nil {
 			clusterCount++
-			validationErrors = append(validationErrors, v.validateClusterProfile(fieldRoot, testConfig.ClusterProfile, test.As, metadata)...)
+			validationErrors = append(validationErrors, v.validateClusterProfile(fieldRoot, string(testConfig.ClusterProfileLiteral.Name), test.As, metadata)...)
 		}
 		validationErrors = append(validationErrors, validateLeases(context.addField("leases"), testConfig.Leases)...)
 		for i, s := range testConfig.Pre {

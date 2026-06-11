@@ -217,14 +217,15 @@ func (r RehearsalConfig) createResolver(candidatePath string) (registry.Resolver
 	var chains registry.ChainByName
 	var workflows registry.WorkflowByName
 	var observers registry.ObserverByName
+	var clusterProfiles api.ClusterProfilesMap
 	if !r.NoRegistry {
 		var err error
-		registryRefs, chains, workflows, _, _, _, observers, err = load.Registry(filepath.Join(candidatePath, config.RegistryPath), load.RegistryFlag(0))
+		registryRefs, chains, workflows, clusterProfiles, _, _, observers, err = load.Registry(filepath.Join(candidatePath, config.RegistryPath), load.RegistryFlag(0))
 		if err != nil {
 			return nil, fmt.Errorf("could not load step registry: %w", err)
 		}
 	}
-	resolver := registry.NewResolver(registryRefs, chains, workflows, observers)
+	resolver := registry.NewResolver(registryRefs, chains, workflows, observers, clusterProfiles)
 	return resolver, nil
 }
 

@@ -24,8 +24,8 @@ type ObserverByName map[string]api.Observer
 // Validate verifies the internal consistency of steps, chains, and workflows.
 // A superset of this validation is performed later when actual test
 // configurations are resolved.
-func Validate(stepsByName ReferenceByName, chainsByName ChainByName, workflowsByName WorkflowByName, observersByName ObserverByName) error {
-	reg := registry{stepsByName, chainsByName, workflowsByName, observersByName}
+func Validate(stepsByName ReferenceByName, chainsByName ChainByName, workflowsByName WorkflowByName, observersByName ObserverByName, clusterProfiles api.ClusterProfilesMap) error {
+	reg := registry{stepsByName, chainsByName, workflowsByName, observersByName, clusterProfiles}
 	var ret []error
 	for k := range chainsByName {
 		if _, err := reg.process([]api.TestStep{{Chain: &k}}, sets.New[string](), stackForChain()); err != nil {
@@ -55,14 +55,16 @@ type registry struct {
 	chainsByName    ChainByName
 	workflowsByName WorkflowByName
 	observersByName ObserverByName
+	clusterProfiles api.ClusterProfilesMap
 }
 
-func NewResolver(stepsByName ReferenceByName, chainsByName ChainByName, workflowsByName WorkflowByName, observersByName ObserverByName) Resolver {
+func NewResolver(stepsByName ReferenceByName, chainsByName ChainByName, workflowsByName WorkflowByName, observersByName ObserverByName, clusterProfiles api.ClusterProfilesMap) Resolver {
 	return &registry{
 		stepsByName:     stepsByName,
 		chainsByName:    chainsByName,
 		workflowsByName: workflowsByName,
 		observersByName: observersByName,
+		clusterProfiles: clusterProfiles,
 	}
 }
 
@@ -131,11 +133,19 @@ func (r *registry) resolveTest(
 ) (api.MultiStageTestConfigurationLiteral, error) {
 	var resolveErrors []error
 	expandedFlow := api.MultiStageTestConfigurationLiteral{
-		ClusterProfile:           config.ClusterProfile,
 		AllowSkipOnSuccess:       config.AllowSkipOnSuccess,
 		AllowBestEffortPostSteps: config.AllowBestEffortPostSteps,
 		Leases:                   config.Leases,
 		DependencyOverrides:      config.DependencyOverrides,
+	}
+
+	if config.ClusterProfile != "" {
+		profileDetails, ok := r.resolveClusterProfile(string(config.ClusterProfile))
+		if !ok {
+			resolveErrors = append(resolveErrors, fmt.Errorf("cluster profile %s is not defined", string(config.ClusterProfile)))
+		} else {
+			expandedFlow.ClusterProfileLiteral = &profileDetails
+		}
 	}
 
 	stack.setNodeArchitectureOverrides(config.NodeArchitectureOverrides)
@@ -391,6 +401,11 @@ func (r *registry) iterateSteps(s api.TestStep, f func(*api.LiteralTestStep)) er
 		f(s.LiteralTestStep)
 	}
 	return nil
+}
+
+func (r *registry) resolveClusterProfile(profileName string) (api.ClusterProfileDetails, bool) {
+	profileDetails, ok := r.clusterProfiles[api.ClusterProfile(profileName)]
+	return profileDetails, ok
 }
 
 // ResolveConfig uses a resolver to resolve an entire ci-operator config

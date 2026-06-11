@@ -109,7 +109,7 @@ type multiStageTestStep struct {
 	name             string
 	additionalSuffix string
 	nodeName         string
-	profile          api.ClusterProfile
+	profile          *api.ClusterProfileDetails
 	config           *api.ReleaseBuildConfiguration
 	// params exposes getters for variables created by other steps
 	params                           api.Parameters
@@ -183,7 +183,7 @@ func newMultiStageTestStep(
 		name:                             testConfig.As,
 		additionalSuffix:                 targetAdditionalSuffix,
 		nodeName:                         nodeName,
-		profile:                          ms.ClusterProfile,
+		profile:                          ms.ClusterProfileLiteral,
 		config:                           config,
 		params:                           params,
 		env:                              ms.Environment,
@@ -270,19 +270,20 @@ func (s *multiStageTestStep) Run(ctx context.Context) error {
 func (s *multiStageTestStep) run(ctx context.Context) error {
 	logrus.Infof("Running multi-stage test %s", s.name)
 
-	clusterProfile, err := api.ClusterProfileFromParams(s.params)
-	if err != nil {
-		return fmt.Errorf("get cluster profile from parameters: %w", err)
-	}
-	if clusterProfile != "" {
-		s.profile = clusterProfile
-	}
+	// FIXME: cluster profile
+	// clusterProfile, err := api.ClusterProfileFromParams(s.params)
+	// if err != nil {
+	// 	return fmt.Errorf("get cluster profile from parameters: %w", err)
+	// }
+	// if clusterProfile != "" {
+	// 	s.profile = clusterProfile
+	// }
 
 	if err := s.retrieveSTSRoleARNParams(); err != nil {
 		return fmt.Errorf("retrieve STS role ARN params: %w", err)
 	}
 
-	if s.profile != "" {
+	if s.profile != nil {
 		if err := s.getProfileData(ctx); err != nil {
 			return err
 		}
@@ -440,7 +441,7 @@ func (s *multiStageTestStep) Requires() (ret []api.StepLink) {
 			ret = append(ret, api.LinkForImage(imageStream, name))
 		}
 	}
-	if s.profile != "" {
+	if s.profile != nil {
 		needsReleasePayload = true
 		for _, env := range envForProfile {
 			if link, ok := utils.LinkForEnv(env); ok {
@@ -550,7 +551,7 @@ func (s *multiStageTestStep) environment() ([]coreapi.EnvVar, error) {
 		}
 	}
 
-	if s.profile != "" {
+	if s.profile != nil {
 		for _, e := range envForProfile {
 			val, err := s.params.Get(e)
 			if err != nil {

@@ -82,7 +82,12 @@ func TestGeneratePods(t *testing.T) {
 				Tests: []api.TestStepConfiguration{{
 					As: "test",
 					MultiStageTestConfigurationLiteral: &api.MultiStageTestConfigurationLiteral{
-						ClusterProfile: api.ClusterProfileAWS,
+						ClusterProfileLiteral: &api.ClusterProfileDetails{
+							Name:        api.ClusterProfileAWS,
+							ClusterType: "aws",
+							LeaseType:   "aws-quota-slice",
+							Secret:      "cluster-secrets-aws",
+						},
 						Test: []api.LiteralTestStep{{
 							As: "step0", From: "src", Commands: "command0",
 							Timeout:     &prowapi.Duration{Duration: time.Hour},
@@ -170,7 +175,12 @@ func TestGeneratePods(t *testing.T) {
 				Tests: []api.TestStepConfiguration{{
 					As: "e2e-aws",
 					MultiStageTestConfigurationLiteral: &api.MultiStageTestConfigurationLiteral{
-						ClusterProfile: api.ClusterProfileAWS,
+						ClusterProfileLiteral: &api.ClusterProfileDetails{
+							Name:        api.ClusterProfileAWS,
+							ClusterType: "aws",
+							LeaseType:   "aws-quota-slice",
+							Secret:      "cluster-secrets-aws",
+						},
 						Test: []api.LiteralTestStep{{
 							As: "step0", From: "src", Commands: "command0",
 							Timeout:     &prowapi.Duration{Duration: time.Hour},
@@ -226,7 +236,12 @@ func TestGenerateObservers(t *testing.T) {
 		Tests: []api.TestStepConfiguration{{
 			As: "test",
 			MultiStageTestConfigurationLiteral: &api.MultiStageTestConfigurationLiteral{
-				ClusterProfile: api.ClusterProfileAWS,
+				ClusterProfileLiteral: &api.ClusterProfileDetails{
+					Name:        api.ClusterProfileAWS,
+					ClusterType: "aws",
+					LeaseType:   "aws-quota-slice",
+					Secret:      "cluster-secrets-aws",
+				},
 				Test: []api.LiteralTestStep{{
 					As: "step0", From: "src", Commands: "command0",
 				}},

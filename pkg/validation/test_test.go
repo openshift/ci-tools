@@ -214,7 +214,9 @@ func TestValidateTests(t *testing.T) {
 				{
 					As: "test",
 					MultiStageTestConfigurationLiteral: &api.MultiStageTestConfigurationLiteral{
-						ClusterProfile: api.ClusterProfileGCP,
+						ClusterProfileLiteral: &api.ClusterProfileDetails{
+							Name: api.ClusterProfileGCP,
+						},
 					},
 				},
 			},
@@ -2515,7 +2517,7 @@ func TestValidateClusterProfiles(t *testing.T) {
 			t.Parallel()
 
 			v := NewValidator(tc.clusterProfilesMap, nil, WithClusterProfileSetDetails(tc.cpsDetails))
-			gotErrs := v.validateClusterProfile("foo", tc.clusterProfile, tc.testName, tc.metadata)
+			gotErrs := v.validateClusterProfile("foo", string(tc.clusterProfile), tc.testName, tc.metadata)
 
 			wantErrMsg := "<nil>"
 			if tc.wantErrs != nil {

@@ -34,8 +34,13 @@ func TestRequires(t *testing.T) {
 	}{{
 		name: "step has a cluster profile and requires a release image, should not have ReleaseImagesLink",
 		steps: api.MultiStageTestConfigurationLiteral{
-			ClusterProfile: api.ClusterProfileAWS,
-			Test:           []api.LiteralTestStep{{From: "from-release"}},
+			ClusterProfileLiteral: &api.ClusterProfileDetails{
+				Name:        api.ClusterProfileAWS,
+				ClusterType: "aws",
+				LeaseType:   "aws-quota-slice",
+				Secret:      "cluster-secrets-aws",
+			},
+			Test: []api.LiteralTestStep{{From: "from-release"}},
 		},
 		req: []api.StepLink{
 			api.ReleasePayloadImageLink(api.LatestReleaseName),

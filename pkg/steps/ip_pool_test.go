@@ -394,7 +394,13 @@ func TestRun(t *testing.T) {
 
 func TestIPPoolStepForward(t *testing.T) {
 	step := stepNeedsLease{}
-	withIPPool := IPPoolStep(nil, nil, &step, nil, emptyNamespace, nil, api.ClusterProfileAWS, "main")
+	cpAWS := api.ClusterProfileDetails{
+		Name:        api.ClusterProfileAWS,
+		ClusterType: "aws",
+		LeaseType:   "aws-quota-slice",
+		Secret:      "cluster-secrets-aws",
+	}
+	withIPPool := IPPoolStep(nil, nil, &step, nil, emptyNamespace, nil, cpAWS, "main")
 	t.Run("SubTests", func(t *testing.T) {
 		s, l := step.SubTests(), withIPPool.(SubtestReporter).SubTests()
 		if diff := cmp.Diff(s, l); diff != "" {

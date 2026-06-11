@@ -2527,11 +2527,11 @@ func (o *options) loadConfig(info *api.Metadata, gcsReader gcsFileReader) (*api.
 		return nil, fmt.Errorf("invalid configuration: %w\nvalue:\n%s", err, raw)
 	}
 	if o.registryPath != "" {
-		refs, chains, workflows, _, _, _, observers, err := load.Registry(o.registryPath, load.RegistryFlag(0))
+		refs, chains, workflows, clusterProfiles, _, _, observers, err := load.Registry(o.registryPath, load.RegistryFlag(0))
 		if err != nil {
 			return nil, fmt.Errorf("failed to load registry: %w", err)
 		}
-		configSpec, err = registry.ResolveConfig(registry.NewResolver(refs, chains, workflows, observers), configSpec)
+		configSpec, err = registry.ResolveConfig(registry.NewResolver(refs, chains, workflows, observers, clusterProfiles), configSpec)
 		if err != nil {
 			return nil, fmt.Errorf("failed to resolve configuration: %w", err)
 		}

@@ -1748,6 +1748,9 @@ func TestHandleTargetAdditionalSuffix(t *testing.T) {
 }
 
 func TestGetClusterProfileNamesFromTargets(t *testing.T) {
+	profile1 := &api.ClusterProfileDetails{Name: "profile1"}
+	profile2 := &api.ClusterProfileDetails{Name: "profile2"}
+
 	testCases := []struct {
 		name                 string
 		options              *options
@@ -1762,7 +1765,7 @@ func TestGetClusterProfileNamesFromTargets(t *testing.T) {
 						{
 							As: "target-test-1",
 							MultiStageTestConfigurationLiteral: &api.MultiStageTestConfigurationLiteral{
-								ClusterProfile: "profile1",
+								ClusterProfileLiteral: profile1,
 							},
 						},
 					},
@@ -1779,13 +1782,13 @@ func TestGetClusterProfileNamesFromTargets(t *testing.T) {
 						{
 							As: "target-test-1",
 							MultiStageTestConfigurationLiteral: &api.MultiStageTestConfigurationLiteral{
-								ClusterProfile: "profile1",
+								ClusterProfileLiteral: profile1,
 							},
 						},
 						{
 							As: "target-test-2",
 							MultiStageTestConfigurationLiteral: &api.MultiStageTestConfigurationLiteral{
-								ClusterProfile: "profile2",
+								ClusterProfileLiteral: profile2,
 							},
 						},
 					},

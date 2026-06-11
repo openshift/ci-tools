@@ -137,11 +137,11 @@ func (o *options) loadResolver(path string) error {
 	if path == "" {
 		return nil
 	}
-	refs, chains, workflows, _, _, _, observers, err := load.Registry(path, load.RegistryFlag(0))
+	refs, chains, workflows, clusterProfiles, _, _, observers, err := load.Registry(path, load.RegistryFlag(0))
 	if err != nil {
 		return err
 	}
-	o.resolver = registry.NewResolver(refs, chains, workflows, observers)
+	o.resolver = registry.NewResolver(refs, chains, workflows, observers, clusterProfiles)
 	return nil
 }
 

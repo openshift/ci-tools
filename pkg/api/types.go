@@ -929,8 +929,9 @@ func (config TestStepConfiguration) IsPeriodic() bool {
 // GetClusterProfileName returns the cluster profile name if it's set
 func (config TestStepConfiguration) GetClusterProfileName() string {
 	switch {
-	case config.MultiStageTestConfigurationLiteral != nil:
-		return config.MultiStageTestConfigurationLiteral.ClusterProfile.Name()
+	case config.MultiStageTestConfigurationLiteral != nil &&
+		config.MultiStageTestConfigurationLiteral.ClusterProfileLiteral != nil:
+		return string(config.MultiStageTestConfigurationLiteral.ClusterProfileLiteral.Name)
 	case config.MultiStageTestConfiguration != nil:
 		return config.MultiStageTestConfiguration.ClusterProfile.Name()
 	default:
@@ -1308,8 +1309,8 @@ type DependencyOverrides map[string]string
 // references. It is the type that MultiStageTestConfigurations are converted to when parsed by the
 // ci-operator-configresolver.
 type MultiStageTestConfigurationLiteral struct {
-	// ClusterProfile defines the profile/cloud provider for end-to-end test steps.
-	ClusterProfile ClusterProfile `json:"cluster_profile"`
+	// ClusterProfileLiteral defines the profile/cloud provider for end-to-end test steps.
+	ClusterProfileLiteral *ClusterProfileDetails `json:"literal_cluster_profile"`
 	// Pre is the array of test steps run to set up the environment for the test.
 	Pre []LiteralTestStep `json:"pre,omitempty"`
 	// Test is the array of test steps that define the actual test.

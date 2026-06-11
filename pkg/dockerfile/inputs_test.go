@@ -166,6 +166,50 @@ RUN echo "hello"
 			},
 		},
 		{
+			name: "RUN podman pull registry.ci reference",
+			dockerfile: `FROM registry.access.redhat.com/ubi9/ubi-minimal:latest
+RUN podman pull registry.ci.openshift.org/ocp/4.19:tools && cp bin/tool /usr/bin/tool
+`,
+			expected: map[string]api.ImageStreamTagReference{
+				"ocp_4.19_tools": {
+					Namespace: "ocp",
+					Name:      "4.19",
+					Tag:       "tools",
+					As:        "registry.ci.openshift.org/ocp/4.19:tools",
+				},
+			},
+		},
+		{
+			name: "RUN podman pull with line continuation",
+			dockerfile: `FROM registry.access.redhat.com/ubi9/ubi-minimal:latest
+RUN podman pull \
+    registry.ci.openshift.org/ocp/4.19:tools && cp bin/tool /usr/bin/tool
+`,
+			expected: map[string]api.ImageStreamTagReference{
+				"ocp_4.19_tools": {
+					Namespace: "ocp",
+					Name:      "4.19",
+					Tag:       "tools",
+					As:        "registry.ci.openshift.org/ocp/4.19:tools",
+				},
+			},
+		},
+		{
+			name: "from: ubi with external final stage keeps builder registry.ci FROM",
+			dockerfile: `FROM registry.ci.openshift.org/ocp/builder:rhel-9-golang-1.22-openshift-4.18 AS builder
+FROM registry.access.redhat.com/ubi9/ubi-minimal:latest
+`,
+			from: "ubi",
+			expected: map[string]api.ImageStreamTagReference{
+				"ocp_builder_rhel-9-golang-1.22-openshift-4.18": {
+					Namespace: "ocp",
+					Name:      "builder",
+					Tag:       "rhel-9-golang-1.22-openshift-4.18",
+					As:        "registry.ci.openshift.org/ocp/builder:rhel-9-golang-1.22-openshift-4.18",
+				},
+			},
+		},
+		{
 			name: "from: is specified - should exclude the last detected FROM ref with COPY",
 			dockerfile: `FROM registry.ci.openshift.org/ocp/4.18:base AS builder
 FROM registry.ci.openshift.org/openshift/release:rhel-9-release-golang-1.24-openshift-4.21

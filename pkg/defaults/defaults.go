@@ -155,7 +155,7 @@ func fromConfig(ctx context.Context, cfg *Config) ([]api.Step, []api.Step, error
 			}
 			var source releasesteps.ReleaseSource
 			if env := utils.ReleaseImageEnv(resolveConfig.Name); cfg.params.HasInput(env) {
-				value, err = cfg.params.Get(env)
+				value, err = cfg.params.GetString(env)
 				if err != nil {
 					return nil, nil, results.ForReason("resolving_release").ForError(fmt.Errorf("failed to get %q parameter: %w", env, err))
 				}
@@ -250,7 +250,7 @@ func fromConfig(ctx context.Context, cfg *Config) ([]api.Step, []api.Step, error
 					referencePolicy = *rawStep.ReleaseImagesTagStepConfiguration.ReferencePolicy
 				}
 				if cfg.params.HasInput(envVar) {
-					pullSpec, err := cfg.params.Get(envVar)
+					pullSpec, err := cfg.params.GetString(envVar)
 					if err != nil {
 						return nil, nil, results.ForReason("reading_release").ForError(fmt.Errorf("failed to read input release pullSpec %s: %w", name, err))
 					}
@@ -368,7 +368,7 @@ func stepForTest(cfg *Config, inputImages inputImageSet, c *api.TestStepConfigur
 		step := multi_stage.MultiStageTestStep(*c, cfg.CIConfig, params, cfg.podClient, cfg.JobSpec, leases, cfg.NodeName, cfg.TargetAdditionalSuffix, nil, cfg.GSMConfig != nil, cfg.GSMConfig, isLeaseProxyServerAvailable(cfg), retry.DefaultRetry)
 
 		if len(leases) != 0 {
-			step = steps.IPPoolStep(cfg.LeaseClient, cfg.podClient, step, params, cfg.JobSpec.Namespace, cfg.MetricsAgent, test.ClusterProfile, cfg.CIConfig.Metadata.Branch)
+			step = steps.IPPoolStep(cfg.LeaseClient, cfg.podClient, step, params, cfg.JobSpec.Namespace, cfg.MetricsAgent, test.ClusterProfileLiteral, cfg.CIConfig.Metadata.Branch)
 			step = steps.LeaseStep(cfg.LeaseClient, leases, step, cfg.JobSpec.Namespace, cfg.MetricsAgent, cfg.kubeClient, cfg.ClusterProfileGetter)
 		}
 
@@ -1094,7 +1094,7 @@ func paramsHasAllParametersAsInput(p api.Parameters, params map[string]func() (a
 		if values == nil {
 			values = make(map[string]string)
 		}
-		v, err := p.Get(k)
+		v, err := p.GetString(k)
 		if err != nil {
 			return nil, false
 		}

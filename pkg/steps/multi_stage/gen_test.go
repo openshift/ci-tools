@@ -82,7 +82,12 @@ func TestGeneratePods(t *testing.T) {
 				Tests: []api.TestStepConfiguration{{
 					As: "test",
 					MultiStageTestConfigurationLiteral: &api.MultiStageTestConfigurationLiteral{
-						ClusterProfile: api.ClusterProfileAWS,
+						ClusterProfileLiteral: &api.ClusterProfileLiteral{
+							Name:        "aws",
+							ClusterType: "aws",
+							LeaseType:   "aws-quota-slice",
+							Secret:      "cluster-secrets-aws",
+						},
 						Test: []api.LiteralTestStep{{
 							As: "step0", From: "src", Commands: "command0",
 							Timeout:     &prowapi.Duration{Duration: time.Hour},
@@ -121,8 +126,8 @@ func TestGeneratePods(t *testing.T) {
 			}},
 			paramsFunc: func() api.Parameters {
 				params := api.NewDeferredParameters(nil)
-				params.Add(api.ClusterProfileSecretNameParam, func() (any, error) {
-					return "cluster-secrets-aws-5", nil
+				params.Add(api.ClusterProfileParam, func() (any, error) {
+					return &api.ClusterProfileDetails{Secret: "cluster-secrets-aws-5"}, nil
 				})
 				return params
 			},
@@ -170,7 +175,12 @@ func TestGeneratePods(t *testing.T) {
 				Tests: []api.TestStepConfiguration{{
 					As: "e2e-aws",
 					MultiStageTestConfigurationLiteral: &api.MultiStageTestConfigurationLiteral{
-						ClusterProfile: api.ClusterProfileAWS,
+						ClusterProfileLiteral: &api.ClusterProfileLiteral{
+							Name:        "aws",
+							ClusterType: "aws",
+							LeaseType:   "aws-quota-slice",
+							Secret:      "cluster-secrets-aws",
+						},
 						Test: []api.LiteralTestStep{{
 							As: "step0", From: "src", Commands: "command0",
 							Timeout:     &prowapi.Duration{Duration: time.Hour},
@@ -186,8 +196,8 @@ func TestGeneratePods(t *testing.T) {
 			},
 			paramsFunc: func() api.Parameters {
 				params := api.NewDeferredParameters(nil)
-				params.Add(api.ClusterProfileSecretNameParam, func() (any, error) {
-					return "cluster-secrets-aws-5", nil
+				params.Add(api.ClusterProfileParam, func() (any, error) {
+					return &api.ClusterProfileDetails{Secret: "cluster-secrets-aws-5"}, nil
 				})
 				return params
 			},
@@ -226,7 +236,12 @@ func TestGenerateObservers(t *testing.T) {
 		Tests: []api.TestStepConfiguration{{
 			As: "test",
 			MultiStageTestConfigurationLiteral: &api.MultiStageTestConfigurationLiteral{
-				ClusterProfile: api.ClusterProfileAWS,
+				ClusterProfileLiteral: &api.ClusterProfileLiteral{
+					Name:        "aws",
+					ClusterType: "aws",
+					LeaseType:   "aws-quota-slice",
+					Secret:      "cluster-secrets-aws",
+				},
 				Test: []api.LiteralTestStep{{
 					As: "step0", From: "src", Commands: "command0",
 				}},
@@ -349,7 +364,7 @@ func TestGeneratePodsEnvironment(t *testing.T) {
 					Test:        test,
 					Environment: tc.env,
 				},
-			}, &api.ReleaseBuildConfiguration{}, nil, nil, &jobSpec, nil, "node-name", "", nil, false, nil, false, wait.Backoff{})
+			}, &api.ReleaseBuildConfiguration{}, fakeStepParams{}, nil, &jobSpec, nil, "node-name", "", nil, false, nil, false, wait.Backoff{})
 			pods, _, err := step.(*multiStageTestStep).generatePods(test, nil, nil, nil, nil)
 			if err != nil {
 				t.Fatal(err)

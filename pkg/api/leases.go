@@ -10,12 +10,12 @@ import (
 // unique values.
 func LeasesForTest(test *TestStepConfiguration) (ret []StepLease) {
 	multiStageTest := test.MultiStageTestConfigurationLiteral
-	if p := multiStageTest.ClusterProfile; p != "" {
+	if p := multiStageTest.ClusterProfileLiteral; p != nil {
 		ret = append(ret, StepLease{
-			ResourceType:   p.LeaseType(),
+			ResourceType:   p.LeaseType,
 			Env:            DefaultLeaseEnv,
 			Count:          1,
-			ClusterProfile: multiStageTest.ClusterProfile.Name(),
+			ClusterProfile: p,
 		})
 	}
 	for _, step := range append(multiStageTest.Pre, append(multiStageTest.Test, multiStageTest.Post...)...) {

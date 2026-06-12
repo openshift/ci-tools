@@ -113,7 +113,7 @@ func TestProvides(t *testing.T) {
 	}
 }
 
-type fakeStepParams map[string]string
+type fakeStepParams map[string]any
 
 func (f fakeStepParams) Has(key string) bool {
 	_, ok := f[key]
@@ -124,8 +124,26 @@ func (f fakeStepParams) HasInput(_ string) bool {
 	panic("This should not be used")
 }
 
-func (f fakeStepParams) Get(key string) (string, error) {
-	return f[key], nil
+func (f fakeStepParams) GetString(key string) (string, error) {
+	v, ok := f[key]
+	if !ok {
+		return "", nil
+	}
+
+	vStr, ok := v.(string)
+	if !ok {
+		return "", nil
+	}
+
+	return vStr, nil
+}
+
+func (f fakeStepParams) Get(key string) (any, error) {
+	v, ok := f[key]
+	if !ok {
+		return nil, &api.ErrParamNotFound{}
+	}
+	return v, nil
 }
 
 // blockingStep sleeps for 5 seconds to allow testing of the release of unused ip-pool leases
@@ -345,6 +363,7 @@ func TestRun(t *testing.T) {
 				namespace: func() string {
 					return ciOpNamespace
 				},
+				params:  fakeStepParams{},
 				wrapped: &stepNeedsLease{},
 				stepRun: &atomic.Bool{},
 			},
@@ -394,7 +413,13 @@ func TestRun(t *testing.T) {
 
 func TestIPPoolStepForward(t *testing.T) {
 	step := stepNeedsLease{}
-	withIPPool := IPPoolStep(nil, nil, &step, nil, emptyNamespace, nil, api.ClusterProfileAWS, "main")
+	cpAWS := api.ClusterProfileLiteral{
+		Name:        "aws",
+		ClusterType: "aws",
+		LeaseType:   "aws-quota-slice",
+		Secret:      "cluster-secrets-aws",
+	}
+	withIPPool := IPPoolStep(nil, nil, &step, nil, emptyNamespace, nil, &cpAWS, "main")
 	t.Run("SubTests", func(t *testing.T) {
 		s, l := step.SubTests(), withIPPool.(SubtestReporter).SubTests()
 		if diff := cmp.Diff(s, l); diff != "" {

@@ -34,8 +34,13 @@ func TestRequires(t *testing.T) {
 	}{{
 		name: "step has a cluster profile and requires a release image, should not have ReleaseImagesLink",
 		steps: api.MultiStageTestConfigurationLiteral{
-			ClusterProfile: api.ClusterProfileAWS,
-			Test:           []api.LiteralTestStep{{From: "from-release"}},
+			ClusterProfileLiteral: &api.ClusterProfileLiteral{
+				Name:        "aws",
+				ClusterType: "aws",
+				LeaseType:   "aws-quota-slice",
+				Secret:      "cluster-secrets-aws",
+			},
+			Test: []api.LiteralTestStep{{From: "from-release"}},
 		},
 		req: []api.StepLink{
 			api.ReleasePayloadImageLink(api.LatestReleaseName),
@@ -326,7 +331,7 @@ func TestAddCredentialsToCensoring(t *testing.T) {
 	}
 }
 
-type fakeStepParams map[string]string
+type fakeStepParams map[string]any
 
 func (f fakeStepParams) Has(key string) bool {
 	_, ok := f[key]
@@ -337,8 +342,26 @@ func (f fakeStepParams) HasInput(_ string) bool {
 	panic("This should not be used")
 }
 
-func (f fakeStepParams) Get(key string) (string, error) {
-	return f[key], nil
+func (f fakeStepParams) GetString(key string) (string, error) {
+	v, ok := f[key]
+	if !ok {
+		return "", nil
+	}
+
+	vStr, ok := v.(string)
+	if !ok {
+		return "", nil
+	}
+
+	return vStr, nil
+}
+
+func (f fakeStepParams) Get(key string) (any, error) {
+	v, ok := f[key]
+	if !ok {
+		return nil, &api.ErrParamNotFound{}
+	}
+	return v, nil
 }
 
 func TestEnvironment(t *testing.T) {
@@ -409,37 +432,9 @@ func TestEnvironment(t *testing.T) {
 
 func TestProfileSecretName(t *testing.T) {
 	t.Parallel()
-	testCases := []struct {
-		name       string
-		stepName   string
-		paramsFunc func() api.Parameters
-		expected   string
-	}{
-		{
-			name:     "cluster profile secret name from param",
-			stepName: "step-0",
-			paramsFunc: func() api.Parameters {
-				params := api.NewDeferredParameters(nil)
-				params.Add(api.ClusterProfileSecretNameParam, func() (any, error) {
-					return "foobar", nil
-				})
-				return params
-			},
-			expected: "foobar",
-		},
-	}
-	for _, tc := range testCases {
-		t.Run(tc.name, func(t *testing.T) {
-			step := multiStageTestStep{name: tc.stepName, params: tc.paramsFunc()}
-
-			result, err := step.profileSecretName()
-			if err != nil {
-				t.Fatalf("unexpected get profile secret name error: %s", err)
-			}
-
-			if diff := cmp.Diff(tc.expected, result); diff != "" {
-				t.Fatalf("result does not match expected, diff: %s", diff)
-			}
-		})
+	step := multiStageTestStep{name: "step-0", profile: &api.ClusterProfileLiteral{Secret: "foobar"}}
+	result := step.profileSecretName()
+	if diff := cmp.Diff("foobar", result); diff != "" {
+		t.Fatalf("result does not match expected, diff: %s", diff)
 	}
 }

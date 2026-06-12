@@ -2,6 +2,7 @@ package multi_stage
 
 import (
 	"context"
+	"errors"
 	"fmt"
 	"path"
 	"strings"
@@ -109,7 +110,7 @@ type multiStageTestStep struct {
 	name             string
 	additionalSuffix string
 	nodeName         string
-	profile          api.ClusterProfile
+	profile          *api.ClusterProfileLiteral
 	config           *api.ReleaseBuildConfiguration
 	// params exposes getters for variables created by other steps
 	params                           api.Parameters
@@ -183,7 +184,7 @@ func newMultiStageTestStep(
 		name:                             testConfig.As,
 		additionalSuffix:                 targetAdditionalSuffix,
 		nodeName:                         nodeName,
-		profile:                          ms.ClusterProfile,
+		profile:                          ms.ClusterProfileLiteral,
 		config:                           config,
 		params:                           params,
 		env:                              ms.Environment,
@@ -209,17 +210,11 @@ func newMultiStageTestStep(
 	return s
 }
 
-func (s *multiStageTestStep) profileSecretName() (string, error) {
-	if s.params == nil {
-		return "", nil
+func (s *multiStageTestStep) profileSecretName() string {
+	if s.profile != nil {
+		return s.profile.Secret
 	}
-
-	cpSecretName, err := s.params.Get(api.ClusterProfileSecretNameParam)
-	if err != nil {
-		return "", fmt.Errorf("get param %s: %w", api.ClusterProfileSecretNameParam, err)
-	}
-
-	return cpSecretName, nil
+	return ""
 }
 
 func (s *multiStageTestStep) retrieveSTSRoleARNParams() error {
@@ -227,7 +222,7 @@ func (s *multiStageTestStep) retrieveSTSRoleARNParams() error {
 		return nil
 	}
 
-	homeRole, err := s.params.Get(api.STSHomeRoleARNParam)
+	homeRole, err := s.params.GetString(api.STSHomeRoleARNParam)
 	if err != nil {
 		return fmt.Errorf("get %s: %w", api.STSHomeRoleARNParam, err)
 	}
@@ -236,7 +231,7 @@ func (s *multiStageTestStep) retrieveSTSRoleARNParams() error {
 		s.stsHomeRoleARN = homeRole
 	}
 
-	hubRole, err := s.params.Get(api.STSHubRoleARNParam)
+	hubRole, err := s.params.GetString(api.STSHubRoleARNParam)
 	if err != nil {
 		return fmt.Errorf("get %s: %w", api.STSHubRoleARNParam, err)
 	}
@@ -245,7 +240,7 @@ func (s *multiStageTestStep) retrieveSTSRoleARNParams() error {
 		s.stsHubRoleARN = hubRole
 	}
 
-	targetRole, err := s.params.Get(api.STSTargetRoleARNParam)
+	targetRole, err := s.params.GetString(api.STSTargetRoleARNParam)
 	if err != nil {
 		return fmt.Errorf("get %s: %w", api.STSTargetRoleARNParam, err)
 	}
@@ -270,19 +265,20 @@ func (s *multiStageTestStep) Run(ctx context.Context) error {
 func (s *multiStageTestStep) run(ctx context.Context) error {
 	logrus.Infof("Running multi-stage test %s", s.name)
 
-	clusterProfile, err := api.ClusterProfileFromParams(s.params)
+	clusterProfileDetails, err := api.ClusterProfileFromParams(s.params)
 	if err != nil {
-		return fmt.Errorf("get cluster profile from parameters: %w", err)
-	}
-	if clusterProfile != "" {
-		s.profile = clusterProfile
+		if !errors.Is(err, &api.ErrParamNotFound{}) {
+			return fmt.Errorf("get cluster profile from parameters: %w", err)
+		}
+	} else if clusterProfileDetails != nil {
+		s.profile = api.FromClusterProfileDetails(clusterProfileDetails)
 	}
 
 	if err := s.retrieveSTSRoleARNParams(); err != nil {
 		return fmt.Errorf("retrieve STS role ARN params: %w", err)
 	}
 
-	if s.profile != "" {
+	if s.profile != nil {
 		if err := s.getProfileData(ctx); err != nil {
 			return err
 		}
@@ -440,7 +436,7 @@ func (s *multiStageTestStep) Requires() (ret []api.StepLink) {
 			ret = append(ret, api.LinkForImage(imageStream, name))
 		}
 	}
-	if s.profile != "" {
+	if s.profile != nil {
 		needsReleasePayload = true
 		for _, env := range envForProfile {
 			if link, ok := utils.LinkForEnv(env); ok {
@@ -474,10 +470,7 @@ func (s *multiStageTestStep) SubTests() []*junit.TestCase { return s.subTests }
 // namespace and to gather information used when generating the test pods.
 func (s *multiStageTestStep) getProfileData(ctx context.Context) error {
 	var secret coreapi.Secret
-	name, err := s.profileSecretName()
-	if err != nil {
-		return fmt.Errorf("get profile secret name: %w", err)
-	}
+	name := s.profileSecretName()
 	if err := s.client.Get(ctx, ctrlruntimeclient.ObjectKey{Namespace: s.jobSpec.Namespace(), Name: name}, &secret); err != nil {
 		return fmt.Errorf("could not get cluster profile secret %q: %w", name, err)
 	}
@@ -523,7 +516,7 @@ func (s *multiStageTestStep) environment() ([]coreapi.EnvVar, error) {
 		return ret, nil
 	}
 	for _, l := range s.leases {
-		val, err := s.params.Get(l.Env)
+		val, err := s.params.GetString(l.Env)
 		if err != nil {
 			return nil, err
 		}
@@ -531,7 +524,7 @@ func (s *multiStageTestStep) environment() ([]coreapi.EnvVar, error) {
 	}
 
 	for _, name := range []string{api.LeaseProxyServerURLEnvVarName, api.ClusterProfileSetEnv} {
-		val, err := s.params.Get(name)
+		val, err := s.params.GetString(name)
 		if err != nil {
 			return nil, err
 		}
@@ -542,7 +535,7 @@ func (s *multiStageTestStep) environment() ([]coreapi.EnvVar, error) {
 
 	for _, name := range []string{api.InitialReleaseName, api.LatestReleaseName} {
 		envVar := fmt.Sprintf("ORIGINAL_%s", utils.ReleaseImageEnv(name))
-		pullspec, err := s.params.Get(envVar)
+		pullspec, err := s.params.GetString(envVar)
 		if err != nil {
 			return nil, err
 		} else if pullspec != "" {
@@ -550,16 +543,16 @@ func (s *multiStageTestStep) environment() ([]coreapi.EnvVar, error) {
 		}
 	}
 
-	if s.profile != "" {
+	if s.profile != nil {
 		for _, e := range envForProfile {
-			val, err := s.params.Get(e)
+			val, err := s.params.GetString(e)
 			if err != nil {
 				return nil, err
 			}
 			ret = append(ret, coreapi.EnvVar{Name: e, Value: val})
 		}
 
-		val, err := s.params.Get(api.DefaultIPPoolLeaseEnv)
+		val, err := s.params.GetString(api.DefaultIPPoolLeaseEnv)
 		if err != nil {
 			return nil, err
 		}

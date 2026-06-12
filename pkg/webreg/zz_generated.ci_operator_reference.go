@@ -672,8 +672,12 @@ const ciOperatorReferenceYaml = "# The list of base images describe\n" +
 	"            # all previous `pre` and `test` steps were successful. The given step must explicitly\n" +
 	"            # ask for being skipped by setting the OptionalOnSuccess flag to true.\n" +
 	"            allow_skip_on_success: false\n" +
-	"            # ClusterProfile defines the profile/cloud provider for end-to-end test steps.\n" +
-	"            cluster_profile: ' '\n" +
+	"            # ClusterProfileLiteral defines the profile/cloud provider for end-to-end test steps.\n" +
+	"            cluster_profile_literal:\n" +
+	"                cluster_type: ' '\n" +
+	"                lease_type: ' '\n" +
+	"                name: ' '\n" +
+	"                secret: ' '\n" +
 	"            # Dependencies holds override values for dependency parameters.\n" +
 	"            dependencies:\n" +
 	"                \"\": \"\"\n" +
@@ -1606,8 +1610,12 @@ const ciOperatorReferenceYaml = "# The list of base images describe\n" +
 	"        # all previous `pre` and `test` steps were successful. The given step must explicitly\n" +
 	"        # ask for being skipped by setting the OptionalOnSuccess flag to true.\n" +
 	"        allow_skip_on_success: false\n" +
-	"        # ClusterProfile defines the profile/cloud provider for end-to-end test steps.\n" +
-	"        cluster_profile: ' '\n" +
+	"        # ClusterProfileLiteral defines the profile/cloud provider for end-to-end test steps.\n" +
+	"        cluster_profile_literal:\n" +
+	"            cluster_type: ' '\n" +
+	"            lease_type: ' '\n" +
+	"            name: ' '\n" +
+	"            secret: ' '\n" +
 	"        # Dependencies holds override values for dependency parameters.\n" +
 	"        dependencies:\n" +
 	"            \"\": \"\"\n" +

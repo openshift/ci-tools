@@ -56,7 +56,12 @@
     {
       "as": "e2e-aws",
       "literal_steps": {
-        "cluster_profile": "aws",
+        "cluster_profile_literal": {
+          "name": "aws",
+          "lease_type": "aws-quota-slice",
+          "cluster_type": "aws",
+          "secret": "cluster-secrets-aws"
+        },
         "pre": [
           {
             "as": "ipi-install-rbac",
@@ -132,7 +137,12 @@
     {
       "as": "e2e-azure",
       "literal_steps": {
-        "cluster_profile": "azure4",
+        "cluster_profile_literal": {
+          "name": "azure4",
+          "lease_type": "azure4-quota-slice",
+          "cluster_type": "azure4",
+          "secret": "cluster-secrets-azure4"
+        },
         "pre": [
           {
             "as": "ipi-install-rbac",
@@ -208,7 +218,12 @@
     {
       "as": "e2e-azure-with-watcher",
       "literal_steps": {
-        "cluster_profile": "azure4",
+        "cluster_profile_literal": {
+          "name": "azure4",
+          "lease_type": "azure4-quota-slice",
+          "cluster_type": "azure4",
+          "secret": "cluster-secrets-azure4"
+        },
         "pre": [
           {
             "as": "ipi-install-rbac",
@@ -301,7 +316,12 @@
     {
       "as": "e2e-gcp",
       "literal_steps": {
-        "cluster_profile": "gcp",
+        "cluster_profile_literal": {
+          "name": "gcp",
+          "lease_type": "gcp-quota-slice",
+          "cluster_type": "gcp",
+          "secret": "cluster-secrets-gcp"
+        },
         "pre": [
           {
             "as": "ipi-install-rbac",

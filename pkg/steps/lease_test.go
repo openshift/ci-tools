@@ -292,15 +292,14 @@ func TestAcquireLeases(t *testing.T) {
 				},
 			},
 			wantProvides: map[string]any{
-				api.ClusterProfileSetEnv:          "",
-				api.ClusterProfileParam:           "",
-				api.ClusterProfileSecretNameParam: "",
-				api.STSHomeRoleARNParam:           "",
-				api.STSHubRoleARNParam:            "",
-				api.STSTargetRoleARNParam:         "",
-				"lease-0":                         "res-type-0",
-				"lease-1":                         "res-type-1",
-				"parameter":                       "map",
+				api.ClusterProfileSetEnv:  "",
+				api.ClusterProfileParam:   (*api.ClusterProfileDetails)(nil),
+				api.STSHomeRoleARNParam:   "",
+				api.STSHubRoleARNParam:    "",
+				api.STSTargetRoleARNParam: "",
+				"lease-0":                 "res-type-0",
+				"lease-1":                 "res-type-1",
+				"parameter":               "map",
 			},
 			wantCalls: []string{
 				"acquireWaitWithPriority owner res-type-0 free leased random",
@@ -316,7 +315,7 @@ func TestAcquireLeases(t *testing.T) {
 				ResourceType:   "aws",
 				Env:            api.DefaultLeaseEnv,
 				Count:          1,
-				ClusterProfile: "aws",
+				ClusterProfile: &api.ClusterProfileLiteral{Name: "aws"},
 			}},
 			resources: map[string]*common.Resource{
 				"acquireWaitWithPriority_aws_free_leased_random": {
@@ -340,14 +339,16 @@ func TestAcquireLeases(t *testing.T) {
 				},
 			},
 			wantProvides: map[string]any{
-				"parameter":                       "map",
-				api.ClusterProfileSetEnv:          "",
-				api.ClusterProfileParam:           "aws",
-				api.ClusterProfileSecretNameParam: "cluster-secrets-aws",
-				api.STSHomeRoleARNParam:           "",
-				api.STSHubRoleARNParam:            "",
-				api.STSTargetRoleARNParam:         "",
-				api.DefaultLeaseEnv:               "us-east-1",
+				"parameter":              "map",
+				api.ClusterProfileSetEnv: "",
+				api.ClusterProfileParam: &api.ClusterProfileDetails{
+					Secret:    "cluster-secrets-aws",
+					LeaseType: "aws-quota-slice",
+				},
+				api.STSHomeRoleARNParam:   "",
+				api.STSHubRoleARNParam:    "",
+				api.STSTargetRoleARNParam: "",
+				api.DefaultLeaseEnv:       "us-east-1",
 			},
 			wantSecrets: corev1.SecretList{
 				Items: []corev1.Secret{
@@ -387,7 +388,7 @@ func TestAcquireLeases(t *testing.T) {
 				ResourceType:   "aws",
 				Env:            api.DefaultLeaseEnv,
 				Count:          1,
-				ClusterProfile: "aws",
+				ClusterProfile: &api.ClusterProfileLiteral{Name: "aws"},
 			}, {
 				ResourceType: "foobar",
 				Env:          "FOOBAR_RESOURCE",
@@ -418,15 +419,17 @@ func TestAcquireLeases(t *testing.T) {
 				},
 			},
 			wantProvides: map[string]any{
-				"parameter":                       "map",
-				api.ClusterProfileSetEnv:          "",
-				api.ClusterProfileParam:           "aws",
-				api.ClusterProfileSecretNameParam: "cluster-secrets-aws",
-				api.STSHomeRoleARNParam:           "",
-				api.STSHubRoleARNParam:            "",
-				api.STSTargetRoleARNParam:         "",
-				api.DefaultLeaseEnv:               "us-east-1",
-				"FOOBAR_RESOURCE":                 "foobar-res-0",
+				"parameter":              "map",
+				api.ClusterProfileSetEnv: "",
+				api.ClusterProfileParam: &api.ClusterProfileDetails{
+					Secret:    "cluster-secrets-aws",
+					LeaseType: "aws-quota-slice",
+				},
+				api.STSHomeRoleARNParam:   "",
+				api.STSHubRoleARNParam:    "",
+				api.STSTargetRoleARNParam: "",
+				api.DefaultLeaseEnv:       "us-east-1",
+				"FOOBAR_RESOURCE":         "foobar-res-0",
 			},
 			wantSecrets: corev1.SecretList{
 				Items: []corev1.Secret{
@@ -468,7 +471,7 @@ func TestAcquireLeases(t *testing.T) {
 				ResourceType:   "aws",
 				Env:            api.DefaultLeaseEnv,
 				Count:          1,
-				ClusterProfile: "aws",
+				ClusterProfile: &api.ClusterProfileLiteral{Name: "aws"},
 			}},
 			resources: map[string]*common.Resource{
 				"acquireWaitWithPriority_aws_free_leased_random": {
@@ -504,14 +507,16 @@ func TestAcquireLeases(t *testing.T) {
 				},
 			},
 			wantProvides: map[string]any{
-				"parameter":                       "map",
-				api.ClusterProfileSetEnv:          "",
-				api.ClusterProfileParam:           "aws",
-				api.ClusterProfileSecretNameParam: "cluster-secrets-aws",
-				api.STSHomeRoleARNParam:           "arn:aws:iam::000:role/home",
-				api.STSHubRoleARNParam:            "arn:aws:iam::111:role/hub",
-				api.STSTargetRoleARNParam:         "arn:aws:iam::222:role/target",
-				api.DefaultLeaseEnv:               "us-east-1",
+				"parameter":              "map",
+				api.ClusterProfileSetEnv: "",
+				api.ClusterProfileParam: &api.ClusterProfileDetails{
+					Secret:    "cluster-secrets-aws",
+					LeaseType: "aws-quota-slice",
+				},
+				api.STSHomeRoleARNParam:   "arn:aws:iam::000:role/home",
+				api.STSHubRoleARNParam:    "arn:aws:iam::111:role/hub",
+				api.STSTargetRoleARNParam: "arn:aws:iam::222:role/target",
+				api.DefaultLeaseEnv:       "us-east-1",
 			},
 			wantSecrets: corev1.SecretList{
 				Items: []corev1.Secret{
@@ -563,7 +568,7 @@ func TestAcquireLeases(t *testing.T) {
 				ResourceType:   "aws",
 				Env:            api.DefaultLeaseEnv,
 				Count:          1,
-				ClusterProfile: "aws",
+				ClusterProfile: &api.ClusterProfileLiteral{Name: "aws"},
 			}},
 			resources: map[string]*common.Resource{
 				"acquireWaitWithPriority_aws_free_leased_random": {
@@ -588,14 +593,16 @@ func TestAcquireLeases(t *testing.T) {
 				},
 			},
 			wantProvides: map[string]any{
-				"parameter":                       "map",
-				api.ClusterProfileSetEnv:          "",
-				api.ClusterProfileParam:           "aws",
-				api.ClusterProfileSecretNameParam: "cluster-secrets-aws",
-				api.STSHomeRoleARNParam:           "",
-				api.STSHubRoleARNParam:            "",
-				api.STSTargetRoleARNParam:         "",
-				api.DefaultLeaseEnv:               "us-east-1",
+				"parameter":              "map",
+				api.ClusterProfileSetEnv: "",
+				api.ClusterProfileParam: &api.ClusterProfileDetails{
+					Secret:    "cluster-secrets-aws",
+					LeaseType: "aws-quota-slice",
+				},
+				api.STSHomeRoleARNParam:   "",
+				api.STSHubRoleARNParam:    "",
+				api.STSTargetRoleARNParam: "",
+				api.DefaultLeaseEnv:       "us-east-1",
 			},
 			wantSecrets: corev1.SecretList{
 				Items: []corev1.Secret{
@@ -637,7 +644,7 @@ func TestAcquireLeases(t *testing.T) {
 				ResourceType:   "aws",
 				Env:            api.DefaultLeaseEnv,
 				Count:          1,
-				ClusterProfile: "aws",
+				ClusterProfile: &api.ClusterProfileLiteral{Name: "aws"},
 			}},
 			resources: map[string]*common.Resource{
 				"acquireWaitWithPriority_aws_free_leased_random": {
@@ -673,14 +680,16 @@ func TestAcquireLeases(t *testing.T) {
 				},
 			},
 			wantProvides: map[string]any{
-				"parameter":                       "map",
-				api.ClusterProfileSetEnv:          "",
-				api.ClusterProfileParam:           "aws",
-				api.ClusterProfileSecretNameParam: "cluster-secrets-aws",
-				api.STSHomeRoleARNParam:           "",
-				api.STSHubRoleARNParam:            "",
-				api.STSTargetRoleARNParam:         "",
-				api.DefaultLeaseEnv:               "us-east-1",
+				"parameter":              "map",
+				api.ClusterProfileSetEnv: "",
+				api.ClusterProfileParam: &api.ClusterProfileDetails{
+					Secret:    "cluster-secrets-aws",
+					LeaseType: "aws-quota-slice",
+				},
+				api.STSHomeRoleARNParam:   "",
+				api.STSHubRoleARNParam:    "",
+				api.STSTargetRoleARNParam: "",
+				api.DefaultLeaseEnv:       "us-east-1",
 			},
 			wantSecrets: corev1.SecretList{
 				Items: []corev1.Secret{
@@ -732,7 +741,7 @@ func TestAcquireLeases(t *testing.T) {
 				ResourceType:   "openshift-org-aws",
 				Env:            api.DefaultLeaseEnv,
 				Count:          1,
-				ClusterProfile: "aws-set",
+				ClusterProfile: &api.ClusterProfileLiteral{Name: "aws-set"},
 			}},
 			resources: map[string]*common.Resource{
 				"acquireWaitWithPriority_openshift-org-aws_free_leased_random": {
@@ -759,14 +768,16 @@ func TestAcquireLeases(t *testing.T) {
 				},
 			},
 			wantProvides: map[string]any{
-				"parameter":                       "map",
-				api.ClusterProfileSetEnv:          "aws-set",
-				api.ClusterProfileParam:           "aws",
-				api.ClusterProfileSecretNameParam: "cluster-secrets-aws",
-				api.STSHomeRoleARNParam:           "",
-				api.STSHubRoleARNParam:            "",
-				api.STSTargetRoleARNParam:         "",
-				api.DefaultLeaseEnv:               "us-east-1",
+				"parameter":              "map",
+				api.ClusterProfileSetEnv: "aws-set",
+				api.ClusterProfileParam: &api.ClusterProfileDetails{
+					Secret:    "cluster-secrets-aws",
+					LeaseType: "aws-quota-slice",
+				},
+				api.STSHomeRoleARNParam:   "",
+				api.STSHubRoleARNParam:    "",
+				api.STSTargetRoleARNParam: "",
+				api.DefaultLeaseEnv:       "us-east-1",
 			},
 			wantSecrets: corev1.SecretList{
 				Items: []corev1.Secret{

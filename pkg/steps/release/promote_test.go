@@ -1113,16 +1113,9 @@ func TestGetPublicImageReference(t *testing.T) {
 func TestGetMirrorRetryShell(t *testing.T) {
 	regcfg := "/etc/push-secret/.dockerconfigjson"
 	got := getMirrorRetryShell(regcfg, []string{"src=dst"})
-	for _, sub := range []string{
-		"for r in {1..5}",
-		"Mirror attempt $r",
-		"oc image mirror",
-		`[ "${r}" -eq 5 ]`,
-		"exit 1",
-	} {
-		if !strings.Contains(got, sub) {
-			t.Fatalf("missing substring %q in:\n%s", sub, got)
-		}
+	shouldBe := "mirror 5 2 /etc/push-secret/.dockerconfigjson src=dst"
+	if !strings.Contains(got, shouldBe) {
+		t.Fatalf("wrong shell mirror function call %q should be %q", got, shouldBe)
 	}
 }
 

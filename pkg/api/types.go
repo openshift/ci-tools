@@ -75,6 +75,7 @@ type ReleaseBuildConfiguration struct {
 
 	InputConfiguration `json:",inline"`
 
+	BuildType string `json:"build_type,omitempty"`
 	// BinaryBuildCommands will create a "bin" image based on "src" that
 	// contains the output of this command. This allows reuse of binary artifacts
 	// across other steps. If empty, no "bin" image will be created.
@@ -1824,4 +1825,9 @@ type ClusterClaimOwnerDetails struct {
 
 const (
 	EphemeralClusterTestDoneSignalSecretName = "test-done-signal"
+)
+
+const (
+	// BuildTypeOpenshift indicates the Openshift Build
+	BuildTypeOpenshift = "openshift"
 )

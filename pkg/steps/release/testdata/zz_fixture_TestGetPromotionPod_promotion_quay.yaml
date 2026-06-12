@@ -7,114 +7,30 @@ metadata:
 spec:
   containers:
   - args:
-    - |-
-      for r in {1..5}; do
-        echo Mirror attempt $r
-        if oc image mirror --loglevel=2 --keep-manifest-list --registry-config=/etc/push-secret/.dockerconfigjson --max-per-registry=10 registry.build02.ci.openshift.org/ci-op-y2n8rsh3/pipeline@sha256:bbb=quay.io/openshift/ci:ci_a_latest_incoming registry.build02.ci.openshift.org/ci-op-y2n8rsh3/pipeline@sha256:ddd=quay.io/openshift/ci:ci_c_latest_incoming; then break; fi
-        if [ "${r}" -eq 5 ]; then
-          exit 1
-        fi
-        backoff=$(($RANDOM % 120))s
-        echo Sleeping randomized $backoff before retry
-        sleep $backoff
-      done
-      _OLD_EXISTS=false
-      if oc image info --registry-config=/etc/push-secret/.dockerconfigjson quay.io/openshift/ci:ci_a_latest >/dev/null 2>&1; then _OLD_EXISTS=true; fi
-      if [ "${_OLD_EXISTS}" = "true" ]; then
-        for r in {1..5}; do
-          echo Mirror attempt $r
-          if oc image mirror --loglevel=2 --keep-manifest-list --registry-config=/etc/push-secret/.dockerconfigjson --max-per-registry=10 quay.io/openshift/ci:ci_a_latest=quay.io/openshift/ci:20240603235401_prune_ci_a_latest; then break; fi
-          if [ "${r}" -eq 5 ]; then
-            exit 1
-          fi
-          backoff=$(($RANDOM % 120))s
-          echo Sleeping randomized $backoff before retry
-          sleep $backoff
-        done
-        for r in {1..5}; do
-          echo Mirror attempt $r
-          if oc image mirror --loglevel=2 --keep-manifest-list --registry-config=/etc/push-secret/.dockerconfigjson --max-per-registry=10 quay.io/openshift/ci:ci_a_latest=quay.io/openshift/ci:ci_a_latest__pre; then break; fi
-          if [ "${r}" -eq 5 ]; then
-            exit 1
-          fi
-          backoff=$(($RANDOM % 120))s
-          echo Sleeping randomized $backoff before retry
-          sleep $backoff
-        done
-      fi
-      for r in {1..5}; do
-        echo Mirror attempt $r
-        if oc image mirror --loglevel=2 --keep-manifest-list --registry-config=/etc/push-secret/.dockerconfigjson --max-per-registry=10 quay.io/openshift/ci:ci_a_latest_incoming=quay.io/openshift/ci:ci_a_latest; then break; fi
-        if [ "${r}" -eq 5 ]; then
-          exit 1
-        fi
-        backoff=$(($RANDOM % 120))s
-        echo Sleeping randomized $backoff before retry
-        sleep $backoff
-      done
-      if [ "${_OLD_EXISTS}" = "true" ]; then
-        for r in {1..5}; do
-          echo Mirror attempt $r
-          if oc image mirror --loglevel=2 --keep-manifest-list --registry-config=/etc/push-secret/.dockerconfigjson --max-per-registry=10 quay.io/openshift/ci:ci_a_latest=quay.io/openshift/ci:ci_a_latest__post1; then break; fi
-          if [ "${r}" -eq 5 ]; then
-            exit 1
-          fi
-          backoff=$(($RANDOM % 120))s
-          echo Sleeping randomized $backoff before retry
-          sleep $backoff
-        done
-      fi
-      _OLD_EXISTS=false
-      if oc image info --registry-config=/etc/push-secret/.dockerconfigjson quay.io/openshift/ci:ci_c_latest >/dev/null 2>&1; then _OLD_EXISTS=true; fi
-      if [ "${_OLD_EXISTS}" = "true" ]; then
-        for r in {1..5}; do
-          echo Mirror attempt $r
-          if oc image mirror --loglevel=2 --keep-manifest-list --registry-config=/etc/push-secret/.dockerconfigjson --max-per-registry=10 quay.io/openshift/ci:ci_c_latest=quay.io/openshift/ci:20240603235401_prune_ci_c_latest; then break; fi
-          if [ "${r}" -eq 5 ]; then
-            exit 1
-          fi
-          backoff=$(($RANDOM % 120))s
-          echo Sleeping randomized $backoff before retry
-          sleep $backoff
-        done
-        for r in {1..5}; do
-          echo Mirror attempt $r
-          if oc image mirror --loglevel=2 --keep-manifest-list --registry-config=/etc/push-secret/.dockerconfigjson --max-per-registry=10 quay.io/openshift/ci:ci_c_latest=quay.io/openshift/ci:ci_c_latest__pre; then break; fi
-          if [ "${r}" -eq 5 ]; then
-            exit 1
-          fi
-          backoff=$(($RANDOM % 120))s
-          echo Sleeping randomized $backoff before retry
-          sleep $backoff
-        done
-      fi
-      for r in {1..5}; do
-        echo Mirror attempt $r
-        if oc image mirror --loglevel=2 --keep-manifest-list --registry-config=/etc/push-secret/.dockerconfigjson --max-per-registry=10 quay.io/openshift/ci:ci_c_latest_incoming=quay.io/openshift/ci:ci_c_latest; then break; fi
-        if [ "${r}" -eq 5 ]; then
-          exit 1
-        fi
-        backoff=$(($RANDOM % 120))s
-        echo Sleeping randomized $backoff before retry
-        sleep $backoff
-      done
-      if [ "${_OLD_EXISTS}" = "true" ]; then
-        for r in {1..5}; do
-          echo Mirror attempt $r
-          if oc image mirror --loglevel=2 --keep-manifest-list --registry-config=/etc/push-secret/.dockerconfigjson --max-per-registry=10 quay.io/openshift/ci:ci_c_latest=quay.io/openshift/ci:ci_c_latest__post1; then break; fi
-          if [ "${r}" -eq 5 ]; then
-            exit 1
-          fi
-          backoff=$(($RANDOM % 120))s
-          echo Sleeping randomized $backoff before retry
-          sleep $backoff
-        done
-      fi
-      set +e
-      for r in {1..2}; do echo "Tag attempt $r (all together)"; oc tag --source=docker --loglevel=2 --reference-policy='source' --import-mode='PreserveOriginal' --reference quay-proxy.ci.openshift.org/openshift/ci@sha256:ddd ci/${component}-quay:c quay-proxy.ci.openshift.org/openshift/ci@sha256:bbb ci/ci-quay:${component} && break; :; done
-      for r in {1..3}; do echo "Tag attempt $r (individual)"; oc tag --source=docker --loglevel=2 --reference-policy='source' --import-mode='PreserveOriginal' --reference quay-proxy.ci.openshift.org/openshift/ci@sha256:ddd ci/${component}-quay:c && break; backoff=$(($RANDOM % 120))s; echo Sleeping randomized $backoff before retry; sleep $backoff; done
-      for r in {1..3}; do echo "Tag attempt $r (individual)"; oc tag --source=docker --loglevel=2 --reference-policy='source' --import-mode='PreserveOriginal' --reference quay-proxy.ci.openshift.org/openshift/ci@sha256:bbb ci/ci-quay:${component} && break; backoff=$(($RANDOM % 120))s; echo Sleeping randomized $backoff before retry; sleep $backoff; done
-      set -e
+    - "function mirror {\nfor r in {1..$1}; do\n  echo Mirror attempt $r\n  if oc
+      image mirror --loglevel=$2 --keep-manifest-list --registry-config=$3 --max-per-registry=10
+      $4; then break; fi\n  if [ \"${r}\" -eq $1 ]; then\n    exit 1\n  fi\n  backoff=$(($RANDOM
+      % 120))s\n  echo Sleeping randomized $backoff before retry\n  sleep $backoff\ndone\n}\nmirror
+      5 2 /etc/push-secret/.dockerconfigjson registry.build02.ci.openshift.org/ci-op-y2n8rsh3/pipeline@sha256:bbb=quay.io/openshift/ci:ci_a_latest_incoming\nmirror
+      5 2 /etc/push-secret/.dockerconfigjson registry.build02.ci.openshift.org/ci-op-y2n8rsh3/pipeline@sha256:ddd=quay.io/openshift/ci:ci_c_latest_incoming\n_OLD_EXISTS=false\nif
+      oc image info --registry-config=/etc/push-secret/.dockerconfigjson quay.io/openshift/ci:ci_a_latest
+      >/dev/null 2>&1; then _OLD_EXISTS=true; fi\nif [ \"${_OLD_EXISTS}\" = \"true\"
+      ]; then\n  mirror 5 2 /etc/push-secret/.dockerconfigjson quay.io/openshift/ci:ci_a_latest=quay.io/openshift/ci:20240603235401_prune_ci_a_latest\n
+      \ mirror 5 2 /etc/push-secret/.dockerconfigjson quay.io/openshift/ci:ci_a_latest=quay.io/openshift/ci:ci_a_latest__pre\nfi\nmirror
+      5 2 /etc/push-secret/.dockerconfigjson quay.io/openshift/ci:ci_a_latest_incoming=quay.io/openshift/ci:ci_a_latest\nif
+      [ \"${_OLD_EXISTS}\" = \"true\" ]; then\n  mirror 5 2 /etc/push-secret/.dockerconfigjson
+      quay.io/openshift/ci:ci_a_latest=quay.io/openshift/ci:ci_a_latest__post1\nfi\n_OLD_EXISTS=false\nif
+      oc image info --registry-config=/etc/push-secret/.dockerconfigjson quay.io/openshift/ci:ci_c_latest
+      >/dev/null 2>&1; then _OLD_EXISTS=true; fi\nif [ \"${_OLD_EXISTS}\" = \"true\"
+      ]; then\n  mirror 5 2 /etc/push-secret/.dockerconfigjson quay.io/openshift/ci:ci_c_latest=quay.io/openshift/ci:20240603235401_prune_ci_c_latest\n
+      \ mirror 5 2 /etc/push-secret/.dockerconfigjson quay.io/openshift/ci:ci_c_latest=quay.io/openshift/ci:ci_c_latest__pre\nfi\nmirror
+      5 2 /etc/push-secret/.dockerconfigjson quay.io/openshift/ci:ci_c_latest_incoming=quay.io/openshift/ci:ci_c_latest\nif
+      [ \"${_OLD_EXISTS}\" = \"true\" ]; then\n  mirror 5 2 /etc/push-secret/.dockerconfigjson
+      quay.io/openshift/ci:ci_c_latest=quay.io/openshift/ci:ci_c_latest__post1\nfi\nfor
+      r in {1..2}; do echo \"Tag attempt $r\"; \nwhile read tag; do\noc tag --source=docker
+      --loglevel=2 --reference-policy='source' --import-mode='PreserveOriginal' --reference
+      $tag\ndone <<EOF\nquay-proxy.ci.openshift.org/openshift/ci@sha256:ddd ci/${component}-quay:c\nquay-proxy.ci.openshift.org/openshift/ci@sha256:bbb
+      ci/ci-quay:${component}\nEOF && break; :; done"
     command:
     - /bin/sh
     - -c

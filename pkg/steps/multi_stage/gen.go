@@ -565,10 +565,6 @@ func addSTSVolumes(pod *coreapi.Pod) {
 			ReadOnly:  true,
 		},
 	)
-	container.Env = append(container.Env,
-		coreapi.EnvVar{Name: "AWS_CONFIG_FILE", Value: path.Join(stsConfigMountPath, "config")},
-		coreapi.EnvVar{Name: "AWS_SDK_LOAD_CONFIG", Value: "1"},
-	)
 }
 
 func addCliInjector(imagestream string, pod *coreapi.Pod) {

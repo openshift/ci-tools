@@ -1689,7 +1689,7 @@ func TestFromConfig(t *testing.T) {
 			Tests: []api.TestStepConfiguration{{
 				As: "test",
 				MultiStageTestConfigurationLiteral: &api.MultiStageTestConfigurationLiteral{
-					ClusterProfileLiteral: &api.ClusterProfileDetails{Name: api.ClusterProfileAWS},
+					ClusterProfileLiteral: &api.ClusterProfileLiteral{Name: "aws"},
 				},
 			}},
 		},

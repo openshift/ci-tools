@@ -638,7 +638,7 @@ func (v *Validator) validateTestConfigurationType(
 		context := newContext(fieldPath(fieldRoot).addField("steps"), testConfig.Environment, releases, inputImagesSeen)
 		if testConfig.ClusterProfileLiteral != nil {
 			clusterCount++
-			validationErrors = append(validationErrors, v.validateClusterProfile(fieldRoot, string(testConfig.ClusterProfileLiteral.Name), test.As, metadata)...)
+			validationErrors = append(validationErrors, v.validateClusterProfile(fieldRoot, testConfig.ClusterProfileLiteral.Name, test.As, metadata)...)
 		}
 		validationErrors = append(validationErrors, validateLeases(context.addField("leases"), testConfig.Leases)...)
 		for i, s := range testConfig.Pre {

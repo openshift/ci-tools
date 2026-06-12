@@ -34,8 +34,8 @@ func TestRequires(t *testing.T) {
 	}{{
 		name: "step has a cluster profile and requires a release image, should not have ReleaseImagesLink",
 		steps: api.MultiStageTestConfigurationLiteral{
-			ClusterProfileLiteral: &api.ClusterProfileDetails{
-				Name:        api.ClusterProfileAWS,
+			ClusterProfileLiteral: &api.ClusterProfileLiteral{
+				Name:        "aws",
 				ClusterType: "aws",
 				LeaseType:   "aws-quota-slice",
 				Secret:      "cluster-secrets-aws",
@@ -432,7 +432,7 @@ func TestEnvironment(t *testing.T) {
 
 func TestProfileSecretName(t *testing.T) {
 	t.Parallel()
-	step := multiStageTestStep{name: "step-0", profile: &api.ClusterProfileDetails{Secret: "foobar"}}
+	step := multiStageTestStep{name: "step-0", profile: &api.ClusterProfileLiteral{Secret: "foobar"}}
 	result := step.profileSecretName()
 	if diff := cmp.Diff("foobar", result); diff != "" {
 		t.Fatalf("result does not match expected, diff: %s", diff)

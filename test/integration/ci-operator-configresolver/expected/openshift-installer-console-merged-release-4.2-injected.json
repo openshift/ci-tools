@@ -55,7 +55,12 @@
     {
       "as": "e2e",
       "literal_steps": {
-        "cluster_profile": "azure4",
+        "cluster_profile_literal": {
+          "name": "azure4",
+          "lease_type": "azure4-quota-slice",
+          "cluster_type": "azure4",
+          "secret": "cluster-secrets-azure4"
+        },
         "pre": [
           {
             "as": "ipi-install-rbac",

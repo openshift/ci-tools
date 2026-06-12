@@ -1748,8 +1748,8 @@ func TestHandleTargetAdditionalSuffix(t *testing.T) {
 }
 
 func TestGetClusterProfileNamesFromTargets(t *testing.T) {
-	profile1 := &api.ClusterProfileDetails{Name: "profile1"}
-	profile2 := &api.ClusterProfileDetails{Name: "profile2"}
+	profile1 := &api.ClusterProfileLiteral{Name: "profile1"}
+	profile2 := &api.ClusterProfileLiteral{Name: "profile2"}
 
 	testCases := []struct {
 		name                 string

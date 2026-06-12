@@ -10,6 +10,7 @@ import (
 	"github.com/sirupsen/logrus"
 )
 
+// +k8s:deepcopy-gen=false
 type ErrParamNotFound struct {
 	param string
 }
@@ -23,6 +24,7 @@ func (e *ErrParamNotFound) Error() string {
 	return "param \"" + e.param + "\" not found"
 }
 
+// +k8s:deepcopy-gen=false
 type ErrParamTypeMismatch struct {
 	want string
 	got  string

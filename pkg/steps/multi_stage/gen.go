@@ -488,7 +488,7 @@ func addDshmVolume(shmSize *resource.Quantity, pod *coreapi.Pod, container *core
 	})
 }
 
-func addProfile(name string, profile api.ClusterProfileDetails, stsEnabled bool, pod *coreapi.Pod) {
+func addProfile(name string, profile api.ClusterProfileLiteral, stsEnabled bool, pod *coreapi.Pod) {
 	pod.Spec.Volumes = append(pod.Spec.Volumes, coreapi.Volume{
 		Name: profileVolumeName,
 		VolumeSource: coreapi.VolumeSource{
@@ -504,7 +504,7 @@ func addProfile(name string, profile api.ClusterProfileDetails, stsEnabled bool,
 	})
 	container.Env = append(container.Env, []coreapi.EnvVar{{
 		Name:  "CLUSTER_PROFILE_NAME",
-		Value: string(profile.Name),
+		Value: profile.Name,
 	}, {
 		Name:  "CLUSTER_TYPE",
 		Value: profile.ClusterType,

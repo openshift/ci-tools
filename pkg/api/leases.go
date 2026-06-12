@@ -15,7 +15,7 @@ func LeasesForTest(test *TestStepConfiguration) (ret []StepLease) {
 			ResourceType:   p.LeaseType,
 			Env:            DefaultLeaseEnv,
 			Count:          1,
-			ClusterProfile: string(p.Name),
+			ClusterProfile: p,
 		})
 	}
 	for _, step := range append(multiStageTest.Pre, append(multiStageTest.Test, multiStageTest.Post...)...) {

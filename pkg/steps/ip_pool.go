@@ -35,7 +35,7 @@ type ipPoolStep struct {
 
 	namespace func() string
 	// To ease unit testing
-	profile         *api.ClusterProfileDetails
+	profile         *api.ClusterProfileLiteral
 	branch          string
 	ipPoolLeaseFunc func(profile api.ClusterProfile, branch string) stepLease
 
@@ -45,7 +45,7 @@ type ipPoolStep struct {
 
 // lease api.StepLease,
 func IPPoolStep(client *lease.Client, secretClient SecretClient, wrapped api.Step, params api.Parameters,
-	namespace func() string, metricsAgent *metrics.MetricsAgent, profile *api.ClusterProfileDetails, branch string) api.Step {
+	namespace func() string, metricsAgent *metrics.MetricsAgent, profile *api.ClusterProfileLiteral, branch string) api.Step {
 	return &ipPoolStep{
 		client:       client,
 		secretClient: secretClient,
@@ -117,21 +117,21 @@ func (s *ipPoolStep) Run(ctx context.Context) error {
 
 // minute is provided as an argument to assist with unit testing
 func (s *ipPoolStep) run(ctx context.Context, minute time.Duration) error {
-	clusterProfile, err := api.ClusterProfileFromParams(s.params)
+	clusterProfileDetails, err := api.ClusterProfileFromParams(s.params)
 	if err != nil {
 		if !errors.Is(err, &api.ErrParamNotFound{}) {
 			return fmt.Errorf("get cluster profile from parameters: %w", err)
 		}
-	} else if clusterProfile != nil {
-		s.profile = clusterProfile
+	} else if clusterProfileDetails != nil {
+		s.profile = api.FromClusterProfileDetails(clusterProfileDetails)
 	}
 
-	var profileName api.ClusterProfile
+	var profileName string
 	if s.profile != nil {
 		profileName = s.profile.Name
 	}
 
-	s.ipPoolLease = s.ipPoolLeaseFunc(profileName, s.branch)
+	s.ipPoolLease = s.ipPoolLeaseFunc(api.ClusterProfile(profileName), s.branch)
 	if !s.ipPoolLeaseAvailable() {
 		return results.ForReason("executing_test").ForError(s.wrapped.Run(ctx))
 	}

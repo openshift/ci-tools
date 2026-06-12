@@ -46,7 +46,6 @@ type leaseStep struct {
 	// for sending heartbeats during lease acquisition
 	namespace             func() string
 	clusterProfileSetName string
-	clusterProfileName    string
 	clusterProfile        *api.ClusterProfileDetails
 	stsHomeRoleARN        string
 	stsHubRoleARN         string
@@ -207,7 +206,7 @@ func (s *leaseStep) acquireLeases(ctx context.Context, cancel context.CancelFunc
 		logrus.Infof("Acquired %d lease(s) for %s: %v", l.Count, l.ResourceType, names)
 		l.resources = names
 
-		if l.ClusterProfile != "" {
+		if l.ClusterProfile != nil {
 			if err := s.handleClusterProfile(ctx, l, names); err != nil {
 				errs = append(errs, err)
 				break
@@ -266,25 +265,25 @@ func clusterProfileFromResources(resources []string) string {
 }
 
 func (s *leaseStep) handleClusterProfile(ctx context.Context, l *stepLease, names []string) error {
-	s.clusterProfileName = l.ClusterProfile
+	clusterProfileName := l.ClusterProfile.Name
 
-	if clusterProfileName := clusterProfileFromResources(names); clusterProfileName != "" {
-		s.clusterProfileSetName = l.ClusterProfile
-		s.clusterProfileName = clusterProfileName
+	if cpName := clusterProfileFromResources(names); cpName != "" {
+		s.clusterProfileSetName = l.ClusterProfile.Name
+		clusterProfileName = cpName
 	}
 
-	if s.clusterProfileName == "" {
+	if clusterProfileName == "" {
 		return nil
 	}
 
-	cpDetails, err := s.clusterProfileGetter(s.clusterProfileName)
+	cpDetails, err := s.clusterProfileGetter(clusterProfileName)
 	if err != nil {
-		return fmt.Errorf("resolve cluster profile %s: %w", s.clusterProfileName, err)
+		return fmt.Errorf("resolve cluster profile %s: %w", clusterProfileName, err)
 	}
 
 	secretData, err := s.importClusterProfileSecret(ctx, cpDetails.Secret)
 	if err != nil {
-		return fmt.Errorf("import secret %s for cluster profile %s: %w", cpDetails.Secret, s.clusterProfileName, err)
+		return fmt.Errorf("import secret %s for cluster profile %s: %w", cpDetails.Secret, clusterProfileName, err)
 	}
 
 	s.stsHubRoleARN = string(secretData[api.STSHubRoleARNSecretKey])
@@ -304,7 +303,7 @@ func (s *leaseStep) handleClusterProfile(ctx context.Context, l *stepLease, name
 		if s.stsHomeRoleARN == "" {
 			logrus.Warnf("STS hub and target role ARNs are set for profile %s but home_role_arn "+
 				"was not found in Secret %s; STS will not be activated",
-				s.clusterProfileName, api.STSClusterSecretName)
+				clusterProfileName, api.STSClusterSecretName)
 			s.stsHubRoleARN = ""
 			s.stsTargetRoleARN = ""
 		}

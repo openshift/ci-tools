@@ -30,7 +30,7 @@ func TestResolve(t *testing.T) {
 	yes := true
 	clusterProfilesMap := api.ClusterProfilesMap{
 		api.ClusterProfileAWS: api.ClusterProfileDetails{
-			Name:        api.ClusterProfileAWS,
+			Name:        "aws",
 			ClusterType: "aws",
 			LeaseType:   "aws-quota-slice",
 			Secret:      "cluster-secrets-aws",
@@ -93,8 +93,8 @@ func TestResolve(t *testing.T) {
 			}},
 		},
 		expectedRes: api.MultiStageTestConfigurationLiteral{
-			ClusterProfileLiteral: &api.ClusterProfileDetails{
-				Name:        api.ClusterProfileAWS,
+			ClusterProfileLiteral: &api.ClusterProfileLiteral{
+				Name:        "aws",
 				ClusterType: "aws",
 				LeaseType:   "aws-quota-slice",
 				Secret:      "cluster-secrets-aws",
@@ -183,8 +183,8 @@ func TestResolve(t *testing.T) {
 			},
 		},
 		expectedRes: api.MultiStageTestConfigurationLiteral{
-			ClusterProfileLiteral: &api.ClusterProfileDetails{
-				Name:        api.ClusterProfileAWS,
+			ClusterProfileLiteral: &api.ClusterProfileLiteral{
+				Name:        "aws",
 				ClusterType: "aws",
 				LeaseType:   "aws-quota-slice",
 				Secret:      "cluster-secrets-aws",
@@ -259,8 +259,8 @@ func TestResolve(t *testing.T) {
 			},
 		},
 		expectedRes: api.MultiStageTestConfigurationLiteral{
-			ClusterProfileLiteral: &api.ClusterProfileDetails{
-				Name:        api.ClusterProfileAWS,
+			ClusterProfileLiteral: &api.ClusterProfileLiteral{
+				Name:        "aws",
 				ClusterType: "aws",
 				LeaseType:   "aws-quota-slice",
 				Secret:      "cluster-secrets-aws",
@@ -336,8 +336,8 @@ func TestResolve(t *testing.T) {
 			},
 		},
 		expectedRes: api.MultiStageTestConfigurationLiteral{
-			ClusterProfileLiteral: &api.ClusterProfileDetails{
-				Name:        api.ClusterProfileAWS,
+			ClusterProfileLiteral: &api.ClusterProfileLiteral{
+				Name:        "aws",
 				ClusterType: "aws",
 				LeaseType:   "aws-quota-slice",
 				Secret:      "cluster-secrets-aws",
@@ -428,8 +428,8 @@ func TestResolve(t *testing.T) {
 				}},
 		},
 		expectedRes: api.MultiStageTestConfigurationLiteral{
-			ClusterProfileLiteral: &api.ClusterProfileDetails{
-				Name:        api.ClusterProfileAWS,
+			ClusterProfileLiteral: &api.ClusterProfileLiteral{
+				Name:        "aws",
 				ClusterType: "aws",
 				LeaseType:   "aws-quota-slice",
 				Secret:      "cluster-secrets-aws",
@@ -567,8 +567,8 @@ func TestResolve(t *testing.T) {
 			},
 		},
 		expectedRes: api.MultiStageTestConfigurationLiteral{
-			ClusterProfileLiteral: &api.ClusterProfileDetails{
-				Name:        api.ClusterProfileAWS,
+			ClusterProfileLiteral: &api.ClusterProfileLiteral{
+				Name:        "aws",
 				ClusterType: "aws",
 				LeaseType:   "aws-quota-slice",
 				Secret:      "cluster-secrets-aws",
@@ -707,8 +707,8 @@ func TestResolve(t *testing.T) {
 			},
 		},
 		expectedRes: api.MultiStageTestConfigurationLiteral{
-			ClusterProfileLiteral: &api.ClusterProfileDetails{
-				Name:        api.ClusterProfileAWS,
+			ClusterProfileLiteral: &api.ClusterProfileLiteral{
+				Name:        "aws",
 				ClusterType: "aws",
 				LeaseType:   "aws-quota-slice",
 				Secret:      "cluster-secrets-aws",
@@ -801,8 +801,8 @@ func TestResolve(t *testing.T) {
 				},
 			},
 			expectedRes: api.MultiStageTestConfigurationLiteral{
-				ClusterProfileLiteral: &api.ClusterProfileDetails{
-					Name:        api.ClusterProfileAzure4,
+				ClusterProfileLiteral: &api.ClusterProfileLiteral{
+					Name:        "azure4",
 					ClusterType: "azure4",
 					LeaseType:   "azure4-quota-slice",
 					Secret:      "cluster-secrets-azure4",
@@ -1004,8 +1004,8 @@ func TestResolve(t *testing.T) {
 				},
 			},
 			expectedRes: api.MultiStageTestConfigurationLiteral{
-				ClusterProfileLiteral: &api.ClusterProfileDetails{
-					Name:        api.ClusterProfileAWS,
+				ClusterProfileLiteral: &api.ClusterProfileLiteral{
+					Name:        "aws",
 					ClusterType: "aws",
 					LeaseType:   "aws-quota-slice",
 					Secret:      "cluster-secrets-aws",
@@ -1111,8 +1111,8 @@ func TestResolve(t *testing.T) {
 				},
 			},
 			expectedRes: api.MultiStageTestConfigurationLiteral{
-				ClusterProfileLiteral: &api.ClusterProfileDetails{
-					Name:        api.ClusterProfileAWS,
+				ClusterProfileLiteral: &api.ClusterProfileLiteral{
+					Name:        "aws",
 					ClusterType: "aws",
 					LeaseType:   "aws-quota-slice",
 					Secret:      "cluster-secrets-aws",
@@ -1218,8 +1218,8 @@ func TestResolve(t *testing.T) {
 				},
 			},
 			expectedRes: api.MultiStageTestConfigurationLiteral{
-				ClusterProfileLiteral: &api.ClusterProfileDetails{
-					Name:        api.ClusterProfileAWS,
+				ClusterProfileLiteral: &api.ClusterProfileLiteral{
+					Name:        "aws",
 					ClusterType: "aws",
 					LeaseType:   "aws-quota-slice",
 					Secret:      "cluster-secrets-aws",
@@ -1325,8 +1325,8 @@ func TestResolve(t *testing.T) {
 				},
 			},
 			expectedRes: api.MultiStageTestConfigurationLiteral{
-				ClusterProfileLiteral: &api.ClusterProfileDetails{
-					Name:        api.ClusterProfileAWS,
+				ClusterProfileLiteral: &api.ClusterProfileLiteral{
+					Name:        "aws",
 					ClusterType: "aws",
 					LeaseType:   "aws-quota-slice",
 					Secret:      "cluster-secrets-aws",
@@ -1431,8 +1431,8 @@ func TestResolve(t *testing.T) {
 				},
 			},
 			expectedRes: api.MultiStageTestConfigurationLiteral{
-				ClusterProfileLiteral: &api.ClusterProfileDetails{
-					Name:        api.ClusterProfileAWS,
+				ClusterProfileLiteral: &api.ClusterProfileLiteral{
+					Name:        "aws",
 					ClusterType: "aws",
 					LeaseType:   "aws-quota-slice",
 					Secret:      "cluster-secrets-aws",
@@ -1540,8 +1540,8 @@ func TestResolve(t *testing.T) {
 				},
 			},
 			expectedRes: api.MultiStageTestConfigurationLiteral{
-				ClusterProfileLiteral: &api.ClusterProfileDetails{
-					Name:        api.ClusterProfileAWS,
+				ClusterProfileLiteral: &api.ClusterProfileLiteral{
+					Name:        "aws",
 					ClusterType: "aws",
 					LeaseType:   "aws-quota-slice",
 					Secret:      "cluster-secrets-aws",
@@ -1612,8 +1612,8 @@ func TestResolve(t *testing.T) {
 				},
 			},
 			expectedRes: api.MultiStageTestConfigurationLiteral{
-				ClusterProfileLiteral: &api.ClusterProfileDetails{
-					Name:        api.ClusterProfileAWS,
+				ClusterProfileLiteral: &api.ClusterProfileLiteral{
+					Name:        "aws",
 					ClusterType: "aws",
 					LeaseType:   "aws-quota-slice",
 					Secret:      "cluster-secrets-aws",
@@ -1653,8 +1653,8 @@ func TestResolve(t *testing.T) {
 				},
 			},
 			expectedRes: api.MultiStageTestConfigurationLiteral{
-				ClusterProfileLiteral: &api.ClusterProfileDetails{
-					Name:        api.ClusterProfileAWS,
+				ClusterProfileLiteral: &api.ClusterProfileLiteral{
+					Name:        "aws",
 					ClusterType: "aws",
 					LeaseType:   "aws-quota-slice",
 					Secret:      "cluster-secrets-aws",

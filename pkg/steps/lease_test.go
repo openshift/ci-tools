@@ -315,7 +315,7 @@ func TestAcquireLeases(t *testing.T) {
 				ResourceType:   "aws",
 				Env:            api.DefaultLeaseEnv,
 				Count:          1,
-				ClusterProfile: "aws",
+				ClusterProfile: &api.ClusterProfileLiteral{Name: "aws"},
 			}},
 			resources: map[string]*common.Resource{
 				"acquireWaitWithPriority_aws_free_leased_random": {
@@ -388,7 +388,7 @@ func TestAcquireLeases(t *testing.T) {
 				ResourceType:   "aws",
 				Env:            api.DefaultLeaseEnv,
 				Count:          1,
-				ClusterProfile: "aws",
+				ClusterProfile: &api.ClusterProfileLiteral{Name: "aws"},
 			}, {
 				ResourceType: "foobar",
 				Env:          "FOOBAR_RESOURCE",
@@ -471,7 +471,7 @@ func TestAcquireLeases(t *testing.T) {
 				ResourceType:   "aws",
 				Env:            api.DefaultLeaseEnv,
 				Count:          1,
-				ClusterProfile: "aws",
+				ClusterProfile: &api.ClusterProfileLiteral{Name: "aws"},
 			}},
 			resources: map[string]*common.Resource{
 				"acquireWaitWithPriority_aws_free_leased_random": {
@@ -568,7 +568,7 @@ func TestAcquireLeases(t *testing.T) {
 				ResourceType:   "aws",
 				Env:            api.DefaultLeaseEnv,
 				Count:          1,
-				ClusterProfile: "aws",
+				ClusterProfile: &api.ClusterProfileLiteral{Name: "aws"},
 			}},
 			resources: map[string]*common.Resource{
 				"acquireWaitWithPriority_aws_free_leased_random": {
@@ -644,7 +644,7 @@ func TestAcquireLeases(t *testing.T) {
 				ResourceType:   "aws",
 				Env:            api.DefaultLeaseEnv,
 				Count:          1,
-				ClusterProfile: "aws",
+				ClusterProfile: &api.ClusterProfileLiteral{Name: "aws"},
 			}},
 			resources: map[string]*common.Resource{
 				"acquireWaitWithPriority_aws_free_leased_random": {
@@ -741,7 +741,7 @@ func TestAcquireLeases(t *testing.T) {
 				ResourceType:   "openshift-org-aws",
 				Env:            api.DefaultLeaseEnv,
 				Count:          1,
-				ClusterProfile: "aws-set",
+				ClusterProfile: &api.ClusterProfileLiteral{Name: "aws-set"},
 			}},
 			resources: map[string]*common.Resource{
 				"acquireWaitWithPriority_openshift-org-aws_free_leased_random": {

@@ -413,8 +413,8 @@ func TestRun(t *testing.T) {
 
 func TestIPPoolStepForward(t *testing.T) {
 	step := stepNeedsLease{}
-	cpAWS := api.ClusterProfileDetails{
-		Name:        api.ClusterProfileAWS,
+	cpAWS := api.ClusterProfileLiteral{
+		Name:        "aws",
 		ClusterType: "aws",
 		LeaseType:   "aws-quota-slice",
 		Secret:      "cluster-secrets-aws",

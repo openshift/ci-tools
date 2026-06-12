@@ -110,7 +110,7 @@ type multiStageTestStep struct {
 	name             string
 	additionalSuffix string
 	nodeName         string
-	profile          *api.ClusterProfileDetails
+	profile          *api.ClusterProfileLiteral
 	config           *api.ReleaseBuildConfiguration
 	// params exposes getters for variables created by other steps
 	params                           api.Parameters
@@ -265,13 +265,13 @@ func (s *multiStageTestStep) Run(ctx context.Context) error {
 func (s *multiStageTestStep) run(ctx context.Context) error {
 	logrus.Infof("Running multi-stage test %s", s.name)
 
-	clusterProfile, err := api.ClusterProfileFromParams(s.params)
+	clusterProfileDetails, err := api.ClusterProfileFromParams(s.params)
 	if err != nil {
 		if !errors.Is(err, &api.ErrParamNotFound{}) {
 			return fmt.Errorf("get cluster profile from parameters: %w", err)
 		}
-	} else if clusterProfile != nil {
-		s.profile = clusterProfile
+	} else if clusterProfileDetails != nil {
+		s.profile = api.FromClusterProfileDetails(clusterProfileDetails)
 	}
 
 	if err := s.retrieveSTSRoleARNParams(); err != nil {

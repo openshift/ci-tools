@@ -8,16 +8,20 @@ spec:
   containers:
   - args:
     - |-
-      for r in {1..5}; do
+      function mirror {
+      for r in $(seq 1 $1); do
         echo Mirror attempt $r
-        if oc image mirror --loglevel=2 --keep-manifest-list --registry-config=/etc/push-secret/.dockerconfigjson --max-per-registry=10 docker-registry.default.svc:5000/ci-op-y2n8rsh3/pipeline@sha256:afd71aa3cbbf7d2e00cd8696747b2abf164700147723c657919c20b13d13ec62=registry.ci.openshift.org/ci/applyconfig:latest docker-registry.default.svc:5000/ci-op-y2n8rsh3/pipeline@sha256:bbb=registry.ci.openshift.org/ci/bin:latest; then break; fi
-        if [ "${r}" -eq 5 ]; then
+        if oc image mirror --loglevel=$2 --keep-manifest-list --registry-config=$3 --max-per-registry=10 $4; then break; fi
+        if [ "${r}" -eq $1 ]; then
           exit 1
         fi
         backoff=$(($RANDOM % 120))s
         echo Sleeping randomized $backoff before retry
         sleep $backoff
       done
+      }
+      mirror 5 2 /etc/push-secret/.dockerconfigjson docker-registry.default.svc:5000/ci-op-y2n8rsh3/pipeline@sha256:afd71aa3cbbf7d2e00cd8696747b2abf164700147723c657919c20b13d13ec62=registry.ci.openshift.org/ci/applyconfig:latest
+      mirror 5 2 /etc/push-secret/.dockerconfigjson docker-registry.default.svc:5000/ci-op-y2n8rsh3/pipeline@sha256:bbb=registry.ci.openshift.org/ci/bin:latest
     command:
     - /bin/sh
     - -c

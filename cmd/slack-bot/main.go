@@ -207,46 +207,52 @@ func main() {
 	// Initialize Chaibot if enabled
 	var chaibotAnalyzer *chaibot.Analyzer
 	var chaibotChannels []string
-	if o.enableTriage && o.triageConfigPath != "" {
+	if o.enableTriage {
+		// Fail fast if required config is missing
+		if o.triageConfigPath == "" {
+			logrus.Fatal("--enable-triage requires --triage-config-path to be set")
+		}
+
 		mcpURL := os.Getenv("SHIP_HELP_MCP_URL")
 		mcpToken := os.Getenv("SHIP_HELP_MCP_TOKEN")
 
-		if mcpURL != "" && mcpToken != "" {
-			type triageConfig struct {
-				Enabled           bool `yaml:"enabled"`
-				MonitoredChannels []struct {
-					Name      string `yaml:"name"`
-					ChannelID string `yaml:"channel_id"`
-				} `yaml:"monitored_channels"`
-				Analysis struct {
-					AIProvider     string `yaml:"ai_provider"`
-					PromptTemplate string `yaml:"prompt_template"`
-				} `yaml:"analysis"`
-			}
-
-			configData, err := os.ReadFile(o.triageConfigPath)
-			if err != nil {
-				logrus.WithError(err).Fatal("Failed to read triage config")
-			}
-
-			var cfg triageConfig
-			if err := yaml.Unmarshal(configData, &cfg); err != nil {
-				logrus.WithError(err).Fatal("Failed to parse triage config")
-			}
-
-			chaibotAnalyzer = chaibot.NewAnalyzer(mcpURL, mcpToken, cfg.Analysis.PromptTemplate)
-
-			for _, ch := range cfg.MonitoredChannels {
-				chaibotChannels = append(chaibotChannels, ch.ChannelID)
-			}
-
-			logrus.WithFields(logrus.Fields{
-				"channels": len(chaibotChannels),
-				"provider": cfg.Analysis.AIProvider,
-			}).Info("Chaibot triage enabled")
-		} else {
-			logrus.Warn("Chaibot enabled but SHIP_HELP_MCP_URL or SHIP_HELP_MCP_TOKEN not set")
+		// Fail fast if required env vars are missing
+		if mcpURL == "" || mcpToken == "" {
+			logrus.Fatal("--enable-triage requires both SHIP_HELP_MCP_URL and SHIP_HELP_MCP_TOKEN environment variables")
 		}
+
+		type triageConfig struct {
+			Enabled           bool `yaml:"enabled"`
+			MonitoredChannels []struct {
+				Name      string `yaml:"name"`
+				ChannelID string `yaml:"channel_id"`
+			} `yaml:"monitored_channels"`
+			Analysis struct {
+				AIProvider     string `yaml:"ai_provider"`
+				PromptTemplate string `yaml:"prompt_template"`
+			} `yaml:"analysis"`
+		}
+
+		configData, err := os.ReadFile(o.triageConfigPath)
+		if err != nil {
+			logrus.WithError(err).Fatal("Failed to read triage config")
+		}
+
+		var cfg triageConfig
+		if err := yaml.Unmarshal(configData, &cfg); err != nil {
+			logrus.WithError(err).Fatal("Failed to parse triage config")
+		}
+
+		chaibotAnalyzer = chaibot.NewAnalyzer(mcpURL, mcpToken, cfg.Analysis.PromptTemplate)
+
+		for _, ch := range cfg.MonitoredChannels {
+			chaibotChannels = append(chaibotChannels, ch.ChannelID)
+		}
+
+		logrus.WithFields(logrus.Fields{
+			"channels": len(chaibotChannels),
+			"provider": cfg.Analysis.AIProvider,
+		}).Info("Chaibot triage enabled")
 	}
 
 	metrics.ExposeMetrics("slack-bot", config.PushGateway{}, o.instrumentationOptions.MetricsPort)

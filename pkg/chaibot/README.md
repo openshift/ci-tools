@@ -6,142 +6,154 @@ This package provides test failure analysis using Chai Bot (ship-help MCP) for a
 
 Chaibot monitors Slack channels for Prow CI job failure URLs and automatically posts analysis using the Chai Bot service via ship-help MCP.
 
-## Files
+## Files in This PR
 
-- `analyzer.go` - Ship-help MCP client implementation
+- `pkg/chaibot/analyzer.go` - Ship-help MCP client implementation
+- `pkg/chaibot/analyzer_test.go` - Unit tests
+- `pkg/slack/events/chaibot/handler.go` - Slack event handler (monitors for Prow URLs)
+- `pkg/slack/events/chaibot/handler_test.go` - Event handler tests
+- `pkg/slack/events/router/router.go` - Updated to register Chaibot handler
+- `cmd/slack-bot/main.go` - Updated with Chaibot initialization
 
-## Integration with slack-bot
+**This PR provides the complete implementation.** The integration is ready to use once deployed.
 
-To enable Chaibot in the slack-bot command, add the following to `cmd/slack-bot/main.go`:
+## How It Works
 
-### 1. Add imports
+### 1. Event Handler Pattern (Already Implemented)
+
+Chaibot uses the existing event handler pattern in `openshift/ci-tools`:
+
+**Implementation files:**
+- `pkg/slack/events/chaibot/handler.go` - Monitors Slack messages for Prow URLs
+- Registered in `pkg/slack/events/router/router.go`
+- Initialized in `cmd/slack-bot/main.go`
+
+**What the handler does:**
+1. Monitors configured Slack channels (e.g., `#opp-discussion`)
+2. Detects Prow CI job URLs in messages
+3. Calls `analyzer.AnalyzeFailure()` asynchronously
+4. Posts analysis results in a thread
+
+### 2. Initialization in cmd/slack-bot/main.go
+
+**Already implemented in this PR:**
 
 ```go
-import (
-    // ... existing imports ...
-    "github.com/openshift/ci-tools/pkg/chaibot"
-    "gopkg.in/yaml.v2"
-)
+// Command-line flags (added)
+--enable-triage          // Enable Chaibot
+--triage-config-path     // Path to triage-config.yaml
+
+// Initialization (added to main())
+if o.enableTriage && o.triageConfigPath != "" {
+    mcpURL := os.Getenv("SHIP_HELP_MCP_URL")
+    mcpToken := os.Getenv("SHIP_HELP_MCP_TOKEN")
+    
+    // Create analyzer
+    chaibotAnalyzer = chaibot.NewAnalyzer(mcpURL, mcpToken, promptTemplate)
+    
+    // Handler is registered in router.ForEvents()
+}
 ```
 
-### 2. Add command-line flags
+### 3. Event Router Registration
+
+**Already implemented in pkg/slack/events/router/router.go:**
 
 ```go
-type options struct {
-    // ... existing fields ...
+func ForEvents(client *slack.Client, chaibotAnalyzer *chaibot.Analyzer, chaibotChannels []string, ...) {
+    // ... existing handlers ...
     
-    enableTriage      bool
-    triageConfigPath  string
-}
-
-func (o *options) Bind(fs *flag.FlagSet) {
-    // ... existing bindings ...
-    
-    fs.BoolVar(&o.enableTriage, "enable-triage", false, "Enable automatic test failure triage")
-    fs.StringVar(&o.triageConfigPath, "triage-config-path", "", "Path to triage configuration file")
-}
-```
-
-### 3. Add Chaibot initialization in main()
-
-```go
-func main() {
-    // ... existing setup ...
-    
-    if o.enableTriage {
-        mcpURL := os.Getenv("SHIP_HELP_MCP_URL")
-        mcpToken := os.Getenv("SHIP_HELP_MCP_TOKEN")
-        
-        if mcpURL != "" && mcpToken != "" {
-            // Load triage config
-            configData, err := os.ReadFile(o.triageConfigPath)
-            if err != nil {
-                logrus.WithError(err).Fatal("Failed to load triage config")
-            }
-            
-            var triageConfig TriageConfig
-            if err := yaml.Unmarshal(configData, &triageConfig); err != nil {
-                logrus.WithError(err).Fatal("Failed to parse triage config")
-            }
-            
-            // Create analyzer
-            analyzer := chaibot.NewAnalyzer(mcpURL, mcpToken, triageConfig.Analysis.PromptTemplate)
-            
-            logrus.WithFields(logrus.Fields{
-                "channels": len(triageConfig.MonitoredChannels),
-                "provider": triageConfig.Analysis.AIProvider,
-            }).Info("Chaibot triage enabled")
-            
-            // Start monitoring (add as event handler)
-            go monitorForFailures(slackClient, analyzer, &triageConfig)
-        } else {
-            logrus.Warn("Chaibot enabled but SHIP_HELP_MCP_URL or SHIP_HELP_MCP_TOKEN not set")
-        }
+    if chaibotAnalyzer != nil && len(chaibotChannels) > 0 {
+        handlers = append(handlers, chaibothandler.Handler(client, chaibotAnalyzer, chaibotChannels))
     }
-    
-    // ... rest of main ...
 }
 ```
 
-### 4. Add monitoring function
+## NOT in This PR (Requires openshift/release Configuration)
 
-```go
-type TriageConfig struct {
-    Enabled           bool                 `yaml:"enabled"`
-    MonitoredChannels []MonitoredChannel   `yaml:"monitored_channels"`
-    Analysis          AnalysisConfig       `yaml:"analysis"`
-}
+The following configuration files are in **openshift/release#80559**, not this PR:
 
-type MonitoredChannel struct {
-    Name      string `yaml:"name"`
-    ChannelID string `yaml:"channel_id"`
-}
+- `core-services/ci-chat-bot/triage-config.yaml` - Chaibot configuration
+- `clusters/app.ci/ci-chat-bot/chaibot-configmap.yaml` - Kubernetes ConfigMap
+- `clusters/app.ci/ci-chat-bot/ci-chat-bot.yaml` - Deployment with environment variables
+- `core-services/ci-secret-bootstrap/chaibot-secret-config.yaml` - Ship-help token secret
 
-type AnalysisConfig struct {
-    Timeout        int    `yaml:"timeout"`
-    AIProvider     string `yaml:"ai_provider"`
-    PromptTemplate string `yaml:"prompt_template"`
-}
+## Usage
 
-func monitorForFailures(client *slack.Client, analyzer *chaibot.Analyzer, config *TriageConfig) {
-    // Create channel ID map
-    monitoredChannels := make(map[string]bool)
-    for _, ch := range config.MonitoredChannels {
-        monitoredChannels[ch.ChannelID] = true
-    }
-    
-    // This would integrate with existing event handling
-    // For now, this is a placeholder showing the pattern
-    logrus.Info("Chaibot monitoring started")
-}
-```
+Once both PRs are merged and deployed:
 
-## Alternative: Event Handler Pattern
+1. **Post a Prow URL in a monitored channel:**
+   ```
+   Job failed: https://prow.ci.openshift.org/view/gs/test-platform-results/logs/periodic-ci-stolostron-policy-collection-main-ocp4.22-interop-opp-aws/2066255424226594816
+   ```
 
-A cleaner integration would be to add Chaibot as an event handler in the existing event routing system:
-
-1. Create `pkg/slack/events/chaibot/handler.go` following the pattern of `pkg/slack/events/helpdesk/`
-2. Register it in the event router in `cmd/slack-bot/main.go`
-3. The handler would check for Prow URLs and call the analyzer
+2. **Chaibot responds in a thread within 30-60 seconds** with:
+   - Which step(s) failed
+   - Root cause analysis (product bug, test issue, or infrastructure)
+   - Related Jira tickets
+   - Pass rate history
+   - Recommended fixes
 
 ## Configuration
 
-The triage configuration is mounted at `/etc/triage-config/triage-config.yaml` in the deployment and includes:
-- Monitored channel IDs
-- Ship-help MCP endpoint
-- Analysis prompt template
-- Rate limiting settings
+**Deployment configuration is in openshift/release#80559:**
 
-See `openshift/release#80559` for the full configuration.
+- `core-services/ci-chat-bot/triage-config.yaml` - Main config:
+  - Monitored channels (e.g., `#opp-discussion`)
+  - Ship-help MCP endpoint
+  - Analysis prompt template
+  - Rate limiting settings
+
+- `clusters/app.ci/ci-chat-bot/ci-chat-bot.yaml` - Deployment:
+  - Environment variables: `SHIP_HELP_MCP_URL`, `SHIP_HELP_MCP_TOKEN`
+  - ConfigMap mount: `/etc/triage-config/triage-config.yaml`
 
 ## Environment Variables
 
-- `CHAIBOT_ENABLED` - Set to "true" to enable
-- `SHIP_HELP_MCP_URL` - Ship-help MCP endpoint
-- `SHIP_HELP_MCP_TOKEN` - Authentication token
+Required environment variables (set in deployment):
+
+- `SHIP_HELP_MCP_URL` - Ship-help MCP endpoint (e.g., `https://ship-help-mcp-continuous-release-tooling--ship-help-bot.apps.gpc.ocp-hub.prod.psi.redhat.com/personas/ocp_ai_helpdesk/mcp`)
+- `SHIP_HELP_MCP_TOKEN` - Authentication token (from Kubernetes secret `cluster-secrets-chaibot-ship-help`)
 
 ## Related PRs
 
-- openshift/release#80559 - Configuration and deployment
-- Based on /analyze-failure skill by MPEX Integrity team
-- Alternative to PR #80476 (OpenAI approach)
+- **This PR (openshift/ci-tools#5251)** - Chaibot implementation (analyzer, handler, router, main.go)
+- **openshift/release#80559** - Configuration and deployment (config files, secrets, ConfigMaps)
+- Based on `/analyze-failure` skill by MPEX Integrity team
+- Alternative to PR openshift/release#80476 (OpenAI approach)
+
+## Architecture
+
+```
+User posts Prow URL in Slack
+         ↓
+Slack Event API → ci-chat-bot deployment
+         ↓
+pkg/slack/events/chaibot/handler.go
+    - Detects Prow URL
+    - Extracts job URL
+         ↓
+pkg/chaibot/analyzer.go
+    - Calls ship-help MCP (ask_persona tool)
+    - Sends prompt with job URL
+         ↓
+Ship-Help MCP (ocp_ai_helpdesk persona)
+    - Searches Jira, Sippy, Prow logs
+    - Analyzes failure
+    - Returns comprehensive analysis
+         ↓
+pkg/chaibot/analyzer.go
+    - Formats response as Slack Block Kit
+         ↓
+Slack API
+    - Posts analysis in thread
+```
+
+## Cost Comparison
+
+| Solution | Cost | Data Sources |
+|----------|------|--------------|
+| **Chaibot (ship-help MCP)** | $0/month | 9+ sources (Jira, Sippy, Prow, GitHub, etc.) |
+| OpenAI GPT-4o (PR #80476) | ~$1,080/year | 3 sources (limited context) |
+
+**Chaibot uses internal Red Hat infrastructure** - no external API costs.

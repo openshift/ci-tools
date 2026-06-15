@@ -108,12 +108,35 @@ Once both PRs are merged and deployed:
   - Environment variables: `SHIP_HELP_MCP_URL`, `SHIP_HELP_MCP_TOKEN`
   - ConfigMap mount: `/etc/triage-config/triage-config.yaml`
 
-## Environment Variables
+## How to Enable Chaibot
 
-Required environment variables (set in deployment):
+Chaibot is enabled via **command-line flags** (not environment variables):
 
-- `SHIP_HELP_MCP_URL` - Ship-help MCP endpoint (e.g., `https://ship-help-mcp-continuous-release-tooling--ship-help-bot.apps.gpc.ocp-hub.prod.psi.redhat.com/personas/ocp_ai_helpdesk/mcp`)
-- `SHIP_HELP_MCP_TOKEN` - Authentication token (from Kubernetes secret `cluster-secrets-chaibot-ship-help`)
+**Command-line flags (required):**
+- `--enable-triage` - Enable Chaibot functionality
+- `--triage-config-path=/etc/triage-config/triage-config.yaml` - Path to config file
+
+**Environment variables (required):**
+- `SHIP_HELP_MCP_URL` - Ship-help MCP endpoint
+- `SHIP_HELP_MCP_TOKEN` - Authentication token (from Kubernetes secret)
+
+**Example deployment command:**
+```yaml
+# In clusters/app.ci/ci-chat-bot/ci-chat-bot.yaml
+args:
+  - --enable-triage
+  - --triage-config-path=/etc/triage-config/triage-config.yaml
+env:
+  - name: SHIP_HELP_MCP_URL
+    value: "https://ship-help-mcp-continuous-release-tooling--ship-help-bot.apps.gpc.ocp-hub.prod.psi.redhat.com/personas/ocp_ai_helpdesk/mcp"
+  - name: SHIP_HELP_MCP_TOKEN
+    valueFrom:
+      secretKeyRef:
+        name: cluster-secrets-chaibot-ship-help
+        key: ship-help-token
+```
+
+**Without these flags, Chaibot will NOT activate** - even if environment variables are set.
 
 ## Related PRs
 

@@ -36,6 +36,31 @@ func TestExtractProwURL(t *testing.T) {
 			input:    "Failed again https://prow.ci.openshift.org/view/gs/origin-ci-test/logs/job/456 any ideas?",
 			expected: "https://prow.ci.openshift.org/view/gs/origin-ci-test/logs/job/456",
 		},
+		{
+			name:     "URL with trailing parenthesis",
+			input:    "Check this out (https://prow.ci.openshift.org/view/gs/test-platform-results/logs/job/789)",
+			expected: "https://prow.ci.openshift.org/view/gs/test-platform-results/logs/job/789",
+		},
+		{
+			name:     "URL with trailing angle bracket",
+			input:    "<https://prow.ci.openshift.org/view/gs/test-platform-results/logs/job/999>",
+			expected: "https://prow.ci.openshift.org/view/gs/test-platform-results/logs/job/999",
+		},
+		{
+			name:     "URL with trailing period",
+			input:    "Failed job: https://prow.ci.openshift.org/view/gs/test-platform-results/logs/job/111.",
+			expected: "https://prow.ci.openshift.org/view/gs/test-platform-results/logs/job/111",
+		},
+		{
+			name:     "URL with trailing comma",
+			input:    "Jobs failed: https://prow.ci.openshift.org/view/gs/test-platform-results/logs/job/222, and more",
+			expected: "https://prow.ci.openshift.org/view/gs/test-platform-results/logs/job/222",
+		},
+		{
+			name:     "URL with multiple trailing punctuation",
+			input:    "See: https://prow.ci.openshift.org/view/gs/test-platform-results/logs/job/333>.",
+			expected: "https://prow.ci.openshift.org/view/gs/test-platform-results/logs/job/333",
+		},
 	}
 
 	for _, tt := range tests {

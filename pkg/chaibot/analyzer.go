@@ -165,7 +165,12 @@ func ExtractProwURL(text string) string {
 			for urlEnd < len(text) && !isWhitespace(text[urlEnd]) {
 				urlEnd++
 			}
-			return text[urlStart:urlEnd]
+
+			// Trim trailing punctuation (handles cases like "https://...)" or "<https://...>")
+			url := text[urlStart:urlEnd]
+			url = strings.TrimRight(url, ")>]}.,;:")
+
+			return url
 		}
 	}
 

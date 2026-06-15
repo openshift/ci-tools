@@ -144,3 +144,27 @@ func TestFormatSlackResponse(t *testing.T) {
 		t.Errorf("Expected third block to be context, got %v", blocks[2]["type"])
 	}
 }
+
+func TestFormatSlackResponse_NilResult(t *testing.T) {
+	// Should not panic with nil result
+	response := FormatSlackResponse(nil)
+
+	// Check that response has error structure
+	if response["response_type"] != "in_channel" {
+		t.Errorf("Expected response_type to be 'in_channel', got %v", response["response_type"])
+	}
+
+	blocks, ok := response["blocks"].([]map[string]interface{})
+	if !ok {
+		t.Fatal("Expected blocks to be a slice of maps")
+	}
+
+	if len(blocks) != 1 {
+		t.Errorf("Expected 1 error block, got %d", len(blocks))
+	}
+
+	// Check error message block
+	if blocks[0]["type"] != "section" {
+		t.Errorf("Expected error block to be section, got %v", blocks[0]["type"])
+	}
+}

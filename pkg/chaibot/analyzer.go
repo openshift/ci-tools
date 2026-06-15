@@ -188,6 +188,22 @@ func ContainsProwURL(text string) bool {
 
 // FormatSlackResponse formats the analysis for Slack using Block Kit
 func FormatSlackResponse(result *AnalysisResult) map[string]interface{} {
+	// Guard against nil result to prevent panic
+	if result == nil {
+		return map[string]interface{}{
+			"response_type": "in_channel",
+			"blocks": []map[string]interface{}{
+				{
+					"type": "section",
+					"text": map[string]string{
+						"type": "mrkdwn",
+						"text": "❌ Error: Unable to format analysis (nil result)",
+					},
+				},
+			},
+		}
+	}
+
 	return map[string]interface{}{
 		"response_type": "in_channel", // visible to everyone
 		"blocks": []map[string]interface{}{

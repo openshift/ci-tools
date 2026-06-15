@@ -16,10 +16,11 @@ import (
 
 // Analyzer provides test failure analysis using ship-help MCP
 type Analyzer struct {
-	mcpURL   string
-	token    string
-	client   *http.Client
-	template string
+	mcpURL    string
+	token     string
+	client    *http.Client
+	template  string
+	sessionID string // MCP session ID
 }
 
 // NewAnalyzer creates a new Analyzer instance
@@ -76,22 +77,27 @@ type AnalysisResult struct {
 func (a *Analyzer) AnalyzeFailure(ctx context.Context, jobURL string) (*AnalysisResult, error) {
 	startTime := time.Now()
 
+	// Initialize MCP session if needed
+	if a.sessionID == "" {
+		if err := a.initializeSession(ctx); err != nil {
+			return nil, fmt.Errorf("initialize session: %w", err)
+		}
+	}
+
 	// Build prompt using the configured template
 	prompt := strings.ReplaceAll(a.template, "{job_url}", jobURL)
 
-	// Call ship-help MCP ask_persona tool
-	params := ToolCallParams{
-		Name: "ask_persona",
-		Arguments: map[string]interface{}{
-			"question": prompt,
-		},
-	}
-
+	// Call ship-help MCP tools/call method
 	reqBody := MCPRequest{
 		JSONRPC: "2.0",
 		ID:      1,
 		Method:  "tools/call",
-		Params:  params,
+		Params: map[string]interface{}{
+			"name": "ask_persona",
+			"arguments": map[string]interface{}{
+				"question": prompt,
+			},
+		},
 	}
 
 	jsonData, err := json.Marshal(reqBody)
@@ -107,6 +113,7 @@ func (a *Analyzer) AnalyzeFailure(ctx context.Context, jobURL string) (*Analysis
 	req.Header.Set("Authorization", "Bearer "+a.token)
 	req.Header.Set("Content-Type", "application/json")
 	req.Header.Set("Accept", "application/json, text/event-stream")
+	req.Header.Set("Mcp-Session-Id", a.sessionID)
 
 	resp, err := a.client.Do(req)
 	if err != nil {
@@ -124,9 +131,15 @@ func (a *Analyzer) AnalyzeFailure(ctx context.Context, jobURL string) (*Analysis
 		return nil, fmt.Errorf("HTTP %d: %s", resp.StatusCode, string(body))
 	}
 
+	// Parse SSE response (ship-help MCP returns text/event-stream format)
+	sseData := parseSSEMessage(string(body))
+	if sseData == "" {
+		return nil, fmt.Errorf("no JSON data in SSE response: %s", string(body))
+	}
+
 	// Parse MCP response
 	var mcpResp MCPResponse
-	if err := json.Unmarshal(body, &mcpResp); err != nil {
+	if err := json.Unmarshal([]byte(sseData), &mcpResp); err != nil {
 		return nil, fmt.Errorf("parse response: %w", err)
 	}
 
@@ -200,4 +213,57 @@ func FormatSlackResponse(result *AnalysisResult) string {
 		result.Analysis,
 		result.Duration.Seconds(),
 	)
+}
+
+// initializeSession initializes an MCP session and stores the session ID
+func (a *Analyzer) initializeSession(ctx context.Context) error {
+	// Create initialize request
+	reqBody := MCPRequest{
+		JSONRPC: "2.0",
+		ID:      0,
+		Method:  "initialize",
+		Params:  map[string]interface{}{},
+	}
+
+	jsonData, err := json.Marshal(reqBody)
+	if err != nil {
+		return fmt.Errorf("marshal init request: %w", err)
+	}
+
+	req, err := http.NewRequestWithContext(ctx, "POST", a.mcpURL, bytes.NewBuffer(jsonData))
+	if err != nil {
+		return fmt.Errorf("create init request: %w", err)
+	}
+
+	req.Header.Set("Authorization", "Bearer "+a.token)
+	req.Header.Set("Content-Type", "application/json")
+	req.Header.Set("Accept", "application/json, text/event-stream")
+
+	resp, err := a.client.Do(req)
+	if err != nil {
+		return fmt.Errorf("send init request: %w", err)
+	}
+	defer resp.Body.Close()
+
+	// Extract session ID from response header
+	sessionID := resp.Header.Get("Mcp-Session-Id")
+	if sessionID == "" {
+		body, _ := io.ReadAll(resp.Body)
+		return fmt.Errorf("no session ID in response (HTTP %d): %s", resp.StatusCode, string(body))
+	}
+
+	a.sessionID = sessionID
+	return nil
+}
+
+// parseSSEMessage extracts JSON data from Server-Sent Events response
+// SSE format: "event: message\ndata: {json}\n\n"
+func parseSSEMessage(body string) string {
+	lines := strings.Split(body, "\n")
+	for _, line := range lines {
+		if strings.HasPrefix(line, "data: ") {
+			return strings.TrimPrefix(line, "data: ")
+		}
+	}
+	return ""
 }

@@ -187,49 +187,16 @@ func ContainsProwURL(text string) bool {
 }
 
 // FormatSlackResponse formats the analysis for Slack using Block Kit
-func FormatSlackResponse(result *AnalysisResult) map[string]interface{} {
+// Returns a simple text message since we're posting in a thread
+func FormatSlackResponse(result *AnalysisResult) string {
 	// Guard against nil result to prevent panic
 	if result == nil {
-		return map[string]interface{}{
-			"response_type": "in_channel",
-			"blocks": []map[string]interface{}{
-				{
-					"type": "section",
-					"text": map[string]string{
-						"type": "mrkdwn",
-						"text": "❌ Error: Unable to format analysis (nil result)",
-					},
-				},
-			},
-		}
+		return "❌ Error: Unable to format analysis (nil result)"
 	}
 
-	return map[string]interface{}{
-		"response_type": "in_channel", // visible to everyone
-		"blocks": []map[string]interface{}{
-			{
-				"type": "header",
-				"text": map[string]string{
-					"type": "plain_text",
-					"text": "🔍 Test Failure Analysis",
-				},
-			},
-			{
-				"type": "section",
-				"text": map[string]string{
-					"type": "mrkdwn",
-					"text": result.Analysis,
-				},
-			},
-			{
-				"type": "context",
-				"elements": []map[string]string{
-					{
-						"type": "mrkdwn",
-						"text": fmt.Sprintf("Analysis completed in %.1fs • Powered by Chai Bot", result.Duration.Seconds()),
-					},
-				},
-			},
-		},
-	}
+	// Format as markdown text for thread reply
+	return fmt.Sprintf("🔍 *Chaibot Analysis*\n\n%s\n\n_Analysis completed in %.1fs • Powered by Chai Bot_",
+		result.Analysis,
+		result.Duration.Seconds(),
+	)
 }

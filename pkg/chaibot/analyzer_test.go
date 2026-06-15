@@ -115,33 +115,24 @@ func TestFormatSlackResponse(t *testing.T) {
 
 	response := FormatSlackResponse(result)
 
-	// Check that response has the expected structure
-	if response["response_type"] != "in_channel" {
-		t.Errorf("Expected response_type to be 'in_channel', got %v", response["response_type"])
+	// Check that response is a string
+	if response == "" {
+		t.Error("Expected non-empty response string")
 	}
 
-	blocks, ok := response["blocks"].([]map[string]interface{})
-	if !ok {
-		t.Fatal("Expected blocks to be a slice of maps")
+	// Check that response contains the analysis text
+	if !containsString(response, "Test analysis result") {
+		t.Errorf("Expected response to contain analysis text, got: %s", response)
 	}
 
-	if len(blocks) != 3 {
-		t.Fatalf("Expected 3 blocks, got %d", len(blocks))
+	// Check that response contains the duration
+	if !containsString(response, "42.0s") {
+		t.Errorf("Expected response to contain duration, got: %s", response)
 	}
 
-	// Check header block
-	if blocks[0]["type"] != "header" {
-		t.Errorf("Expected first block to be header, got %v", blocks[0]["type"])
-	}
-
-	// Check section block contains analysis
-	if blocks[1]["type"] != "section" {
-		t.Errorf("Expected second block to be section, got %v", blocks[1]["type"])
-	}
-
-	// Check context block exists
-	if blocks[2]["type"] != "context" {
-		t.Errorf("Expected third block to be context, got %v", blocks[2]["type"])
+	// Check that response contains "Chaibot" or similar branding
+	if !containsString(response, "Chaibot") && !containsString(response, "Chai Bot") {
+		t.Errorf("Expected response to contain branding, got: %s", response)
 	}
 }
 
@@ -149,22 +140,25 @@ func TestFormatSlackResponse_NilResult(t *testing.T) {
 	// Should not panic with nil result
 	response := FormatSlackResponse(nil)
 
-	// Check that response has error structure
-	if response["response_type"] != "in_channel" {
-		t.Errorf("Expected response_type to be 'in_channel', got %v", response["response_type"])
+	// Check that response has error message
+	if response == "" {
+		t.Error("Expected non-empty error message")
 	}
 
-	blocks, ok := response["blocks"].([]map[string]interface{})
-	if !ok {
-		t.Fatal("Expected blocks to be a slice of maps")
+	// Check that response contains error indicator
+	if !containsString(response, "Error") && !containsString(response, "❌") {
+		t.Errorf("Expected error response, got: %s", response)
 	}
+}
 
-	if len(blocks) != 1 {
-		t.Errorf("Expected 1 error block, got %d", len(blocks))
-	}
-
-	// Check error message block
-	if blocks[0]["type"] != "section" {
-		t.Errorf("Expected error block to be section, got %v", blocks[0]["type"])
-	}
+func containsString(s, substr string) bool {
+	return len(s) >= len(substr) && (s == substr || len(substr) == 0 ||
+		func() bool {
+			for i := 0; i <= len(s)-len(substr); i++ {
+				if s[i:i+len(substr)] == substr {
+					return true
+				}
+			}
+			return false
+		}())
 }

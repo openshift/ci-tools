@@ -66,11 +66,11 @@ func (h *handler) analyzeAndRespond(event *slackevents.MessageEvent, prowURL str
 		return
 	}
 
-	blocks := chaibot.FormatSlackResponse(result)
+	message := chaibot.FormatSlackResponse(result)
 
 	_, _, err = h.client.PostMessage(
 		event.Channel,
-		slack.MsgOptionBlocks(blocks...),
+		slack.MsgOptionText(message, false),
 		slack.MsgOptionTS(event.TimeStamp),
 	)
 

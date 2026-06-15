@@ -126,7 +126,7 @@ func TestFormatSlackResponse(t *testing.T) {
 	}
 
 	if len(blocks) != 3 {
-		t.Errorf("Expected 3 blocks, got %d", len(blocks))
+		t.Fatalf("Expected 3 blocks, got %d", len(blocks))
 	}
 
 	// Check header block

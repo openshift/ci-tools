@@ -30,7 +30,7 @@ func NewAnalyzer(mcpURL, token, promptTemplate string) *Analyzer {
 		token:    token,
 		template: promptTemplate,
 		client: &http.Client{
-			Timeout: 120 * time.Second,
+			Timeout: 180 * time.Second, // Ship-help analysis can take 2-3 minutes
 		},
 	}
 }
@@ -217,12 +217,19 @@ func FormatSlackResponse(result *AnalysisResult) string {
 
 // initializeSession initializes an MCP session and stores the session ID
 func (a *Analyzer) initializeSession(ctx context.Context) error {
-	// Create initialize request
+	// Create initialize request with required MCP protocol params
 	reqBody := MCPRequest{
 		JSONRPC: "2.0",
 		ID:      0,
 		Method:  "initialize",
-		Params:  map[string]interface{}{},
+		Params: map[string]interface{}{
+			"protocolVersion": "2024-11-05",
+			"capabilities":    map[string]interface{}{},
+			"clientInfo": map[string]interface{}{
+				"name":    "chaibot",
+				"version": "1.0",
+			},
+		},
 	}
 
 	jsonData, err := json.Marshal(reqBody)

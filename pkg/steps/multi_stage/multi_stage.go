@@ -184,7 +184,7 @@ func newMultiStageTestStep(
 		name:                             testConfig.As,
 		additionalSuffix:                 targetAdditionalSuffix,
 		nodeName:                         nodeName,
-		profile:                          ms.ClusterProfileLiteral,
+		profile:                          ms.ClusterProfileLiteralOrLegacy(),
 		config:                           config,
 		params:                           params,
 		env:                              ms.Environment,

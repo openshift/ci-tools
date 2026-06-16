@@ -130,6 +130,23 @@ func ConsolidatedQuayPromotionVersion(name string) bool {
 	return major == 4 && minor >= 11 && minor <= 22
 }
 
+// UsesOfficialImageTagResolution reports whether an official OCP input should resolve via
+// spec/status on the source imagestream before falling back to computed quay-proxy.
+// Versioned streams at 4.23+ use computed quay only; non-versioned streams (e.g. builder) use spec-first.
+func UsesOfficialImageTagResolution(tag ImageStreamTagReference) bool {
+	if !RefersToOfficialImage(tag.Namespace, WithoutOKD) {
+		return false
+	}
+	if ConsolidatedQuayPromotionVersion(tag.Name) {
+		return true
+	}
+	var major, minor int
+	if _, err := fmt.Sscanf(tag.Name, "%d.%d", &major, &minor); err == nil {
+		return false
+	}
+	return true
+}
+
 func quayProxyStreamSuffix(tag ImageStreamTagReference) string {
 	if ConsolidatedQuayPromotionVersion(tag.Name) {
 		return ""

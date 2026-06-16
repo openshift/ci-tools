@@ -40,6 +40,33 @@ func TestResolveOfficialInputFrom(t *testing.T) {
 		wantFrom *coreapi.ObjectReference
 	}{
 		{name: "non-consolidated", base: api.ImageStreamTagReference{Namespace: "ocp", Name: "5.0", Tag: "cli"}, wantOK: false},
+		{name: "4.23 uses computed quay", base: api.ImageStreamTagReference{Namespace: "ocp", Name: "4.23", Tag: "cli"}, wantOK: false},
+		{
+			name: "ocp builder spec quay-proxy digest",
+			base: api.ImageStreamTagReference{Namespace: "ocp", Name: "builder", Tag: "rhel-9-golang-1.22-openshift-4.17"},
+			objects: []runtime.Object{&imagev1.ImageStream{
+				ObjectMeta: metav1.ObjectMeta{Namespace: "ocp", Name: "builder"},
+				Spec: imagev1.ImageStreamSpec{Tags: []imagev1.TagReference{{
+					Name:      "rhel-9-golang-1.22-openshift-4.17",
+					Reference: true,
+					From: &coreapi.ObjectReference{
+						Kind: "DockerImage",
+						Name: "quay-proxy.ci.openshift.org/openshift/ci@sha256:47f4267a177f47b7a1cf44d652a452d668ee1fc72ed0490560db4292449eebfe",
+					},
+				}}},
+				Status: imagev1.ImageStreamStatus{Tags: []imagev1.NamedTagEventList{{
+					Tag: "rhel-9-golang-1.22-openshift-4.17",
+					Items: []imagev1.TagEvent{{
+						DockerImageReference: "quay-proxy.ci.openshift.org/openshift/ci@sha256:47f4267a177f47b7a1cf44d652a452d668ee1fc72ed0490560db4292449eebfe",
+					}},
+				}}},
+			}},
+			wantOK: true,
+			wantFrom: &coreapi.ObjectReference{
+				Kind: "DockerImage",
+				Name: "quay-proxy.ci.openshift.org/openshift/ci@sha256:47f4267a177f47b7a1cf44d652a452d668ee1fc72ed0490560db4292449eebfe",
+			},
+		},
 		{
 			name: "spec docker",
 			base: base,
@@ -113,8 +140,52 @@ func TestResolveOfficialInputFrom(t *testing.T) {
 			if !ok {
 				return
 			}
-			if from.Kind != tt.wantFrom.Kind || from.Name != tt.wantFrom.Name || from.Namespace != tt.wantFrom.Namespace {
-				t.Fatalf("from = %+v, want %+v", from, tt.wantFrom)
+			if diff := cmp.Diff(tt.wantFrom, from); diff != "" {
+				t.Fatalf("from mismatch (-want +got):\n%s", diff)
+			}
+		})
+	}
+}
+
+func TestPullSpecForImageStreamTag(t *testing.T) {
+	specDigest := "quay-proxy.ci.openshift.org/openshift/ci@sha256:47f4267a177f47b7a1cf44d652a452d668ee1fc72ed0490560db4292449eebfe"
+	is := &imagev1.ImageStream{
+		ObjectMeta: metav1.ObjectMeta{Namespace: "ocp", Name: "builder"},
+		Spec: imagev1.ImageStreamSpec{Tags: []imagev1.TagReference{{
+			Name:      "rhel-9-golang-1.22-openshift-4.17",
+			Reference: true,
+			From:      &coreapi.ObjectReference{Kind: "DockerImage", Name: specDigest},
+		}}},
+		Status: imagev1.ImageStreamStatus{Tags: []imagev1.NamedTagEventList{{
+			Tag:   "rhel-9-golang-1.22-openshift-4.17",
+			Items: []imagev1.TagEvent{{DockerImageReference: specDigest}},
+		}}},
+	}
+	tests := []struct {
+		name  string
+		isTag *imagev1.ImageStreamTag
+		want  string
+	}{
+		{
+			name: "reference tag",
+			isTag: &imagev1.ImageStreamTag{
+				ObjectMeta: metav1.ObjectMeta{Namespace: "ocp", Name: "builder:rhel-9-golang-1.22-openshift-4.17"},
+			},
+			want: specDigest,
+		},
+		{
+			name: "stale local image",
+			isTag: &imagev1.ImageStreamTag{
+				ObjectMeta: metav1.ObjectMeta{Namespace: "ocp", Name: "builder:rhel-9-golang-1.22-openshift-4.17"},
+				Image:      imagev1.Image{ObjectMeta: metav1.ObjectMeta{Name: "sha256:950393761142fa66698e9ba1d679643c88194d78a99308aa814fef6de92a8bfe"}},
+			},
+			want: specDigest,
+		},
+	}
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			if diff := cmp.Diff(tt.want, PullSpecForImageStreamTag("registry.ci.openshift.org", is, tt.isTag)); diff != "" {
+				t.Fatalf("pull spec mismatch (-want +got):\n%s", diff)
 			}
 		})
 	}

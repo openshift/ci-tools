@@ -63,6 +63,26 @@ func TestPromotesOfficialImages(t *testing.T) {
 	}
 }
 
+func TestUsesOfficialImageTagResolution(t *testing.T) {
+	tests := []struct {
+		tag  ImageStreamTagReference
+		want bool
+	}{
+		{tag: ImageStreamTagReference{Namespace: "ocp", Name: "4.22", Tag: "cli"}, want: true},
+		{tag: ImageStreamTagReference{Namespace: "ocp", Name: "4.23", Tag: "cli"}, want: false},
+		{tag: ImageStreamTagReference{Namespace: "ocp", Name: "5.0", Tag: "cli"}, want: false},
+		{tag: ImageStreamTagReference{Namespace: "ocp", Name: "builder", Tag: "rhel-9-golang-1.22-openshift-4.17"}, want: true},
+		{tag: ImageStreamTagReference{Namespace: "ci", Name: "tools", Tag: "latest"}, want: false},
+	}
+	for _, tt := range tests {
+		t.Run(tt.tag.ISTagName(), func(t *testing.T) {
+			if diff := cmp.Diff(tt.want, UsesOfficialImageTagResolution(tt.tag)); diff != "" {
+				t.Fatalf("UsesOfficialImageTagResolution() mismatch (-want +got):\n%s", diff)
+			}
+		})
+	}
+}
+
 func TestTargetName(t *testing.T) {
 	var testCases = []struct {
 		name     string

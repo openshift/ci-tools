@@ -141,13 +141,8 @@ func snapshotImportSource(sourceNamespace, sourceName, tag string, source *image
 		}
 		return nil, false
 	}
-	if api.ConsolidatedQuayPromotionVersion(sourceName) {
+	if api.UsesOfficialImageTagResolution(base) {
 		return utils.OfficialImageTagFrom(source, base), true
-	}
-	if source != nil {
-		if ref := utils.FindSpecTag(source, tag); ref != nil && ref.Kind == "DockerImage" && ref.Name != "" {
-			from.Name = ref.Name
-		}
 	}
 	return from, true
 }

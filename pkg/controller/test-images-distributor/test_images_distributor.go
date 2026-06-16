@@ -29,6 +29,7 @@ import (
 	testimagestreamtagimportv1 "github.com/openshift/ci-tools/pkg/api/testimagestreamtagimport/v1"
 	controllerutil "github.com/openshift/ci-tools/pkg/controller/util"
 	"github.com/openshift/ci-tools/pkg/load/agents"
+	steputils "github.com/openshift/ci-tools/pkg/steps/utils"
 	"github.com/openshift/ci-tools/pkg/util/imagestreamtagmapper"
 	"github.com/openshift/ci-tools/pkg/util/imagestreamtagwrapper"
 )
@@ -317,9 +318,9 @@ func (r *reconciler) reconcile(ctx context.Context, req reconcile.Request, log *
 	if err != nil {
 		return fmt.Errorf("failed to get registry domain for cluster %s: %w", r.registryClusterName, err)
 	}
-	pullSpec := pullSpecFromImageStreamTag(registryDomain, sourceImageStreamTag)
+	pullSpec := steputils.PullSpecForImageStreamTag(registryDomain, sourceImageStream, sourceImageStreamTag)
 	*log = *log.WithField("docker_image_reference", pullSpec)
-	if isImportForbidden(sourceImageStreamTag.Image.DockerImageReference, r.forbiddenRegistries) {
+	if isImportForbidden(pullSpec, r.forbiddenRegistries) || isImportForbidden(sourceImageStreamTag.Image.DockerImageReference, r.forbiddenRegistries) {
 		log.Debugf("Import from any cluster in %s is forbidden, ignoring", r.forbiddenRegistries)
 		return nil
 	}
@@ -376,7 +377,7 @@ func (r *reconciler) reconcile(ctx context.Context, req reconcile.Request, log *
 				},
 				To: &corev1.LocalObjectReference{Name: imageTag},
 				ReferencePolicy: imagev1.TagReferencePolicy{
-					Type: imagev1.LocalTagReferencePolicy,
+					Type: steputils.TagImportReferencePolicy(&corev1.ObjectReference{Kind: "DockerImage", Name: pullSpec}),
 				},
 			}},
 		},
@@ -636,8 +637,4 @@ func isImportForbidden(pullSpec string, forbiddenRegistries sets.Set[string]) bo
 		}
 	}
 	return false
-}
-
-func pullSpecFromImageStreamTag(registryURL string, isTag *imagev1.ImageStreamTag) string {
-	return registryURL + "/" + isTag.Namespace + "/" + strings.Split(isTag.Name, ":")[0] + "@" + isTag.Image.ObjectMeta.Name
 }

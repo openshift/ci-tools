@@ -181,7 +181,7 @@
       name: dshm
     - name: cluster-profile
       secret:
-        secretName: cluster-secrets-aws-5
+        secretName: cluster-secrets-aws
     - name: aws-sts-token
       projected:
         sources:

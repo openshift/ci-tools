@@ -929,8 +929,9 @@ func (config TestStepConfiguration) IsPeriodic() bool {
 // GetClusterProfileName returns the cluster profile name if it's set
 func (config TestStepConfiguration) GetClusterProfileName() string {
 	switch {
-	case config.MultiStageTestConfigurationLiteral != nil:
-		return config.MultiStageTestConfigurationLiteral.ClusterProfile.Name()
+	case config.MultiStageTestConfigurationLiteral != nil &&
+		config.MultiStageTestConfigurationLiteral.ClusterProfileLiteral != nil:
+		return config.MultiStageTestConfigurationLiteral.ClusterProfileLiteral.Name
 	case config.MultiStageTestConfiguration != nil:
 		return config.MultiStageTestConfiguration.ClusterProfile.Name()
 	default:
@@ -947,6 +948,22 @@ const (
 	CloudAzure4  Cloud = "azure4"
 	CloudVSphere Cloud = "vsphere"
 )
+
+type ClusterProfileLiteral struct {
+	Name        string `yaml:"name,omitempty" json:"name,omitempty"`
+	LeaseType   string `yaml:"lease_type,omitempty" json:"lease_type,omitempty"`
+	ClusterType string `yaml:"cluster_type,omitempty" json:"cluster_type,omitempty"`
+	Secret      string `yaml:"secret,omitempty" json:"secret,omitempty"`
+}
+
+func FromClusterProfileDetails(profileDetails *ClusterProfileDetails) *ClusterProfileLiteral {
+	return &ClusterProfileLiteral{
+		Name:        string(profileDetails.Name),
+		LeaseType:   profileDetails.LeaseType,
+		ClusterType: profileDetails.ClusterType,
+		Secret:      profileDetails.Secret,
+	}
+}
 
 // ClusterClaim claims an OpenShift cluster for the job.
 type ClusterClaim struct {
@@ -1231,8 +1248,8 @@ type StepLease struct {
 	// Env is the environment variable that will contain the resource name.
 	Env string `json:"env"`
 	// Count is the number of resources to acquire (optional, defaults to 1).
-	Count          uint   `json:"count,omitempty"`
-	ClusterProfile string `json:"-"`
+	Count          uint                   `json:"count,omitempty"`
+	ClusterProfile *ClusterProfileLiteral `json:"-"`
 }
 
 // FromImageTag returns the internal name for the image tag that will be used
@@ -1308,8 +1325,8 @@ type DependencyOverrides map[string]string
 // references. It is the type that MultiStageTestConfigurations are converted to when parsed by the
 // ci-operator-configresolver.
 type MultiStageTestConfigurationLiteral struct {
-	// ClusterProfile defines the profile/cloud provider for end-to-end test steps.
-	ClusterProfile ClusterProfile `json:"cluster_profile"`
+	// ClusterProfileLiteral defines the profile/cloud provider for end-to-end test steps.
+	ClusterProfileLiteral *ClusterProfileLiteral `json:"cluster_profile_literal,omitempty"`
 	// Pre is the array of test steps run to set up the environment for the test.
 	Pre []LiteralTestStep `json:"pre,omitempty"`
 	// Test is the array of test steps that define the actual test.

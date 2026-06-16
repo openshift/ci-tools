@@ -1,19 +1,51 @@
 package api
 
 import (
+	"errors"
 	"fmt"
 	"os"
+	"reflect"
 	"sync"
 
 	"github.com/sirupsen/logrus"
 )
+
+// +k8s:deepcopy-gen=false
+type ErrParamNotFound struct {
+	param string
+}
+
+func (e *ErrParamNotFound) Is(err error) bool {
+	_, ok := err.(*ErrParamNotFound)
+	return ok
+}
+
+func (e *ErrParamNotFound) Error() string {
+	return "param \"" + e.param + "\" not found"
+}
+
+// +k8s:deepcopy-gen=false
+type ErrParamTypeMismatch struct {
+	want string
+	got  string
+}
+
+func (e *ErrParamTypeMismatch) Is(err error) bool {
+	_, ok := err.(*ErrParamTypeMismatch)
+	return ok
+}
+
+func (e *ErrParamTypeMismatch) Error() string {
+	return "param types mismatch: type " + e.want + " expected but got " + e.got
+}
 
 // Parameters allows a step to read values set by other steps.
 // +k8s:deepcopy-gen=false
 type Parameters interface {
 	Has(name string) bool
 	HasInput(name string) bool
-	Get(name string) (string, error)
+	Get(name string) (any, error)
+	GetString(name string) (string, error)
 }
 
 // +k8s:deepcopy-gen=false
@@ -110,23 +142,47 @@ func (p *DeferredParameters) has(name string) bool {
 	return ok
 }
 
-func (p *DeferredParameters) Get(name string) (string, error) {
-	ret, err := p.get(name)
+// Get retrieves the parameter `name` only if it's a string. It defaults to ""
+// if the paramenter has not been found or is not a string.
+func (p *DeferredParameters) GetString(name string) (string, error) {
+	ret, err := p.Get(name)
 	if err != nil {
-		return "", err
+		if !errors.Is(err, &ErrParamNotFound{}) {
+			return "", err
+		}
+		return "", nil
 	}
 
 	if retStr, ok := ret.(string); ok && retStr != "" {
 		return retStr, nil
 	}
 
-	if p.params != nil {
-		return p.params.Get(name)
-	}
-
 	return "", nil
 }
 
+// Get retrieves the parameter `name` from the current parameters or, recursively,
+// from the inner ones.
+func (p *DeferredParameters) Get(name string) (any, error) {
+	var err error
+
+	ret, err := p.get(name)
+	if err == nil {
+		return ret, nil
+	}
+	if !errors.Is(err, &ErrParamNotFound{}) {
+		return nil, err
+	}
+
+	if p.params != nil {
+		if ret, err = p.params.Get(name); err == nil {
+			return ret, nil
+		}
+	}
+
+	return nil, err
+}
+
+// Get retrieves the parameter `name` from the current parameters or from the env.
 func (p *DeferredParameters) get(name string) (any, error) {
 	p.lock.Lock()
 	defer p.lock.Unlock()
@@ -150,5 +206,30 @@ func (p *DeferredParameters) get(name string) (any, error) {
 		return value, nil
 	}
 
-	return nil, nil
+	return nil, &ErrParamNotFound{param: name}
+}
+
+func GetParamTyped[T any](params Parameters, name string) (T, error) {
+	var zero T
+	raw, err := params.Get(name)
+	if err != nil {
+		return zero, err
+	}
+
+	// The param exists but it's untyped: we have an untyped nil here.
+	// Return the zero of T since we have now way to compare T's type
+	// with an untyped nil.
+	if raw == nil {
+		return zero, nil
+	}
+
+	value, ok := raw.(T)
+	if !ok {
+		return zero, &ErrParamTypeMismatch{
+			want: reflect.TypeFor[T]().String(),
+			got:  reflect.TypeOf(raw).String(),
+		}
+	}
+
+	return value, nil
 }

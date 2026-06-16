@@ -1207,12 +1207,8 @@ func LeaseTypeFromClusterType(t string) (string, error) {
 	}
 }
 
-func ClusterProfileFromParams(params Parameters) (ClusterProfile, error) {
-	if params == nil {
-		return "", nil
-	}
-	cp, err := params.Get(ClusterProfileParam)
-	return ClusterProfile(cp), err
+func ClusterProfileFromParams(params Parameters) (*ClusterProfileDetails, error) {
+	return GetParamTyped[*ClusterProfileDetails](params, ClusterProfileParam)
 }
 
 type ClusterProfileKonfluxConfig struct {
@@ -1301,9 +1297,9 @@ type ClusterProfileSetDetails struct {
 	TestsAllowlist map[utilregexp.Regexp]map[utilregexp.Regexp]map[utilregexp.Regexp][]utilregexp.Regexp `json:"tests_allowlist,omitempty"`
 }
 
-func (cps ClusterProfileSetDetails) FindSetByProfile(profile ClusterProfile) (ClusterProfile, bool) {
+func (cps ClusterProfileSetDetails) FindSetByProfile(profileName string) (ClusterProfile, bool) {
 	for cpsName, cpDetails := range cps.ClusterProfileSets {
-		if slices.Contains(cpDetails, string(profile)) {
+		if slices.Contains(cpDetails, profileName) {
 			return cpsName, true
 		}
 	}

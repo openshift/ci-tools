@@ -28,6 +28,21 @@ func TestResolve(t *testing.T) {
 	nodeArchitectureAMD64 := api.NodeArchitectureAMD64
 	nodeArchitectureARM64 := api.NodeArchitectureARM64
 	yes := true
+	clusterProfilesMap := api.ClusterProfilesMap{
+		api.ClusterProfileAWS: api.ClusterProfileDetails{
+			Name:        "aws",
+			ClusterType: "aws",
+			LeaseType:   "aws-quota-slice",
+			Secret:      "cluster-secrets-aws",
+		},
+		api.ClusterProfileAzure4: api.ClusterProfileDetails{
+			Name:        api.ClusterProfileAzure4,
+			ClusterType: "azure4",
+			LeaseType:   "azure4-quota-slice",
+			Secret:      "cluster-secrets-azure4",
+		},
+	}
+
 	for _, testCase := range []struct {
 		name                  string
 		config                api.MultiStageTestConfiguration
@@ -78,7 +93,12 @@ func TestResolve(t *testing.T) {
 			}},
 		},
 		expectedRes: api.MultiStageTestConfigurationLiteral{
-			ClusterProfile:           api.ClusterProfileAWS,
+			ClusterProfileLiteral: &api.ClusterProfileLiteral{
+				Name:        "aws",
+				ClusterType: "aws",
+				LeaseType:   "aws-quota-slice",
+				Secret:      "cluster-secrets-aws",
+			},
 			AllowSkipOnSuccess:       &yes,
 			AllowBestEffortPostSteps: &yes,
 			Pre: []api.LiteralTestStep{{
@@ -163,7 +183,12 @@ func TestResolve(t *testing.T) {
 			},
 		},
 		expectedRes: api.MultiStageTestConfigurationLiteral{
-			ClusterProfile: api.ClusterProfileAWS,
+			ClusterProfileLiteral: &api.ClusterProfileLiteral{
+				Name:        "aws",
+				ClusterType: "aws",
+				LeaseType:   "aws-quota-slice",
+				Secret:      "cluster-secrets-aws",
+			},
 			Test: []api.LiteralTestStep{{
 				As:       "generic-unit-test",
 				From:     "my-image",
@@ -234,7 +259,12 @@ func TestResolve(t *testing.T) {
 			},
 		},
 		expectedRes: api.MultiStageTestConfigurationLiteral{
-			ClusterProfile: api.ClusterProfileAWS,
+			ClusterProfileLiteral: &api.ClusterProfileLiteral{
+				Name:        "aws",
+				ClusterType: "aws",
+				LeaseType:   "aws-quota-slice",
+				Secret:      "cluster-secrets-aws",
+			},
 			Test: []api.LiteralTestStep{{
 				As:       "generic-unit-test",
 				From:     "my-image",
@@ -306,7 +336,12 @@ func TestResolve(t *testing.T) {
 			},
 		},
 		expectedRes: api.MultiStageTestConfigurationLiteral{
-			ClusterProfile: api.ClusterProfileAWS,
+			ClusterProfileLiteral: &api.ClusterProfileLiteral{
+				Name:        "aws",
+				ClusterType: "aws",
+				LeaseType:   "aws-quota-slice",
+				Secret:      "cluster-secrets-aws",
+			},
 			Test: []api.LiteralTestStep{{
 				As:       "generic-unit-test",
 				From:     "my-image",
@@ -393,7 +428,12 @@ func TestResolve(t *testing.T) {
 				}},
 		},
 		expectedRes: api.MultiStageTestConfigurationLiteral{
-			ClusterProfile: api.ClusterProfileAWS,
+			ClusterProfileLiteral: &api.ClusterProfileLiteral{
+				Name:        "aws",
+				ClusterType: "aws",
+				LeaseType:   "aws-quota-slice",
+				Secret:      "cluster-secrets-aws",
+			},
 			Pre: []api.LiteralTestStep{{
 				As:       "ipi-install",
 				From:     "installer",
@@ -527,7 +567,12 @@ func TestResolve(t *testing.T) {
 			},
 		},
 		expectedRes: api.MultiStageTestConfigurationLiteral{
-			ClusterProfile: api.ClusterProfileAWS,
+			ClusterProfileLiteral: &api.ClusterProfileLiteral{
+				Name:        "aws",
+				ClusterType: "aws",
+				LeaseType:   "aws-quota-slice",
+				Secret:      "cluster-secrets-aws",
+			},
 			Pre: []api.LiteralTestStep{{
 				As:       "ipi-lease",
 				From:     "installer",
@@ -662,7 +707,12 @@ func TestResolve(t *testing.T) {
 			},
 		},
 		expectedRes: api.MultiStageTestConfigurationLiteral{
-			ClusterProfile: api.ClusterProfileAWS,
+			ClusterProfileLiteral: &api.ClusterProfileLiteral{
+				Name:        "aws",
+				ClusterType: "aws",
+				LeaseType:   "aws-quota-slice",
+				Secret:      "cluster-secrets-aws",
+			},
 			Pre: []api.LiteralTestStep{{
 				As:       "ipi-install",
 				From:     "installer",
@@ -751,7 +801,12 @@ func TestResolve(t *testing.T) {
 				},
 			},
 			expectedRes: api.MultiStageTestConfigurationLiteral{
-				ClusterProfile: api.ClusterProfileAzure4,
+				ClusterProfileLiteral: &api.ClusterProfileLiteral{
+					Name:        "azure4",
+					ClusterType: "azure4",
+					LeaseType:   "azure4-quota-slice",
+					Secret:      "cluster-secrets-azure4",
+				},
 				Pre: []api.LiteralTestStep{{
 					As:       "ipi-install",
 					From:     "installer",
@@ -949,7 +1004,12 @@ func TestResolve(t *testing.T) {
 				},
 			},
 			expectedRes: api.MultiStageTestConfigurationLiteral{
-				ClusterProfile: api.ClusterProfileAWS,
+				ClusterProfileLiteral: &api.ClusterProfileLiteral{
+					Name:        "aws",
+					ClusterType: "aws",
+					LeaseType:   "aws-quota-slice",
+					Secret:      "cluster-secrets-aws",
+				},
 				Pre: []api.LiteralTestStep{{
 					As:       "ipi-install",
 					From:     "installer",
@@ -1051,7 +1111,12 @@ func TestResolve(t *testing.T) {
 				},
 			},
 			expectedRes: api.MultiStageTestConfigurationLiteral{
-				ClusterProfile: api.ClusterProfileAWS,
+				ClusterProfileLiteral: &api.ClusterProfileLiteral{
+					Name:        "aws",
+					ClusterType: "aws",
+					LeaseType:   "aws-quota-slice",
+					Secret:      "cluster-secrets-aws",
+				},
 				Pre: []api.LiteralTestStep{{
 					As:       "ipi-install",
 					From:     "installer",
@@ -1153,7 +1218,12 @@ func TestResolve(t *testing.T) {
 				},
 			},
 			expectedRes: api.MultiStageTestConfigurationLiteral{
-				ClusterProfile: api.ClusterProfileAWS,
+				ClusterProfileLiteral: &api.ClusterProfileLiteral{
+					Name:        "aws",
+					ClusterType: "aws",
+					LeaseType:   "aws-quota-slice",
+					Secret:      "cluster-secrets-aws",
+				},
 				Pre: []api.LiteralTestStep{{
 					As:       "ipi-install",
 					From:     "installer",
@@ -1255,7 +1325,12 @@ func TestResolve(t *testing.T) {
 				},
 			},
 			expectedRes: api.MultiStageTestConfigurationLiteral{
-				ClusterProfile: api.ClusterProfileAWS,
+				ClusterProfileLiteral: &api.ClusterProfileLiteral{
+					Name:        "aws",
+					ClusterType: "aws",
+					LeaseType:   "aws-quota-slice",
+					Secret:      "cluster-secrets-aws",
+				},
 				Pre: []api.LiteralTestStep{{
 					As:       "ipi-install",
 					From:     "installer",
@@ -1356,7 +1431,12 @@ func TestResolve(t *testing.T) {
 				},
 			},
 			expectedRes: api.MultiStageTestConfigurationLiteral{
-				ClusterProfile: api.ClusterProfileAWS,
+				ClusterProfileLiteral: &api.ClusterProfileLiteral{
+					Name:        "aws",
+					ClusterType: "aws",
+					LeaseType:   "aws-quota-slice",
+					Secret:      "cluster-secrets-aws",
+				},
 				Pre: []api.LiteralTestStep{{
 					As:       "ipi-install",
 					From:     "installer",
@@ -1460,7 +1540,12 @@ func TestResolve(t *testing.T) {
 				},
 			},
 			expectedRes: api.MultiStageTestConfigurationLiteral{
-				ClusterProfile: api.ClusterProfileAWS,
+				ClusterProfileLiteral: &api.ClusterProfileLiteral{
+					Name:        "aws",
+					ClusterType: "aws",
+					LeaseType:   "aws-quota-slice",
+					Secret:      "cluster-secrets-aws",
+				},
 				Pre: []api.LiteralTestStep{{
 					As:       "ipi-install",
 					From:     "installer",
@@ -1527,7 +1612,12 @@ func TestResolve(t *testing.T) {
 				},
 			},
 			expectedRes: api.MultiStageTestConfigurationLiteral{
-				ClusterProfile: api.ClusterProfileAWS,
+				ClusterProfileLiteral: &api.ClusterProfileLiteral{
+					Name:        "aws",
+					ClusterType: "aws",
+					LeaseType:   "aws-quota-slice",
+					Secret:      "cluster-secrets-aws",
+				},
 				Pre: []api.LiteralTestStep{
 					{As: "ipi-install", NodeArchitecture: &nodeArchitectureARM64},
 					{As: "enable-fips"},
@@ -1563,7 +1653,12 @@ func TestResolve(t *testing.T) {
 				},
 			},
 			expectedRes: api.MultiStageTestConfigurationLiteral{
-				ClusterProfile: api.ClusterProfileAWS,
+				ClusterProfileLiteral: &api.ClusterProfileLiteral{
+					Name:        "aws",
+					ClusterType: "aws",
+					LeaseType:   "aws-quota-slice",
+					Secret:      "cluster-secrets-aws",
+				},
 				Pre: []api.LiteralTestStep{
 					{As: "ipi-install", NodeArchitecture: &nodeArchitectureARM64},
 					{As: "enable-fips", NodeArchitecture: &nodeArchitectureAMD64},
@@ -1571,14 +1666,22 @@ func TestResolve(t *testing.T) {
 				Test: []api.LiteralTestStep{{As: "e2e", NodeArchitecture: &nodeArchitectureAMD64}},
 				Post: []api.LiteralTestStep{{As: "ipi-teardown", NodeArchitecture: &nodeArchitectureARM64}},
 			},
+		}, {
+			name: "Use a cluster profile that is not defined",
+			config: api.MultiStageTestConfiguration{
+				ClusterProfile: "foobar",
+			},
+			observerMap: map[string]api.Observer{},
+			expectedRes: api.MultiStageTestConfigurationLiteral{},
+			expectedErr: errors.New("cluster profile foobar is not defined"),
 		},
 	} {
 		t.Run(testCase.name, func(t *testing.T) {
-			err := Validate(testCase.stepMap, testCase.chainMap, testCase.workflowMap, testCase.observerMap)
+			err := Validate(testCase.stepMap, testCase.chainMap, testCase.workflowMap, testCase.observerMap, clusterProfilesMap)
 			if !reflect.DeepEqual(err, utilerrors.NewAggregate([]error{testCase.expectedValidationErr})) {
 				t.Errorf("got incorrect validation error: %s", cmp.Diff(err, testCase.expectedValidationErr))
 			}
-			ret, err := NewResolver(testCase.stepMap, testCase.chainMap, testCase.workflowMap, testCase.observerMap).Resolve("test", testCase.config)
+			ret, err := NewResolver(testCase.stepMap, testCase.chainMap, testCase.workflowMap, testCase.observerMap, clusterProfilesMap).Resolve("test", testCase.config)
 			if !reflect.DeepEqual(err, utilerrors.NewAggregate([]error{testCase.expectedErr})) {
 				t.Errorf("got incorrect error: %s", cmp.Diff(err, testCase.expectedErr))
 			}
@@ -1910,7 +2013,7 @@ func TestResolveParameters(t *testing.T) {
 		},
 	}} {
 		t.Run(tc.name, func(t *testing.T) {
-			ret, err := NewResolver(refs, chains, workflows, observers).Resolve("test", tc.test)
+			ret, err := NewResolver(refs, chains, workflows, observers, nil).Resolve("test", tc.test)
 			var params [][]api.StepParameter
 			var deps [][]api.StepDependency
 			var dnsConfigs []*api.StepDNSConfig
@@ -2010,7 +2113,7 @@ func TestResolveLeases(t *testing.T) {
 		},
 	}} {
 		t.Run(tc.name, func(t *testing.T) {
-			ret, err := NewResolver(refs, chains, workflows, ObserverByName{}).Resolve("test", tc.test)
+			ret, err := NewResolver(refs, chains, workflows, ObserverByName{}, nil).Resolve("test", tc.test)
 			if diff := cmp.Diff(tc.expectedErr, err, testhelper.EquateErrorMessage); diff != "" {
 				t.Errorf("unexpected error: %v", diff)
 			}
@@ -2029,11 +2132,11 @@ func TestResolveLeasesCopy(t *testing.T) {
 	test := api.MultiStageTestConfiguration{
 		Test: []api.TestStep{{Reference: &ref}},
 	}
-	ret0, err := NewResolver(refs, nil, nil, nil).Resolve("test", test)
+	ret0, err := NewResolver(refs, nil, nil, nil, nil).Resolve("test", test)
 	if err != nil {
 		t.Fatal(err)
 	}
-	ret1, err := NewResolver(refs, nil, nil, nil).Resolve("test", test)
+	ret1, err := NewResolver(refs, nil, nil, nil, nil).Resolve("test", test)
 	if err != nil {
 		t.Fatal(err)
 	}

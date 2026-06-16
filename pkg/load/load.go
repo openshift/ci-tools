@@ -197,11 +197,11 @@ func Registry(root string, flags RegistryFlag) (registry.ReferenceByName, regist
 	if _, err = registry.NewGraph(references, chains, workflows, observers); err != nil {
 		return nil, nil, nil, nil, nil, nil, nil, err
 	}
-	err = registry.Validate(references, chains, workflows, observers)
+	profiles, err = ClusterProfilesConfig(clusterProfilesConfigPath)
 	if err != nil {
 		return nil, nil, nil, nil, nil, nil, nil, err
 	}
-	profiles, err = ClusterProfilesConfig(clusterProfilesConfigPath)
+	err = registry.Validate(references, chains, workflows, observers, profiles)
 	if err != nil {
 		return nil, nil, nil, nil, nil, nil, nil, err
 	}

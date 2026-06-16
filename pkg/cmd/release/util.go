@@ -38,11 +38,12 @@ func (o options) argsWithPrefixes(def, path string, args []string) []string {
 func (o *options) loadRegistry() error {
 	path := o.argsWithPrefixes(config.RegistryPath, o.registryPath, nil)[0]
 	var err error
-	o.refs, o.chains, o.workflows, _, _, _, _, err = load.Registry(path, load.RegistryFlag(0))
+	refs, chains, workflows, clusterProfiles, _, _, _, err := load.Registry(path, load.RegistryFlag(0))
+	o.refs, o.chains, o.workflows = refs, chains, workflows
 	if err != nil {
 		return fmt.Errorf("failed to load registry: %w", err)
 	}
-	o.resolver = registry.NewResolver(o.refs, o.chains, o.workflows, nil)
+	o.resolver = registry.NewResolver(o.refs, o.chains, o.workflows, nil, clusterProfiles)
 	return nil
 }
 

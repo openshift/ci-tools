@@ -172,7 +172,7 @@ func (a *registryAgent) loadRegistry() error {
 		a.documentation = documentation
 		a.metadata = metadata
 		a.clusterProfiles = clusterProfiles
-		a.resolver = registry.NewResolver(references, chains, workflows, observers)
+		a.resolver = registry.NewResolver(references, chains, workflows, observers, clusterProfiles)
 		a.generation++
 		return time.Since(startTime), nil
 	}()

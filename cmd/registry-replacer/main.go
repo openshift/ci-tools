@@ -214,11 +214,11 @@ func loadResolver(path string) (registry.Resolver, error) {
 	if path == "" {
 		return nil, nil
 	}
-	refs, chains, workflows, _, _, _, observers, err := load.Registry(path, load.RegistryFlag(0))
+	refs, chains, workflows, clusterProfiles, _, _, observers, err := load.Registry(path, load.RegistryFlag(0))
 	if err != nil {
 		return nil, err
 	}
-	return registry.NewResolver(refs, chains, workflows, observers), nil
+	return registry.NewResolver(refs, chains, workflows, observers, clusterProfiles), nil
 }
 
 type usernameToken struct {

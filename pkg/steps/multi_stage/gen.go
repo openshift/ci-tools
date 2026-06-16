@@ -211,7 +211,7 @@ func (s *multiStageTestStep) generatePods(
 		if owner := s.jobSpec.Owner(); owner != nil {
 			pod.OwnerReferences = append(pod.OwnerReferences, *owner)
 		}
-		if s.profile != "" && s.clusterClaim != nil {
+		if s.profile != nil && s.clusterClaim != nil {
 			// should never happen
 			errs = append(errs, fmt.Errorf("cannot set both cluster_profile and cluster_claim in a test"))
 		}
@@ -236,17 +236,13 @@ func (s *multiStageTestStep) generatePods(
 		if !shmSize.IsZero() {
 			addDshmVolume(shmSize, pod, container)
 		}
-		if s.profile != "" {
+		if s.profile != nil {
 			stsEnabled := s.stsHomeRoleARN != "" && s.stsHubRoleARN != "" && s.stsTargetRoleARN != ""
 			if !needsKubeConfig && stsEnabled {
 				errs = append(errs, fmt.Errorf("step %s sets no_kubeconfig but the test has STS enabled (home_role_arn=%s, hub_role_arn=%s, target_role_arn=%s); STS requires kubeconfig", step.As, s.stsHomeRoleARN, s.stsHubRoleARN, s.stsTargetRoleARN))
 				continue
 			}
-			profileSecret, err := s.profileSecretName()
-			if err != nil {
-				return nil, nil, fmt.Errorf("get profile secret name: %w", err)
-			}
-			addProfile(profileSecret, s.profile, stsEnabled, pod)
+			addProfile(s.profileSecretName(), *s.profile, stsEnabled, pod)
 		}
 		if step.Cli != "" {
 			dependency := api.StepDependency{Name: fmt.Sprintf("%s:cli", api.ReleaseStreamFor(step.Cli))}
@@ -492,7 +488,7 @@ func addDshmVolume(shmSize *resource.Quantity, pod *coreapi.Pod, container *core
 	})
 }
 
-func addProfile(name string, profile api.ClusterProfile, stsEnabled bool, pod *coreapi.Pod) {
+func addProfile(name string, profile api.ClusterProfileLiteral, stsEnabled bool, pod *coreapi.Pod) {
 	pod.Spec.Volumes = append(pod.Spec.Volumes, coreapi.Volume{
 		Name: profileVolumeName,
 		VolumeSource: coreapi.VolumeSource{
@@ -508,10 +504,10 @@ func addProfile(name string, profile api.ClusterProfile, stsEnabled bool, pod *c
 	})
 	container.Env = append(container.Env, []coreapi.EnvVar{{
 		Name:  "CLUSTER_PROFILE_NAME",
-		Value: profile.Name(),
+		Value: profile.Name,
 	}, {
 		Name:  "CLUSTER_TYPE",
-		Value: profile.ClusterType(),
+		Value: profile.ClusterType,
 	}, {
 		Name:  ClusterProfileMountEnv,
 		Value: ClusterProfileMountPath,

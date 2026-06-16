@@ -15,7 +15,6 @@
     {
       "as": "without-references",
       "literal_steps": {
-        "cluster_profile": "",
         "test": [
           {
             "as": "test",
@@ -34,7 +33,6 @@
     {
       "as": "with-references",
       "literal_steps": {
-        "cluster_profile": "",
         "test": [
           {
             "as": "ipi-deprovision-deprovision",

@@ -63,19 +63,21 @@ type consumerOptions struct {
 	port   int
 	uiPort int
 
-	dataDir                   string
-	certDir                   string
-	mutateResourceLimits      bool
-	cpuCap                    int64
-	memoryCap                 string
-	cpuPriorityScheduling     int64
-	percentageMeasured        float64
-	measuredPodCPUIncrease    float64
-	systemReservedCPU         int64
-	authoritativeCPU          bool
-	authoritativeMemory       bool
-	authoritativeCPUDryRun    bool
-	authoritativeMemoryDryRun bool
+	dataDir                                string
+	certDir                                string
+	mutateResourceLimits                   bool
+	cpuCap                                 int64
+	memoryCap                              string
+	cpuPriorityScheduling                  int64
+	percentageMeasured                     float64
+	measuredPodCPUIncrease                 float64
+	systemReservedCPU                      int64
+	authoritativeCPU                       bool
+	authoritativeMemory                    bool
+	authoritativeCPUDryRun                 bool
+	authoritativeMemoryDryRun              bool
+	authoritativeCPUMaxReductionPercent    float64
+	authoritativeMemoryMaxReductionPercent float64
 }
 
 func bindOptions(fs *flag.FlagSet) *options {
@@ -106,6 +108,8 @@ func bindOptions(fs *flag.FlagSet) *options {
 	fs.BoolVar(&o.authoritativeMemory, "authoritative-memory", false, "Allow admission to decrease memory requests and limits based on measured usage.")
 	fs.BoolVar(&o.authoritativeCPUDryRun, "authoritative-cpu-dry-run", false, "Log CPU decreases that authoritative mode would apply without mutating pods.")
 	fs.BoolVar(&o.authoritativeMemoryDryRun, "authoritative-memory-dry-run", false, "Log memory decreases that authoritative mode would apply without mutating pods.")
+	fs.Float64Var(&o.authoritativeCPUMaxReductionPercent, "authoritative-cpu-max-reduction-percent", 1.0, "Maximum CPU request reduction per admission in authoritative mode, as a fraction (0.25 = 25%, 1.0 = no cap).")
+	fs.Float64Var(&o.authoritativeMemoryMaxReductionPercent, "authoritative-memory-max-reduction-percent", 1.0, "Maximum memory request reduction per admission in authoritative mode, as a fraction (0.25 = 25%, 1.0 = no cap).")
 	o.resultsOptions.Bind(fs)
 	return &o
 }
@@ -144,6 +148,12 @@ func (o *options) validate() error {
 		}
 		if o.measuredPodCPUIncrease < 0 {
 			return errors.New("--measured-pod-cpu-increase must be >= 0")
+		}
+		if o.authoritativeCPUMaxReductionPercent < 0 || o.authoritativeCPUMaxReductionPercent > 1 {
+			return errors.New("--authoritative-cpu-max-reduction-percent must be between 0 and 1")
+		}
+		if o.authoritativeMemoryMaxReductionPercent < 0 || o.authoritativeMemoryMaxReductionPercent > 1 {
+			return errors.New("--authoritative-memory-max-reduction-percent must be between 0 and 1")
 		}
 		if err := o.resultsOptions.Validate(); err != nil {
 			return err
@@ -295,7 +305,7 @@ func mainAdmission(opts *options, cache Cache) {
 		logrus.WithError(err).Fatal("Failed to create pod-scaler reporter.")
 	}
 
-	go admit(opts.port, opts.instrumentationOptions.HealthPort, opts.certDir, client, kubeClient, loaders(cache), opts.mutateResourceLimits, opts.cpuCap, opts.memoryCap, opts.cpuPriorityScheduling, opts.percentageMeasured, opts.measuredPodCPUIncrease, opts.systemReservedCPU, opts.authoritativeCPU, opts.authoritativeMemory, opts.authoritativeCPUDryRun, opts.authoritativeMemoryDryRun, reporter)
+	go admit(opts.port, opts.instrumentationOptions.HealthPort, opts.certDir, client, kubeClient, loaders(cache), opts.mutateResourceLimits, opts.cpuCap, opts.memoryCap, opts.cpuPriorityScheduling, opts.percentageMeasured, opts.measuredPodCPUIncrease, opts.systemReservedCPU, opts.authoritativeCPU, opts.authoritativeMemory, opts.authoritativeCPUDryRun, opts.authoritativeMemoryDryRun, opts.authoritativeCPUMaxReductionPercent, opts.authoritativeMemoryMaxReductionPercent, reporter)
 }
 
 func loaders(cache Cache) map[string][]*cacheReloader {

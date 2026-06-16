@@ -283,9 +283,13 @@ func getMirrorCommand(registryConfig string, images []string, loglevel int) stri
 		loglevel, registryConfig, strings.Join(images, " "))
 }
 
-func getTagCommand(tagSpecs []string, loglevel int) string {
-	return fmt.Sprintf("oc tag --source=docker --loglevel=%d --reference-policy='source' --import-mode='PreserveOriginal' --reference %s",
-		loglevel, strings.Join(tagSpecs, " "))
+func getTagLoopCommand(tagSpecs []string, loglevel int) string {
+	return fmt.Sprintf(`
+while read tag; do
+oc tag --source=docker --loglevel=%d --reference-policy='source' --import-mode='PreserveOriginal' --reference $tag || break
+done <<EOF
+%s
+EOF`, loglevel, strings.Join(tagSpecs, "\n"))
 }
 
 // quayProxyTagFromISKey derives the quay-proxy floating tag from an IS tag key.
@@ -335,22 +339,29 @@ func promotionCLIImageInfoFilterOS(nodeArchitectures []string) string {
 const (
 	quayPromotionDigestTagAttempts = 5
 	quayPromotionMirrorAttempts    = 5
+	quayPromotionLogLevel          = 2
 )
+
+const mirrorShellFunction = `function mirror {
+for r in $(seq 1 $1); do
+  echo Mirror attempt $r
+  if oc image mirror --loglevel=$2 --keep-manifest-list --registry-config=$3 --max-per-registry=10 $4; then break; fi
+  if [ "${r}" -eq $1 ]; then
+    exit 1
+  fi
+  backoff=$(($RANDOM % 120))s
+  echo Sleeping randomized $backoff before retry
+  sleep $backoff
+done
+}`
 
 // getMirrorRetryShell mirrors images with retries and fails the promotion pod if all attempts fail.
 func getMirrorRetryShell(registryConfig string, images []string) string {
-	mirrorCmd := getMirrorCommand(registryConfig, images, 2)
-	n := quayPromotionMirrorAttempts
-	return fmt.Sprintf(`for r in {1..%d}; do
-  echo Mirror attempt $r
-  if %s; then break; fi
-  if [ "${r}" -eq %d ]; then
-    exit 1
-  fi
-  backoff=$(($RANDOM %% 120))s
-  echo Sleeping randomized $backoff before retry
-  sleep $backoff
-done`, n, mirrorCmd, n)
+	var mirrorCmds []string
+	for _, image := range images {
+		mirrorCmds = append(mirrorCmds, fmt.Sprintf("mirror %d %d %s %s", quayPromotionMirrorAttempts, quayPromotionLogLevel, registryConfig, image))
+	}
+	return strings.Join(mirrorCmds, "\n")
 }
 
 // getResolveAndTagRetryShell resolves digest from quay.io (push-secret) and tags the IST with quay-proxy@digest.
@@ -379,7 +390,12 @@ done
 }
 
 const (
-	retryLoopTemplate    = "for r in {1..%d}; do echo %s; %s && break; %s; done"
+	retryLoopTemplate = `for r in {1..%d}; do 
+echo %s
+%s
+[[ $? -ne 0 ]] && break
+%s
+done`
 	retryLoopWithBackoff = "backoff=$(($RANDOM % 120))s; echo Sleeping randomized $backoff before retry; sleep $backoff"
 
 	quayImageIncomingSuffix = "_incoming"
@@ -507,7 +523,6 @@ func getPromotionPod(imageMirrorTarget map[string]string, timeStr string, namesp
 
 	registryConfig := filepath.Join(api.RegistryPushCredentialsCICentralSecretMountPath, coreapi.DockerConfigJsonKey)
 	command := []string{"/bin/sh", "-c"}
-
 	var commands []string
 
 	// Generate mirror commands if there are images to mirror
@@ -524,24 +539,15 @@ func getPromotionPod(imageMirrorTarget map[string]string, timeStr string, namesp
 
 	// Non-official IS tags (ci/ci-quay, ${component} templates) keep best-effort batch tagging.
 	if isQuayStep && len(tags) > 0 {
-		tagCommands := []string{"set +e"}
-
-		singleCmd := fmt.Sprintf(retryLoopTemplate, 2, `"Tag attempt $r (all together)"`, getTagCommand(tags, 2), ":")
-		tagCommands = append(tagCommands, singleCmd)
-		for _, tagPair := range tags {
-			individualCmd := fmt.Sprintf(retryLoopTemplate, 3, `"Tag attempt $r (individual)"`, getTagCommand([]string{tagPair}, 2), retryLoopWithBackoff)
-			tagCommands = append(tagCommands, individualCmd)
-		}
-
-		tagCommands = append(tagCommands, "set -e")
-		commands = append(commands, strings.Join(tagCommands, "\n"))
+		tagCmd := fmt.Sprintf(retryLoopTemplate, 2, `"Tag attempt $r"`, getTagLoopCommand(tags, 2), ":")
+		commands = append(commands, tagCmd)
 	} else if len(tags) > 0 {
 		// For regular promotion, use the original retry logic
-		tagCommand := fmt.Sprintf(retryLoopTemplate, 5, "Tag attempt $r", getTagCommand(tags, 2), retryLoopWithBackoff)
+		tagCommand := fmt.Sprintf(retryLoopTemplate, 5, "Tag attempt $r", getTagLoopCommand(tags, 2), retryLoopWithBackoff)
 		commands = append(commands, tagCommand)
 	}
 
-	var args []string
+	args := []string{mirrorShellFunction}
 	if isQuayStep && len(incomingImages) > 0 {
 		args = append(args, getMirrorRetryShell(registryConfig, incomingImages))
 	}

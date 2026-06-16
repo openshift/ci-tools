@@ -3,6 +3,8 @@ package release
 import (
 	"testing"
 
+	"github.com/google/go-cmp/cmp"
+
 	coreapi "k8s.io/api/core/v1"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 
@@ -53,7 +55,7 @@ func TestSnapshotImportSource(t *testing.T) {
 			wantFrom: &coreapi.ObjectReference{Kind: "DockerImage", Name: api.QuayImageReference(api.ImageStreamTagReference{Namespace: "ocp", Name: "4.22", Tag: base.Tag})},
 		},
 		{
-			name:   "non-consolidated spec docker",
+			name:   "non-consolidated uses computed quay",
 			stream: "4.23",
 			tag:    "cli",
 			source: &imagev1.ImageStream{
@@ -64,7 +66,7 @@ func TestSnapshotImportSource(t *testing.T) {
 				}}},
 			},
 			wantOK:   true,
-			wantFrom: &coreapi.ObjectReference{Kind: "DockerImage", Name: specPull},
+			wantFrom: &coreapi.ObjectReference{Kind: "DockerImage", Name: api.QuayImageReference(api.ImageStreamTagReference{Namespace: "ocp", Name: "4.23", Tag: "cli"})},
 		},
 		{
 			name:     "default quay float",
@@ -88,8 +90,8 @@ func TestSnapshotImportSource(t *testing.T) {
 			if !ok {
 				return
 			}
-			if from.Kind != tt.wantFrom.Kind || from.Name != tt.wantFrom.Name {
-				t.Fatalf("from = %+v, want %+v", from, tt.wantFrom)
+			if diff := cmp.Diff(tt.wantFrom, from); diff != "" {
+				t.Fatalf("from mismatch (-want +got):\n%s", diff)
 			}
 		})
 	}

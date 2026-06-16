@@ -83,10 +83,53 @@ func OfficialImageTagFrom(source *imagev1.ImageStream, base api.ImageStreamTagRe
 	return &coreapi.ObjectReference{Kind: "DockerImage", Name: api.QuayImageReference(base)}
 }
 
-// ResolveOfficialInputFrom resolves consolidated ocp inputs: stable in job ns, then spec/status/quay on source IS.
+// TagImportReferencePolicy returns Source for external DockerImage refs, Local for in-cluster tags.
+func TagImportReferencePolicy(from *coreapi.ObjectReference) imagev1.TagReferencePolicyType {
+	if from != nil && from.Kind == "DockerImage" {
+		name := from.Name
+		if strings.HasPrefix(name, api.QCIAPPCIDomain) || strings.HasPrefix(name, api.QuayOpenShiftCIRepo) || strings.HasPrefix(name, "quay.io/") {
+			return imagev1.SourceTagReferencePolicy
+		}
+	}
+	return imagev1.LocalTagReferencePolicy
+}
+
+// PullSpecForImageStreamTag returns a pull spec for an imagestream tag, resolving reference-only
+// tags via spec/status/quay-proxy when the tag has no local image content.
+func PullSpecForImageStreamTag(registryURL string, source *imagev1.ImageStream, isTag *imagev1.ImageStreamTag) string {
+	nameParts := strings.SplitN(isTag.Name, ":", 2)
+	if len(nameParts) == 2 && source != nil {
+		for _, t := range source.Spec.Tags {
+			if t.Name == nameParts[1] && t.Reference && t.From != nil && t.From.Kind == "DockerImage" && t.From.Name != "" {
+				return t.From.Name
+			}
+		}
+	}
+	if isTag.Image.ObjectMeta.Name != "" {
+		return registryURL + "/" + isTag.Namespace + "/" + strings.Split(isTag.Name, ":")[0] + "@" + isTag.Image.ObjectMeta.Name
+	}
+	if len(nameParts) != 2 {
+		return ""
+	}
+	base := api.ImageStreamTagReference{Namespace: isTag.Namespace, Name: nameParts[0], Tag: nameParts[1]}
+	ref := OfficialImageTagFrom(source, base)
+	switch ref.Kind {
+	case "DockerImage":
+		return ref.Name
+	case "ImageStreamImage":
+		if ref.Namespace != "" {
+			return registryURL + "/" + ref.Namespace + "/" + ref.Name
+		}
+		return registryURL + "/" + isTag.Namespace + "/" + ref.Name
+	default:
+		return ref.Name
+	}
+}
+
+// ResolveOfficialInputFrom resolves official ocp inputs: stable in job ns, then spec/status/quay on source IS.
 // When ok is false, callers use QuayImageReference with Source policy (e.g. 4.23, 5.0).
 func ResolveOfficialInputFrom(ctx context.Context, client ctrlruntimeclient.Client, jobNamespace string, base api.ImageStreamTagReference) (*coreapi.ObjectReference, bool, error) {
-	if !api.ConsolidatedQuayPromotionVersion(base.Name) || !api.RefersToOfficialImage(base.Namespace, api.WithoutOKD) {
+	if !api.UsesOfficialImageTagResolution(base) {
 		return nil, false, nil
 	}
 	stable := &imagev1.ImageStream{}

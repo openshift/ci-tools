@@ -5,6 +5,8 @@ import (
 	"fmt"
 	"testing"
 
+	"github.com/google/go-cmp/cmp"
+
 	corev1 "k8s.io/api/core/v1"
 	"k8s.io/apimachinery/pkg/api/equality"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
@@ -16,6 +18,7 @@ import (
 
 	"github.com/openshift/ci-tools/pkg/api"
 	"github.com/openshift/ci-tools/pkg/steps/loggingclient"
+	"github.com/openshift/ci-tools/pkg/testhelper"
 )
 
 func TestInputImageTagStep(t *testing.T) {
@@ -192,15 +195,78 @@ func TestInputImageTagStepOfficialSpec(t *testing.T) {
 		Tag: &imagev1.TagReference{
 			From:            &corev1.ObjectReference{Kind: "DockerImage", Name: specPullSpec},
 			ImportPolicy:    imagev1.TagImportPolicy{ImportMode: imagev1.ImportModePreserveOriginal},
-			ReferencePolicy: imagev1.TagReferencePolicy{Type: imagev1.LocalTagReferencePolicy},
+			ReferencePolicy: imagev1.TagReferencePolicy{Type: imagev1.SourceTagReferencePolicy},
 		},
 	}
 	targetImageStreamTag := &imagev1.ImageStreamTag{}
 	if err := client.Get(context.Background(), ctrlruntimeclient.ObjectKey{Namespace: jobspec.Namespace(), Name: "pipeline:ocp_4_22_hyperkube"}, targetImageStreamTag); err != nil {
 		t.Fatalf("failed to get pipeline tag: %v", err)
 	}
-	if !equality.Semantic.DeepEqual(expectedImageStreamTag, targetImageStreamTag) {
-		t.Errorf("unexpected pipeline tag:\n%s", diff.ObjectReflectDiff(expectedImageStreamTag, targetImageStreamTag))
+	if diff := cmp.Diff(expectedImageStreamTag, targetImageStreamTag, testhelper.RuntimeObjectIgnoreRvTypeMeta); diff != "" {
+		t.Errorf("unexpected pipeline tag (-want +got):\n%s", diff)
+	}
+}
+
+func TestInputImageTagStepOCPBuilderReference(t *testing.T) {
+	specPullSpec := "quay-proxy.ci.openshift.org/openshift/ci@sha256:47f4267a177f47b7a1cf44d652a452d668ee1fc72ed0490560db4292449eebfe"
+	baseImage := api.ImageStreamTagReference{
+		Namespace: "ocp",
+		Name:      "builder",
+		Tag:       "rhel-9-golang-1.22-openshift-4.17",
+	}
+	config := api.InputImageTagStepConfiguration{
+		InputImage: api.InputImage{To: "builder", BaseImage: baseImage},
+	}
+	client := loggingclient.New(fakectrlruntimeclient.NewClientBuilder().WithRuntimeObjects(
+		&imagev1.ImageStream{
+			ObjectMeta: metav1.ObjectMeta{Namespace: "ocp", Name: "builder"},
+			Spec: imagev1.ImageStreamSpec{Tags: []imagev1.TagReference{{
+				Name:      "rhel-9-golang-1.22-openshift-4.17",
+				Reference: true,
+				From:      &corev1.ObjectReference{Kind: "DockerImage", Name: specPullSpec},
+			}}},
+			Status: imagev1.ImageStreamStatus{Tags: []imagev1.NamedTagEventList{{
+				Tag: "rhel-9-golang-1.22-openshift-4.17",
+				Items: []imagev1.TagEvent{{
+					Image:                "",
+					DockerImageReference: specPullSpec,
+				}},
+			}}},
+		},
+		&imagev1.ImageStream{
+			ObjectMeta: metav1.ObjectMeta{Namespace: "target-namespace", Name: api.PipelineImageStream},
+			Spec: imagev1.ImageStreamSpec{
+				LookupPolicy: imagev1.ImageLookupPolicy{Local: true},
+				Tags:         []imagev1.TagReference{{Name: "builder"}},
+			},
+			Status: imagev1.ImageStreamStatus{
+				PublicDockerImageRepository: "some-reg/target-namespace/pipeline",
+				Tags: []imagev1.NamedTagEventList{{
+					Tag:   "builder",
+					Items: []imagev1.TagEvent{{Image: "sha256:47e2f82dbede8ff990e6e240f82d78830e7558f7b30df7bd8c0693992018b1e3"}},
+				}},
+			},
+		}).Build(), nil)
+	jobspec := &api.JobSpec{}
+	jobspec.SetNamespace("target-namespace")
+	iits := InputImageTagStep(&config, client, jobspec)
+	executeStep(t, iits, executionExpectation{
+		prerun: doneExpectation{value: false, err: false}, runError: false, postrun: doneExpectation{value: true, err: false},
+	})
+	expected := &imagev1.ImageStreamTag{
+		ObjectMeta: metav1.ObjectMeta{Name: "pipeline:builder", Namespace: jobspec.Namespace(), ResourceVersion: "1"},
+		Tag: &imagev1.TagReference{
+			From:            &corev1.ObjectReference{Kind: "DockerImage", Name: specPullSpec},
+			ImportPolicy:    imagev1.TagImportPolicy{ImportMode: imagev1.ImportModePreserveOriginal},
+			ReferencePolicy: imagev1.TagReferencePolicy{Type: imagev1.SourceTagReferencePolicy},
+		},
+	}
+	got := &imagev1.ImageStreamTag{}
+	if err := client.Get(context.Background(), ctrlruntimeclient.ObjectKey{Namespace: jobspec.Namespace(), Name: "pipeline:builder"}, got); err != nil {
+		t.Fatalf("get pipeline tag: %v", err)
+	}
+	if diff := cmp.Diff(expected, got, testhelper.RuntimeObjectIgnoreRvTypeMeta); diff != "" {
+		t.Errorf("unexpected tag (-want +got):\n%s", diff)
 	}
 }
 

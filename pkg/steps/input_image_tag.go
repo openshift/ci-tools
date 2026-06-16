@@ -164,7 +164,7 @@ func (s *inputImageTagStep) resolveOfficialImport(ctx context.Context) (*coreapi
 	if from.Kind != "DockerImage" && from.Namespace != "" {
 		pullSpec = fmt.Sprintf("%s/%s", from.Namespace, from.Name)
 	}
-	return from, imagev1.LocalTagReferencePolicy, pullSpec, nil
+	return from, utils.TagImportReferencePolicy(from), pullSpec, nil
 }
 
 // waitForTagInSpec waits for the tag on the image stream are to show in spec

@@ -1149,6 +1149,14 @@ const ciOperatorReferenceYaml = "# The list of base images describe\n" +
 	"        # Each generated job will be a duplication, but contain a suffix and the necessary SHARD_ARGS will be passed to the steps\n" +
 	"        # Only applicable to presubmits and periodics\n" +
 	"        shard_count: 0\n" +
+	"        # SkipBranches is a list of branch name regex patterns. Branches matching\n" +
+	"        # any of these patterns will be excluded from running this presubmit job.\n" +
+	"        # This maps directly to the upstream Prow Brancher.SkipBranches field and\n" +
+	"        # is useful to prevent feature branch inheritance (e.g. preventing a\n" +
+	"        # presubmit configured for \"main\" from also running on \"main-*\" branches).\n" +
+	"        # Only applicable to presubmit tests.\n" +
+	"        skip_branches:\n" +
+	"            - \"\"\n" +
 	"        # SkipIfOnlyChanged is a regex that will result in the test being skipped if all changed files match that regex.\n" +
 	"        # Only applicable to presubmits; postsubmits always run on every merge.\n" +
 	"        skip_if_only_changed: ' '\n" +
@@ -2089,6 +2097,14 @@ const ciOperatorReferenceYaml = "# The list of base images describe\n" +
 	"      # Each generated job will be a duplication, but contain a suffix and the necessary SHARD_ARGS will be passed to the steps\n" +
 	"      # Only applicable to presubmits and periodics\n" +
 	"      shard_count: 0\n" +
+	"      # SkipBranches is a list of branch name regex patterns. Branches matching\n" +
+	"      # any of these patterns will be excluded from running this presubmit job.\n" +
+	"      # This maps directly to the upstream Prow Brancher.SkipBranches field and\n" +
+	"      # is useful to prevent feature branch inheritance (e.g. preventing a\n" +
+	"      # presubmit configured for \"main\" from also running on \"main-*\" branches).\n" +
+	"      # Only applicable to presubmit tests.\n" +
+	"      skip_branches:\n" +
+	"        - \"\"\n" +
 	"      # SkipIfOnlyChanged is a regex that will result in the test being skipped if all changed files match that regex.\n" +
 	"      # Only applicable to presubmits; postsubmits always run on every merge.\n" +
 	"      skip_if_only_changed: ' '\n" +

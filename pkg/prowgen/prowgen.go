@@ -225,6 +225,7 @@ func handlePresubmit(g *prowJobBaseBuilder, element cioperatorapi.TestStepConfig
 		options.Capabilities = element.Capabilities
 		options.runIfChanged = element.RunIfChanged
 		options.skipIfOnlyChanged = element.SkipIfOnlyChanged
+		options.skipBranches = element.SkipBranches
 		options.defaultDisable = element.AlwaysRun != nil && !*element.AlwaysRun
 		options.optional = element.Optional
 		options.disableRehearsal = disableRehearsal
@@ -244,6 +245,7 @@ type generatePresubmitOptions struct {
 	Capabilities              []string
 	runIfChanged              string
 	skipIfOnlyChanged         string
+	skipBranches              []string
 	defaultDisable            bool
 	optional                  bool
 	disableRehearsal          bool
@@ -307,7 +309,10 @@ func generatePresubmitForTest(jobBaseBuilder *prowJobBaseBuilder, name string, i
 	pj := &prowconfig.Presubmit{
 		JobBase:   base,
 		AlwaysRun: opts.shouldAlwaysRun(),
-		Brancher:  prowconfig.Brancher{Branches: sets.List(sets.New[string](jc.ExactlyBranch(info.Branch), jc.FeatureBranch(info.Branch)))},
+		Brancher: prowconfig.Brancher{
+			Branches:     sets.List(sets.New[string](jc.ExactlyBranch(info.Branch), jc.FeatureBranch(info.Branch))),
+			SkipBranches: opts.skipBranches,
+		},
 		Reporter: prowconfig.Reporter{
 			Context: fmt.Sprintf("ci/prow/%s", shortName),
 		},

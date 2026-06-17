@@ -2401,6 +2401,11 @@ func (in *TestStepConfiguration) DeepCopyInto(out *TestStepConfiguration) {
 		*out = new(config.Retry)
 		**out = **in
 	}
+	if in.SkipBranches != nil {
+		in, out := &in.SkipBranches, &out.SkipBranches
+		*out = make([]string, len(*in))
+		copy(*out, *in)
+	}
 	if in.Timeout != nil {
 		in, out := &in.Timeout, &out.Timeout
 		*out = new(v1.Duration)

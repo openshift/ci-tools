@@ -872,14 +872,11 @@ func runtimeStepConfigsForBuild(
 			if root.FromRepository {
 				path := "."        // By default, the path will be the working directory
 				if len(refs) > 1 { // If we are getting the build root image for a specific ref we must determine the absolute path
-					var matchingRefs []prowapi.Refs
-					for _, r := range refs {
-						if ref == fmt.Sprintf("%s.%s", r.Org, r.Repo) {
-							matchingRefs = append(matchingRefs, r)
+					matchingRefs := matchingRefsForImage(ref, jobSpec)
+					if len(matchingRefs) == 0 {
+						if primaryRef := determinePrimaryRef(jobSpec, injectedTest); primaryRef != nil {
+							matchingRefs = append(matchingRefs, *primaryRef)
 						}
-					}
-					if len(matchingRefs) == 0 { // If we didn't find anything, use the primary refs
-						matchingRefs = append(matchingRefs, *determinePrimaryRef(jobSpec, injectedTest))
 					}
 					path = decorate.DetermineWorkDir(codeMountPath, matchingRefs)
 				}
@@ -920,7 +917,7 @@ func runtimeStepConfigsForBuild(
 	buildSteps = append(buildSteps, getSourceStepsForJobSpec(jobSpec, injectedTest)...)
 
 	// Detect Dockerfile inputs for project images and add InputImageTagStepConfiguration entries
-	dockerfileInputSteps, images := detectDockerfileInputs(config.Images.Items, config.BaseImages, readFile)
+	dockerfileInputSteps, images := detectDockerfileInputs(config.Images.Items, config.BaseImages, readFile, jobSpec)
 	config.Images.Items = images
 	buildSteps = append(buildSteps, dockerfileInputSteps...)
 
@@ -936,10 +933,10 @@ type dockerfileDetails struct {
 // detectDockerfileInputs reads Dockerfiles for project images and detects registry.ci.openshift.org
 // references that should be added as base images. It returns any required InputImageTagStepConfiguration steps to
 // import the detected base images, as well as an updated list of image configurations with the detected inputs added
-func detectDockerfileInputs(images []api.ProjectDirectoryImageBuildStepConfiguration, baseImages map[string]api.ImageStreamTagReference, readFile readFile) ([]api.StepConfiguration, []api.ProjectDirectoryImageBuildStepConfiguration) {
+func detectDockerfileInputs(images []api.ProjectDirectoryImageBuildStepConfiguration, baseImages map[string]api.ImageStreamTagReference, readFile readFile, jobSpec *api.JobSpec) ([]api.StepConfiguration, []api.ProjectDirectoryImageBuildStepConfiguration) {
 	var steps []api.StepConfiguration
 	for i, image := range images {
-		dockerfileDetails, err := readDockerfileForImage(image, readFile)
+		dockerfileDetails, err := readDockerfileForImage(image, readFile, jobSpec)
 		if err != nil {
 			logrus.WithError(err).WithField("image", image.To).Debug("Failed to read Dockerfile for input detection, skipping")
 			continue
@@ -952,9 +949,23 @@ func detectDockerfileInputs(images []api.ProjectDirectoryImageBuildStepConfigura
 	return steps, images
 }
 
+// matchingRefsForImage returns prowapi.Refs from jobSpec whose org.repo identifier matches imageRef.
+func matchingRefsForImage(imageRef string, jobSpec *api.JobSpec) []prowapi.Refs {
+	var refs []prowapi.Refs
+	if jobSpec.Refs != nil && imageRef == fmt.Sprintf("%s.%s", jobSpec.Refs.Org, jobSpec.Refs.Repo) {
+		refs = append(refs, *jobSpec.Refs)
+	}
+	for _, ref := range jobSpec.ExtraRefs {
+		if imageRef == fmt.Sprintf("%s.%s", ref.Org, ref.Repo) {
+			refs = append(refs, ref)
+		}
+	}
+	return refs
+}
+
 // readDockerfileForImage reads the Dockerfile content for a given image configuration
 // Returns the dockerfileDetails and any error encountered
-func readDockerfileForImage(image api.ProjectDirectoryImageBuildStepConfiguration, readFile readFile) (dockerfileDetails, error) {
+func readDockerfileForImage(image api.ProjectDirectoryImageBuildStepConfiguration, readFile readFile, jobSpec *api.JobSpec) (dockerfileDetails, error) {
 	if image.DockerfileLiteral != nil {
 		return dockerfileDetails{content: []byte(*image.DockerfileLiteral), path: "dockerfile_literal"}, nil
 	}
@@ -965,6 +976,16 @@ func readDockerfileForImage(image api.ProjectDirectoryImageBuildStepConfiguratio
 	dockerfilePath := fmt.Sprintf("./%s", details.path)
 	if image.ContextDir != "" {
 		dockerfilePath = fmt.Sprintf("%s/%s", image.ContextDir, details.path)
+	}
+	if image.Ref != "" {
+		if matchingRefs := matchingRefsForImage(image.Ref, jobSpec); len(matchingRefs) > 0 {
+			basePath := decorate.DetermineWorkDir(codeMountPath, matchingRefs)
+			if image.ContextDir != "" {
+				dockerfilePath = filepath.Join(basePath, image.ContextDir, details.path)
+			} else {
+				dockerfilePath = filepath.Join(basePath, details.path)
+			}
+		}
 	}
 	details.path = dockerfilePath
 

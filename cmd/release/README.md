@@ -1,8 +1,85 @@
-# `release`
+# release
 
-`release` is a command-line program that can be used to interact with and
-extract various types of data from the `openshift/release` repository.
+## What
+Developer CLI for inspecting and querying openshift/release repository data. Built with Cobra subcommands, it can list and print ci-operator configs (with optional registry resolution), Prow job configs, step registry components (steps, chains, workflows with tree display), and cluster profile details. Designed for local use -- not deployed as a service.
 
+## How it works -- subcommands
+
+### `release config [paths...]`
+Operates on ci-operator configuration files.
+
+| Flag | What it does |
+|---|---|
+| `--list` / `-l` | Print file paths only (no contents) |
+| `--resolve` / `-r` | Resolve registry references before printing (loads step registry) |
+| (default) | Print raw YAML of each config |
+
+If no paths are given, defaults to `ci-operator/config` under the root directory. Paths can be relative to the config directory.
+
+### `release job [paths...]`
+Operates on Prow job configuration files.
+
+| Flag | What it does |
+|---|---|
+| `--list` / `-l` | Print file paths only |
+| (default) | Print raw YAML of each job config |
+
+Defaults to `ci-operator/jobs` under the root directory.
+
+### `release registry`
+Operates on step registry components. Without a subcommand, lists all steps, chains, and workflows with type prefixes.
+
+#### `release registry step [names...]`
+| Flag | What it does |
+|---|---|
+| `--list` / `-l` | List all step names |
+| `--resolve` / `-r` | Print resolved step (for steps, same as unresolved) |
+| `--tree` | Print step name in tree format |
+| (default) | Print YAML of the step definition |
+
+#### `release registry chain [names...]`
+| Flag | What it does |
+|---|---|
+| `--list` / `-l` | List all chain names |
+| `--resolve` / `-r` | Resolve chain (inline all referenced steps and sub-chains) |
+| `--tree` | Display chain hierarchy with indentation |
+| (default) | Print YAML of the chain definition |
+
+#### `release registry workflow [names...]`
+| Flag | What it does |
+|---|---|
+| `--list` / `-l` | List all workflow names |
+| `--resolve` / `-r` | Resolve workflow (inline all pre/test/post steps and chains) |
+| `--tree` | Display workflow hierarchy: pre/test/post sections with chains and steps indented |
+| (default) | Print YAML of the workflow definition |
+
+### `release profile [names...]`
+Lists cluster profiles with their details. If no names given, lists all known profiles. For each profile, outputs:
+- `profile`: name
+- `cluster_type`: associated cloud provider type
+- `lease_type`: Boskos lease type
+
+## Flags (global)
+
+| Flag | Default | What it controls |
+|---|---|---|
+| `-C` / `--root-dir` | `.` | Path to the root of the openshift/release repository |
+| `--config-dir` | `ci-operator/config` (relative to root) | Override path to ci-operator config directory |
+| `--job-config` | `ci-operator/jobs` (relative to root) | Override path to Prow job config directory |
+| `--registry` | `ci-operator/step-registry` (relative to root) | Override path to step registry directory |
+
+## Key files
+
+- `cmd/release/main.go` -- entry point, Cobra root command with pflag integration
+- `pkg/cmd/release/release.go` -- root command definition, global flags, subcommand registration
+- `pkg/cmd/release/config.go` -- `config` subcommand: list/print/resolve ci-operator configs
+- `pkg/cmd/release/jobs.go` -- `job` subcommand: list/print Prow job configs
+- `pkg/cmd/release/registry.go` -- `registry` subcommand and sub-subcommands (step/chain/workflow): list/print/resolve/tree display
+- `pkg/cmd/release/profile.go` -- `profile` subcommand: cluster profile listing
+- `pkg/cmd/release/util.go` -- shared utilities: path joining, registry loading, YAML printing
+
+## Deployment
+Not deployed. Local developer tool for inspecting release repo data. Install with `go install ./cmd/release` from the ci-tools repo.
 ## Arguments
 
 `release` expects to be executed from the root of the repository.  The

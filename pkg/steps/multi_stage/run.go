@@ -155,6 +155,8 @@ func (s *multiStageTestStep) runPod(ctx context.Context, pod *coreapi.Pod, notif
 	// step Pod in the cluster, because it may eventually get scheduled and start testing the cluster that
 	// is already being torn down).
 	if err != nil && pod.Status.Phase == coreapi.PodPending {
+		client.MetricsAgent().StorePodLifecycleMetrics(pod.Name, pod.Namespace, coreapi.PodFailed)
+		client.MetricsAgent().StoreMachinesSnapshot(pod)
 		logrus.Infof("Deleting pod %s that failed to start", pod.Name)
 		deleteCtx, cancel := context.WithTimeout(base_steps.CleanupCtx, 30*time.Second)
 		defer cancel()

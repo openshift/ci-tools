@@ -368,7 +368,7 @@ func stepForTest(cfg *Config, inputImages inputImageSet, c *api.TestStepConfigur
 		step := multi_stage.MultiStageTestStep(*c, cfg.CIConfig, params, cfg.podClient, cfg.JobSpec, leases, cfg.NodeName, cfg.TargetAdditionalSuffix, nil, cfg.GSMConfig != nil, cfg.GSMConfig, isLeaseProxyServerAvailable(cfg), retry.DefaultRetry)
 
 		if len(leases) != 0 {
-			step = steps.IPPoolStep(cfg.LeaseClient, cfg.podClient, step, params, cfg.JobSpec.Namespace, cfg.MetricsAgent, test.ClusterProfileLiteral, cfg.CIConfig.Metadata.Branch)
+			step = steps.IPPoolStep(cfg.LeaseClient, cfg.podClient, step, params, cfg.JobSpec.Namespace, cfg.MetricsAgent, test.ClusterProfileLiteralOrLegacy(), cfg.CIConfig.Metadata.Branch)
 			step = steps.LeaseStep(cfg.LeaseClient, leases, step, cfg.JobSpec.Namespace, cfg.MetricsAgent, cfg.kubeClient, cfg.ClusterProfileGetter)
 		}
 

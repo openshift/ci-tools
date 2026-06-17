@@ -1,8 +1,70 @@
-# CVP Trigger
+# cvp-trigger
 
-CVP Trigger tool will be used by the CVP pipeline to parametrize and trigger
-the verification jobs for optional operator artifacts built internally in RH.
+## What
+CLI tool that triggers Container Verification Pipeline (CVP) operator verification jobs in Prow. Given a bundle image, index image, OCP version, and other operator metadata, it finds the corresponding periodic ProwJob definition, injects the operator-specific parameters, submits the job to the cluster, and watches it until completion. Outputs a JSON result file with the job status and artifacts URL.
 
+CVP is the system that validates ISV (Independent Software Vendor) operators for Red Hat certification.
+
+## How it works -- full flow
+
+1. **Parse and validate options**: All required parameters are validated -- bundle image ref, channel, index image ref, operator package name, OCP version (must be `X.Y` where X >= 4), job name, and Prow config paths. The output path directory must exist (unless `--dry-run`).
+
+2. **Load Prow config**: Use the Prow config agent to load job definitions from the specified config and job-config paths.
+
+3. **Find the periodic job**: Search all periodic jobs in the loaded Prow config for one matching `--job-name`. Fatal if not found.
+
+4. **Construct a ProwJob**: Convert the periodic job spec into a ProwJob resource using `pjutil.NewProwJob()`.
+
+5. **Inject parameters**:
+   - **Multi-stage params** (`--multi-stage-param=KEY=VALUE`): `OO_CHANNEL`, `OO_PACKAGE`, and optionally `OO_INSTALL_NAMESPACE`, `OO_TARGET_NAMESPACES`, `CUSTOM_SCORECARD_TESTCASE`
+   - **Dependency overrides** (`--dependency-override-param=KEY=VALUE`): `BUNDLE_IMAGE`, `OO_INDEX`, `INDEX_IMAGE`
+   - **Environment variables**: `CLUSTER_TYPE=aws`, `OCP_VERSION`, and optionally `RELEASE_IMAGE_LATEST`
+   - **Input hash**: Computed from sorted env vars, appended as `--input-hash=...` for deduplication
+
+6. **Dry-run mode**: If `--dry-run`, marshal the ProwJob to YAML, print it, and exit.
+
+7. **Submit and watch**:
+   - Create a ProwJob client from in-cluster config
+   - Submit the ProwJob via `Create()`
+   - Watch the ProwJob using a field selector on its name, with exponential backoff for watch creation (10 steps, factor 2, starting at 1s)
+   - On terminal state (`Success`, `Failure`, `Aborted`, `Error`):
+     - Compute the GCS artifacts URL using `gcsupload.PathsForJob()` and `Spyglass.GCSBrowserPrefix`
+     - Write a JSON result to `--output-path`:
+       ```json
+       {
+         "status": "<state>",
+         "prowjob_artifacts_url": "<url>",
+         "prowjob_url": "<url>"
+       }
+       ```
+     - Exit 0 on success, fatal on failure
+
+## Flags
+
+| Flag | Default | What it controls |
+|---|---|---|
+| `--bundle-image-ref` | (required) | URL for the operator bundle image |
+| `--channel` | (required) | Operator channel to test |
+| `--index-image-ref` | (required) | URL for the operator index image |
+| `--operator-package-name` | (required) | Operator package name |
+| `--ocp-version` | (required) | OCP version in X.Y format (X >= 4) |
+| `--job-name` | (required) | Name of the periodic ProwJob to trigger |
+| `--prow-config-path` | (required) | Path to Prow config YAML |
+| `--job-config-path` | (required) | Path to Prow job config directory |
+| `--output-path` | (required unless dry-run) | File path to write the JSON result |
+| `--release-image-ref` | `""` | Pull spec of a specific release payload for OCP deployment |
+| `--install-namespace` | `""` | Namespace for operator/catalog installation |
+| `--target-namespaces` | `""` | Comma-separated list of target namespaces for the operator |
+| `--custom-scorecard-testcase` | `""` | Custom scorecard test case name |
+| `--enable-hybrid-overlay` | `false` | Enable hybrid overlay feature on the test cluster |
+| `--dry-run` | `false` | Print ProwJob YAML without submitting |
+
+## Key files
+
+- `cmd/cvp-trigger/main.go` -- all logic: option parsing, ProwJob construction, parameter injection, submission, watch loop, result output
+
+## Deployment
+CLI tool. Not deployed as a service. Invoked by external systems (e.g. CVP pipeline) that need to trigger operator verification jobs in Prow. Requires in-cluster access to the Prow API server for ProwJob creation.
 ## High-level CVP ↔ Prow Job Architecture
 
 To test the optional operator images built internally in Red Hat, CVP triggers

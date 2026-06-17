@@ -1,10 +1,81 @@
-# Private Org Sync
+# private-org-sync
 
-This tool automatically syncs code from which "official" images are built
-from their public git repo locations to their mirrors in private GitHub
-organization. It is intended to be run in a Prow periodic job with an interval
-of less than an hour.
+## What
+Syncs git repository content from public organizations (openshift, openshift-eng, operator-framework, etc.) to their private mirrors in openshift-priv. Handles shallow clones with exponential depth retry, merge fallback for diverged histories, and org name flattening.
 
+## How it works — full flow
+
+### 1. Discover repositories
+- Walks ci-operator config directory to find repos that build official images (`api.BuildsAnyOfficialImages()`)
+- Merges with whitelist for repos not in config
+- Groups by org/repo, then iterates branches
+
+### 2. Repository naming
+- **Flattened orgs** (openshift, openshift-eng, operator-framework, redhat-cne, openshift-assisted, ViaQ by default + `--flatten-org` values): repo name unchanged in openshift-priv
+  - Example: `openshift/installer` -> `openshift-priv/installer`
+- **Non-flattened orgs**: prefixed with org name
+  - Example: `migtools/filebrowser` -> `openshift-priv/migtools-filebrowser`
+
+### 3. Branch filtering
+- Checks source branch existence via `git ls-remote --heads` (retries 5x with exponential backoff)
+- **Release branches** (`openshift-*`, `release-*`): error if source doesn't exist
+- **Misc branches**: skip with warning if source doesn't exist
+- If source and destination already at same commit: skip (no-op)
+
+### 4. Exponential depth retry
+Starts with a shallow fetch and progressively deepens until push succeeds:
+
+| Depth level | Git flag | Commits fetched |
+|---|---|---|
+| 1 | `--depth=2` | 2 |
+| 2 | `--depth=4` | 4 |
+| 3 | `--depth=8` | 8 |
+| 4 | `--depth=16` | 16 |
+| 5 | `--depth=32` | 32 |
+| 6 | `--depth=64` | 64 |
+| 7 | `--unshallow` | Full history |
+
+At each level:
+1. Fetch from source at current depth
+2. Push to destination (`git push --tags {destURL} FETCH_HEAD:refs/heads/{branch}`)
+3. If push fails with "shallow update not allowed" or "rejected because remote contains work": increase depth and retry
+
+Each shallow fetch has 3 internal retries for transient "shallow file has changed" errors.
+
+### 5. Merge fallback
+When push still fails after unshallowing (histories have diverged):
+1. `git fetch {destURL} {branch}` — get destination state
+2. `git checkout FETCH_HEAD` — switch to destination
+3. `git merge {srcRemote}/{branch} -m "DPTP reconciliation from upstream"` — merge source
+4. If merge conflict: `git merge --abort`, log warning, return nil (graceful skip)
+5. `git push --tags {destURL} HEAD:{branch}` — push merged result
+
+### 6. Error handling
+- Fatal: token file unreadable, git dir creation fails, invalid options
+- Skipped: misc branch missing, destination repo missing (unless `--fail-on-missing-destination`), merge conflicts
+- All errors accumulated and reported at end
+
+## Flags
+
+| Flag | Default | What it controls |
+|---|---|---|
+| `--token-path` | — | GitHub token file path |
+| `--target-org` | — | Destination organization (e.g., openshift-priv) |
+| `--config-dir` | — | CI operator config directory |
+| `--git-name` | — | Git author name for merge commits |
+| `--git-email` | — | Git author email |
+| `--flatten-org` | — | Orgs that keep original repo names (repeatable) |
+| `--only-org` | — | Mirror only repos from this org |
+| `--only-repo` | — | Mirror only this specific repo (org/repo format) |
+| `--confirm` | false | Execute real operations |
+| `--fail-on-missing-destination` | false | Error if destination repo doesn't exist |
+
+## Key files
+- `cmd/private-org-sync/main.go` — full sync logic, mirror(), exponential retry, merge fallback
+- `pkg/privateorg/flatten.go` — `MirroredRepoName()`, default flattened orgs
+
+## Deployment
+Periodic Prow job.
 Both source and destination are queried with `git ls-remote`: if they are
 already in sync, no further git operations are done. When the destination is
 detected to be an empty repo, full `git fetch` is done against a source,
@@ -15,9 +86,10 @@ When this fails, X is exponentially increased and the fetch is retried.
 When a threshold is hit, the shallow branch tip is fully fetched with
 `--unshallow` and the push is retried again.
 
-Currently the tool does not fail when the destination repository does not exist
-at all: this should allow running against full openshift/release while
-repository mirrors are created in the private org.
+By default the tool does not fail when the destination repository does not exist,
+which allows running against the full openshift/release while repository mirrors
+are created in the private org. Use `--fail-on-missing-destination` to treat
+missing destinations as errors.
 
 Errors resulting from merge conflicts are also ignored (see [DPTP-1426][]) so
 they do not cause the job to fail and an alert to be fired when there is a
@@ -51,7 +123,7 @@ This ensures that repositories from different organizations with the same name d
 ## Example
 
 ```console
-$ private-org-sync --config-path ci-operator/config/ --target-org $ORG --token-path $TOKEN_PATH --only-repo openshift/api --confirm=true --git-dir $( mktemp -d )
+$ private-org-sync --config-dir ci-operator/config/ --target-org $ORG --token-path $TOKEN_PATH --only-repo openshift/api --confirm=true --git-dir $( mktemp -d )
 INFO[0000] Syncing content between locations             branch=master (more fields...)
 INFO[0001] Destination is an empty repo: will do a full fetch right away  branch=master (more fields...)
 INFO[0001] Fetching from source (full fetch)             branch=master (more fields...)
@@ -87,7 +159,7 @@ INFO[0093] Syncing content between locations             branch=release-4.5 (mor
 INFO[0094] Fetching from source (--depth=2)              branch=release-4.5 (more fields...)
 INFO[0095] Pushing to destination                        branch=release-4.5 (more fields...)
 
-$ private-org-sync --config-path ci-operator/config/ --target-org $ORG --token-path $TOKEN_PATH --only-repo openshift/api --confirm=true --git-dir $( mktemp -d )
+$ private-org-sync --config-dir ci-operator/config/ --target-org $ORG --token-path $TOKEN_PATH --only-repo openshift/api --confirm=true --git-dir $( mktemp -d )
 INFO[0000] Syncing content between locations             branch=master (more fields...)
 INFO[0001] Branches are already in sync                  branch=master (more fields...)
 INFO[0001] Syncing content between locations             branch=release-4.1 (more fields...)

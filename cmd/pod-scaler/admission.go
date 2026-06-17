@@ -37,7 +37,7 @@ import (
 	"github.com/openshift/ci-tools/pkg/steps"
 )
 
-func admit(port, healthPort int, certDir string, client buildclientv1.BuildV1Interface, kubeClient kubernetes.Interface, loaders map[string][]*cacheReloader, mutateResourceLimits bool, cpuCap int64, memoryCap string, cpuPriorityScheduling int64, percentageMeasured float64, measuredPodCPUIncrease float64, systemReservedCPU int64, authoritativeCPU, authoritativeMemory, authoritativeCPUDryRun, authoritativeMemoryDryRun bool, reporter results.PodScalerReporter) {
+func admit(port, healthPort int, certDir string, client buildclientv1.BuildV1Interface, kubeClient kubernetes.Interface, loaders map[string][]*cacheReloader, mutateResourceLimits bool, cpuCap int64, memoryCap string, cpuPriorityScheduling int64, percentageMeasured float64, measuredPodCPUIncrease float64, systemReservedCPU int64, authoritativeCPU, authoritativeMemory, authoritativeCPUDryRun, authoritativeMemoryDryRun bool, authoritativeCPUMaxReductionPercent, authoritativeMemoryMaxReductionPercent float64, reporter results.PodScalerReporter) {
 	logger := logrus.WithField("component", "pod-scaler admission")
 	logger.Infof("Initializing admission webhook server with %d loaders.", len(loaders))
 	if authoritativeCPUDryRun || authoritativeMemoryDryRun {
@@ -57,7 +57,7 @@ func admit(port, healthPort int, certDir string, client buildclientv1.BuildV1Int
 		Port:    port,
 		CertDir: certDir,
 	})
-	server.Register("/pods", &webhook.Admission{Handler: &podMutator{logger: logger, client: client, decoder: decoder, resources: resources, mutateResourceLimits: mutateResourceLimits, cpuCap: cpuCap, memoryCap: memoryCap, cpuPriorityScheduling: cpuPriorityScheduling, percentageMeasured: percentageMeasured, measuredPodCPUIncrease: measuredPodCPUIncrease, nodeCache: nodeCache, authoritativeCPU: authoritativeCPU, authoritativeMemory: authoritativeMemory, authoritativeCPUDryRun: authoritativeCPUDryRun, authoritativeMemoryDryRun: authoritativeMemoryDryRun, reporter: reporter}})
+	server.Register("/pods", &webhook.Admission{Handler: &podMutator{logger: logger, client: client, decoder: decoder, resources: resources, mutateResourceLimits: mutateResourceLimits, cpuCap: cpuCap, memoryCap: memoryCap, cpuPriorityScheduling: cpuPriorityScheduling, percentageMeasured: percentageMeasured, measuredPodCPUIncrease: measuredPodCPUIncrease, nodeCache: nodeCache, authoritativeCPU: authoritativeCPU, authoritativeMemory: authoritativeMemory, authoritativeCPUDryRun: authoritativeCPUDryRun, authoritativeMemoryDryRun: authoritativeMemoryDryRun, authoritativeCPUMaxReductionPercent: authoritativeCPUMaxReductionPercent, authoritativeMemoryMaxReductionPercent: authoritativeMemoryMaxReductionPercent, reporter: reporter}})
 	logger.Info("Serving admission webhooks.")
 	if err := server.Start(interrupts.Context()); err != nil {
 		logrus.WithError(err).Fatal("Failed to serve webhooks.")
@@ -65,22 +65,24 @@ func admit(port, healthPort int, certDir string, client buildclientv1.BuildV1Int
 }
 
 type podMutator struct {
-	logger                    *logrus.Entry
-	client                    buildclientv1.BuildV1Interface
-	resources                 *resourceServer
-	mutateResourceLimits      bool
-	decoder                   admission.Decoder
-	cpuCap                    int64
-	memoryCap                 string
-	cpuPriorityScheduling     int64
-	percentageMeasured        float64
-	measuredPodCPUIncrease    float64
-	nodeCache                 *nodeAllocatableCache
-	authoritativeCPU          bool
-	authoritativeMemory       bool
-	authoritativeCPUDryRun    bool
-	authoritativeMemoryDryRun bool
-	reporter                  results.PodScalerReporter
+	logger                                 *logrus.Entry
+	client                                 buildclientv1.BuildV1Interface
+	resources                              *resourceServer
+	mutateResourceLimits                   bool
+	decoder                                admission.Decoder
+	cpuCap                                 int64
+	memoryCap                              string
+	cpuPriorityScheduling                  int64
+	percentageMeasured                     float64
+	measuredPodCPUIncrease                 float64
+	nodeCache                              *nodeAllocatableCache
+	authoritativeCPU                       bool
+	authoritativeMemory                    bool
+	authoritativeCPUDryRun                 bool
+	authoritativeMemoryDryRun              bool
+	authoritativeCPUMaxReductionPercent    float64
+	authoritativeMemoryMaxReductionPercent float64
+	reporter                               results.PodScalerReporter
 }
 
 func (m *podMutator) Handle(ctx context.Context, req admission.Request) admission.Response {
@@ -129,7 +131,7 @@ func (m *podMutator) Handle(ctx context.Context, req admission.Request) admissio
 		m.setMeasuredLabel(pod, false, logger)
 	}
 
-	mutatePodResources(pod, m.resources, m.mutateResourceLimits, m.cpuCap, m.memoryCap, isMeasured, m.nodeCache, m.measuredPodCPUIncrease, m.authoritativeCPU, m.authoritativeMemory, m.authoritativeCPUDryRun, m.authoritativeMemoryDryRun, m.reporter, logger)
+	mutatePodResources(pod, m.resources, m.mutateResourceLimits, m.cpuCap, m.memoryCap, isMeasured, m.nodeCache, m.measuredPodCPUIncrease, m.authoritativeCPU, m.authoritativeMemory, m.authoritativeCPUDryRun, m.authoritativeMemoryDryRun, m.authoritativeCPUMaxReductionPercent, m.authoritativeMemoryMaxReductionPercent, m.reporter, logger)
 	m.addPriorityClass(pod)
 
 	marshaledPod, err := json.Marshal(pod)
@@ -228,12 +230,10 @@ func mutatePodLabels(pod *corev1.Pod, build *buildv1.Build) {
 	}
 }
 
-const authoritativeMaxReductionPercent = 0.25
-
 var authoritativeMinCPURequest = resource.MustParse("10m")
 
 // useOursIfLarger updates fields in theirs when ours are larger, or lowers them when authoritative mode allows.
-func useOursIfLarger(allOfOurs, allOfTheirs *corev1.ResourceRequirements, workloadName, workloadType string, isMeasured bool, workloadClass string, authoritativeCPU, authoritativeMemory, authoritativeCPUDryRun, authoritativeMemoryDryRun bool, reporter results.PodScalerReporter, logger *logrus.Entry) {
+func useOursIfLarger(allOfOurs, allOfTheirs *corev1.ResourceRequirements, workloadName, workloadType string, isMeasured bool, workloadClass string, authoritativeCPU, authoritativeMemory, authoritativeCPUDryRun, authoritativeMemoryDryRun bool, authoritativeCPUMaxReductionPercent, authoritativeMemoryMaxReductionPercent float64, reporter results.PodScalerReporter, logger *logrus.Entry) {
 	for _, item := range []*corev1.ResourceRequirements{allOfOurs, allOfTheirs} {
 		if item.Requests == nil {
 			item.Requests = corev1.ResourceList{}
@@ -286,9 +286,11 @@ func useOursIfLarger(allOfOurs, allOfTheirs *corev1.ResourceRequirements, worklo
 				}
 				authoritative := authoritativeMemory
 				dryRun := authoritativeMemoryDryRun
+				maxReductionPercent := authoritativeMemoryMaxReductionPercent
 				if field == corev1.ResourceCPU {
 					authoritative = authoritativeCPU
 					dryRun = authoritativeCPUDryRun
+					maxReductionPercent = authoritativeCPUMaxReductionPercent
 				}
 				if !authoritative && !dryRun {
 					continue
@@ -319,14 +321,15 @@ func useOursIfLarger(allOfOurs, allOfTheirs *corev1.ResourceRequirements, worklo
 				if 1.0-(ourValue/theirValue) < 0.05 {
 					continue
 				}
-				capped := false
-				if 1.0-(ourValue/theirValue) > authoritativeMaxReductionPercent {
-					if field == corev1.ResourceCPU {
-						our.SetMilli(int64(float64(their.MilliValue()) * (1.0 - authoritativeMaxReductionPercent)))
-					} else {
-						our.Set(int64(theirValue * (1.0 - authoritativeMaxReductionPercent)))
+				reductionCapped := false
+				if 1.0-(ourValue/theirValue) > maxReductionPercent {
+					switch field {
+					case corev1.ResourceCPU:
+						our.SetMilli(int64(float64(their.MilliValue()) * (1.0 - maxReductionPercent)))
+					case corev1.ResourceMemory:
+						our.Set(int64(theirValue * (1.0 - maxReductionPercent)))
 					}
-					capped = true
+					reductionCapped = true
 				}
 				if field == corev1.ResourceCPU {
 					if our.Cmp(authoritativeMinCPURequest) < 0 {
@@ -338,12 +341,12 @@ func useOursIfLarger(allOfOurs, allOfTheirs *corev1.ResourceRequirements, worklo
 				}
 				if dryRun {
 					fieldLogger.WithFields(logrus.Fields{
-						"event":         "authoritative_decrease_dry_run",
-						"workloadClass": workloadClass,
-						"would_set":     our.String(),
-						"authoritative": authoritative,
-						"reduction_pct": (1.0 - our.AsApproximateFloat64()/theirValue) * 100,
-						"capped_25pct":  capped,
+						"event":            "authoritative_decrease_dry_run",
+						"workloadClass":    workloadClass,
+						"would_set":        our.String(),
+						"authoritative":    authoritative,
+						"reduction_pct":    (1.0 - our.AsApproximateFloat64()/theirValue) * 100,
+						"reduction_capped": reductionCapped,
 					}).Info("authoritative decrease dry-run")
 					continue
 				}
@@ -408,7 +411,7 @@ func preventUnschedulableWithCaps(resources *corev1.ResourceRequirements, cpuCap
 	}
 }
 
-func mutatePodResources(pod *corev1.Pod, server *resourceServer, mutateResourceLimits bool, cpuCap int64, memoryCap string, isMeasured bool, nodeCache *nodeAllocatableCache, measuredPodCPUIncrease float64, authoritativeCPU, authoritativeMemory, authoritativeCPUDryRun, authoritativeMemoryDryRun bool, reporter results.PodScalerReporter, logger *logrus.Entry) {
+func mutatePodResources(pod *corev1.Pod, server *resourceServer, mutateResourceLimits bool, cpuCap int64, memoryCap string, isMeasured bool, nodeCache *nodeAllocatableCache, measuredPodCPUIncrease float64, authoritativeCPU, authoritativeMemory, authoritativeCPUDryRun, authoritativeMemoryDryRun bool, authoritativeCPUMaxReductionPercent, authoritativeMemoryMaxReductionPercent float64, reporter results.PodScalerReporter, logger *logrus.Entry) {
 	workloadClass := pod.Labels[ciWorkloadLabel]
 
 	mutateResources := func(containers []corev1.Container) {
@@ -460,7 +463,7 @@ func mutatePodResources(pod *corev1.Pod, server *resourceServer, mutateResourceL
 				logger.Debugf("recommendation exists for: %s (using max of measured and unmeasured)", containers[i].Name)
 				workloadType := determineWorkloadType(pod.Annotations, pod.Labels)
 				workloadName := determineWorkloadName(pod.Name, containers[i].Name, workloadType, pod.Labels)
-				useOursIfLarger(&resources, &containers[i].Resources, workloadName, workloadType, isMeasured, workloadClass, authoritativeCPU, authoritativeMemory, authoritativeCPUDryRun, authoritativeMemoryDryRun, reporter, logger)
+				useOursIfLarger(&resources, &containers[i].Resources, workloadName, workloadType, isMeasured, workloadClass, authoritativeCPU, authoritativeMemory, authoritativeCPUDryRun, authoritativeMemoryDryRun, authoritativeCPUMaxReductionPercent, authoritativeMemoryMaxReductionPercent, reporter, logger)
 				if mutateResourceLimits {
 					reconcileLimits(&containers[i].Resources)
 				}

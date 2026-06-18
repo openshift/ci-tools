@@ -34,16 +34,20 @@ const (
 	ProwjobsCachePrefix = "prowjobs"
 	PodsCachePrefix     = "pods"
 	StepsCachePrefix    = "steps"
+
+	metricOOMKilled    = `kube_pod_container_status_last_terminated_reason`
+	metricCPUThrottled = `container_cpu_cfs_throttled_periods_total`
+	metricCPUPeriods   = `container_cpu_cfs_periods_total`
 )
 
-// queriesByMetric returns a mapping of Prometheus query by metric name for all queries we want to execute
-func queriesByMetric() map[string]string {
-	queries := map[string]string{}
-	for _, info := range []struct {
-		prefix   string
-		selector string
-		labels   []string
-	}{
+type metricQueryConfig struct {
+	prefix   string
+	selector string
+	labels   []string
+}
+
+func metricQueryConfigs() []metricQueryConfig {
+	return []metricQueryConfig{
 		{
 			prefix:   ProwjobsCachePrefix,
 			selector: `{` + string(podscaler.ProwLabelNameCreated) + `="true",` + string(podscaler.ProwLabelNameJob) + `!="",` + string(podscaler.LabelNameRehearsal) + `=""}`,
@@ -59,7 +63,12 @@ func queriesByMetric() map[string]string {
 			selector: `{` + string(podscaler.LabelNameCreated) + `="true",` + string(podscaler.LabelNameStep) + `!=""}`,
 			labels:   []string{string(podscaler.LabelNameOrg), string(podscaler.LabelNameRepo), string(podscaler.LabelNameBranch), string(podscaler.LabelNameVariant), string(podscaler.LabelNameTarget), string(podscaler.LabelNameStep), string(podscaler.LabelNameMeasured)},
 		},
-	} {
+	}
+}
+
+func queriesByMetric() map[string]string {
+	queries := map[string]string{}
+	for _, info := range metricQueryConfigs() {
 		for name, metric := range map[string]string{
 			MetricNameCPUUsage:         `rate(` + MetricNameCPUUsage + containerFilter + `[3m])`,
 			MetricNameMemoryWorkingSet: MetricNameMemoryWorkingSet + containerFilter,
@@ -70,7 +79,7 @@ func queriesByMetric() map[string]string {
 	return queries
 }
 
-func produce(clients map[string]prometheusapi.API, dataCache Cache, ignoreLatest, maxDataAge time.Duration, once bool) {
+func produce(clients map[string]prometheusapi.API, dataCache Cache, ignoreLatest, maxDataAge time.Duration, once bool, failureEscalationMaxLevel int, cpuThrottleThreshold float64) {
 	var execute func(func())
 	if once {
 		execute = func(f func()) {
@@ -157,6 +166,7 @@ func produce(clients map[string]prometheusapi.API, dataCache Cache, ignoreLatest
 				logger.WithError(err).Error("Failed to write cached data.")
 			}
 		}
+		refreshEscalationIndex(clients, dataCache, failureEscalationMaxLevel, cpuThrottleThreshold)
 	})
 }
 
@@ -394,4 +404,132 @@ func (q *querier) executeOverRange(ctx context.Context, c *clusterMetadata, r pr
 	q.data.Record(c.name, rangeFrom(r), matrix, logger)
 	q.lock.Unlock()
 	logger.Debugf("Saved Prometheus response after %s.", time.Since(saveStart).Round(time.Second))
+}
+
+func refreshEscalationIndex(clients map[string]prometheusapi.API, dataCache Cache, maxLevel int, cpuThrottleThreshold float64) {
+	logger := logrus.WithField("component", "pod-scaler escalation producer")
+	index := loadEscalationIndex(dataCache, logger)
+	oomWorkloads := map[string]struct{}{}
+	throttledWorkloads := map[string]struct{}{}
+	usageWorkloads := map[string]struct{}{}
+
+	for clusterName, client := range clients {
+		clusterLogger := logger.WithField("cluster", clusterName)
+		for _, info := range metricQueryConfigs() {
+			oomQuery := queryFor(
+				metricOOMKilled+`{reason="OOMKilled",container!="POD",container!=""}`,
+				info.selector,
+				info.labels,
+			)
+			if err := queryInstantVector(clusterLogger.WithField("query", "oom"), client, oomQuery, func(metric model.Metric, value model.SampleValue) {
+				if value > 0 {
+					oomWorkloads[podscaler.WorkloadKeyFromMetric(metric)] = struct{}{}
+				}
+			}); err != nil {
+				clusterLogger.WithError(err).WithField("query", "oom").Warn("Failed to query OOM signal.")
+			}
+
+			throttleQuery := queryFor(
+				`sum by (namespace,pod,container) (rate(`+metricCPUThrottled+containerFilter+`[1h])) / sum by (namespace,pod,container) (rate(`+metricCPUPeriods+containerFilter+`[1h]))`,
+				info.selector,
+				info.labels,
+			)
+			if err := queryInstantVector(clusterLogger.WithField("query", "cpu_throttle"), client, throttleQuery, func(metric model.Metric, value model.SampleValue) {
+				if value >= model.SampleValue(cpuThrottleThreshold) {
+					throttledWorkloads[podscaler.WorkloadKeyFromMetric(metric)] = struct{}{}
+				}
+			}); err != nil {
+				clusterLogger.WithError(err).WithField("query", "cpu_throttle").Warn("Failed to query CPU throttle signal.")
+			}
+
+			usageQuery := queriesByMetric()[info.prefix+"/"+MetricNameMemoryWorkingSet]
+			if err := queryInstantVector(clusterLogger.WithField("query", "usage"), client, usageQuery, func(metric model.Metric, value model.SampleValue) {
+				if value > 0 {
+					usageWorkloads[podscaler.WorkloadKeyFromMetric(metric)] = struct{}{}
+				}
+			}); err != nil {
+				clusterLogger.WithError(err).WithField("query", "usage").Warn("Failed to query usage signal.")
+			}
+		}
+	}
+
+	for key := range oomWorkloads {
+		state := index[key]
+		if state.MemoryLevel < maxLevel {
+			state.MemoryLevel++
+		}
+		index[key] = state
+	}
+	for key := range throttledWorkloads {
+		state := index[key]
+		if state.CPULevel < maxLevel {
+			state.CPULevel++
+		}
+		index[key] = state
+	}
+	decayEscalation := func(key string) {
+		state, ok := index[key]
+		if !ok {
+			return
+		}
+		if state.MemoryLevel > 0 {
+			state.MemoryLevel--
+		}
+		if state.CPULevel > 0 {
+			state.CPULevel--
+		}
+		if state.MemoryLevel == 0 && state.CPULevel == 0 {
+			delete(index, key)
+			return
+		}
+		index[key] = state
+	}
+	for key := range usageWorkloads {
+		if _, oom := oomWorkloads[key]; oom {
+			continue
+		}
+		if _, throttled := throttledWorkloads[key]; throttled {
+			continue
+		}
+		decayEscalation(key)
+	}
+	for key := range index {
+		if _, oom := oomWorkloads[key]; oom {
+			continue
+		}
+		if _, throttled := throttledWorkloads[key]; throttled {
+			continue
+		}
+		if _, active := usageWorkloads[key]; active {
+			continue
+		}
+		decayEscalation(key)
+	}
+
+	if err := storeEscalationIndex(dataCache, index); err != nil {
+		logger.WithError(err).Error("Failed to store workload escalation index.")
+	}
+}
+
+func queryInstantVector(logger *logrus.Entry, client prometheusapi.API, query string, apply func(model.Metric, model.SampleValue)) error {
+	ctx, cancel := context.WithTimeout(context.Background(), 2*time.Minute)
+	defer cancel()
+	value, warnings, err := client.Query(ctx, query, time.Now())
+	if err != nil {
+		return err
+	}
+	if len(warnings) > 0 {
+		logger.WithField("warnings", warnings).Warn("Got warnings from Prometheus.")
+	}
+	vector, ok := value.(model.Vector)
+	if !ok {
+		return nil
+	}
+	for _, sample := range vector {
+		if sample.Metric == nil {
+			continue
+		}
+		apply(sample.Metric, sample.Value)
+	}
+	return nil
 }

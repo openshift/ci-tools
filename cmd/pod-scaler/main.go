@@ -49,6 +49,10 @@ type options struct {
 	cacheBucket        string
 	gcsCredentialsFile string
 
+	failureEscalationFactor   float64
+	failureEscalationMaxLevel int
+	cpuThrottleThreshold      float64
+
 	resultsOptions results.Options
 }
 
@@ -108,8 +112,11 @@ func bindOptions(fs *flag.FlagSet) *options {
 	fs.BoolVar(&o.authoritativeMemory, "authoritative-memory", false, "Allow admission to decrease memory requests and limits based on measured usage.")
 	fs.BoolVar(&o.authoritativeCPUDryRun, "authoritative-cpu-dry-run", false, "Log CPU decreases that authoritative mode would apply without mutating pods.")
 	fs.BoolVar(&o.authoritativeMemoryDryRun, "authoritative-memory-dry-run", false, "Log memory decreases that authoritative mode would apply without mutating pods.")
-	fs.Float64Var(&o.authoritativeCPUMaxReductionPercent, "authoritative-cpu-max-reduction-percent", 1.0, "Maximum CPU request reduction per admission in authoritative mode, as a fraction (0.25 = 25%, 1.0 = no cap).")
-	fs.Float64Var(&o.authoritativeMemoryMaxReductionPercent, "authoritative-memory-max-reduction-percent", 1.0, "Maximum memory request reduction per admission in authoritative mode, as a fraction (0.25 = 25%, 1.0 = no cap).")
+	fs.Float64Var(&o.authoritativeCPUMaxReductionPercent, "authoritative-cpu-max-reduction-percent", 1.0, "Maximum CPU limit reduction per admission in authoritative mode, as a fraction (0.25 = 25%, 1.0 = no cap).")
+	fs.Float64Var(&o.authoritativeMemoryMaxReductionPercent, "authoritative-memory-max-reduction-percent", 1.0, "Maximum memory limit reduction per admission in authoritative mode, as a fraction (0.25 = 25%, 1.0 = no cap).")
+	fs.Float64Var(&o.failureEscalationFactor, "failure-escalation-factor", 1.5, "Multiplier applied per escalation level after OOM or CPU throttle (1.5 = 50% increase per level).")
+	fs.IntVar(&o.failureEscalationMaxLevel, "failure-escalation-max-level", 10, "Maximum escalation level tracked for a workload.")
+	fs.Float64Var(&o.cpuThrottleThreshold, "cpu-throttle-threshold", 0.25, "Minimum throttled/total CPU CFS period ratio to count as CPU deprived.")
 	o.resultsOptions.Bind(fs)
 	return &o
 }
@@ -177,6 +184,15 @@ func (o *options) validate() error {
 	}
 	if o.logStyle != logStyleJson && o.logStyle != logStyleText {
 		return fmt.Errorf("--log-style must be one of %s or %s, not %s", logStyleText, logStyleJson, o.logStyle)
+	}
+	if o.failureEscalationFactor <= 1 {
+		return errors.New("--failure-escalation-factor must be greater than 1")
+	}
+	if o.failureEscalationMaxLevel < 0 {
+		return errors.New("--failure-escalation-max-level must be >= 0")
+	}
+	if o.cpuThrottleThreshold <= 0 || o.cpuThrottleThreshold > 1 {
+		return errors.New("--cpu-throttle-threshold must be between 0 and 1")
 	}
 
 	return o.instrumentationOptions.Validate(false)
@@ -277,7 +293,7 @@ func mainProduce(opts *options, cache Cache) {
 		logger.Debugf("Loaded Prometheus client.")
 	}
 
-	produce(clients, cache, opts.ignoreLatest, opts.maxDataAge, opts.once)
+	produce(clients, cache, opts.ignoreLatest, opts.maxDataAge, opts.once, opts.failureEscalationMaxLevel, opts.cpuThrottleThreshold)
 
 }
 
@@ -305,7 +321,9 @@ func mainAdmission(opts *options, cache Cache) {
 		logrus.WithError(err).Fatal("Failed to create pod-scaler reporter.")
 	}
 
-	go admit(opts.port, opts.instrumentationOptions.HealthPort, opts.certDir, client, kubeClient, loaders(cache), opts.mutateResourceLimits, opts.cpuCap, opts.memoryCap, opts.cpuPriorityScheduling, opts.percentageMeasured, opts.measuredPodCPUIncrease, opts.systemReservedCPU, opts.authoritativeCPU, opts.authoritativeMemory, opts.authoritativeCPUDryRun, opts.authoritativeMemoryDryRun, opts.authoritativeCPUMaxReductionPercent, opts.authoritativeMemoryMaxReductionPercent, reporter)
+	escalations := newEscalationServer(cache, opts.failureEscalationFactor)
+
+	go admit(opts.port, opts.instrumentationOptions.HealthPort, opts.certDir, client, kubeClient, loaders(cache), opts.mutateResourceLimits, opts.cpuCap, opts.memoryCap, opts.cpuPriorityScheduling, opts.percentageMeasured, opts.measuredPodCPUIncrease, opts.systemReservedCPU, opts.authoritativeCPU, opts.authoritativeMemory, opts.authoritativeCPUDryRun, opts.authoritativeMemoryDryRun, opts.authoritativeCPUMaxReductionPercent, opts.authoritativeMemoryMaxReductionPercent, escalations, reporter)
 }
 
 func loaders(cache Cache) map[string][]*cacheReloader {

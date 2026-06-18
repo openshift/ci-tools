@@ -469,3 +469,36 @@ func (m *StepMetadata) LogFields() logrus.Fields {
 		"container": m.Container,
 	}
 }
+
+// ResourceEscalation tracks per-workload escalation levels after resource pressure failures.
+type ResourceEscalation struct {
+	MemoryLevel int `json:"memory_level,omitempty"`
+	CPULevel    int `json:"cpu_level,omitempty"`
+}
+
+// EscalationIndex maps workload keys to escalation state persisted by the producer.
+type EscalationIndex map[string]ResourceEscalation
+
+// WorkloadKey returns the canonical key for a workload type and name.
+func WorkloadKey(workloadType, workloadName string) string {
+	return fmt.Sprintf("%s/%s", workloadType, workloadName)
+}
+
+// WorkloadKeyFromMetric derives a WorkloadKey from Prometheus metric labels.
+func WorkloadKeyFromMetric(metric model.Metric) string {
+	if _, ok := metric[ProwLabelNameCreated]; ok {
+		return WorkloadKey("prowjob", string(metric[ProwLabelNameJob]))
+	}
+	meta := metadataFromMetric(metric)
+	name := fmt.Sprintf("%s-%s", meta.Pod, meta.Container)
+	if meta.Step != "" {
+		return WorkloadKey("step", name)
+	}
+	if _, ok := metric[LabelNameBuild]; ok {
+		return WorkloadKey("build", name)
+	}
+	return WorkloadKey("undefined", name)
+}
+
+// EscalationsCacheName is the GCS object prefix for the persisted escalation index.
+const EscalationsCacheName = "escalations/v1"

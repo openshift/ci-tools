@@ -1037,3 +1037,45 @@ func TestMetadataFor(t *testing.T) {
 		})
 	}
 }
+
+func TestWorkloadKeyFromMetric(t *testing.T) {
+	var testCases = []struct {
+		name   string
+		metric model.Metric
+		want   string
+	}{
+		{
+			name: "prowjob",
+			metric: model.Metric{
+				ProwLabelNameCreated: "true",
+				ProwLabelNameJob:     "periodic-test",
+			},
+			want: "prowjob/periodic-test",
+		},
+		{
+			name: "build pod",
+			metric: model.Metric{
+				LabelNameBuild:     "true",
+				LabelNamePod:       "build-1",
+				LabelNameContainer: "test",
+			},
+			want: "build/build-1-test",
+		},
+		{
+			name: "step",
+			metric: model.Metric{
+				LabelNameStep:      "unit",
+				LabelNamePod:       "pod-1",
+				LabelNameContainer: "test",
+			},
+			want: "step/pod-1-test",
+		},
+	}
+	for _, tc := range testCases {
+		t.Run(tc.name, func(t *testing.T) {
+			if got := WorkloadKeyFromMetric(tc.metric); got != tc.want {
+				t.Errorf("WorkloadKeyFromMetric() = %q, want %q", got, tc.want)
+			}
+		})
+	}
+}

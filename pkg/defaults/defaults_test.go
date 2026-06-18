@@ -2323,6 +2323,7 @@ func TestReadDockerfileForImage(t *testing.T) {
 	testCases := []struct {
 		name            string
 		image           api.ProjectDirectoryImageBuildStepConfiguration
+		jobSpec         *api.JobSpec
 		readFile        readFile
 		expectedContent string
 		expectedPath    string
@@ -2396,6 +2397,38 @@ func TestReadDockerfileForImage(t *testing.T) {
 			expectError:     false,
 		},
 		{
+			name: "extra ref dockerfile path",
+			image: api.ProjectDirectoryImageBuildStepConfiguration{
+				To:  "hello-openshift-openshift.origin",
+				Ref: "openshift.origin",
+				ProjectDirectoryImageBuildInputs: api.ProjectDirectoryImageBuildInputs{
+					DockerfilePath: "Dockerfile.rhel",
+					ContextDir:     "images/hello-openshift",
+				},
+			},
+			jobSpec: &api.JobSpec{
+				JobSpec: downwardapi.JobSpec{
+					Refs: &prowapi.Refs{Org: "openshift", Repo: "cluster-cloud-controller-manager-operator", BaseRef: "release-4.22"},
+					ExtraRefs: []prowapi.Refs{{
+						Org:       "openshift",
+						Repo:      "origin",
+						BaseRef:   "release-4.22",
+						PathAlias: "github.com/openshift/origin",
+					}},
+				},
+			},
+			readFile: func(path string) ([]byte, error) {
+				want := "/home/prow/go/src/github.com/openshift/origin/images/hello-openshift/Dockerfile.rhel"
+				if path == want {
+					return []byte("FROM registry.ci.openshift.org/ocp/4.16:base-rhel9"), nil
+				}
+				return nil, fmt.Errorf("file not found: %s", path)
+			},
+			expectedContent: "FROM registry.ci.openshift.org/ocp/4.16:base-rhel9",
+			expectedPath:    "/home/prow/go/src/github.com/openshift/origin/images/hello-openshift/Dockerfile.rhel",
+			expectError:     false,
+		},
+		{
 			name: "file not found",
 			image: api.ProjectDirectoryImageBuildStepConfiguration{
 				To: "test-image",
@@ -2409,7 +2442,7 @@ func TestReadDockerfileForImage(t *testing.T) {
 
 	for _, tc := range testCases {
 		t.Run(tc.name, func(t *testing.T) {
-			details, err := readDockerfileForImage(tc.image, tc.readFile)
+			details, err := readDockerfileForImage(tc.image, tc.readFile, tc.jobSpec)
 
 			if tc.expectError {
 				if err == nil {

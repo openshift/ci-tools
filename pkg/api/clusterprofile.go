@@ -115,7 +115,7 @@ const (
 	ClusterProfilePOWERVS7                   ClusterProfile = "powervs-7"
 	ClusterProfilePOWERVS8                   ClusterProfile = "powervs-8"
 	ClusterProfilePOWERVS9                   ClusterProfile = "powervs-9"
-        ClusterProfilePOWERVSHCP                 ClusterProfile = "powervs-hcp"
+    ClusterProfilePOWERVSHCP                 ClusterProfile = "powervs-hcp"
 	ClusterProfileLibvirtPpc64le             ClusterProfile = "libvirt-ppc64le"
 	ClusterProfileLibvirtPpc64leS2S          ClusterProfile = "libvirt-ppc64le-s2s"
 	ClusterProfileLibvirtS390x               ClusterProfile = "libvirt-s390x"
@@ -337,7 +337,7 @@ func ClusterProfiles() []ClusterProfile {
 		ClusterProfilePOWERVS7,
 		ClusterProfilePOWERVS8,
 		ClusterProfilePOWERVS9,
-                ClusterProfilePOWERVSHCP,
+        ClusterProfilePOWERVSHCP,
 		ClusterProfileKubevirt,
 		ClusterProfileLibvirtPpc64le,
 		ClusterProfileLibvirtPpc64leS2S,
@@ -610,8 +610,8 @@ func (p ClusterProfile) ClusterType() string {
 		return "powervs-8"
 	case ClusterProfilePOWERVS9:
 		return "powervs-9"
-        case ClusterProfilePOWERVSHCP:
-                return "powervs-hcp"
+    case ClusterProfilePOWERVSHCP:
+        return "powervs-hcp"
 	case ClusterProfileLibvirtPpc64le:
 		return "libvirt-ppc64le"
 	case ClusterProfileLibvirtPpc64leS2S:
@@ -959,8 +959,8 @@ func (p ClusterProfile) LeaseType() string {
 		return "powervs-8-quota-slice"
 	case ClusterProfilePOWERVS9:
 		return "powervs-9-quota-slice"
-        case ClusterProfilePOWERVSHCP:
-                return "powervs-hcp-quota-slice"
+    case ClusterProfilePOWERVSHCP:
+        return "powervs-hcp-quota-slice"
 	case ClusterProfileLibvirtPpc64le:
 		return "libvirt-ppc64le-quota-slice"
 	case ClusterProfileLibvirtPpc64leS2S:

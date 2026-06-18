@@ -93,10 +93,6 @@
         value: aws
       - name: CLUSTER_PROFILE_DIR
         value: /var/run/secrets/ci.openshift.io/cluster-profile
-      - name: AWS_CONFIG_FILE
-        value: /var/run/secrets/aws/config/config
-      - name: AWS_SDK_LOAD_CONFIG
-        value: "1"
       - name: SHARED_DIR
         value: /var/run/secrets/ci.openshift.io/multi-stage
       - name: LEASE_PROXY_CLIENT_SH

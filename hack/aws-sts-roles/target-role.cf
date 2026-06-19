@@ -1,0 +1,125 @@
+AWSTemplateFormatVersion: "2010-09-09"
+Description: >-
+  IAM role for a CI cluster profile's target AWS account. Deploy in every
+  AWS account that a cluster profile needs access to (e.g. the aws-5
+  account).
+
+  Trusts the ci-step-runner-hub hub role. The assume chain is:
+    per-test SA token (OIDC) -> ci-step-runner-hub (hub-role.cf, hub account)
+      -> ci-step-runner-target (this, target account)
+
+  Permissions mirror the origin-ci-robot-provision user: full access to
+  EC2, S3, IAM, Route53, ECR, EFS, Lambda, CloudFormation, Secrets
+  Manager, ELB server certificates, Resource Groups, Service Quotas
+  read-only, and unrestricted STS AssumeRole.
+
+Parameters:
+  TrustedRoleArn:
+    Type: String
+    Description: >-
+      ARN of the ci-step-runner-hub hub role (output of hub-role.cf),
+      e.g. arn:aws:iam::123456789012:role/ci-step-runner-hub
+
+Resources:
+  CITargetRole:
+    Type: AWS::IAM::Role
+    Properties:
+      RoleName: ci-step-runner-target
+      AssumeRolePolicyDocument:
+        Version: "2012-10-17"
+        Statement:
+          - Effect: Allow
+            Principal:
+              AWS: !Ref TrustedRoleArn
+            Action: sts:AssumeRole
+      ManagedPolicyArns:
+        # CloudFormation full
+        - arn:aws:iam::aws:policy/AWSCloudFormationFullAccess
+        # ECR full
+        - arn:aws:iam::aws:policy/AmazonElasticContainerRegistryPublicFullAccess
+        # EFS full + client
+        - arn:aws:iam::aws:policy/AmazonElasticFileSystemFullAccess
+        - arn:aws:iam::aws:policy/AmazonElasticFileSystemClientFullAccess
+        # Secrets Manager read/write
+        - arn:aws:iam::aws:policy/SecretsManagerReadWrite
+        # Lambda full
+        - arn:aws:iam::aws:policy/AWSLambda_FullAccess
+      Policies:
+        - PolicyName: ci-provision-compute-networking
+          PolicyDocument:
+            Version: "2012-10-17"
+            Statement:
+              - Sid: EC2Full
+                Effect: Allow
+                Action: "ec2:*"
+                Resource: "*"
+              - Sid: ELBFull
+                Effect: Allow
+                Action: "elasticloadbalancing:*"
+                Resource: "*"
+              - Sid: AutoScalingFull
+                Effect: Allow
+                Action: "autoscaling:*"
+                Resource: "*"
+        - PolicyName: ci-provision-storage
+          PolicyDocument:
+            Version: "2012-10-17"
+            Statement:
+              - Sid: S3Full
+                Effect: Allow
+                Action: "s3:*"
+                Resource: "*"
+        - PolicyName: ci-provision-identity
+          PolicyDocument:
+            Version: "2012-10-17"
+            Statement:
+              - Sid: IAMFull
+                Effect: Allow
+                Action: "iam:*"
+                Resource: "*"
+              - Sid: STSAssumeRole
+                Effect: Allow
+                Action: "sts:*"
+                Resource: "*"
+        - PolicyName: ci-provision-dns-certs
+          PolicyDocument:
+            Version: "2012-10-17"
+            Statement:
+              - Sid: Route53Full
+                Effect: Allow
+                Action: "route53:*"
+                Resource: "*"
+              - Sid: Route53DomainsFull
+                Effect: Allow
+                Action: "route53domains:*"
+                Resource: "*"
+              - Sid: ELBServerCerts
+                Effect: Allow
+                Action:
+                  - "iam:ListServerCertificates"
+                  - "iam:GetServerCertificate"
+                  - "iam:UploadServerCertificate"
+                Resource: "*"
+        - PolicyName: ci-provision-resource-groups-quotas
+          PolicyDocument:
+            Version: "2012-10-17"
+            Statement:
+              - Sid: ResourceGroupsFull
+                Effect: Allow
+                Action:
+                  - "resource-groups:*"
+                  - "tag:*"
+                Resource: "*"
+              - Sid: ServiceQuotasReadOnly
+                Effect: Allow
+                Action:
+                  - "servicequotas:Get*"
+                  - "servicequotas:List*"
+                Resource: "*"
+
+Outputs:
+  RoleArn:
+    Description: >-
+      ARN of the target role (arn:aws:iam::<account>:role/ci-step-runner-target).
+      Use this as target_role_arn in the cluster profiles config.
+    Value: !GetAtt CITargetRole.Arn

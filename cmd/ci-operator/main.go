@@ -1109,6 +1109,8 @@ func (o *options) Run() (errs []error) {
 	info := o.getResolverInfo(o.jobSpec)
 	o.metricsAgent.RecordConfigurationInsight(o.targets.values, o.promote, info.Org, info.Repo, info.Branch, info.Variant, o.baseNamespace, o.consoleHost, o.nodeName, o.clusterProfiles)
 
+	o.adjustLeaseAcquireTimeout()
+
 	if runErrs := interrupt.New(handler, o.saveNamespaceArtifacts).Run(func() []error {
 		if leaseClient != nil {
 			if err := o.initializeLeaseClient(); err != nil {
@@ -2081,6 +2083,22 @@ func loadLeaseCredentials(leaseServerCredentialsFile string) (string, func() []b
 		return []byte(splits[1])
 	}
 	return username, passwordGetter, nil
+}
+
+// adjustLeaseAcquireTimeout increases the lease acquire timeout to match the
+// test timeout when a target test has a longer timeout configured. This
+// prevents jobs from failing to acquire leases when the pool is busy, even
+// though the overall job timeout would allow waiting longer.
+func (o *options) adjustLeaseAcquireTimeout() {
+	for _, test := range o.configSpec.Tests {
+		if len(o.targets.values) > 0 && !slices.Contains(o.targets.values, test.As) {
+			continue
+		}
+		if test.Timeout != nil && test.Timeout.Duration > o.leaseAcquireTimeout {
+			logrus.Infof("Adjusting lease acquire timeout from %s to %s to match test %q timeout", o.leaseAcquireTimeout, test.Timeout.Duration, test.As)
+			o.leaseAcquireTimeout = test.Timeout.Duration
+		}
+	}
 }
 
 func (o *options) initializeLeaseClient() error {

@@ -1308,14 +1308,16 @@ func TestReconcileLimits(t *testing.T) {
 			name: "nothing to do",
 		},
 		{
-			name: "remove CPU limits",
+			name: "leave CPU limits unchanged",
 			input: corev1.ResourceRequirements{
 				Limits: corev1.ResourceList{
 					corev1.ResourceCPU: *resource.NewQuantity(200, resource.DecimalSI),
 				},
 			},
 			expected: corev1.ResourceRequirements{
-				Limits: corev1.ResourceList{},
+				Limits: corev1.ResourceList{
+					corev1.ResourceCPU: *resource.NewQuantity(200, resource.DecimalSI),
+				},
 			},
 		},
 		{

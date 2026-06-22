@@ -936,15 +936,15 @@ func (config TestStepConfiguration) IsPeriodic() bool {
 
 // GetClusterProfileName returns the cluster profile name if it's set
 func (config TestStepConfiguration) GetClusterProfileName() string {
-	if config.MultiStageTestConfigurationLiteral != nil {
-		if p := config.MultiStageTestConfigurationLiteral.ClusterProfileLiteralOrLegacy(); p != nil {
-			return p.Name
-		}
-	}
-	if config.MultiStageTestConfiguration != nil {
+	switch {
+	case config.MultiStageTestConfigurationLiteral != nil &&
+		config.MultiStageTestConfigurationLiteral.ClusterProfileLiteral != nil:
+		return config.MultiStageTestConfigurationLiteral.ClusterProfileLiteral.Name
+	case config.MultiStageTestConfiguration != nil:
 		return config.MultiStageTestConfiguration.ClusterProfile.Name()
+	default:
+		return ""
 	}
-	return ""
 }
 
 // Cloud is the name of a cloud provider, e.g., aws cluster topology, etc.
@@ -970,27 +970,6 @@ func FromClusterProfileDetails(profileDetails *ClusterProfileDetails) *ClusterPr
 		LeaseType:   profileDetails.LeaseType,
 		ClusterType: profileDetails.ClusterType,
 		Secret:      profileDetails.Secret,
-	}
-}
-
-// ClusterProfileLiteralOrLegacy returns the resolved cluster profile literal, falling back to
-// the deprecated cluster_profile string emitted by older configresolver builds.
-func (m *MultiStageTestConfigurationLiteral) ClusterProfileLiteralOrLegacy() *ClusterProfileLiteral {
-	if m == nil {
-		return nil
-	}
-	if m.ClusterProfileLiteral != nil {
-		return m.ClusterProfileLiteral
-	}
-	if m.ClusterProfile == "" {
-		return nil
-	}
-	profile := m.ClusterProfile
-	return &ClusterProfileLiteral{
-		Name:        string(profile),
-		LeaseType:   profile.LeaseType(),
-		ClusterType: profile.ClusterType(),
-		Secret:      GetDefaultClusterProfileSecretName(profile),
 	}
 }
 
@@ -1356,8 +1335,6 @@ type DependencyOverrides map[string]string
 type MultiStageTestConfigurationLiteral struct {
 	// ClusterProfileLiteral defines the profile/cloud provider for end-to-end test steps.
 	ClusterProfileLiteral *ClusterProfileLiteral `json:"cluster_profile_literal,omitempty"`
-	// ClusterProfile is deprecated; retained for configs resolved by older configresolver builds.
-	ClusterProfile ClusterProfile `json:"cluster_profile,omitempty"`
 	// Pre is the array of test steps run to set up the environment for the test.
 	Pre []LiteralTestStep `json:"pre,omitempty"`
 	// Test is the array of test steps that define the actual test.

@@ -672,8 +672,6 @@ const ciOperatorReferenceYaml = "# The list of base images describe\n" +
 	"            # all previous `pre` and `test` steps were successful. The given step must explicitly\n" +
 	"            # ask for being skipped by setting the OptionalOnSuccess flag to true.\n" +
 	"            allow_skip_on_success: false\n" +
-	"            # ClusterProfile is deprecated; retained for configs resolved by older configresolver builds.\n" +
-	"            cluster_profile: ' '\n" +
 	"            # ClusterProfileLiteral defines the profile/cloud provider for end-to-end test steps.\n" +
 	"            cluster_profile_literal:\n" +
 	"                cluster_type: ' '\n" +
@@ -1620,8 +1618,6 @@ const ciOperatorReferenceYaml = "# The list of base images describe\n" +
 	"        # all previous `pre` and `test` steps were successful. The given step must explicitly\n" +
 	"        # ask for being skipped by setting the OptionalOnSuccess flag to true.\n" +
 	"        allow_skip_on_success: false\n" +
-	"        # ClusterProfile is deprecated; retained for configs resolved by older configresolver builds.\n" +
-	"        cluster_profile: ' '\n" +
 	"        # ClusterProfileLiteral defines the profile/cloud provider for end-to-end test steps.\n" +
 	"        cluster_profile_literal:\n" +
 	"            cluster_type: ' '\n" +

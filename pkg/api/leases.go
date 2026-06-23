@@ -10,7 +10,7 @@ import (
 // unique values.
 func LeasesForTest(test *TestStepConfiguration) (ret []StepLease) {
 	multiStageTest := test.MultiStageTestConfigurationLiteral
-	if p := multiStageTest.ClusterProfileLiteralOrLegacy(); p != nil {
+	if p := multiStageTest.ClusterProfileLiteral; p != nil {
 		ret = append(ret, StepLease{
 			ResourceType:   p.LeaseType,
 			Env:            DefaultLeaseEnv,

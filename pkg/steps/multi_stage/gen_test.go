@@ -202,8 +202,8 @@ func TestGeneratePods(t *testing.T) {
 				return params
 			},
 			stsHomeRoleARN:   "arn:aws:iam::000000000000:role/ci-step-runner",
-			stsHubRoleARN:    "arn:aws:iam::111111111111:role/ci-step-runner",
-			stsTargetRoleARN: "arn:aws:iam::222222222222:role/ci-step-runner",
+			stsHubRoleARN:    "arn:aws:iam::111111111111:role/ci-step-runner-hub",
+			stsTargetRoleARN: "arn:aws:iam::222222222222:role/ci-step-runner-target",
 		},
 	} {
 		t.Run(tc.name, func(t *testing.T) {

@@ -1,0 +1,52 @@
+AWSTemplateFormatVersion: "2010-09-09"
+Description: >-
+  Hub role for CI STS role chaining. Deploy once in the hub AWS account.
+  Trusts the ci-step-runner home roles from each build cluster's account.
+
+  The assume chain is:
+    per-test SA token (OIDC) -> ci-step-runner (home-role.cf, build cluster acct)
+      -> ci-step-runner-hub (this, hub account)
+      -> ci-step-runner-target (target-role.cf, each cluster profile account)
+
+  To add or remove a build cluster, update the TrustedHomeRoleArns
+  parameter value and run a stack update. The role itself is never
+  replaced, preserving its internal ID and all downstream trust
+  relationships.
+
+Parameters:
+  TrustedHomeRoleArns:
+    Type: CommaDelimitedList
+    Description: >-
+      Comma-separated list of ci-step-runner home role ARNs from all
+      build cluster accounts (output of home-role.cf in each account),
+      e.g. arn:aws:iam::111:role/ci-step-runner,arn:aws:iam::222:role/ci-step-runner
+
+Resources:
+  CIHubRole:
+    Type: AWS::IAM::Role
+    Properties:
+      RoleName: ci-step-runner-hub
+      MaxSessionDuration: 14400
+      AssumeRolePolicyDocument:
+        Version: "2012-10-17"
+        Statement:
+          - Effect: Allow
+            Principal:
+              AWS: !Ref TrustedHomeRoleArns
+            Action: sts:AssumeRole
+      Policies:
+        - PolicyName: assume-target-roles
+          PolicyDocument:
+            Version: "2012-10-17"
+            Statement:
+              - Effect: Allow
+                Action: sts:AssumeRole
+                Resource: "arn:aws:iam::*:role/ci-step-runner-target"
+
+Outputs:
+  RoleArn:
+    Description: >-
+      ARN of the hub role. Use this as:
+        - hub_role_arn in the cluster profile secret
+        - TrustedRoleArn when deploying target-role.cf in target accounts
+    Value: !GetAtt CIHubRole.Arn

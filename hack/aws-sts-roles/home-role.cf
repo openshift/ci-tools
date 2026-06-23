@@ -1,0 +1,66 @@
+AWSTemplateFormatVersion: "2010-09-09"
+Description: >-
+  Home role for CI STS role chaining. Deploy once in each build cluster's
+  AWS account (where the OIDC provider is already registered by the cluster
+  installer).
+
+  Per-test pods authenticate via a projected ServiceAccount token (OIDC)
+  and the AWS SDK performs a three-hop STS exchange:
+    per-test SA token (OIDC) -> ci-step-runner (this, build cluster acct)
+      -> ci-step-runner-hub (hub-role.cf, hub account)
+      -> ci-step-runner-target (target-role.cf, each cluster profile account)
+
+  The :sub condition restricts access to dynamically created ci-operator
+  test namespaces (ci-op-*). The :aud condition ensures only projected SA
+  tokens with audience "sts.amazonaws.com" are accepted.
+
+Parameters:
+  OIDCProviderArn:
+    Type: String
+    Description: >-
+      ARN of the IAM OIDC provider registered by the cluster installer,
+      e.g. arn:aws:iam::123456789012:oidc-provider/rh-oidc.s3.us-east-1.amazonaws.com/abc123
+  OIDCProviderURL:
+    Type: String
+    Description: >-
+      OIDC issuer URL without the https:// prefix,
+      e.g. rh-oidc.s3.us-east-1.amazonaws.com/abc123
+
+Resources:
+  CIHomeRole:
+    Type: AWS::IAM::Role
+    Properties:
+      RoleName: ci-step-runner
+      AssumeRolePolicyDocument: !Sub |
+        {
+          "Version": "2012-10-17",
+          "Statement": [{
+            "Effect": "Allow",
+            "Principal": { "Federated": "${OIDCProviderArn}" },
+            "Action": "sts:AssumeRoleWithWebIdentity",
+            "Condition": {
+              "StringLike": {
+                "${OIDCProviderURL}:sub": "system:serviceaccount:ci-op-*:*"
+              },
+              "StringEquals": {
+                "${OIDCProviderURL}:aud": "sts.amazonaws.com"
+              }
+            }
+          }]
+        }
+      Policies:
+        - PolicyName: assume-hub-role
+          PolicyDocument:
+            Version: "2012-10-17"
+            Statement:
+              - Effect: Allow
+                Action: sts:AssumeRole
+                Resource: "arn:aws:iam::*:role/ci-step-runner-hub"
+
+Outputs:
+  RoleArn:
+    Description: >-
+      ARN of the home role. Use this as:
+        - home_role_arn in the cluster profile secret
+        - An entry in TrustedHomeRoleArns when deploying hub-role.cf
+    Value: !GetAtt CIHomeRole.Arn

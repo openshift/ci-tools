@@ -1214,7 +1214,7 @@ func LeaseTypeFromClusterType(t string) (string, error) {
 }
 
 func ClusterProfileFromParams(params Parameters) (*ClusterProfileDetails, error) {
-	return GetParamTyped[*ClusterProfileDetails](params, ClusterProfileParam)
+	return GetParamTyped[*ClusterProfileDetails](params, ClusterProfileDetailsParam)
 }
 
 type ClusterProfileKonfluxConfig struct {

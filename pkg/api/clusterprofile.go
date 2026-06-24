@@ -1270,12 +1270,13 @@ func (cpl *ClusterProfilesList) Resolve() error {
 type ClusterProfilesMap map[ClusterProfile]ClusterProfileDetails
 
 type ClusterProfileDetails struct {
-	Name        ClusterProfile         `yaml:"name,omitempty" json:"name,omitempty"`
-	Owners      []ClusterProfileOwners `yaml:"owners,omitempty" json:"owners,omitempty"`
-	ClusterType string                 `yaml:"cluster_type,omitempty" json:"cluster_type,omitempty"`
-	LeaseType   string                 `yaml:"lease_type,omitempty" json:"lease_type,omitempty"`
-	Secret      string                 `yaml:"secret,omitempty" json:"secret,omitempty"`
-	ConfigMap   string                 `yaml:"config_map,omitempty" json:"config_map,omitempty"`
+	Name            ClusterProfile         `yaml:"name,omitempty" json:"name,omitempty"`
+	Owners          []ClusterProfileOwners `yaml:"owners,omitempty" json:"owners,omitempty"`
+	ClusterType     string                 `yaml:"cluster_type,omitempty" json:"cluster_type,omitempty"`
+	LeaseType       string                 `yaml:"lease_type,omitempty" json:"lease_type,omitempty"`
+	IPPoolLeaseType string                 `yaml:"ip_pool_lease_type,omitempty" json:"ip_pool_lease_type,omitempty"`
+	Secret          string                 `yaml:"secret,omitempty" json:"secret,omitempty"`
+	ConfigMap       string                 `yaml:"config_map,omitempty" json:"config_map,omitempty"`
 }
 
 type ClusterProfileKonfluxOwner struct {

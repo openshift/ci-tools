@@ -271,10 +271,11 @@ func TestClusterProfilesConfig(t *testing.T) {
 	existingProfiles := make(api.ClusterProfilesMap)
 	for _, profileName := range api.ClusterProfiles() {
 		existingProfiles[profileName] = api.ClusterProfileDetails{
-			Name:        profileName,
-			ClusterType: profileName.ClusterType(),
-			LeaseType:   profileName.LeaseType(),
-			Secret:      api.GetDefaultClusterProfileSecretName(profileName),
+			Name:            profileName,
+			ClusterType:     profileName.ClusterType(),
+			LeaseType:       profileName.LeaseType(),
+			IPPoolLeaseType: profileName.IPPoolLeaseType(),
+			Secret:          api.GetDefaultClusterProfileSecretName(profileName),
 		}
 	}
 
@@ -283,26 +284,29 @@ func TestClusterProfilesConfig(t *testing.T) {
 		switch profileName {
 		case "aws":
 			profilesWithOwners[profileName] = api.ClusterProfileDetails{
-				Name:        profileName,
-				Owners:      []api.ClusterProfileOwners{{Org: "org1"}},
-				ClusterType: profileName.ClusterType(),
-				LeaseType:   profileName.LeaseType(),
-				Secret:      api.GetDefaultClusterProfileSecretName(profileName),
+				Name:            profileName,
+				Owners:          []api.ClusterProfileOwners{{Org: "org1"}},
+				ClusterType:     profileName.ClusterType(),
+				LeaseType:       profileName.LeaseType(),
+				IPPoolLeaseType: profileName.IPPoolLeaseType(),
+				Secret:          api.GetDefaultClusterProfileSecretName(profileName),
 			}
 		case "aws-2":
 			profilesWithOwners[profileName] = api.ClusterProfileDetails{
-				Name:        profileName,
-				Owners:      []api.ClusterProfileOwners{{Org: "org2", Repos: []string{"repo1", "repo2"}}},
-				ClusterType: profileName.ClusterType(),
-				LeaseType:   profileName.LeaseType(),
-				Secret:      api.GetDefaultClusterProfileSecretName(profileName),
+				Name:            profileName,
+				Owners:          []api.ClusterProfileOwners{{Org: "org2", Repos: []string{"repo1", "repo2"}}},
+				ClusterType:     profileName.ClusterType(),
+				LeaseType:       profileName.LeaseType(),
+				IPPoolLeaseType: profileName.IPPoolLeaseType(),
+				Secret:          api.GetDefaultClusterProfileSecretName(profileName),
 			}
 		default:
 			profilesWithOwners[profileName] = api.ClusterProfileDetails{
-				Name:        profileName,
-				ClusterType: profileName.ClusterType(),
-				LeaseType:   profileName.LeaseType(),
-				Secret:      api.GetDefaultClusterProfileSecretName(profileName),
+				Name:            profileName,
+				ClusterType:     profileName.ClusterType(),
+				LeaseType:       profileName.LeaseType(),
+				IPPoolLeaseType: profileName.IPPoolLeaseType(),
+				Secret:          api.GetDefaultClusterProfileSecretName(profileName),
 			}
 		}
 	}
@@ -310,27 +314,39 @@ func TestClusterProfilesConfig(t *testing.T) {
 	profilesWithSecrets := make(api.ClusterProfilesMap)
 	for _, profileName := range api.ClusterProfiles() {
 		switch profileName {
+		case "aws-us-east-1":
+			profilesWithSecrets[profileName] = api.ClusterProfileDetails{
+				Name:            profileName,
+				Owners:          []api.ClusterProfileOwners{{Org: "openshift"}, {Org: "openshift-priv"}},
+				ClusterType:     profileName.ClusterType(),
+				LeaseType:       profileName.LeaseType(),
+				IPPoolLeaseType: profileName.IPPoolLeaseType(),
+				Secret:          "non-default-secret-name-aws",
+			}
 		case "aws-2":
 			profilesWithSecrets[profileName] = api.ClusterProfileDetails{
-				Name:        profileName,
-				Owners:      []api.ClusterProfileOwners{{Org: "org2", Repos: []string{"repo1", "repo2"}}},
-				ClusterType: profileName.ClusterType(),
-				LeaseType:   profileName.LeaseType(),
-				Secret:      "non-default-secret-name-aws",
+				Name:            profileName,
+				Owners:          []api.ClusterProfileOwners{{Org: "org2", Repos: []string{"repo1", "repo2"}}},
+				ClusterType:     profileName.ClusterType(),
+				LeaseType:       profileName.LeaseType(),
+				IPPoolLeaseType: profileName.IPPoolLeaseType(),
+				Secret:          "non-default-secret-name-aws",
 			}
 		case "vsphere-connected-2":
 			profilesWithSecrets[profileName] = api.ClusterProfileDetails{
-				Name:        profileName,
-				ClusterType: profileName.ClusterType(),
-				LeaseType:   profileName.LeaseType(),
-				Secret:      "non-default-secret-name-vsphere",
+				Name:            profileName,
+				ClusterType:     profileName.ClusterType(),
+				LeaseType:       profileName.LeaseType(),
+				IPPoolLeaseType: profileName.IPPoolLeaseType(),
+				Secret:          "non-default-secret-name-vsphere",
 			}
 		default:
 			profilesWithSecrets[profileName] = api.ClusterProfileDetails{
-				Name:        profileName,
-				ClusterType: profileName.ClusterType(),
-				LeaseType:   profileName.LeaseType(),
-				Secret:      api.GetDefaultClusterProfileSecretName(profileName),
+				Name:            profileName,
+				ClusterType:     profileName.ClusterType(),
+				LeaseType:       profileName.LeaseType(),
+				IPPoolLeaseType: profileName.IPPoolLeaseType(),
+				Secret:          api.GetDefaultClusterProfileSecretName(profileName),
 			}
 		}
 	}
@@ -375,6 +391,12 @@ cluster_profiles:
 			testYaml: `
 cluster_profiles:
 - name: aws
+- name: aws-us-east-1
+  owners:
+  - org: openshift
+  - org: openshift-priv
+  ip_pool_lease_type: aws-ip-pools
+  secret: non-default-secret-name-aws
 - name: aws-2
   owners:
   - org: org2

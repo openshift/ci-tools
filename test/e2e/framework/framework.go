@@ -191,9 +191,10 @@ func Boskos(opt BoskosOptions) *Accessory {
 
 // ConfigResolverOptions are options for running the config server
 type ConfigResolverOptions struct {
-	ConfigPath   string
-	RegistryPath string
-	FlatRegistry bool
+	ConfigPath              string
+	RegistryPath            string
+	FlatRegistry            bool
+	UpstreamResolverAddress string
 }
 
 // ConfigResolver begins the configresolver server and makes sure it is ready
@@ -201,11 +202,12 @@ type ConfigResolverOptions struct {
 func ConfigResolver(opt ConfigResolverOptions) *Accessory {
 	return testhelper.NewAccessory("ci-operator-configresolver",
 		flags(map[string]string{
-			"config":        opt.ConfigPath,
-			"registry":      opt.RegistryPath,
-			"flat-registry": strconv.FormatBool(opt.FlatRegistry),
-			"log-level":     "debug",
-			"cycle":         "2m",
+			"config":                    opt.ConfigPath,
+			"registry":                  opt.RegistryPath,
+			"flat-registry":             strconv.FormatBool(opt.FlatRegistry),
+			"log-level":                 "debug",
+			"cycle":                     "2m",
+			"upstream-resolver-address": opt.UpstreamResolverAddress,
 		}),
 		func(port, healthPort string) []string {
 			return flags(map[string]string{

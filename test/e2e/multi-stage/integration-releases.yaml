@@ -36,14 +36,16 @@ tests:
               cpu: 10m
               memory: 10Mi
         - as: latest
-          commands: grep -q '4.18' <<<"$( cluster-version-operator version )"
+          commands: |
+            cat /release-manifests/release-metadata
+            grep -q '4.18' /release-manifests/release-metadata
           from: "release:latest"
           resources:
             requests:
               cpu: 10m
               memory: 10Mi
         - as: latest-cli
-          commands: grep -q '4.18' <<<"$( oc version )"
+          commands: grep -q '4.18' <<<"$OS_GIT_VERSION"
           from: "stable:cli"
           resources:
             requests:

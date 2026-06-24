@@ -291,14 +291,11 @@ func useOursIfLarger(allOfOurs, allOfTheirs *corev1.ResourceRequirements, worklo
 	}
 }
 
-// reconcileLimits ensures that container resource limits do not set anything for CPU (as we
-// are fairly certain this is never a useful thing to do) and that any limits that have been configured
-// are >=200% of requests (which they may not be any longer if we've changed requests)
+// reconcileLimits ensures memory limits are >=200% of requests after request mutation.
 func reconcileLimits(resources *corev1.ResourceRequirements) {
 	if resources.Limits == nil {
 		return
 	}
-	delete(resources.Limits, corev1.ResourceCPU)
 	if !resources.Limits.Memory().IsZero() { // Never set a limit where there isn't one defined
 		// Note: doing math on Quantities is not easy, since they may contain values that overflow
 		// normal integers. Doing math on inf.Dec is possible, but there does not exist any way to
@@ -402,6 +399,11 @@ func mutatePodResources(pod *corev1.Pod, server *resourceServer, mutateResourceL
 				}
 				applyFailureEscalation(&containers[i].Resources, workloadType, workloadName, escalations, logger)
 				applyAuthoritativeLimitDecrease(&resources, &containers[i].Resources, workloadName, workloadType, isMeasured, workloadClass, authoritativeCPU, authoritativeMemory, authoritativeCPUDryRun, authoritativeMemoryDryRun, authoritativeCPUMaxReductionPercent, authoritativeMemoryMaxReductionPercent, escalations, logger)
+				if mutateResourceLimits && !authoritativeCPU {
+					if containers[i].Resources.Limits != nil {
+						delete(containers[i].Resources.Limits, corev1.ResourceCPU)
+					}
+				}
 				clampRequestsToLimits(&containers[i].Resources)
 			}
 			preventUnschedulable(&containers[i].Resources, cpuCap, memoryCap, logger)

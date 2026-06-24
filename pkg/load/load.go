@@ -299,9 +299,6 @@ func ClusterProfilesConfig(configPath string) (api.ClusterProfilesMap, error) {
 		if profile.LeaseType == "" {
 			profile.LeaseType = profileName.LeaseType()
 		}
-		if profile.IPPoolLeaseType == "" {
-			profile.IPPoolLeaseType = profileName.IPPoolLeaseType()
-		}
 
 		mergedMap[profileName] = profile
 	}

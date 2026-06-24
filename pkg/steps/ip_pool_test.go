@@ -19,8 +19,8 @@ import (
 	"github.com/openshift/ci-tools/pkg/testhelper"
 )
 
-func ipPoolLeaseAdapter(lease stepLease) func(api.ClusterProfile, string) stepLease {
-	return func(api.ClusterProfile, string) stepLease { return lease }
+func ipPoolLeaseAdapter(lease stepLease) func(string, string) stepLease {
+	return func(string, string) stepLease { return lease }
 }
 
 func atomicBool(v bool) *atomic.Bool {

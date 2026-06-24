@@ -958,18 +958,20 @@ const (
 )
 
 type ClusterProfileLiteral struct {
-	Name        string `yaml:"name,omitempty" json:"name,omitempty"`
-	LeaseType   string `yaml:"lease_type,omitempty" json:"lease_type,omitempty"`
-	ClusterType string `yaml:"cluster_type,omitempty" json:"cluster_type,omitempty"`
-	Secret      string `yaml:"secret,omitempty" json:"secret,omitempty"`
+	Name            string `yaml:"name,omitempty" json:"name,omitempty"`
+	LeaseType       string `yaml:"lease_type,omitempty" json:"lease_type,omitempty"`
+	IPPoolLeaseType string `yaml:"ip_pool_lease_type,omitempty" json:"ip_pool_lease_type,omitempty"`
+	ClusterType     string `yaml:"cluster_type,omitempty" json:"cluster_type,omitempty"`
+	Secret          string `yaml:"secret,omitempty" json:"secret,omitempty"`
 }
 
 func FromClusterProfileDetails(profileDetails *ClusterProfileDetails) *ClusterProfileLiteral {
 	return &ClusterProfileLiteral{
-		Name:        string(profileDetails.Name),
-		LeaseType:   profileDetails.LeaseType,
-		ClusterType: profileDetails.ClusterType,
-		Secret:      profileDetails.Secret,
+		Name:            string(profileDetails.Name),
+		LeaseType:       profileDetails.LeaseType,
+		IPPoolLeaseType: profileDetails.IPPoolLeaseType,
+		ClusterType:     profileDetails.ClusterType,
+		Secret:          profileDetails.Secret,
 	}
 }
 

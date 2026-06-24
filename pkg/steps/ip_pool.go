@@ -37,7 +37,7 @@ type ipPoolStep struct {
 	// To ease unit testing
 	profile         *api.ClusterProfileLiteral
 	branch          string
-	ipPoolLeaseFunc func(profile api.ClusterProfile, branch string) stepLease
+	ipPoolLeaseFunc func(ipPoolLeaseType, branch string) stepLease
 
 	// Reports whether this step has run or not
 	stepRun *atomic.Bool
@@ -55,8 +55,8 @@ func IPPoolStep(client *lease.Client, secretClient SecretClient, wrapped api.Ste
 		metricsAgent: metricsAgent,
 		profile:      profile,
 		branch:       branch,
-		ipPoolLeaseFunc: func(profile api.ClusterProfile, branch string) stepLease {
-			return stepLease{StepLease: api.IPPoolLeaseForTest(profile, branch)}
+		ipPoolLeaseFunc: func(ipPoolLeaseType, branch string) stepLease {
+			return stepLease{StepLease: api.IPPoolLeaseForTest(ipPoolLeaseType, branch)}
 		},
 		stepRun: &atomic.Bool{},
 	}
@@ -126,12 +126,12 @@ func (s *ipPoolStep) run(ctx context.Context, minute time.Duration) error {
 		s.profile = api.FromClusterProfileDetails(clusterProfileDetails)
 	}
 
-	var profileName string
+	var ipPoolLeaseType string
 	if s.profile != nil {
-		profileName = s.profile.Name
+		ipPoolLeaseType = s.profile.IPPoolLeaseType
 	}
 
-	s.ipPoolLease = s.ipPoolLeaseFunc(api.ClusterProfile(profileName), s.branch)
+	s.ipPoolLease = s.ipPoolLeaseFunc(ipPoolLeaseType, s.branch)
 	if !s.ipPoolLeaseAvailable() {
 		return results.ForReason("executing_test").ForError(s.wrapped.Run(ctx))
 	}

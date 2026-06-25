@@ -209,7 +209,7 @@ const (
 	ClusterProfileAWSOSPQE                   ClusterProfile = "aws-osp-qe"
 	ClusterProfileAWSOSC                     ClusterProfile = "aws-sandboxed-containers-operator"
 
-	ClusterProfileRosaRegionalPlatformInt ClusterProfile = "rosa-regional-platform-int"
+	ClusterProfileRosaHyperFleetInt ClusterProfile = "rosa-hyperfleet-int"
 
 	ClusterProfileAROHCPInt  ClusterProfile = "aro-hcp-int"
 	ClusterProfileAROHCPStg  ClusterProfile = "aro-hcp-stg"
@@ -419,7 +419,7 @@ func ClusterProfiles() []ClusterProfile {
 		ClusterProfileAWSOSPQE,
 		ClusterProfileAWSOSC,
 
-		ClusterProfileRosaRegionalPlatformInt,
+		ClusterProfileRosaHyperFleetInt,
 
 		ClusterProfileAROHCPInt,
 		ClusterProfileAROHCPStg,
@@ -723,8 +723,8 @@ func (p ClusterProfile) ClusterType() string {
 	case ClusterProfileEquinixEdgeEnablement:
 		return "equinix-edge-enablement"
 
-	case ClusterProfileRosaRegionalPlatformInt:
-		return "rosa-regional-platform-int"
+	case ClusterProfileRosaHyperFleetInt:
+		return "rosa-hyperfleet-int"
 
 	case ClusterProfileAROHCPInt:
 		return "aro-hcp-int"
@@ -1138,8 +1138,8 @@ func (p ClusterProfile) LeaseType() string {
 		return "aws-osp-qe-quota-slice"
 	case ClusterProfileAWSOSC:
 		return "aws-sandboxed-containers-operator-quota-slice"
-	case ClusterProfileRosaRegionalPlatformInt:
-		return "rosa-regional-platform-int-quota-slice"
+	case ClusterProfileRosaHyperFleetInt:
+		return "rosa-hyperfleet-int-quota-slice"
 
 	case ClusterProfileAROHCPInt:
 		return "aro-hcp-int-quota-slice"
@@ -1205,7 +1205,7 @@ func LeaseTypeFromClusterType(t string) (string, error) {
 		"azure-virtualization", "hypershift-aws", "hypershift-aks", "hypershift-azure",
 		"hypershift-powervs", "hypershift-powervs-cb", "hypershift-gcp", "aws-mco-qe",
 		"equinix-edge-enablement", "aws-oadp-qe", "azure-oadp-qe", "aws-lp-chaos", "aws-osp-qe",
-		"metal-redhat-gs", "aro-hcp-int", "aro-hcp-stg", "aro-hcp-prod", "aro-hcp-dev", "rosa-regional-platform-int", "hyperfleet-e2e",
+		"metal-redhat-gs", "aro-hcp-int", "aro-hcp-stg", "aro-hcp-prod", "aro-hcp-dev", "rosa-hyperfleet-int", "hyperfleet-e2e",
 		"aro-classic-int", "aro-classic-stg", "aro-classic-prod", "aro-classic-dev", "rosa-e2e-01", "rosa-e2e-02", "rosa-e2e-03":
 		return t + "-quota-slice", nil
 	default:

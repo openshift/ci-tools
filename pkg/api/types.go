@@ -1382,11 +1382,29 @@ type TestDependencies map[string]string
 // Secret describes a secret to be mounted inside a test
 // container.
 type Secret struct {
-	// Secret name, used inside test containers
-	Name string `json:"name"`
+	// Bundle is a named bundle reference from the GSM config mapping file.
+	// Mutually exclusive with Collection/Group and Name.
+	Bundle string `json:"bundle,omitempty"`
+	// Collection is the GSM collection the secret belongs to.
+	// Mutually exclusive with Bundle and Name.
+	Collection string `json:"collection,omitempty"`
+	// Group is the group name within the collection.
+	// Required when Collection is set.
+	Group string `json:"group,omitempty"`
+	// Secret name, used inside test containers.
+	// Mutually exclusive with Bundle and Collection/Group.
+	Name string `json:"name,omitempty"`
 	// Secret mount path. Defaults to /usr/test-secrets for first
 	// secret. /usr/test-secrets-2 for second, and so on.
 	MountPath string `json:"mount_path"`
+}
+
+func (s *Secret) IsGSMReference() bool {
+	return s.Collection != "" && s.Group != ""
+}
+
+func (s *Secret) IsBundleReference() bool {
+	return s.Bundle != ""
 }
 
 // MemoryBackedVolume describes a tmpfs (memory backed volume)

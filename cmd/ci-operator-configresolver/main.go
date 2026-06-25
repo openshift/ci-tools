@@ -40,18 +40,19 @@ import (
 )
 
 type options struct {
-	configPath             string
-	registryPath           string
-	logLevel               string
-	address                string
-	releaseRepoGitSyncPath string
-	port                   int
-	uiAddress              string
-	uiPort                 int
-	gracePeriod            time.Duration
-	validateOnly           bool
-	flatRegistry           bool
-	instrumentationOptions flagutil.InstrumentationOptions
+	configPath              string
+	registryPath            string
+	logLevel                string
+	address                 string
+	releaseRepoGitSyncPath  string
+	port                    int
+	uiAddress               string
+	uiPort                  int
+	gracePeriod             time.Duration
+	validateOnly            bool
+	flatRegistry            bool
+	instrumentationOptions  flagutil.InstrumentationOptions
+	upstreamResolverAddress string
 }
 
 var (
@@ -73,6 +74,7 @@ func gatherOptions() (options, error) {
 	_ = fs.Duration("cycle", time.Minute*2, "Legacy flag kept for compatibility. Does nothing")
 	fs.BoolVar(&o.validateOnly, "validate-only", false, "Load the config and registry, validate them and exit.")
 	fs.BoolVar(&o.flatRegistry, "flat-registry", false, "Disable directory structure based registry validation")
+	fs.StringVar(&o.upstreamResolverAddress, "upstream-resolver-address", "", "Address of an upstream resolver")
 	o.instrumentationOptions.AddFlags(fs)
 	if err := fs.Parse(os.Args[1:]); err != nil {
 		return o, fmt.Errorf("failed to parse flags: %w", err)
@@ -144,32 +146,48 @@ func getRegistryGeneration(agent agents.RegistryAgent) http.HandlerFunc {
 	}
 }
 
-type memoryCache struct {
-	Client                 ctrlruntimeclient.Client
-	IntegratedStreamsMutex sync.Mutex
-	IntegratedStreams      map[string]integratedStreamRecord
-	CacheDuration          time.Duration
+type streamCache struct {
+	integratedStreams         *sync.Map
+	cacheDuration             time.Duration
+	integrationStreamResolver func(ctx context.Context, namespace, name string) (*configresolver.IntegratedStream, error)
 }
 
-func (c *memoryCache) Get(ctx context.Context, ns, name string) (*configresolver.IntegratedStream, error) {
+func (c *streamCache) Get(ctx context.Context, ns, name string) (*configresolver.IntegratedStream, error) {
 	key := fmt.Sprintf("%s/%s", ns, name)
-	if c.IntegratedStreams == nil {
-		c.IntegratedStreams = map[string]integratedStreamRecord{}
-	}
-	if r, ok := c.IntegratedStreams[key]; ok {
-		if time.Now().Before(r.LastUpdatedAt.Add(c.CacheDuration)) {
+
+	if anyR, ok := c.integratedStreams.Load(key); ok {
+		r := anyR.(integratedStreamRecord)
+		if time.Now().Before(r.LastUpdatedAt.Add(c.cacheDuration)) {
 			logrus.WithField("namespace", ns).WithField("name", name).Debug("Getting info for integrated stream from cache")
 			return r.Stream, nil
 		}
 	}
-	c.IntegratedStreamsMutex.Lock()
-	defer c.IntegratedStreamsMutex.Unlock()
-	s, err := configresolver.LocalIntegratedStream(ctx, c.Client, ns, name)
+
+	s, err := c.integrationStreamResolver(ctx, ns, name)
 	if err != nil {
 		return nil, fmt.Errorf("failed to get information on image stream %s/%s: %w", ns, name, err)
 	}
-	c.IntegratedStreams[key] = integratedStreamRecord{Stream: s, LastUpdatedAt: time.Now()}
+
+	c.integratedStreams.Store(key, integratedStreamRecord{Stream: s, LastUpdatedAt: time.Now()})
 	return s, nil
+}
+
+func integrationStreamCache(kubeClient ctrlruntimeclient.Client, ResolverClient registryserver.ResolverClient, cacheDuration time.Duration) *streamCache {
+	streamResolver := func(ctx context.Context, namespace, name string) (*configresolver.IntegratedStream, error) {
+		return configresolver.LocalIntegratedStream(ctx, kubeClient, namespace, name)
+	}
+
+	if ResolverClient != nil {
+		streamResolver = func(_ context.Context, namespace, name string) (*configresolver.IntegratedStream, error) {
+			return ResolverClient.IntegratedStream(namespace, name)
+		}
+	}
+
+	return &streamCache{
+		integratedStreams:         &sync.Map{},
+		cacheDuration:             cacheDuration,
+		integrationStreamResolver: streamResolver,
+	}
 }
 
 type integratedStreamRecord struct {
@@ -302,7 +320,7 @@ func main() {
 	if err != nil {
 		logrus.WithError(err).Fatal("Failed to load in-cluster config")
 	}
-	ocClient, err := ctrlruntimeclient.New(inClusterConfig, ctrlruntimeclient.Options{})
+	kubeClient, err := ctrlruntimeclient.New(inClusterConfig, ctrlruntimeclient.Options{})
 	if err != nil {
 		logrus.WithError(err).Fatal("Failed to create oc client")
 	}
@@ -333,6 +351,13 @@ func main() {
 		l("chain"),
 		l("workflow"),
 	))
+
+	var upstreamResolver registryserver.ResolverClient
+	if o.upstreamResolverAddress != "" {
+		upstreamResolver = registryserver.NewResolverClient(o.upstreamResolverAddress)
+	}
+	integrationStreamCache := integrationStreamCache(kubeClient, upstreamResolver, time.Minute)
+
 	handler := metrics.TraceHandler(simplifier, configresolverMetrics.HTTPRequestDuration, configresolverMetrics.HTTPResponseSize)
 	uihandler := metrics.TraceHandler(uisimplifier, configresolverMetrics.HTTPRequestDuration, configresolverMetrics.HTTPResponseSize)
 	// add handler func for incorrect paths as well; can help with identifying errors/404s caused by incorrect paths
@@ -343,8 +368,7 @@ func main() {
 	http.HandleFunc("/clusterProfile", handler(registryserver.ResolveClusterProfile(registryAgent, configresolverMetrics)).ServeHTTP)
 	http.HandleFunc("/configGeneration", handler(getConfigGeneration(configAgent)).ServeHTTP)
 	http.HandleFunc("/registryGeneration", handler(getRegistryGeneration(registryAgent)).ServeHTTP)
-	cache := memoryCache{Client: ocClient, CacheDuration: time.Minute}
-	http.HandleFunc("/integratedStream", handler(getIntegratedStream(context.Background(), &cache)).ServeHTTP)
+	http.HandleFunc("/integratedStream", handler(getIntegratedStream(context.Background(), integrationStreamCache)).ServeHTTP)
 	http.HandleFunc("/readyz", func(_ http.ResponseWriter, _ *http.Request) {})
 	interrupts.ListenAndServe(&http.Server{Addr: ":" + strconv.Itoa(o.port)}, o.gracePeriod)
 	uiMux := http.NewServeMux()

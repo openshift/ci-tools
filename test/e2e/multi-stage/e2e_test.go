@@ -10,6 +10,7 @@ import (
 
 	"k8s.io/apimachinery/pkg/util/uuid"
 
+	"github.com/openshift/ci-tools/pkg/api"
 	"github.com/openshift/ci-tools/test/e2e/framework"
 )
 
@@ -229,7 +230,6 @@ func TestMultiStage(t *testing.T) {
 	}
 
 	for _, testCase := range testCases {
-		testCase := testCase
 		framework.Run(t, testCase.name, func(t *framework.T, cmd *framework.CiOperatorCommand) {
 			cmd.AddArgs(framework.LocalPullSecretFlag(t), framework.RemotePullSecretFlag(t))
 			cmd.AddArgs(testCase.args...)
@@ -246,9 +246,10 @@ func TestMultiStage(t *testing.T) {
 			}
 			cmd.VerboseOutputContains(t, testCase.name, testCase.output...)
 		}, framework.ConfigResolver(framework.ConfigResolverOptions{
-			ConfigPath:   "configs",
-			RegistryPath: "registry",
-			FlatRegistry: true,
+			ConfigPath:              "configs",
+			RegistryPath:            "registry",
+			FlatRegistry:            true,
+			UpstreamResolverAddress: api.URLForService("config"),
 		}))
 	}
 }

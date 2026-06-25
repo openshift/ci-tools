@@ -7,6 +7,7 @@ import (
 	"net/http"
 	"net/http/httptest"
 	"testing"
+	"time"
 
 	"github.com/google/go-cmp/cmp"
 
@@ -18,6 +19,7 @@ import (
 	imagev1 "github.com/openshift/api/image/v1"
 
 	"github.com/openshift/ci-tools/pkg/api/configresolver"
+	registryserver "github.com/openshift/ci-tools/pkg/registry/server"
 	"github.com/openshift/ci-tools/pkg/testhelper"
 )
 
@@ -123,38 +125,46 @@ func TestValidateStream(t *testing.T) {
 	}
 }
 
-var streams = []ctrlruntimeclient.Object{
-	&imagev1.ImageStream{
-		ObjectMeta: metav1.ObjectMeta{
-			Name:      "4.15",
-			Namespace: "ocp",
-			Annotations: map[string]string{
-				"release.openshift.io/config": `{"name":"4.15.0-0.ci","to":"release","message":"This release contains CI image builds of all code in release-4.15 (master) branches, and is updated each time someone merges.","mirrorPrefix":"4.15","expires":"72h","maxUnreadyReleases":1,"minCreationIntervalSeconds":21600,"pullSecretName":"source","check":{},"publish":{"tag":{"tagRef":{"name":"4.15-ci"}}},"verify":{"aws-sdn-serial":{"maxRetries":3,"prowJob":{"name":"periodic-ci-openshift-release-master-ci-4.15-e2e-aws-sdn-serial"}},"gcp-sdn":{"optional":true,"prowJob":{"name":"periodic-ci-openshift-release-master-ci-4.15-e2e-gcp-sdn"}},"hypershift-e2e":{"maxRetries":3,"prowJob":{"name":"periodic-ci-openshift-hypershift-release-4.15-periodics-e2e-aws-ovn"},"upgrade":true},"upgrade":{"optional":true,"prowJob":{"name":"periodic-ci-openshift-release-master-ci-4.15-e2e-gcp-sdn-upgrade"},"disabled":true,"upgrade":true},"upgrade-minor-aws-ovn":{"optional":true,"prowJob":{"name":"periodic-ci-openshift-release-master-ci-4.15-upgrade-from-stable-4.14-e2e-aws-ovn-upgrade"},"disabled":true,"upgrade":true,"upgradeFromRelease":{"candidate":{"stream":"ci","version":"4.14"}}},"upgrade-minor-sdn":{"optional":true,"prowJob":{"name":"periodic-ci-openshift-release-master-ci-4.15-upgrade-from-stable-4.14-e2e-aws-sdn-upgrade"},"upgrade":true,"upgradeFromRelease":{"candidate":{"stream":"ci","version":"4.14"}}},"aws-ovn-upgrade-4.15-minor":{"maxRetries":3,"prowJob":{"name":"periodic-ci-openshift-release-master-ci-4.15-upgrade-from-stable-4.14-e2e-aws-ovn-upgrade"},"upgrade":true,"upgradeFromRelease":{"candidate":{"stream":"ci","version":"4.14"}}},"azure-sdn-upgrade-4.15-minor":{"maxRetries":3,"prowJob":{"name":"periodic-ci-openshift-release-master-ci-4.15-upgrade-from-stable-4.14-e2e-azure-sdn-upgrade"},"upgrade":true,"upgradeFromRelease":{"candidate":{"stream":"ci","version":"4.14"}}},"gcp-ovn-upgrade-4.15-micro":{"maxRetries":3,"prowJob":{"name":"periodic-ci-openshift-release-master-ci-4.15-e2e-gcp-ovn-upgrade"},"upgrade":true}}}`,
+var (
+	streams = []ctrlruntimeclient.Object{
+		&imagev1.ImageStream{
+			ObjectMeta: metav1.ObjectMeta{
+				Name:      "4.15",
+				Namespace: "ocp",
+				Annotations: map[string]string{
+					"release.openshift.io/config": `{"name":"4.15.0-0.ci","to":"release","message":"This release contains CI image builds of all code in release-4.15 (master) branches, and is updated each time someone merges.","mirrorPrefix":"4.15","expires":"72h","maxUnreadyReleases":1,"minCreationIntervalSeconds":21600,"pullSecretName":"source","check":{},"publish":{"tag":{"tagRef":{"name":"4.15-ci"}}},"verify":{"aws-sdn-serial":{"maxRetries":3,"prowJob":{"name":"periodic-ci-openshift-release-master-ci-4.15-e2e-aws-sdn-serial"}},"gcp-sdn":{"optional":true,"prowJob":{"name":"periodic-ci-openshift-release-master-ci-4.15-e2e-gcp-sdn"}},"hypershift-e2e":{"maxRetries":3,"prowJob":{"name":"periodic-ci-openshift-hypershift-release-4.15-periodics-e2e-aws-ovn"},"upgrade":true},"upgrade":{"optional":true,"prowJob":{"name":"periodic-ci-openshift-release-master-ci-4.15-e2e-gcp-sdn-upgrade"},"disabled":true,"upgrade":true},"upgrade-minor-aws-ovn":{"optional":true,"prowJob":{"name":"periodic-ci-openshift-release-master-ci-4.15-upgrade-from-stable-4.14-e2e-aws-ovn-upgrade"},"disabled":true,"upgrade":true,"upgradeFromRelease":{"candidate":{"stream":"ci","version":"4.14"}}},"upgrade-minor-sdn":{"optional":true,"prowJob":{"name":"periodic-ci-openshift-release-master-ci-4.15-upgrade-from-stable-4.14-e2e-aws-sdn-upgrade"},"upgrade":true,"upgradeFromRelease":{"candidate":{"stream":"ci","version":"4.14"}}},"aws-ovn-upgrade-4.15-minor":{"maxRetries":3,"prowJob":{"name":"periodic-ci-openshift-release-master-ci-4.15-upgrade-from-stable-4.14-e2e-aws-ovn-upgrade"},"upgrade":true,"upgradeFromRelease":{"candidate":{"stream":"ci","version":"4.14"}}},"azure-sdn-upgrade-4.15-minor":{"maxRetries":3,"prowJob":{"name":"periodic-ci-openshift-release-master-ci-4.15-upgrade-from-stable-4.14-e2e-azure-sdn-upgrade"},"upgrade":true,"upgradeFromRelease":{"candidate":{"stream":"ci","version":"4.14"}}},"gcp-ovn-upgrade-4.15-micro":{"maxRetries":3,"prowJob":{"name":"periodic-ci-openshift-release-master-ci-4.15-e2e-gcp-ovn-upgrade"},"upgrade":true}}}`,
+				},
+			},
+			Status: imagev1.ImageStreamStatus{
+				Tags: []imagev1.NamedTagEventList{
+					{Tag: "bar"},
+					{Tag: "foo"},
+				},
 			},
 		},
-		Status: imagev1.ImageStreamStatus{
-			Tags: []imagev1.NamedTagEventList{
-				{Tag: "bar"},
-				{Tag: "foo"},
+		&imagev1.ImageStream{
+			ObjectMeta: metav1.ObjectMeta{
+				Name:      "5.0",
+				Namespace: "ocp",
+				Annotations: map[string]string{
+					"release.openshift.io/config": `{"name":"5.0.0-0.ci","to":"release-5","message":"This release contains CI image builds of all code in release-5.0 (main) branches, and is updated each time someone merges.","mirrorPrefix":"5.0","expires":"72h","maxUnreadyReleases":1,"minCreationIntervalSeconds":21600,"pullSecretName":"source","alternateImageRepository":"quay.io/openshift-release-dev/dev-release","alternateImageRepositorySecretName":"release-controller-quay-mirror-secret","check":{},"publish":{"tag":{"tagRef":{"name":"5.0-ci"}}},"verify":{}}`,
+				},
+			},
+			Status: imagev1.ImageStreamStatus{
+				Tags: []imagev1.NamedTagEventList{
+					{Tag: "bar"},
+					{Tag: "foo"},
+				},
 			},
 		},
-	},
-	&imagev1.ImageStream{
-		ObjectMeta: metav1.ObjectMeta{
-			Name:      "5.0",
-			Namespace: "ocp",
-			Annotations: map[string]string{
-				"release.openshift.io/config": `{"name":"5.0.0-0.ci","to":"release-5","message":"This release contains CI image builds of all code in release-5.0 (main) branches, and is updated each time someone merges.","mirrorPrefix":"5.0","expires":"72h","maxUnreadyReleases":1,"minCreationIntervalSeconds":21600,"pullSecretName":"source","alternateImageRepository":"quay.io/openshift-release-dev/dev-release","alternateImageRepositorySecretName":"release-controller-quay-mirror-secret","check":{},"publish":{"tag":{"tagRef":{"name":"5.0-ci"}}},"verify":{}}`,
-			},
+	}
+	upstreamStreams = map[string]*configresolver.IntegratedStream{
+		"ocp/4.22": {
+			Tags:                        []string{"installer"},
+			ReleaseControllerConfigName: "4.22.0-0.ci",
 		},
-		Status: imagev1.ImageStreamStatus{
-			Tags: []imagev1.NamedTagEventList{
-				{Tag: "bar"},
-				{Tag: "foo"},
-			},
-		},
-	},
-}
+	}
+)
 
 func init() {
 	if err := imagev1.AddToScheme(scheme.Scheme); err != nil {
@@ -162,23 +172,30 @@ func init() {
 	}
 }
 
-type fakeCache struct {
-	Client ctrlruntimeclient.Client
+type fakeResolverClient struct {
+	registryserver.ResolverClient
 }
 
-func (c *fakeCache) Get(ctx context.Context, ns, name string) (*configresolver.IntegratedStream, error) {
-	return configresolver.LocalIntegratedStream(ctx, c.Client, ns, name)
+func (f *fakeResolverClient) IntegratedStream(namespace, name string) (*configresolver.IntegratedStream, error) {
+	nn := namespace + "/" + name
+	s, ok := upstreamStreams[nn]
+	if !ok {
+		return nil, fmt.Errorf("stream %s not found", nn)
+	}
+	return s, nil
 }
 
 func TestGetIntegratedStream(t *testing.T) {
+	t.Parallel()
 	fakeclient.NewClientBuilder().WithObjects(&imagev1.ImageStream{})
 
 	testCases := []struct {
-		name         string
-		client       ctrlruntimeclient.Client
-		url          string
-		expectedCode int
-		expectedBody string
+		name           string
+		client         ctrlruntimeclient.Client
+		resolverClient *fakeResolverClient
+		url            string
+		expectedCode   int
+		expectedBody   string
 	}{
 		{
 			name:         "4.x stream is valid",
@@ -201,16 +218,35 @@ func TestGetIntegratedStream(t *testing.T) {
 			expectedCode: 400,
 			expectedBody: "not a valid integrated stream: ocp/10.0\n",
 		},
+		{
+			name:           "4.x stream from upstream resolver",
+			resolverClient: &fakeResolverClient{},
+			url:            "/url?namespace=ocp&name=4.22",
+			expectedCode:   200,
+			expectedBody:   "{\"tags\":[\"installer\"],\"releaseControllerConfigName\":\"4.22.0-0.ci\"}\n",
+		}, {
+			name:           "5.x stream from upstream not found",
+			resolverClient: &fakeResolverClient{},
+			url:            "/url?namespace=ocp&name=6.22",
+			expectedCode:   400,
+			expectedBody:   "not a valid integrated stream: ocp/6.22\n",
+		},
 	}
 
 	for _, tc := range testCases {
 		t.Run(tc.name, func(t *testing.T) {
+			t.Parallel()
 			req, err := http.NewRequest("GET", tc.url, nil)
 			if err != nil {
 				t.Fatal(err)
 			}
 			rr := httptest.NewRecorder()
-			handlerFunc := getIntegratedStream(context.Background(), &fakeCache{Client: tc.client})
+			var resolver registryserver.ResolverClient
+			if tc.resolverClient != nil {
+				resolver = tc.resolverClient
+			}
+			cache := integrationStreamCache(tc.client, resolver, time.Minute)
+			handlerFunc := getIntegratedStream(context.Background(), cache)
 			handlerFunc.ServeHTTP(rr, req)
 			if diff := cmp.Diff(tc.expectedCode, rr.Code); diff != "" {
 				t.Errorf("%s: actual does not match expected, diff: %s", tc.name, diff)

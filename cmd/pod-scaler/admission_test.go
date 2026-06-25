@@ -30,6 +30,34 @@ import (
 	"github.com/openshift/ci-tools/pkg/testhelper"
 )
 
+func authPair(apply, dryRun bool, maxReduction float64) authoritativePair {
+	return authoritativePair{apply: apply, dryRun: dryRun, maxReduction: maxReduction}
+}
+
+func authLegacyCPU(maxReduction float64) authoritativeConfig {
+	p := authPair(true, false, maxReduction)
+	return authoritativeConfig{cpuRequest: p, cpuLimit: p}
+}
+
+func authLegacyCPUAndMemory(maxCPU, maxMemory float64) authoritativeConfig {
+	return authoritativeConfig{
+		cpuRequest:    authPair(true, false, maxCPU),
+		cpuLimit:      authPair(true, false, maxCPU),
+		memoryRequest: authPair(true, false, maxMemory),
+		memoryLimit:   authPair(true, false, maxMemory),
+	}
+}
+
+func authLegacyCPUDryRun(maxReduction float64) authoritativeConfig {
+	p := authPair(false, true, maxReduction)
+	return authoritativeConfig{cpuRequest: p, cpuLimit: p}
+}
+
+func authLegacyMemory(maxReduction float64) authoritativeConfig {
+	p := authPair(true, false, maxReduction)
+	return authoritativeConfig{memoryRequest: p, memoryLimit: p}
+}
+
 type mockReporter struct {
 	client *http.Client
 	called bool
@@ -554,7 +582,7 @@ func TestMutatePodResources(t *testing.T) {
 	for _, testCase := range testCases {
 		t.Run(testCase.name, func(t *testing.T) {
 			original := testCase.pod.DeepCopy()
-			mutatePodResources(testCase.pod, testCase.server, testCase.mutateResourceLimits, 10, "20Gi", false, nil, 50.0, false, false, false, false, 0.25, 0.25, nil, &defaultReporter, logrus.WithField("test", testCase.name))
+			mutatePodResources(testCase.pod, testCase.server, testCase.mutateResourceLimits, 10, "20Gi", false, nil, 50.0, authoritativeConfig{}, nil, &defaultReporter, logrus.WithField("test", testCase.name))
 			diff := cmp.Diff(original, testCase.pod)
 			// In some cases, cmp.Diff decides to use non-breaking spaces, and it's not
 			// particularly deterministic about this. We don't care.
@@ -619,7 +647,7 @@ func TestMutatePodResources_ciWorkloadLabelDoesNotBreakCacheLookup(t *testing.T)
 		},
 	}
 
-	mutatePodResources(pod, server, false, 10, "20Gi", false, nil, 50.0, false, false, false, false, 0.25, 0.25, nil, &defaultReporter, logger)
+	mutatePodResources(pod, server, false, 10, "20Gi", false, nil, 50.0, authoritativeConfig{}, nil, &defaultReporter, logger)
 
 	got := pod.Spec.Containers[0].Resources.Requests.Cpu().MilliValue()
 	const want = 6000 // 5000m recommendation inflated by 1.2 in useOursIfLarger
@@ -917,10 +945,10 @@ func TestUseOursIfLarger_authoritative(t *testing.T) {
 
 func TestApplyAuthoritativeLimitDecrease(t *testing.T) {
 	testCases := []struct {
-		name                                  string
-		authoritativeCPU, authoritativeMemory bool
-		isMeasured                            bool
-		ours, theirs, expected                corev1.ResourceRequirements
+		name                   string
+		authoritative          authoritativeConfig
+		isMeasured             bool
+		ours, theirs, expected corev1.ResourceRequirements
 	}{
 		{
 			name: "authoritative disabled",
@@ -944,9 +972,8 @@ func TestApplyAuthoritativeLimitDecrease(t *testing.T) {
 			},
 		},
 		{
-			name:                "capped reduction on limits only",
-			authoritativeCPU:    true,
-			authoritativeMemory: true,
+			name:          "capped reduction on requests and limits",
+			authoritative: authLegacyCPUAndMemory(0.25, 0.25),
 			ours: corev1.ResourceRequirements{
 				Requests: corev1.ResourceList{
 					corev1.ResourceCPU:    *resource.NewQuantity(10, resource.DecimalSI),
@@ -969,14 +996,14 @@ func TestApplyAuthoritativeLimitDecrease(t *testing.T) {
 					corev1.ResourceMemory: *resource.NewQuantity(15e9, resource.BinarySI),
 				},
 				Requests: corev1.ResourceList{
-					corev1.ResourceCPU:    *resource.NewQuantity(100, resource.DecimalSI),
-					corev1.ResourceMemory: *resource.NewQuantity(2e10, resource.BinarySI),
+					corev1.ResourceCPU:    *resource.NewQuantity(75, resource.DecimalSI),
+					corev1.ResourceMemory: *resource.NewQuantity(15e9, resource.BinarySI),
 				},
 			},
 		},
 		{
-			name:             "cpu limit decrease never below 10m",
-			authoritativeCPU: true,
+			name:          "cpu limit decrease never below 10m",
+			authoritative: authLegacyCPU(1.0),
 			ours: corev1.ResourceRequirements{
 				Requests: corev1.ResourceList{
 					corev1.ResourceCPU: resource.MustParse("1m"),
@@ -994,9 +1021,9 @@ func TestApplyAuthoritativeLimitDecrease(t *testing.T) {
 			},
 		},
 		{
-			name:             "measured pod skips limit reduction",
-			authoritativeCPU: true,
-			isMeasured:       true,
+			name:          "measured pod skips reduction",
+			authoritative: authLegacyCPU(0.25),
+			isMeasured:    true,
 			ours: corev1.ResourceRequirements{
 				Requests: corev1.ResourceList{
 					corev1.ResourceCPU: *resource.NewQuantity(10, resource.DecimalSI),
@@ -1006,17 +1033,42 @@ func TestApplyAuthoritativeLimitDecrease(t *testing.T) {
 				Limits: corev1.ResourceList{
 					corev1.ResourceCPU: *resource.NewQuantity(100, resource.DecimalSI),
 				},
+				Requests: corev1.ResourceList{
+					corev1.ResourceCPU: *resource.NewQuantity(100, resource.DecimalSI),
+				},
 			},
 			expected: corev1.ResourceRequirements{
 				Limits: corev1.ResourceList{
 					corev1.ResourceCPU: *resource.NewQuantity(100, resource.DecimalSI),
+				},
+				Requests: corev1.ResourceList{
+					corev1.ResourceCPU: *resource.NewQuantity(100, resource.DecimalSI),
+				},
+			},
+		},
+		{
+			name:          "capped reduction on requests without limits",
+			authoritative: authLegacyCPU(0.25),
+			ours: corev1.ResourceRequirements{
+				Requests: corev1.ResourceList{
+					corev1.ResourceCPU: *resource.NewQuantity(10, resource.DecimalSI),
+				},
+			},
+			theirs: corev1.ResourceRequirements{
+				Requests: corev1.ResourceList{
+					corev1.ResourceCPU: *resource.NewQuantity(100, resource.DecimalSI),
+				},
+			},
+			expected: corev1.ResourceRequirements{
+				Requests: corev1.ResourceList{
+					corev1.ResourceCPU: *resource.NewQuantity(75, resource.DecimalSI),
 				},
 			},
 		},
 	}
 	for _, tc := range testCases {
 		t.Run(tc.name, func(t *testing.T) {
-			applyAuthoritativeLimitDecrease(&tc.ours, &tc.theirs, "test", "build", tc.isMeasured, "", tc.authoritativeCPU, tc.authoritativeMemory, false, false, 0.25, 0.25, nil, logrus.WithField("test", tc.name))
+			applyAuthoritativeLimitDecrease(&tc.ours, &tc.theirs, "test", "build", tc.isMeasured, "", tc.authoritative, nil, logrus.WithField("test", tc.name))
 			if diff := cmp.Diff(tc.theirs, tc.expected); diff != "" {
 				t.Errorf("unexpected resources: %s", diff)
 			}
@@ -1044,7 +1096,7 @@ func TestApplyAuthoritativeLimitDecrease_uncappedMemory(t *testing.T) {
 		},
 	}
 
-	applyAuthoritativeLimitDecrease(&ours, &theirs, "test", "build", false, "", true, true, false, false, 0.25, 1.0, nil, logrus.WithField("test", t.Name()))
+	applyAuthoritativeLimitDecrease(&ours, &theirs, "test", "build", false, "", authLegacyCPUAndMemory(0.25, 1.0), nil, logrus.WithField("test", t.Name()))
 	if diff := cmp.Diff(theirs, expected); diff != "" {
 		t.Errorf("unexpected resources: %s", diff)
 	}
@@ -1060,16 +1112,54 @@ func TestApplyAuthoritativeLimitDecrease_dryRun(t *testing.T) {
 		Limits: corev1.ResourceList{
 			corev1.ResourceCPU: *resource.NewQuantity(100, resource.DecimalSI),
 		},
+		Requests: corev1.ResourceList{
+			corev1.ResourceCPU: *resource.NewQuantity(100, resource.DecimalSI),
+		},
 	}
 	expected := corev1.ResourceRequirements{
 		Limits: corev1.ResourceList{
 			corev1.ResourceCPU: *resource.NewQuantity(100, resource.DecimalSI),
 		},
+		Requests: corev1.ResourceList{
+			corev1.ResourceCPU: *resource.NewQuantity(100, resource.DecimalSI),
+		},
 	}
 
-	applyAuthoritativeLimitDecrease(&ours, &theirs, "test", "build", false, "", true, false, true, false, 0.25, 0.25, nil, logrus.WithField("test", t.Name()))
+	applyAuthoritativeLimitDecrease(&ours, &theirs, "test", "build", false, "", authLegacyCPUDryRun(0.25), nil, logrus.WithField("test", t.Name()))
 	if diff := cmp.Diff(theirs, expected); diff != "" {
 		t.Errorf("dry-run should not mutate resources: %s", diff)
+	}
+}
+
+func TestApplyAuthoritativeLimitDecrease_separateRequestLimitCaps(t *testing.T) {
+	ours := corev1.ResourceRequirements{
+		Requests: corev1.ResourceList{
+			corev1.ResourceCPU: *resource.NewQuantity(10, resource.DecimalSI),
+		},
+	}
+	theirs := corev1.ResourceRequirements{
+		Limits: corev1.ResourceList{
+			corev1.ResourceCPU: *resource.NewQuantity(100, resource.DecimalSI),
+		},
+		Requests: corev1.ResourceList{
+			corev1.ResourceCPU: *resource.NewQuantity(100, resource.DecimalSI),
+		},
+	}
+	expected := corev1.ResourceRequirements{
+		Limits: corev1.ResourceList{
+			corev1.ResourceCPU: *resource.NewQuantity(12, resource.DecimalSI),
+		},
+		Requests: corev1.ResourceList{
+			corev1.ResourceCPU: *resource.NewQuantity(75, resource.DecimalSI),
+		},
+	}
+
+	applyAuthoritativeLimitDecrease(&ours, &theirs, "test", "build", false, "", authoritativeConfig{
+		cpuRequest: authPair(true, false, 0.25),
+		cpuLimit:   authPair(true, false, 1.0),
+	}, nil, logrus.WithField("test", t.Name()))
+	if diff := cmp.Diff(theirs, expected); diff != "" {
+		t.Errorf("unexpected resources: %s", diff)
 	}
 }
 
@@ -1110,6 +1200,9 @@ func TestApplyAuthoritativeLimitDecrease_skipsDuringEscalation(t *testing.T) {
 		Limits: corev1.ResourceList{
 			corev1.ResourceMemory: *resource.NewQuantity(2e10, resource.BinarySI),
 		},
+		Requests: corev1.ResourceList{
+			corev1.ResourceMemory: *resource.NewQuantity(2e10, resource.BinarySI),
+		},
 	}
 	server := &escalationServer{
 		index: podscaler.EscalationIndex{
@@ -1117,10 +1210,13 @@ func TestApplyAuthoritativeLimitDecrease_skipsDuringEscalation(t *testing.T) {
 		},
 	}
 
-	applyAuthoritativeLimitDecrease(&ours, &theirs, "test", "build", false, "", false, true, false, false, 0.25, 0.25, server, logrus.WithField("test", t.Name()))
+	applyAuthoritativeLimitDecrease(&ours, &theirs, "test", "build", false, "", authLegacyMemory(0.25), server, logrus.WithField("test", t.Name()))
 	want := *resource.NewQuantity(2e10, resource.BinarySI)
-	if diff := cmp.Diff(theirs.Limits, corev1.ResourceList{corev1.ResourceMemory: want}); diff != "" {
-		t.Errorf("expected memory limit unchanged during escalation: %s", diff)
+	if diff := cmp.Diff(theirs, corev1.ResourceRequirements{
+		Limits:   corev1.ResourceList{corev1.ResourceMemory: want},
+		Requests: corev1.ResourceList{corev1.ResourceMemory: want},
+	}); diff != "" {
+		t.Errorf("expected memory unchanged during escalation: %s", diff)
 	}
 }
 

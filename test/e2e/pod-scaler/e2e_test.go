@@ -419,7 +419,11 @@ func TestAdmissionAuthoritativeDryRun(t *testing.T) {
 	t.Run("authoritative decreases CPU", func(t *testing.T) {
 		ctx, cancel := context.WithCancel(interrupts.Context())
 		defer cancel()
-		admissionHost, transport := run.Admission(T, dataDir, kubeconfigFile, ctx, false, "--authoritative-cpu=true", fmt.Sprintf("--cpu-cap=%d", cpuCap))
+		admissionHost, transport := run.Admission(T, dataDir, kubeconfigFile, ctx, false,
+			"--authoritative-cpu=true",
+			"--authoritative-cpu-request-max-reduction-percent=0.25",
+			fmt.Sprintf("--cpu-cap=%d", cpuCap),
+		)
 		got := cpuRequestAfterAdmission(t, &basePod, admissionHost, transport)
 		if got.Cmp(wantCPU) != 0 {
 			t.Fatalf("authoritative CPU request = %s, want %s", got.String(), wantCPU.String())

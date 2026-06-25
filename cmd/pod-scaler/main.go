@@ -67,21 +67,47 @@ type consumerOptions struct {
 	port   int
 	uiPort int
 
-	dataDir                                string
-	certDir                                string
-	mutateResourceLimits                   bool
-	cpuCap                                 int64
-	memoryCap                              string
-	cpuPriorityScheduling                  int64
-	percentageMeasured                     float64
-	measuredPodCPUIncrease                 float64
-	systemReservedCPU                      int64
-	authoritativeCPU                       bool
-	authoritativeMemory                    bool
-	authoritativeCPUDryRun                 bool
-	authoritativeMemoryDryRun              bool
-	authoritativeCPUMaxReductionPercent    float64
-	authoritativeMemoryMaxReductionPercent float64
+	dataDir                                       string
+	certDir                                       string
+	mutateResourceLimits                          bool
+	cpuCap                                        int64
+	memoryCap                                     string
+	cpuPriorityScheduling                         int64
+	percentageMeasured                            float64
+	measuredPodCPUIncrease                        float64
+	systemReservedCPU                             int64
+	authoritativeCPU                              bool
+	authoritativeMemory                           bool
+	authoritativeCPUDryRun                        bool
+	authoritativeMemoryDryRun                     bool
+	authoritativeCPURequest                       bool
+	authoritativeCPULimit                         bool
+	authoritativeMemoryRequest                    bool
+	authoritativeMemoryLimit                      bool
+	authoritativeCPURequestDryRun                 bool
+	authoritativeCPULimitDryRun                   bool
+	authoritativeMemoryRequestDryRun              bool
+	authoritativeMemoryLimitDryRun                bool
+	authoritativeCPURequestMaxReductionPercent    float64
+	authoritativeCPULimitMaxReductionPercent      float64
+	authoritativeMemoryRequestMaxReductionPercent float64
+	authoritativeMemoryLimitMaxReductionPercent   float64
+}
+
+func (o *consumerOptions) authoritativeConfig() authoritativeConfig {
+	pair := func(apply, dryRun bool, maxReduction float64, legacyApply, legacyDryRun bool) authoritativePair {
+		return authoritativePair{
+			apply:        apply || legacyApply,
+			dryRun:       dryRun || legacyDryRun,
+			maxReduction: maxReduction,
+		}
+	}
+	return authoritativeConfig{
+		cpuRequest:    pair(o.authoritativeCPURequest, o.authoritativeCPURequestDryRun, o.authoritativeCPURequestMaxReductionPercent, o.authoritativeCPU, o.authoritativeCPUDryRun),
+		cpuLimit:      pair(o.authoritativeCPULimit, o.authoritativeCPULimitDryRun, o.authoritativeCPULimitMaxReductionPercent, o.authoritativeCPU, o.authoritativeCPUDryRun),
+		memoryRequest: pair(o.authoritativeMemoryRequest, o.authoritativeMemoryRequestDryRun, o.authoritativeMemoryRequestMaxReductionPercent, o.authoritativeMemory, o.authoritativeMemoryDryRun),
+		memoryLimit:   pair(o.authoritativeMemoryLimit, o.authoritativeMemoryLimitDryRun, o.authoritativeMemoryLimitMaxReductionPercent, o.authoritativeMemory, o.authoritativeMemoryDryRun),
+	}
 }
 
 func bindOptions(fs *flag.FlagSet) *options {
@@ -108,12 +134,24 @@ func bindOptions(fs *flag.FlagSet) *options {
 	fs.Float64Var(&o.percentageMeasured, "percentage-measured", 0, "Percentage of pods to mark as measured (0-100). Measured pods get increased CPU requests and anti-affinity rules.")
 	fs.Float64Var(&o.measuredPodCPUIncrease, "measured-pod-cpu-increase", 50, "Percentage increase in CPU requests for measured pods (default: 50%).")
 	fs.Int64Var(&o.systemReservedCPU, "system-reserved-cpu", 2, "CPU cores to reserve for system overhead when capping measured pod CPU.")
-	fs.BoolVar(&o.authoritativeCPU, "authoritative-cpu", false, "Allow admission to decrease CPU requests and limits based on measured usage.")
-	fs.BoolVar(&o.authoritativeMemory, "authoritative-memory", false, "Allow admission to decrease memory requests and limits based on measured usage.")
-	fs.BoolVar(&o.authoritativeCPUDryRun, "authoritative-cpu-dry-run", false, "Log CPU decreases that authoritative mode would apply without mutating pods.")
-	fs.BoolVar(&o.authoritativeMemoryDryRun, "authoritative-memory-dry-run", false, "Log memory decreases that authoritative mode would apply without mutating pods.")
-	fs.Float64Var(&o.authoritativeCPUMaxReductionPercent, "authoritative-cpu-max-reduction-percent", 1.0, "Maximum CPU limit reduction per admission in authoritative mode, as a fraction (0.25 = 25%, 1.0 = no cap).")
-	fs.Float64Var(&o.authoritativeMemoryMaxReductionPercent, "authoritative-memory-max-reduction-percent", 1.0, "Maximum memory limit reduction per admission in authoritative mode, as a fraction (0.25 = 25%, 1.0 = no cap).")
+	fs.BoolVar(&o.authoritativeCPURequest, "authoritative-cpu-request", false, "Allow admission to decrease CPU requests based on measured usage.")
+	fs.BoolVar(&o.authoritativeCPULimit, "authoritative-cpu-limit", false, "Allow admission to decrease CPU limits based on measured usage.")
+	fs.BoolVar(&o.authoritativeCPU, "authoritative-cpu", false, "Deprecated: enables both --authoritative-cpu-request and --authoritative-cpu-limit.")
+	fs.BoolVar(&o.authoritativeMemoryRequest, "authoritative-memory-request", false, "Allow admission to decrease memory requests based on measured usage.")
+	fs.BoolVar(&o.authoritativeMemoryLimit, "authoritative-memory-limit", false, "Allow admission to decrease memory limits based on measured usage.")
+	fs.BoolVar(&o.authoritativeMemory, "authoritative-memory", false, "Deprecated: enables both --authoritative-memory-request and --authoritative-memory-limit.")
+	fs.BoolVar(&o.authoritativeCPURequestDryRun, "authoritative-cpu-request-dry-run", false, "Log CPU request decreases that authoritative mode would apply without mutating pods.")
+	fs.BoolVar(&o.authoritativeCPULimitDryRun, "authoritative-cpu-limit-dry-run", false, "Log CPU limit decreases that authoritative mode would apply without mutating pods.")
+	fs.BoolVar(&o.authoritativeCPUDryRun, "authoritative-cpu-dry-run", false, "Deprecated: enables both --authoritative-cpu-request-dry-run and --authoritative-cpu-limit-dry-run.")
+	fs.BoolVar(&o.authoritativeMemoryRequestDryRun, "authoritative-memory-request-dry-run", false, "Log memory request decreases that authoritative mode would apply without mutating pods.")
+	fs.BoolVar(&o.authoritativeMemoryLimitDryRun, "authoritative-memory-limit-dry-run", false, "Log memory limit decreases that authoritative mode would apply without mutating pods.")
+	fs.BoolVar(&o.authoritativeMemoryDryRun, "authoritative-memory-dry-run", false, "Deprecated: enables both --authoritative-memory-request-dry-run and --authoritative-memory-limit-dry-run.")
+	fs.Float64Var(&o.authoritativeCPURequestMaxReductionPercent, "authoritative-cpu-request-max-reduction-percent", 1.0, "Maximum CPU request reduction per admission in authoritative mode, as a fraction (0.25 = 25%, 1.0 = no cap).")
+	fs.Float64Var(&o.authoritativeCPULimitMaxReductionPercent, "authoritative-cpu-limit-max-reduction-percent", 1.0, "Maximum CPU limit reduction per admission in authoritative mode, as a fraction (0.25 = 25%, 1.0 = no cap).")
+	fs.Float64Var(&o.authoritativeCPULimitMaxReductionPercent, "authoritative-cpu-max-reduction-percent", 1.0, "Deprecated: use --authoritative-cpu-limit-max-reduction-percent.")
+	fs.Float64Var(&o.authoritativeMemoryRequestMaxReductionPercent, "authoritative-memory-request-max-reduction-percent", 1.0, "Maximum memory request reduction per admission in authoritative mode, as a fraction (0.25 = 25%, 1.0 = no cap).")
+	fs.Float64Var(&o.authoritativeMemoryLimitMaxReductionPercent, "authoritative-memory-limit-max-reduction-percent", 1.0, "Maximum memory limit reduction per admission in authoritative mode, as a fraction (0.25 = 25%, 1.0 = no cap).")
+	fs.Float64Var(&o.authoritativeMemoryLimitMaxReductionPercent, "authoritative-memory-max-reduction-percent", 1.0, "Deprecated: use --authoritative-memory-limit-max-reduction-percent.")
 	fs.Float64Var(&o.failureEscalationFactor, "failure-escalation-factor", 1.5, "Multiplier applied per escalation level after OOM or CPU throttle (1.5 = 50% increase per level).")
 	fs.IntVar(&o.failureEscalationMaxLevel, "failure-escalation-max-level", 10, "Maximum escalation level tracked for a workload.")
 	fs.Float64Var(&o.cpuThrottleThreshold, "cpu-throttle-threshold", 0.25, "Minimum throttled/total CPU CFS period ratio to count as CPU deprived.")
@@ -156,11 +194,17 @@ func (o *options) validate() error {
 		if o.measuredPodCPUIncrease < 0 {
 			return errors.New("--measured-pod-cpu-increase must be >= 0")
 		}
-		if o.authoritativeCPUMaxReductionPercent < 0 || o.authoritativeCPUMaxReductionPercent > 1 {
-			return errors.New("--authoritative-cpu-max-reduction-percent must be between 0 and 1")
+		if o.authoritativeCPURequestMaxReductionPercent < 0 || o.authoritativeCPURequestMaxReductionPercent > 1 {
+			return errors.New("--authoritative-cpu-request-max-reduction-percent must be between 0 and 1")
 		}
-		if o.authoritativeMemoryMaxReductionPercent < 0 || o.authoritativeMemoryMaxReductionPercent > 1 {
-			return errors.New("--authoritative-memory-max-reduction-percent must be between 0 and 1")
+		if o.authoritativeCPULimitMaxReductionPercent < 0 || o.authoritativeCPULimitMaxReductionPercent > 1 {
+			return errors.New("--authoritative-cpu-limit-max-reduction-percent must be between 0 and 1")
+		}
+		if o.authoritativeMemoryRequestMaxReductionPercent < 0 || o.authoritativeMemoryRequestMaxReductionPercent > 1 {
+			return errors.New("--authoritative-memory-request-max-reduction-percent must be between 0 and 1")
+		}
+		if o.authoritativeMemoryLimitMaxReductionPercent < 0 || o.authoritativeMemoryLimitMaxReductionPercent > 1 {
+			return errors.New("--authoritative-memory-limit-max-reduction-percent must be between 0 and 1")
 		}
 		if err := o.resultsOptions.Validate(); err != nil {
 			return err
@@ -323,7 +367,7 @@ func mainAdmission(opts *options, cache Cache) {
 
 	escalations := newEscalationServer(cache, opts.failureEscalationFactor)
 
-	go admit(opts.port, opts.instrumentationOptions.HealthPort, opts.certDir, client, kubeClient, loaders(cache), opts.mutateResourceLimits, opts.cpuCap, opts.memoryCap, opts.cpuPriorityScheduling, opts.percentageMeasured, opts.measuredPodCPUIncrease, opts.systemReservedCPU, opts.authoritativeCPU, opts.authoritativeMemory, opts.authoritativeCPUDryRun, opts.authoritativeMemoryDryRun, opts.authoritativeCPUMaxReductionPercent, opts.authoritativeMemoryMaxReductionPercent, escalations, reporter)
+	go admit(opts.port, opts.instrumentationOptions.HealthPort, opts.certDir, client, kubeClient, loaders(cache), opts.mutateResourceLimits, opts.cpuCap, opts.memoryCap, opts.cpuPriorityScheduling, opts.percentageMeasured, opts.measuredPodCPUIncrease, opts.systemReservedCPU, opts.authoritativeConfig(), escalations, reporter)
 }
 
 func loaders(cache Cache) map[string][]*cacheReloader {

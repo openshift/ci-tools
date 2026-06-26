@@ -1715,7 +1715,7 @@ func TestFromConfig(t *testing.T) {
 		},
 		promote:       true,
 		expectedSteps: []string{"[output-images]", "[images]"},
-		expectedPost:  []string{"[promotion]", "[promotion-quay]"},
+		expectedPost:  []string{"[promotion-quay]"},
 	}, {
 		name: "promote 4.12 quay only",
 		config: api.ReleaseBuildConfiguration{

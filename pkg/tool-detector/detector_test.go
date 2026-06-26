@@ -1,6 +1,8 @@
 package tooldetector
 
 import (
+	"os"
+	"path/filepath"
 	"testing"
 
 	"github.com/google/go-cmp/cmp"
@@ -870,6 +872,47 @@ some context /image pod-scaler
 			}
 			if all != tt.expectedAll {
 				t.Fatalf("expected all=%v, got %v", tt.expectedAll, all)
+			}
+		})
+	}
+}
+
+func TestDetector_loadChangedPackages(t *testing.T) {
+	wd, err := os.Getwd()
+	if err != nil {
+		t.Fatal(err)
+	}
+	root := filepath.Clean(filepath.Join(wd, "..", ".."))
+	if err := os.Chdir(root); err != nil {
+		t.Fatal(err)
+	}
+	t.Cleanup(func() { _ = os.Chdir(wd) })
+
+	tests := []struct {
+		name    string
+		files   []string
+		want    sets.Set[string]
+		wantErr bool
+	}{
+		{
+			name: "skips build-tagged packages",
+			files: []string{
+				"cmd/pod-scaler/main.go",
+				"test/e2e/pod-scaler/e2e_test.go",
+			},
+			want: sets.New("github.com/openshift/ci-tools/cmd/pod-scaler"),
+		},
+	}
+
+	d := New(nil, nil)
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			got, err := d.loadChangedPackages(tt.files)
+			if (err != nil) != tt.wantErr {
+				t.Fatalf("loadChangedPackages() error = %v, wantErr %v", err, tt.wantErr)
+			}
+			if diff := cmp.Diff(tt.want, got); diff != "" {
+				t.Errorf("loadChangedPackages() mismatch (-want +got):\n%s", diff)
 			}
 		})
 	}

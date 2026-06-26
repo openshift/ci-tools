@@ -235,6 +235,10 @@ func (d *Detector) loadChangedPackages(files []string) (sets.Set[string], error)
 	for _, pkg := range pkgs {
 		if len(pkg.Errors) > 0 {
 			for _, pkgErr := range pkg.Errors {
+				if strings.Contains(pkgErr.Error(), "build constraints exclude all Go files") {
+					logrus.WithField("package", pkg.PkgPath).Warn("Skipping changed package excluded by build constraints")
+					continue
+				}
 				packageErrors = append(packageErrors, fmt.Errorf("package %s: %w", pkg.PkgPath, pkgErr))
 			}
 		}
@@ -248,7 +252,7 @@ func (d *Detector) loadChangedPackages(files []string) (sets.Set[string], error)
 	for _, pkg := range pkgs {
 		if pkg.PkgPath == "" {
 			emptyPkgPaths = append(emptyPkgPaths, fmt.Sprintf("files: %v", pkg.GoFiles))
-		} else if strings.HasPrefix(pkg.PkgPath, ModulePrefix) {
+		} else if strings.HasPrefix(pkg.PkgPath, ModulePrefix) && len(pkg.GoFiles) > 0 {
 			changed.Insert(pkg.PkgPath)
 		}
 	}

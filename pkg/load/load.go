@@ -341,3 +341,31 @@ func ClusterClaimOwnersConfig(configPath string) (api.ClusterClaimOwnersMap, err
 	}
 	return clusterClaimOwnersMap, nil
 }
+
+// AllowedAudiencesConfig loads allowed audiences information from its config in the release repository.
+// If the file does not exist, an empty map is returned.
+func AllowedAudiencesConfig(configPath string) (api.AllowedAudiencesMap, error) {
+	configContents, err := os.ReadFile(configPath)
+	if err != nil {
+		if os.IsNotExist(err) {
+			return make(api.AllowedAudiencesMap), nil
+		}
+		return nil, fmt.Errorf("failed to read allowed audiences config: %w", err)
+	}
+
+	var audiencesList []api.AllowedAudienceDetails
+	if err = yaml.UnmarshalStrict(configContents, &audiencesList); err != nil {
+		return nil, fmt.Errorf("failed to unmarshall allowed audiences config: %w", err)
+	}
+	allowedAudiencesMap := make(api.AllowedAudiencesMap, len(audiencesList))
+	for i, a := range audiencesList {
+		if a.Audience == "" {
+			return nil, fmt.Errorf("allowed audiences config entry %d: audience must not be empty", i)
+		}
+		if _, exists := allowedAudiencesMap[a.Audience]; exists {
+			return nil, fmt.Errorf("allowed audiences config: duplicate audience %q", a.Audience)
+		}
+		allowedAudiencesMap[a.Audience] = a
+	}
+	return allowedAudiencesMap, nil
+}

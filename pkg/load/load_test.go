@@ -350,6 +350,7 @@ func TestClusterProfilesConfig(t *testing.T) {
 			}
 		}
 	}
+	profilesWithSecrets["gcp-unique"] = api.ClusterProfileDetails{Name: "gcp-unique"}
 
 	var testCases = []struct {
 		name     string
@@ -406,6 +407,7 @@ cluster_profiles:
   secret: non-default-secret-name-aws
 - name: vsphere-connected-2
   secret: non-default-secret-name-vsphere
+- name: gcp-unique
     `,
 			expected: profilesWithSecrets,
 		},

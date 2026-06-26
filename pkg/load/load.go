@@ -5,6 +5,7 @@ import (
 	"errors"
 	"fmt"
 	"io/fs"
+	"maps"
 	"os"
 	"path/filepath"
 	"strings"
@@ -282,6 +283,8 @@ func ClusterProfilesConfig(configPath string) (api.ClusterProfilesMap, error) {
 	}
 
 	mergedMap := make(api.ClusterProfilesMap)
+	maps.Copy(mergedMap, profilesFromConfigMap)
+
 	for _, profileName := range api.ClusterProfiles() {
 		profile, found := profilesFromConfigMap[profileName]
 		if !found {

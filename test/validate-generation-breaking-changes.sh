@@ -21,7 +21,7 @@ for org in openshift; do
   pushd "${clonedir}"
 
   echo >&2 "$(date -u +'%Y-%m-%dT%H:%M:%S%z') Executing ci-operator-prowgen"
-  ci-operator-prowgen --from-dir "${clonedir}/ci-operator/config" --to-dir "${clonedir}/ci-operator/jobs"
+  ci-operator-prowgen --from-dir "${clonedir}/ci-operator/config" --to-dir "${clonedir}/ci-operator/jobs" --registry "${clonedir}/ci-operator/step-registry"
   out="$(git status --porcelain)"
   if [[ -n "$out" ]]; then
     echo "ERROR: Changes in $org/release:"

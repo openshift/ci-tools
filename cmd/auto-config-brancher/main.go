@@ -172,8 +172,12 @@ func main() {
 			arguments: []string{"--config-dir", o.ConfigDir, "--confirm"},
 		},
 		{
-			command:   "/usr/bin/ci-operator-prowgen",
-			arguments: []string{"--from-dir", o.ConfigDir, "--to-dir", "./ci-operator/jobs"},
+			command: "/usr/bin/ci-operator-prowgen",
+			arguments: []string{
+				"--from-dir", o.ConfigDir,
+				"--to-dir", "./ci-operator/jobs",
+				"--registry", "./ci-operator/step-registry",
+			},
 		},
 		{
 			command: "/usr/bin/private-prow-configs-mirror",

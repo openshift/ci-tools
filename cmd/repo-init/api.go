@@ -688,6 +688,7 @@ func generateJobs(logger *logrus.Entry) error {
 			arguments: []string{
 				"--from-dir", "./ci-operator/config",
 				"--to-dir", "./ci-operator/jobs",
+				"--registry", "./ci-operator/step-registry",
 			},
 		},
 		{

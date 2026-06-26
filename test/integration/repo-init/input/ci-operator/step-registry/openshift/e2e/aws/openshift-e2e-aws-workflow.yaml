@@ -1,0 +1,3 @@
+workflow:
+  as: openshift-e2e-aws
+  documentation: "todo"

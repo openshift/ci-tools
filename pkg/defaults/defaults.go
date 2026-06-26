@@ -304,13 +304,13 @@ func fromConfig(ctx context.Context, cfg *Config) ([]api.Step, []api.Step, error
 		}
 
 		if !api.ConsolidatedQuayPromotion(cfg.CIConfig) {
-			promotionSteps = append(promotionSteps, releasesteps.PromotionStep(api.PromotionStepName, cfg.CIConfig, requiredNames, cfg.JobSpec, cfg.podClient, cfg.PushSecret, registryDomain(cfg.CIConfig.PromotionConfiguration), api.DefaultMirrorFunc, api.DefaultTargetNameFunc, cfg.NodeArchitectures))
+			promotionSteps = append(promotionSteps, releasesteps.PromotionStep(api.PromotionStepName, cfg.CIConfig, requiredNames, cfg.SkippedImages, cfg.JobSpec, cfg.podClient, cfg.PushSecret, registryDomain(cfg.CIConfig.PromotionConfiguration), api.DefaultMirrorFunc, api.DefaultTargetNameFunc, cfg.NodeArchitectures))
 		}
 		// Used primarily (only?) by the ci-chat-bot
 		if cfg.CIConfig.PromotionConfiguration.RegistryOverride != "" {
 			logrus.Info("No images to promote to quay.io if the registry is overridden")
 		} else {
-			promotionSteps = append(promotionSteps, releasesteps.PromotionStep(api.PromotionQuayStepName, cfg.CIConfig, requiredNames, cfg.JobSpec, cfg.podClient, cfg.PushSecret, api.QuayOpenShiftCIRepo, api.QuayCombinedMirrorFunc, api.QuayTargetNameFunc, cfg.NodeArchitectures))
+			promotionSteps = append(promotionSteps, releasesteps.PromotionStep(api.PromotionQuayStepName, cfg.CIConfig, requiredNames, cfg.SkippedImages, cfg.JobSpec, cfg.podClient, cfg.PushSecret, api.QuayOpenShiftCIRepo, api.QuayCombinedMirrorFunc, api.QuayTargetNameFunc, cfg.NodeArchitectures))
 		}
 	}
 

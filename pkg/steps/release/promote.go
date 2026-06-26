@@ -4,8 +4,9 @@ import (
 	"context"
 	"encoding/json"
 	"fmt"
+	"maps"
 	"net/http"
-	"path/filepath"
+	"slices"
 	"sort"
 	"strings"
 	"time"
@@ -38,6 +39,7 @@ type promotionStep struct {
 	name              string
 	configuration     *api.ReleaseBuildConfiguration
 	requiredImages    sets.Set[string]
+	skippedImages     sets.Set[string]
 	jobSpec           *api.JobSpec
 	client            kubernetes.PodClient
 	pushSecret        *coreapi.Secret
@@ -70,6 +72,9 @@ func mainRefs(refs *prowapi.Refs, extra []prowapi.Refs) *prowapi.Refs {
 func (s *promotionStep) run(ctx context.Context) error {
 	opts := []PromotedTagsOption{
 		WithRequiredImages(s.requiredImages),
+	}
+	if s.configuration != nil && s.configuration.Images.BuildIfAffected && len(s.skippedImages) > 0 {
+		opts = append(opts, WithSkippedImages(s.skippedImages))
 	}
 	logger := logrus.WithField("name", s.name)
 
@@ -108,6 +113,10 @@ func (s *promotionStep) run(ctx context.Context) error {
 	cliImage, err := promotionCLIImage(ctx, s.client, s.jobSpec.Namespace())
 	if err != nil {
 		return fmt.Errorf("resolve promotion cli image: %w", err)
+	}
+
+	if s.name == api.PromotionQuayStepName {
+		return s.runQuayPromotion(ctx, imageMirrorTarget, timeStr, cliImage)
 	}
 
 	if _, err := steps.RunPod(ctx, s.client, getPromotionPod(imageMirrorTarget, timeStr, s.jobSpec.Namespace(), s.name, cliImage, s.nodeArchitectures), false); err != nil {
@@ -287,7 +296,7 @@ func getTagLoopCommand(tagSpecs []string, loglevel int) string {
 	return fmt.Sprintf(`
 while read tag; do
 oc tag --source=docker --loglevel=%d --reference-policy='source' --import-mode='PreserveOriginal' --reference $tag || break
-done <<EOF
+done <<'EOF'
 %s
 EOF`, loglevel, strings.Join(tagSpecs, "\n"))
 }
@@ -337,9 +346,9 @@ func promotionCLIImageInfoFilterOS(nodeArchitectures []string) string {
 }
 
 const (
-	quayPromotionDigestTagAttempts = 5
-	quayPromotionMirrorAttempts    = 5
 	quayPromotionLogLevel          = 2
+	quayPromotionMirrorAttempts    = 5
+	quayPromotionDigestTagAttempts = 5
 )
 
 const mirrorShellFunction = `function mirror {
@@ -364,9 +373,111 @@ func getMirrorRetryShell(registryConfig string, images []string) string {
 	return strings.Join(mirrorCmds, "\n")
 }
 
-// getResolveAndTagRetryShell resolves digest from quay.io (push-secret) and tags the IST with quay-proxy@digest.
+const (
+	tagRetryBackoff = "backoff=$(($RANDOM % 120))s; echo Sleeping randomized $backoff before retry; sleep $backoff"
+
+	promotionPodKubeconfigPath   = "/etc/app-ci-kubeconfig/kubeconfig"
+	quayPromotionScriptKey       = "promote.sh"
+	quayPromotionScriptMountPath = "/var/run/configmaps/ci.openshift.io/promotion-quay"
+	quayPromotionScriptVolume    = "promotion-quay-script"
+	quayImageIncomingSuffix      = "_incoming"
+	quayImagePreSuffix           = "__pre"
+	quayImagePost1Suffix         = "__post1"
+)
+
+func tagRetryShell(attempts int, echoLine, tagCmd, backoff string) string {
+	loop := fmt.Sprintf(`for r in {1..%d}; do
+echo %s
+%s
+[[ $? -ne 0 ]] && break`, attempts, echoLine, tagCmd)
+	if backoff != "" {
+		return loop + "\n" + backoff + "\ndone"
+	}
+	return loop + "\ndone"
+}
+
+func (s *promotionStep) runQuayPromotion(ctx context.Context, imageMirrorTarget map[string]string, timeStr, cliImage string) error {
+	configMap := &coreapi.ConfigMap{
+		ObjectMeta: meta.ObjectMeta{
+			Name:      fmt.Sprintf("promotion-quay-%s", timeStr),
+			Namespace: s.jobSpec.Namespace(),
+		},
+		Data: map[string]string{
+			quayPromotionScriptKey: getQuayPromotionShell(imageMirrorTarget, timeStr, s.nodeArchitectures),
+		},
+	}
+	if err := s.client.Create(ctx, configMap); err != nil {
+		return fmt.Errorf("create promotion-quay configmap: %w", err)
+	}
+	defer func() {
+		deleteCtx, cancel := context.WithTimeout(steps.CleanupCtx, 30*time.Second)
+		defer cancel()
+		if err := s.client.Delete(deleteCtx, configMap); err != nil {
+			logrus.WithError(err).WithField("configmap", configMap.Name).Warn("failed to delete promotion-quay configmap")
+		}
+	}()
+
+	pod := newPromotionPod(s.jobSpec.Namespace(), s.name, s.name, cliImage, s.nodeArchitectures,
+		[]string{"/bin/sh", quayPromotionScriptMountPath + "/" + quayPromotionScriptKey}, nil, configMap.Name)
+	if _, err := steps.RunPod(ctx, s.client, pod, false); err != nil {
+		return fmt.Errorf("unable to run promotion-quay pod: %w", err)
+	}
+	return nil
+}
+
+func getQuayPromotionShell(imageMirrorTarget map[string]string, timeStr string, nodeArchitectures []string) string {
+	var incomingImages, floatTags []string
+	pruneTagForFloat := map[string]string{}
+	var tags []string
+	var resolveAndTagPairs [][2]string
+
+	for _, k := range slices.Sorted(maps.Keys(imageMirrorTarget)) {
+		if strings.Contains(k, fmt.Sprintf("%s_prune_", timeStr)) {
+			pruneTagForFloat[imageMirrorTarget[k]] = k
+			continue
+		}
+		src := imageMirrorTarget[k]
+		if strings.HasPrefix(k, api.QuayOpenShiftCIRepo+":") {
+			incomingImages = append(incomingImages, promotionMirrorPair(src, k+quayImageIncomingSuffix))
+			floatTags = append(floatTags, k)
+			continue
+		}
+		if !strings.Contains(k, api.ComponentFormatReplacement) {
+			if quayProxyTag, ok := quayProxyTagFromISKey(k); ok {
+				if ns := k[:strings.Index(k, "/")]; api.RefersToOfficialImage(ns, api.WithOKD) {
+					resolveAndTagPairs = append(resolveAndTagPairs, [2]string{quayProxyTag, k})
+					continue
+				}
+			}
+		}
+		tags = append(tags, fmt.Sprintf("%s %s", src, k))
+	}
+
+	registryConfig := promotionRegistryConfigPath()
+	filterOS := promotionCLIImageInfoFilterOS(nodeArchitectures)
+	script := []string{mirrorShellFunction}
+	if len(incomingImages) > 0 {
+		script = append(script, getMirrorRetryShell(registryConfig, incomingImages))
+	}
+	sort.Strings(floatTags)
+	for _, floatTag := range floatTags {
+		script = append(script, getStagedQuayFloatPromotionShell(registryConfig, floatTag, pruneTagForFloat[floatTag]))
+	}
+	for _, pair := range resolveAndTagPairs {
+		script = append(script, getResolveAndTagRetryShell(registryConfig, pair[0], pair[1], 2, filterOS))
+	}
+	if len(tags) > 0 {
+		script = append(script, tagRetryShell(2, `"Tag attempt $r"`, getTagLoopCommand(tags, 2), ""))
+	}
+	return strings.Join(script, "\n")
+}
+
 func getResolveAndTagRetryShell(registryConfig, quayProxyTag, isTag string, loglevel int, filterByOS string) string {
-	repo := quayProxyTag[:strings.LastIndex(quayProxyTag, ":")]
+	colon := strings.LastIndex(quayProxyTag, ":")
+	if colon == -1 {
+		return fmt.Sprintf("echo promotion-quay: malformed quay proxy tag %q >&2\nexit 1", quayProxyTag)
+	}
+	repo := quayProxyTag[:colon]
 	quayIOTag := strings.Replace(quayProxyTag, api.QCIAPPCIDomain, "quay.io", 1)
 	n := quayPromotionDigestTagAttempts
 	return fmt.Sprintf(`for r in {1..%d}; do
@@ -383,201 +494,113 @@ func getResolveAndTagRetryShell(registryConfig, quayProxyTag, isTag string, logl
   sleep "${backoff}"
 done
 `, n, registryConfig, filterByOS, quayIOTag, loglevel, repo, isTag,
-		isTag, n,
-		n,
-		isTag, n,
-		120)
+		isTag, n, n, isTag, n, 120)
 }
 
-const (
-	retryLoopTemplate = `for r in {1..%d}; do 
-echo %s
-%s
-[[ $? -ne 0 ]] && break
-%s
-done`
-	retryLoopWithBackoff = "backoff=$(($RANDOM % 120))s; echo Sleeping randomized $backoff before retry; sleep $backoff"
-
-	quayImageIncomingSuffix = "_incoming"
-	quayImagePreSuffix      = "__pre"
-	quayImagePost1Suffix    = "__post1"
-)
-
-type quayFloatPromotion struct {
-	floatTag string
-	newSrc   string
-	pruneTag string
-}
-
-// getStagedQuayFloatPromotionShell returns shell that repoints floatTag from its incoming staging tag.
-// If floatTag already exists on the registry, the current image is copied to pruneTag (when set) and
-// floatTag+quayImagePreSuffix before the repoint; floatTag+quayImagePost1Suffix is added afterward.
 func getStagedQuayFloatPromotionShell(registryConfig, floatTag, pruneTag string) string {
-	incomingTag := floatTag + quayImageIncomingSuffix
-	preTag := floatTag + quayImagePreSuffix
-	post1Tag := floatTag + quayImagePost1Suffix
-
 	checkOld := fmt.Sprintf(`_OLD_EXISTS=false
 if oc image info --registry-config=%s %s >/dev/null 2>&1; then _OLD_EXISTS=true; fi`, registryConfig, floatTag)
 
-	var backupOld string
+	var backupPairs []string
 	if pruneTag != "" {
-		backupOld = fmt.Sprintf(`if [ "${_OLD_EXISTS}" = "true" ]; then
-%s
-%s
-fi`,
-			indentShell(getMirrorRetryShell(registryConfig, []string{fmt.Sprintf("%s=%s", floatTag, pruneTag)})),
-			indentShell(getMirrorRetryShell(registryConfig, []string{fmt.Sprintf("%s=%s", floatTag, preTag)})),
-		)
-	} else {
-		backupOld = fmt.Sprintf(`if [ "${_OLD_EXISTS}" = "true" ]; then
-%s
-fi`, indentShell(getMirrorRetryShell(registryConfig, []string{fmt.Sprintf("%s=%s", floatTag, preTag)})))
+		backupPairs = append(backupPairs, promotionMirrorPair(floatTag, pruneTag))
 	}
+	backupPairs = append(backupPairs, promotionMirrorPair(floatTag, floatTag+quayImagePreSuffix))
 
-	latch := getMirrorRetryShell(registryConfig, []string{fmt.Sprintf("%s=%s", incomingTag, floatTag)})
+	return strings.Join([]string{
+		checkOld,
+		ifOldExistsMirrors(registryConfig, backupPairs...),
+		getMirrorRetryShell(registryConfig, []string{promotionMirrorPair(floatTag+quayImageIncomingSuffix, floatTag)}),
+		ifOldExistsMirrors(registryConfig, promotionMirrorPair(floatTag, floatTag+quayImagePost1Suffix)),
+	}, "\n")
+}
 
-	postLatch := fmt.Sprintf(`if [ "${_OLD_EXISTS}" = "true" ]; then
+func ifOldExistsMirrors(registryConfig string, pairs ...string) string {
+	return fmt.Sprintf(`if [ "${_OLD_EXISTS}" = "true" ]; then
 %s
-fi`, indentShell(getMirrorRetryShell(registryConfig, []string{fmt.Sprintf("%s=%s", floatTag, post1Tag)})))
-
-	return strings.Join([]string{checkOld, backupOld, latch, postLatch}, "\n")
+fi`, indentShell(getMirrorRetryShell(registryConfig, pairs)))
 }
 
 func indentShell(script string) string {
-	const prefix = "  "
 	lines := strings.Split(script, "\n")
 	for i, line := range lines {
 		if line != "" {
-			lines[i] = prefix + line
+			lines[i] = "  " + line
 		}
 	}
 	return strings.Join(lines, "\n")
 }
 
+func promotionMirrorPair(src, dst string) string {
+	return fmt.Sprintf("%s=%s", src, dst)
+}
+
 func getPromotionPod(imageMirrorTarget map[string]string, timeStr string, namespace string, name string, cliImage string, nodeArchitectures []string) *coreapi.Pod {
-	keys := make([]string, 0, len(imageMirrorTarget))
-	for k := range imageMirrorTarget {
-		keys = append(keys, k)
-	}
-	sort.Strings(keys)
+	var images, pruneImages, tags []string
 
-	var images []string
-	var incomingImages []string
-	var pruneImages []string
-	var quayFloatPromotions []quayFloatPromotion
-	pruneTagForFloat := map[string]string{}
-	var tags []string
-	// resolveAndTagPairs holds [quayProxyTag, isTag] for official ocp IS targets (consolidated
-	// ocp/4.x:tag and legacy *-quay). Resolved post-mirror via oc image info + oc tag.
-	var resolveAndTagPairs [][2]string
-
-	isQuayStep := name == api.PromotionQuayStepName
-
-	for _, k := range keys {
+	for _, k := range slices.Sorted(maps.Keys(imageMirrorTarget)) {
 		if strings.Contains(k, fmt.Sprintf("%s_prune_", timeStr)) {
-			floatTag := imageMirrorTarget[k]
-			if isQuayStep {
-				pruneTagForFloat[floatTag] = k
-			} else {
-				pruneImages = append(pruneImages, fmt.Sprintf("%s=%s", floatTag, k))
-			}
+			pruneImages = append(pruneImages, promotionMirrorPair(imageMirrorTarget[k], k))
+			continue
+		}
+		src := imageMirrorTarget[k]
+		if strings.HasPrefix(k, api.QuayOpenShiftCIRepo+":") {
+			images = append(images, promotionMirrorPair(src, k))
+		} else if strings.Contains(k, api.ComponentFormatReplacement) || !strings.Contains(src, "@sha256:") || strings.Contains(src, api.QCIAPPCIDomain) {
+			tags = append(tags, fmt.Sprintf("%s %s", src, k))
 		} else {
-			src := imageMirrorTarget[k]
-			if strings.HasPrefix(k, api.QuayOpenShiftCIRepo+":") {
-				// Images promoted into quay.io/openshift/ci always use oc image mirror (tag or digest sources).
-				if isQuayStep {
-					incomingImages = append(incomingImages, fmt.Sprintf("%s=%s", src, k+quayImageIncomingSuffix))
-					quayFloatPromotions = append(quayFloatPromotions, quayFloatPromotion{
-						floatTag: k,
-						newSrc:   src,
-					})
-				} else {
-					images = append(images, fmt.Sprintf("%s=%s", src, k))
-				}
-			} else if isQuayStep && !strings.Contains(k, api.ComponentFormatReplacement) {
-				// Concrete quay IS target: resolve the QCI digest after mirroring instead of
-				// using a pre-computed (potentially tag-only) source so spec.from is always digest-based.
-				// Non-release namespaces use oc tag directly.
-				quayProxyTag, ok := quayProxyTagFromISKey(k)
-				if ok {
-					ns := k[:strings.Index(k, "/")]
-					if api.RefersToOfficialImage(ns, api.WithOKD) {
-						resolveAndTagPairs = append(resolveAndTagPairs, [2]string{quayProxyTag, k})
-						continue
-					}
-				}
-				tags = append(tags, fmt.Sprintf("%s %s", src, k))
-			} else if strings.Contains(k, api.ComponentFormatReplacement) || !strings.Contains(src, "@sha256:") || strings.Contains(src, api.QCIAPPCIDomain) {
-				// Cluster ImageStream tags: oc tag for non-digest sources, quay-proxy imports, or ${component} templates.
-				tags = append(tags, fmt.Sprintf("%s %s", src, k))
-			} else {
-				images = append(images, fmt.Sprintf("%s=%s", src, k))
-			}
+			images = append(images, promotionMirrorPair(src, k))
 		}
 	}
 
-	for i := range quayFloatPromotions {
-		quayFloatPromotions[i].pruneTag = pruneTagForFloat[quayFloatPromotions[i].floatTag]
-	}
-
-	registryConfig := filepath.Join(api.RegistryPushCredentialsCICentralSecretMountPath, coreapi.DockerConfigJsonKey)
-	command := []string{"/bin/sh", "-c"}
+	registryConfig := promotionRegistryConfigPath()
 	var commands []string
-
-	// Generate mirror commands if there are images to mirror
 	if len(images) > 0 {
 		commands = append(commands, getMirrorRetryShell(registryConfig, images))
 	}
-
-	if isQuayStep {
-		for _, pair := range resolveAndTagPairs {
-			quayProxyTag, isTag := pair[0], pair[1]
-			commands = append(commands, getResolveAndTagRetryShell(registryConfig, quayProxyTag, isTag, 2, promotionCLIImageInfoFilterOS(nodeArchitectures)))
-		}
+	if len(tags) > 0 {
+		commands = append(commands, tagRetryShell(5, "Tag attempt $r", getTagLoopCommand(tags, 2), tagRetryBackoff))
 	}
 
-	// Non-official IS tags (ci/ci-quay, ${component} templates) keep best-effort batch tagging.
-	if isQuayStep && len(tags) > 0 {
-		tagCmd := fmt.Sprintf(retryLoopTemplate, 2, `"Tag attempt $r"`, getTagLoopCommand(tags, 2), ":")
-		commands = append(commands, tagCmd)
-	} else if len(tags) > 0 {
-		// For regular promotion, use the original retry logic
-		tagCommand := fmt.Sprintf(retryLoopTemplate, 5, "Tag attempt $r", getTagLoopCommand(tags, 2), retryLoopWithBackoff)
-		commands = append(commands, tagCommand)
-	}
-
-	args := []string{mirrorShellFunction}
-	if isQuayStep && len(incomingImages) > 0 {
-		args = append(args, getMirrorRetryShell(registryConfig, incomingImages))
-	}
-	if isQuayStep && len(quayFloatPromotions) > 0 {
-		sort.Slice(quayFloatPromotions, func(i, j int) bool {
-			return quayFloatPromotions[i].floatTag < quayFloatPromotions[j].floatTag
-		})
-		for _, promotion := range quayFloatPromotions {
-			args = append(args, getStagedQuayFloatPromotionShell(registryConfig, promotion.floatTag, promotion.pruneTag))
-		}
-	}
+	script := []string{mirrorShellFunction}
 	if len(pruneImages) > 0 {
 		// See https://github.com/openshift/release/blob/2080ec4a49337c27577a4b2ff08a538e96436e65/hack/qci_registry_pruner.py for details.
-		// Note that we don't retry here and we ignore failures because (a) it may be the first time an image tag is
-		// being promoted to and trying to add a pruning tag to the existing image is doomed to fail. (b) pruning tags
-		// help eliminate a rare race condition. The cost of an occasional failure in establishing them is very low.
-		args = append(args, fmt.Sprintf("%s || true", getMirrorCommand(registryConfig, pruneImages, 2)))
+		script = append(script, fmt.Sprintf("%s || true", getMirrorCommand(registryConfig, pruneImages, 2)))
+	}
+	script = append(script, commands...)
+	return newPromotionPod(namespace, name, "promotion", cliImage, nodeArchitectures, []string{"/bin/sh", "-c"}, []string{strings.Join(script, "\n")}, "")
+}
+
+func newPromotionPod(namespace, name, containerName, cliImage string, nodeArchitectures []string, command, args []string, configMapName string) *coreapi.Pod {
+	volumes := promotionPodVolumes()
+	mounts := promotionPodVolumeMounts()
+	if configMapName != "" {
+		volumes = append(volumes, coreapi.Volume{
+			Name: quayPromotionScriptVolume,
+			VolumeSource: coreapi.VolumeSource{
+				ConfigMap: &coreapi.ConfigMapVolumeSource{
+					LocalObjectReference: coreapi.LocalObjectReference{Name: configMapName},
+					Items:                []coreapi.KeyToPath{{Key: quayPromotionScriptKey, Path: quayPromotionScriptKey}},
+				},
+			},
+		})
+		mounts = append(mounts, coreapi.VolumeMount{
+			Name: quayPromotionScriptVolume, MountPath: quayPromotionScriptMountPath, ReadOnly: true,
+		})
 	}
 
-	args = append(args, commands...)
-	args = []string{strings.Join(args, "\n")}
-
-	image := cliImage
-	nodeSelector := map[string]string{"kubernetes.io/arch": "amd64"}
-
-	archs := sets.New[string](nodeArchitectures...)
-	// Keep arm64 pinning only when using payload stable:cli. Registry fallback image
-	// is amd64-only, but promotion logic itself is architecture-agnostic.
-	if cliImage == "stable:cli" && !archs.Has("amd64") && archs.Has("arm64") {
-		nodeSelector = map[string]string{"kubernetes.io/arch": "arm64"}
+	container := coreapi.Container{
+		Name:    containerName,
+		Image:   cliImage,
+		Command: command,
+		Env: []coreapi.EnvVar{
+			{Name: "KUBECONFIG", Value: promotionPodKubeconfigPath},
+			{Name: "KUBECACHEDIR", Value: "/tmp/.kube/cache"},
+		},
+		VolumeMounts: mounts,
+	}
+	if len(args) > 0 {
+		container.Args = args
 	}
 
 	return &coreapi.Pod{
@@ -587,50 +610,43 @@ func getPromotionPod(imageMirrorTarget map[string]string, timeStr string, namesp
 			Labels:    map[string]string{steps.AnnotationSaveContainerLogs: "true"},
 		},
 		Spec: coreapi.PodSpec{
-			NodeSelector:  nodeSelector,
+			NodeSelector:  promotionPodNodeSelector(cliImage, nodeArchitectures),
 			RestartPolicy: coreapi.RestartPolicyNever,
-			Containers: []coreapi.Container{
-				{
-					Name:    "promotion",
-					Image:   image,
-					Command: command,
-					Args:    args,
-					Env: []coreapi.EnvVar{
-						// Discovery cache only: without KUBECACHEDIR, client-go defaults to $HOME/.kube/cache; with no
-						// writable HOME in the container that becomes /.kube and logs many INFO lines ("permission denied").
-						{Name: "KUBECONFIG", Value: "/etc/app-ci-kubeconfig/kubeconfig"},
-						{Name: "KUBECACHEDIR", Value: "/tmp/.kube/cache"},
-					},
-					VolumeMounts: []coreapi.VolumeMount{
-						{
-							Name:      "push-secret",
-							MountPath: "/etc/push-secret",
-							ReadOnly:  true,
-						},
-						{
-							Name:      "app-ci-kubeconfig",
-							MountPath: "/etc/app-ci-kubeconfig",
-							ReadOnly:  true,
-						},
-					},
-				},
-			},
-			Volumes: []coreapi.Volume{
-				{
-					Name: "push-secret",
-					VolumeSource: coreapi.VolumeSource{
-						Secret: &coreapi.SecretVolumeSource{SecretName: api.RegistryPushCredentialsCICentralSecret},
-					},
-				},
-				{
-					Name: "app-ci-kubeconfig",
-					VolumeSource: coreapi.VolumeSource{
-						Secret: &coreapi.SecretVolumeSource{SecretName: api.PromotionQuayTaggerKubeconfigSecret},
-					},
-				},
-			},
+			Containers:    []coreapi.Container{container},
+			Volumes:       volumes,
 		},
 	}
+}
+
+func promotionPodNodeSelector(cliImage string, nodeArchitectures []string) map[string]string {
+	nodeSelector := map[string]string{"kubernetes.io/arch": "amd64"}
+	archs := sets.New[string](nodeArchitectures...)
+	if cliImage == "stable:cli" && !archs.Has("amd64") && archs.Has("arm64") {
+		nodeSelector = map[string]string{"kubernetes.io/arch": "arm64"}
+	}
+	return nodeSelector
+}
+
+func promotionPodVolumeMounts() []coreapi.VolumeMount {
+	return []coreapi.VolumeMount{
+		{Name: "push-secret", MountPath: api.RegistryPushCredentialsCICentralSecretMountPath, ReadOnly: true},
+		{Name: "app-ci-kubeconfig", MountPath: "/etc/app-ci-kubeconfig", ReadOnly: true},
+	}
+}
+
+func promotionPodVolumes() []coreapi.Volume {
+	return []coreapi.Volume{
+		{Name: "push-secret", VolumeSource: coreapi.VolumeSource{
+			Secret: &coreapi.SecretVolumeSource{SecretName: api.RegistryPushCredentialsCICentralSecret},
+		}},
+		{Name: "app-ci-kubeconfig", VolumeSource: coreapi.VolumeSource{
+			Secret: &coreapi.SecretVolumeSource{SecretName: api.PromotionQuayTaggerKubeconfigSecret},
+		}},
+	}
+}
+
+func promotionRegistryConfigPath() string {
+	return api.RegistryPushCredentialsCICentralSecretMountPath + "/" + coreapi.DockerConfigJsonKey
 }
 
 // findDockerImageReference returns DockerImageReference, the string that can be used to pull this image,
@@ -657,8 +673,9 @@ func findDockerImageReference(is *imagev1.ImageStream, tag string) string {
 	return ""
 }
 
-// toPromote determines the mapping of local tag to external tag which should be promoted
-func toPromote(config api.PromotionTarget, images []api.ProjectDirectoryImageBuildStepConfiguration, requiredImages sets.Set[string]) (map[string]string, sets.Set[string]) {
+// toPromote determines the mapping of local tag to external tag which should be promoted.
+// skippedImages excludes tools not built when build_if_affected is enabled.
+func toPromote(config api.PromotionTarget, images []api.ProjectDirectoryImageBuildStepConfiguration, requiredImages, skippedImages sets.Set[string]) (map[string]string, sets.Set[string]) {
 	tagsByDst := map[string]string{}
 	names := sets.New[string]()
 
@@ -667,8 +684,11 @@ func toPromote(config api.PromotionTarget, images []api.ProjectDirectoryImageBui
 	}
 
 	for _, image := range images {
-		// if the image is required or non-optional, include it in promotion
 		tag := string(image.To)
+		if skippedImages.Has(tag) && !requiredImages.Has(tag) {
+			continue
+		}
+		// if the image is required or non-optional, include it in promotion
 		if requiredImages.Has(tag) || !image.Optional {
 			tagsByDst[tag] = tag
 			names.Insert(tag)
@@ -708,6 +728,7 @@ func PromotedTags(configuration *api.ReleaseBuildConfiguration) []api.ImageStrea
 
 type PromotedTagsOptions struct {
 	requiredImages sets.Set[string]
+	skippedImages  sets.Set[string]
 	commitSha      string
 }
 
@@ -717,6 +738,13 @@ type PromotedTagsOption func(options *PromotedTagsOptions)
 func WithRequiredImages(images sets.Set[string]) PromotedTagsOption {
 	return func(options *PromotedTagsOptions) {
 		options.requiredImages = images
+	}
+}
+
+// WithSkippedImages excludes tools not built when build_if_affected is enabled.
+func WithSkippedImages(images sets.Set[string]) PromotedTagsOption {
+	return func(options *PromotedTagsOptions) {
+		options.skippedImages = images
 	}
 }
 
@@ -745,8 +773,13 @@ func PromotedTagsWithRequiredImages(configuration *api.ReleaseBuildConfiguration
 		return promotedTags, requiredImages
 	}
 
+	skippedImages := sets.Set[string]{}
+	if configuration.Images.BuildIfAffected {
+		skippedImages = opts.skippedImages
+	}
+
 	for _, target := range api.PromotionTargets(configuration.PromotionConfiguration) {
-		tags, names := toPromote(target, configuration.Images.Items, opts.requiredImages)
+		tags, names := toPromote(target, configuration.Images.Items, opts.requiredImages, skippedImages)
 		requiredImages.Insert(names.UnsortedList()...)
 		for dst, src := range tags {
 			var tag api.ImageStreamTagReference
@@ -821,6 +854,7 @@ func PromotionStep(
 	name string,
 	configuration *api.ReleaseBuildConfiguration,
 	requiredImages sets.Set[string],
+	skippedImages sets.Set[string],
 	jobSpec *api.JobSpec,
 	client kubernetes.PodClient,
 	pushSecret *coreapi.Secret,
@@ -833,6 +867,7 @@ func PromotionStep(
 		name:              name,
 		configuration:     configuration,
 		requiredImages:    requiredImages,
+		skippedImages:     skippedImages,
 		jobSpec:           jobSpec,
 		client:            client,
 		pushSecret:        pushSecret,

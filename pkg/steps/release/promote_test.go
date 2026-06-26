@@ -30,6 +30,7 @@ func TestToPromote(t *testing.T) {
 		config           api.PromotionTarget
 		images           []api.ProjectDirectoryImageBuildStepConfiguration
 		requiredImages   sets.Set[string]
+		skippedImages    sets.Set[string]
 		expectedBySource map[string]string
 		expectedNames    sets.Set[string]
 	}{
@@ -135,11 +136,40 @@ func TestToPromote(t *testing.T) {
 			expectedBySource: map[string]string{"bar": "bar", "baz": "baz", "boo": "ah"},
 			expectedNames:    sets.New[string]("bar", "baz", "boo"),
 		},
+		{
+			name: "skipped images excluded from promotion",
+			config: api.PromotionTarget{
+				Disabled: false,
+			},
+			images: []api.ProjectDirectoryImageBuildStepConfiguration{
+				{To: api.PipelineImageStreamTagReference("foo")},
+				{To: api.PipelineImageStreamTagReference("bar")},
+				{To: api.PipelineImageStreamTagReference("baz")},
+			},
+			requiredImages:   sets.New[string](),
+			skippedImages:    sets.New[string]("bar", "baz"),
+			expectedBySource: map[string]string{"foo": "foo"},
+			expectedNames:    sets.New[string]("foo"),
+		},
+		{
+			name: "required image overrides skipped",
+			config: api.PromotionTarget{
+				Disabled: false,
+			},
+			images: []api.ProjectDirectoryImageBuildStepConfiguration{
+				{To: api.PipelineImageStreamTagReference("foo")},
+				{To: api.PipelineImageStreamTagReference("bar")},
+			},
+			requiredImages:   sets.New[string]("bar"),
+			skippedImages:    sets.New[string]("bar"),
+			expectedBySource: map[string]string{"foo": "foo", "bar": "bar"},
+			expectedNames:    sets.New[string]("foo", "bar"),
+		},
 	}
 
 	for _, test := range testCases {
 		t.Run(test.name, func(t *testing.T) {
-			bySource, names := toPromote(test.config, test.images, test.requiredImages)
+			bySource, names := toPromote(test.config, test.images, test.requiredImages, test.skippedImages)
 			if actual, expected := bySource, test.expectedBySource; !reflect.DeepEqual(actual, expected) {
 				t.Errorf("%s: got incorrect tags by source: %s", test.name, diff.ObjectDiff(actual, expected))
 			}
@@ -170,13 +200,13 @@ func TestPromotedTags(t *testing.T) {
 				}},
 				PromotionConfiguration: &api.PromotionConfiguration{
 					Targets: []api.PromotionTarget{{
-						Namespace: "roger",
-						Name:      "fred",
+						Namespace: "ci",
+						Name:      "tools",
 					}},
 				},
 			},
 			expected: []api.ImageStreamTagReference{
-				{Namespace: "roger", Name: "fred", Tag: "foo"},
+				{Namespace: "ci", Name: "tools", Tag: "foo"},
 			},
 		},
 		{
@@ -187,8 +217,8 @@ func TestPromotedTags(t *testing.T) {
 				}},
 				PromotionConfiguration: &api.PromotionConfiguration{
 					Targets: []api.PromotionTarget{{
-						Namespace: "roger",
-						Name:      "fred",
+						Namespace: "ci",
+						Name:      "tools",
 						Disabled:  true,
 					}},
 				},
@@ -203,13 +233,13 @@ func TestPromotedTags(t *testing.T) {
 				}},
 				PromotionConfiguration: &api.PromotionConfiguration{
 					Targets: []api.PromotionTarget{{
-						Namespace: "roger",
-						Tag:       "fred",
+						Namespace: "ci",
+						Tag:       "latest",
 					}},
 				},
 			},
 			expected: []api.ImageStreamTagReference{
-				{Namespace: "roger", Name: "foo", Tag: "fred"},
+				{Namespace: "ci", Name: "foo", Tag: "latest"},
 			},
 		},
 		{
@@ -220,8 +250,8 @@ func TestPromotedTags(t *testing.T) {
 				}},
 				PromotionConfiguration: &api.PromotionConfiguration{
 					Targets: []api.PromotionTarget{{
-						Namespace: "roger",
-						Tag:       "fred",
+						Namespace: "ci",
+						Tag:       "latest",
 						AdditionalImages: map[string]string{
 							"output": "src",
 						},
@@ -229,8 +259,8 @@ func TestPromotedTags(t *testing.T) {
 				},
 			},
 			expected: []api.ImageStreamTagReference{
-				{Namespace: "roger", Name: "foo", Tag: "fred"},
-				{Namespace: "roger", Name: "output", Tag: "fred"},
+				{Namespace: "ci", Name: "foo", Tag: "latest"},
+				{Namespace: "ci", Name: "output", Tag: "latest"},
 			},
 		},
 		{
@@ -241,8 +271,8 @@ func TestPromotedTags(t *testing.T) {
 				}},
 				PromotionConfiguration: &api.PromotionConfiguration{
 					Targets: []api.PromotionTarget{{
-						Namespace:      "roger",
-						Tag:            "fred",
+						Namespace:      "ci",
+						Tag:            "latest",
 						ExcludedImages: []string{"foo"},
 					}},
 				},
@@ -256,8 +286,8 @@ func TestPromotedTags(t *testing.T) {
 				BinaryBuildCommands: "something",
 				PromotionConfiguration: &api.PromotionConfiguration{
 					Targets: []api.PromotionTarget{{
-						Namespace: "roger",
-						Tag:       "fred",
+						Namespace: "ci",
+						Tag:       "latest",
 					}},
 				},
 				Metadata: api.Metadata{
@@ -329,14 +359,14 @@ func TestPromotedTagsWithRequiredImages(t *testing.T) {
 				}},
 				PromotionConfiguration: &api.PromotionConfiguration{
 					Targets: []api.PromotionTarget{{
-						Namespace: "roger",
-						Name:      "fred",
+						Namespace: "ci",
+						Name:      "tools",
 					}},
 				},
 			},
 			expected: map[string][]api.ImageStreamTagReference{
 				"foo": {
-					{Namespace: "roger", Name: "fred", Tag: "foo"},
+					{Namespace: "ci", Name: "tools", Tag: "foo"},
 				},
 			},
 			expectedRequiredImages: sets.New[string]("foo"),
@@ -350,14 +380,14 @@ func TestPromotedTagsWithRequiredImages(t *testing.T) {
 				}},
 				PromotionConfiguration: &api.PromotionConfiguration{
 					Targets: []api.PromotionTarget{{
-						Namespace: "roger",
-						Name:      "fred",
+						Namespace: "ci",
+						Name:      "tools",
 					}},
 				},
 			},
 			expected: map[string][]api.ImageStreamTagReference{
 				"foo": {
-					{Namespace: "roger", Name: "fred", Tag: "foo"},
+					{Namespace: "ci", Name: "tools", Tag: "foo"},
 				},
 			},
 			expectedRequiredImages: sets.New[string]("foo"),
@@ -370,18 +400,98 @@ func TestPromotedTagsWithRequiredImages(t *testing.T) {
 				}},
 				PromotionConfiguration: &api.PromotionConfiguration{
 					Targets: []api.PromotionTarget{{
-						Namespace: "roger",
-						Name:      "fred",
+						Namespace: "ci",
+						Name:      "tools",
 					}},
 				},
 			},
 			options: []PromotedTagsOption{WithRequiredImages(sets.New[string]("foo"))},
 			expected: map[string][]api.ImageStreamTagReference{
 				"foo": {
-					{Namespace: "roger", Name: "fred", Tag: "foo"},
+					{Namespace: "ci", Name: "tools", Tag: "foo"},
 				},
 			},
 			expectedRequiredImages: sets.New[string]("foo"),
+		},
+		{
+			name: "build_if_affected skips unaffected images",
+			input: &api.ReleaseBuildConfiguration{
+				Images: api.ImageConfiguration{
+					BuildIfAffected: true,
+					Items: []api.ProjectDirectoryImageBuildStepConfiguration{
+						{To: api.PipelineImageStreamTagReference("foo")},
+						{To: api.PipelineImageStreamTagReference("bar")},
+					},
+				},
+				PromotionConfiguration: &api.PromotionConfiguration{
+					Targets: []api.PromotionTarget{{
+						Namespace: "ci",
+						Name:      "tools",
+					}},
+				},
+			},
+			options: []PromotedTagsOption{WithSkippedImages(sets.New[string]("bar"))},
+			expected: map[string][]api.ImageStreamTagReference{
+				"foo": {
+					{Namespace: "ci", Name: "tools", Tag: "foo"},
+				},
+			},
+			expectedRequiredImages: sets.New[string]("foo"),
+		},
+		{
+			name: "build_if_affected still promotes build-cache",
+			input: &api.ReleaseBuildConfiguration{
+				BinaryBuildCommands: "make build",
+				Images: api.ImageConfiguration{
+					BuildIfAffected: true,
+					Items: []api.ProjectDirectoryImageBuildStepConfiguration{
+						{To: api.PipelineImageStreamTagReference("foo")},
+						{To: api.PipelineImageStreamTagReference("bar")},
+					},
+				},
+				Metadata: api.Metadata{Org: "openshift", Repo: "ci-tools", Branch: "main"},
+				PromotionConfiguration: &api.PromotionConfiguration{
+					Targets: []api.PromotionTarget{{
+						Namespace: "ci",
+						Name:      "tools",
+					}},
+				},
+			},
+			options: []PromotedTagsOption{WithSkippedImages(sets.New[string]("bar"))},
+			expected: map[string][]api.ImageStreamTagReference{
+				"foo": {
+					{Namespace: "ci", Name: "tools", Tag: "foo"},
+				},
+				string(api.PipelineImageStreamTagReferenceBinaries): {
+					{Namespace: "build-cache", Name: "openshift-ci-tools", Tag: "main"},
+				},
+			},
+			expectedRequiredImages: sets.New[string]("foo"),
+		},
+		{
+			name: "skipped images ignored when build_if_affected disabled",
+			input: &api.ReleaseBuildConfiguration{
+				Images: api.ImageConfiguration{Items: []api.ProjectDirectoryImageBuildStepConfiguration{
+					{To: api.PipelineImageStreamTagReference("foo")},
+					{To: api.PipelineImageStreamTagReference("bar")},
+				}},
+				PromotionConfiguration: &api.PromotionConfiguration{
+					Targets: []api.PromotionTarget{{
+						Namespace: "ci",
+						Name:      "tools",
+					}},
+				},
+			},
+			options: []PromotedTagsOption{WithSkippedImages(sets.New[string]("bar"))},
+			expected: map[string][]api.ImageStreamTagReference{
+				"foo": {
+					{Namespace: "ci", Name: "tools", Tag: "foo"},
+				},
+				"bar": {
+					{Namespace: "ci", Name: "tools", Tag: "bar"},
+				},
+			},
+			expectedRequiredImages: sets.New[string]("foo", "bar"),
 		},
 		{
 			name: "promoted image but disabled promotion means no output tags",
@@ -391,8 +501,8 @@ func TestPromotedTagsWithRequiredImages(t *testing.T) {
 				}},
 				PromotionConfiguration: &api.PromotionConfiguration{
 					Targets: []api.PromotionTarget{{
-						Namespace: "roger",
-						Name:      "fred",
+						Namespace: "ci",
+						Name:      "tools",
 						Disabled:  true,
 					}},
 				},
@@ -408,14 +518,14 @@ func TestPromotedTagsWithRequiredImages(t *testing.T) {
 				}},
 				PromotionConfiguration: &api.PromotionConfiguration{
 					Targets: []api.PromotionTarget{{
-						Namespace: "roger",
-						Tag:       "fred",
+						Namespace: "ci",
+						Tag:       "latest",
 					}},
 				},
 			},
 			expected: map[string][]api.ImageStreamTagReference{
 				"foo": {
-					{Namespace: "roger", Name: "foo", Tag: "fred"},
+					{Namespace: "ci", Name: "foo", Tag: "latest"},
 				},
 			},
 			expectedRequiredImages: sets.New[string]("foo"),
@@ -428,8 +538,8 @@ func TestPromotedTagsWithRequiredImages(t *testing.T) {
 				}},
 				PromotionConfiguration: &api.PromotionConfiguration{
 					Targets: []api.PromotionTarget{{
-						Namespace:   "roger",
-						Tag:         "fred",
+						Namespace:   "ci",
+						Tag:         "latest",
 						TagByCommit: true,
 					}},
 				},
@@ -437,8 +547,8 @@ func TestPromotedTagsWithRequiredImages(t *testing.T) {
 			options: []PromotedTagsOption{WithCommitSha("sha")},
 			expected: map[string][]api.ImageStreamTagReference{
 				"foo": {
-					{Namespace: "roger", Name: "foo", Tag: "fred"},
-					{Namespace: "roger", Name: "foo", Tag: "sha"},
+					{Namespace: "ci", Name: "foo", Tag: "latest"},
+					{Namespace: "ci", Name: "foo", Tag: "sha"},
 				},
 			},
 			expectedRequiredImages: sets.New[string]("foo"),
@@ -451,8 +561,8 @@ func TestPromotedTagsWithRequiredImages(t *testing.T) {
 				}},
 				PromotionConfiguration: &api.PromotionConfiguration{
 					Targets: []api.PromotionTarget{{
-						Namespace: "roger",
-						Tag:       "fred",
+						Namespace: "ci",
+						Tag:       "latest",
 						AdditionalImages: map[string]string{
 							"output": "src",
 						},
@@ -461,10 +571,10 @@ func TestPromotedTagsWithRequiredImages(t *testing.T) {
 			},
 			expected: map[string][]api.ImageStreamTagReference{
 				"foo": {
-					{Namespace: "roger", Name: "foo", Tag: "fred"},
+					{Namespace: "ci", Name: "foo", Tag: "latest"},
 				},
 				"src": {
-					{Namespace: "roger", Name: "output", Tag: "fred"},
+					{Namespace: "ci", Name: "output", Tag: "latest"},
 				},
 			},
 			expectedRequiredImages: sets.New[string]("output", "foo"),
@@ -477,8 +587,8 @@ func TestPromotedTagsWithRequiredImages(t *testing.T) {
 				}},
 				PromotionConfiguration: &api.PromotionConfiguration{
 					Targets: []api.PromotionTarget{{
-						Namespace:      "roger",
-						Tag:            "fred",
+						Namespace:      "ci",
+						Tag:            "latest",
 						ExcludedImages: []string{"foo"},
 					}},
 				},
@@ -493,8 +603,8 @@ func TestPromotedTagsWithRequiredImages(t *testing.T) {
 				BinaryBuildCommands: "something",
 				PromotionConfiguration: &api.PromotionConfiguration{
 					Targets: []api.PromotionTarget{{
-						Namespace: "roger",
-						Tag:       "fred",
+						Namespace: "ci",
+						Tag:       "latest",
 					}},
 				},
 				Metadata: api.Metadata{
@@ -515,8 +625,8 @@ func TestPromotedTagsWithRequiredImages(t *testing.T) {
 				BinaryBuildCommands: "something",
 				PromotionConfiguration: &api.PromotionConfiguration{
 					Targets: []api.PromotionTarget{{
-						Namespace: "roger",
-						Tag:       "fred",
+						Namespace: "ci",
+						Tag:       "latest",
 					}},
 					DisableBuildCache: true,
 				},
@@ -739,63 +849,6 @@ func TestGetPromotionPod(t *testing.T) {
 				"registry.ci.openshift.org/ci/bin:latest":         "docker-registry.default.svc:5000/ci-op-y2n8rsh3/pipeline@sha256:bbb",
 			},
 			namespace: "ci-op-zyvwvffx",
-		},
-		{
-			name:              "promotion-quay",
-			stepName:          "promotion-quay",
-			nodeArchitectures: []string{"amd64"},
-			imageMirror: map[string]string{
-				"quay.io/openshift/ci:20240603235401_prune_ci_a_latest": "quay.io/openshift/ci:ci_a_latest",
-				"quay.io/openshift/ci:20240603235401_prune_ci_c_latest": "quay.io/openshift/ci:ci_c_latest",
-				"quay.io/openshift/ci:ci_a_latest":                      "registry.build02.ci.openshift.org/ci-op-y2n8rsh3/pipeline@sha256:bbb",
-				"quay.io/openshift/ci:ci_c_latest":                      "registry.build02.ci.openshift.org/ci-op-y2n8rsh3/pipeline@sha256:ddd",
-				"ci/ci-quay:${component}":                               "quay-proxy.ci.openshift.org/openshift/ci@sha256:bbb",
-				"ci/${component}-quay:c":                                "quay-proxy.ci.openshift.org/openshift/ci@sha256:ddd",
-			},
-			namespace: "ci-op-9bdij1f6",
-		},
-		{
-			name:              "promotion-quay-multiple-tags",
-			stepName:          "promotion-quay",
-			nodeArchitectures: []string{"amd64"},
-			imageMirror: map[string]string{
-				"quay.io/openshift/ci:20240603235401_prune_ovn-kubernetes":            "quay.io/openshift/ci:ocp_4.21_ovn-kubernetes",
-				"quay.io/openshift/ci:20240603235401_prune_ovn-kubernetes-base":       "quay.io/openshift/ci:ocp_4.21_ovn-kubernetes-base",
-				"quay.io/openshift/ci:20240603235401_prune_ovn-kubernetes-microshift": "quay.io/openshift/ci:ocp_4.21_ovn-kubernetes-microshift",
-				"quay.io/openshift/ci:ocp_4.21_ovn-kubernetes":                        "registry.build02.ci.openshift.org/ci-op-y2n8rsh3/pipeline@sha256:aaa",
-				"quay.io/openshift/ci:ocp_4.21_ovn-kubernetes-base":                   "registry.build02.ci.openshift.org/ci-op-y2n8rsh3/pipeline@sha256:bbb",
-				"quay.io/openshift/ci:ocp_4.21_ovn-kubernetes-microshift":             "registry.build02.ci.openshift.org/ci-op-y2n8rsh3/pipeline@sha256:ccc",
-				"ocp/4.21:ovn-kubernetes":                                             "quay-proxy.ci.openshift.org/openshift/ci@sha256:aaa",
-				"ocp/4.21:ovn-kubernetes-base":                                        "quay-proxy.ci.openshift.org/openshift/ci@sha256:bbb",
-				"ocp/4.21:ovn-kubernetes-microshift":                                  "quay-proxy.ci.openshift.org/openshift/ci@sha256:ccc",
-			},
-			namespace: "ci-op-9bdij1f6",
-		},
-		{
-			name:              "promotion-quay-4.12",
-			stepName:          "promotion-quay",
-			nodeArchitectures: []string{"amd64"},
-			imageMirror: map[string]string{
-				"quay.io/openshift/ci:20240603235401_prune_ovn-kubernetes":      "quay.io/openshift/ci:ocp_4.12_ovn-kubernetes",
-				"quay.io/openshift/ci:20240603235401_prune_ovn-kubernetes-base": "quay.io/openshift/ci:ocp_4.12_ovn-kubernetes-base",
-				"quay.io/openshift/ci:ocp_4.12_ovn-kubernetes":                  "registry.build02.ci.openshift.org/ci-op-y2n8rsh3/pipeline@sha256:aaa",
-				"quay.io/openshift/ci:ocp_4.12_ovn-kubernetes-base":             "registry.build02.ci.openshift.org/ci-op-y2n8rsh3/pipeline@sha256:bbb",
-				"ocp/4.12:ovn-kubernetes":                                       "quay-proxy.ci.openshift.org/openshift/ci@sha256:aaa",
-				"ocp/4.12:ovn-kubernetes-base":                                  "quay-proxy.ci.openshift.org/openshift/ci@sha256:bbb",
-			},
-			namespace: "ci-op-9bdij1f6",
-		},
-		{
-			name:              "promotion-quay-non-release-namespace",
-			stepName:          "promotion-quay",
-			nodeArchitectures: []string{"amd64"},
-			imageMirror: map[string]string{
-				"quay.io/openshift/ci:ocp_4.21_ovn-kubernetes":  "registry.build02.ci.openshift.org/ci-op-y2n8rsh3/pipeline@sha256:aaa",
-				"ocp/4.21:ovn-kubernetes":                       "quay-proxy.ci.openshift.org/openshift/ci@sha256:aaa",
-				"quay.io/openshift/ci:ci_ci_sanitize-prow-jobs": "registry.build02.ci.openshift.org/ci-op-y2n8rsh3/pipeline@sha256:bbb",
-				"ci/ci-quay:sanitize-prow-jobs":                 "quay-proxy.ci.openshift.org/openshift/ci@sha256:bbb",
-			},
-			namespace: "ci-op-9bdij1f6",
 		},
 		{
 			name:              "basic case - arm64 only",
@@ -1119,6 +1172,89 @@ func TestGetMirrorRetryShell(t *testing.T) {
 	}
 }
 
+func TestGetTagLoopCommandQuotesHeredoc(t *testing.T) {
+	got := getTagLoopCommand([]string{"quay-proxy.ci.openshift.org/openshift/ci@sha256:bbb ci/ci-quay:${component}"}, 2)
+	if !strings.Contains(got, "<<'EOF'") {
+		t.Fatalf("expected quoted heredoc delimiter, got:\n%s", got)
+	}
+	if !strings.Contains(got, "ci/ci-quay:${component}") {
+		t.Fatalf("expected literal ${component} in tag loop, got:\n%s", got)
+	}
+}
+
+func quayPromotionScriptConfigMap(script string) *coreapi.ConfigMap {
+	return &coreapi.ConfigMap{
+		ObjectMeta: meta.ObjectMeta{Name: "promotion-quay-script"},
+		Data:       map[string]string{quayPromotionScriptKey: script},
+	}
+}
+
+func TestGetQuayPromotionShell(t *testing.T) {
+	const timeStr = "20240603235401"
+
+	var testCases = []struct {
+		name              string
+		imageMirror       map[string]string
+		nodeArchitectures []string
+	}{
+		{
+			name:              "promotion-quay",
+			nodeArchitectures: []string{"amd64"},
+			imageMirror: map[string]string{
+				"quay.io/openshift/ci:20240603235401_prune_ci_a_latest": "quay.io/openshift/ci:ci_a_latest",
+				"quay.io/openshift/ci:20240603235401_prune_ci_c_latest": "quay.io/openshift/ci:ci_c_latest",
+				"quay.io/openshift/ci:ci_a_latest":                      "registry.build02.ci.openshift.org/ci-op-y2n8rsh3/pipeline@sha256:bbb",
+				"quay.io/openshift/ci:ci_c_latest":                      "registry.build02.ci.openshift.org/ci-op-y2n8rsh3/pipeline@sha256:ddd",
+				"ci/ci-quay:${component}":                               "quay-proxy.ci.openshift.org/openshift/ci@sha256:bbb",
+				"ci/${component}-quay:c":                                "quay-proxy.ci.openshift.org/openshift/ci@sha256:ddd",
+			},
+		},
+		{
+			name:              "promotion-quay-multiple-tags",
+			nodeArchitectures: []string{"amd64"},
+			imageMirror: map[string]string{
+				"quay.io/openshift/ci:20240603235401_prune_ovn-kubernetes":            "quay.io/openshift/ci:ocp_4.21_ovn-kubernetes",
+				"quay.io/openshift/ci:20240603235401_prune_ovn-kubernetes-base":       "quay.io/openshift/ci:ocp_4.21_ovn-kubernetes-base",
+				"quay.io/openshift/ci:20240603235401_prune_ovn-kubernetes-microshift": "quay.io/openshift/ci:ocp_4.21_ovn-kubernetes-microshift",
+				"quay.io/openshift/ci:ocp_4.21_ovn-kubernetes":                        "registry.build02.ci.openshift.org/ci-op-y2n8rsh3/pipeline@sha256:aaa",
+				"quay.io/openshift/ci:ocp_4.21_ovn-kubernetes-base":                   "registry.build02.ci.openshift.org/ci-op-y2n8rsh3/pipeline@sha256:bbb",
+				"quay.io/openshift/ci:ocp_4.21_ovn-kubernetes-microshift":             "registry.build02.ci.openshift.org/ci-op-y2n8rsh3/pipeline@sha256:ccc",
+				"ocp/4.21:ovn-kubernetes":                                             "quay-proxy.ci.openshift.org/openshift/ci@sha256:aaa",
+				"ocp/4.21:ovn-kubernetes-base":                                        "quay-proxy.ci.openshift.org/openshift/ci@sha256:bbb",
+				"ocp/4.21:ovn-kubernetes-microshift":                                  "quay-proxy.ci.openshift.org/openshift/ci@sha256:ccc",
+			},
+		},
+		{
+			name:              "promotion-quay-4.12",
+			nodeArchitectures: []string{"amd64"},
+			imageMirror: map[string]string{
+				"quay.io/openshift/ci:20240603235401_prune_ovn-kubernetes":      "quay.io/openshift/ci:ocp_4.12_ovn-kubernetes",
+				"quay.io/openshift/ci:20240603235401_prune_ovn-kubernetes-base": "quay.io/openshift/ci:ocp_4.12_ovn-kubernetes-base",
+				"quay.io/openshift/ci:ocp_4.12_ovn-kubernetes":                  "registry.build02.ci.openshift.org/ci-op-y2n8rsh3/pipeline@sha256:aaa",
+				"quay.io/openshift/ci:ocp_4.12_ovn-kubernetes-base":             "registry.build02.ci.openshift.org/ci-op-y2n8rsh3/pipeline@sha256:bbb",
+				"ocp/4.12:ovn-kubernetes":                                       "quay-proxy.ci.openshift.org/openshift/ci@sha256:aaa",
+				"ocp/4.12:ovn-kubernetes-base":                                  "quay-proxy.ci.openshift.org/openshift/ci@sha256:bbb",
+			},
+		},
+		{
+			name:              "promotion-quay-non-release-namespace",
+			nodeArchitectures: []string{"amd64"},
+			imageMirror: map[string]string{
+				"quay.io/openshift/ci:ocp_4.21_ovn-kubernetes":  "registry.build02.ci.openshift.org/ci-op-y2n8rsh3/pipeline@sha256:aaa",
+				"ocp/4.21:ovn-kubernetes":                       "quay-proxy.ci.openshift.org/openshift/ci@sha256:aaa",
+				"quay.io/openshift/ci:ci_ci_sanitize-prow-jobs": "registry.build02.ci.openshift.org/ci-op-y2n8rsh3/pipeline@sha256:bbb",
+				"ci/ci-quay:sanitize-prow-jobs":                 "quay-proxy.ci.openshift.org/openshift/ci@sha256:bbb",
+			},
+		},
+	}
+
+	for _, testCase := range testCases {
+		t.Run(testCase.name, func(t *testing.T) {
+			testhelper.CompareWithFixture(t, quayPromotionScriptConfigMap(getQuayPromotionShell(testCase.imageMirror, timeStr, testCase.nodeArchitectures)))
+		})
+	}
+}
+
 func TestGetResolveAndTagRetryShell(t *testing.T) {
 	regcfg := "/etc/push-secret/.dockerconfigjson"
 	proxyTag := "quay-proxy.ci.openshift.org/openshift/ci:ocp_4.21_ovn-kubernetes"
@@ -1140,6 +1276,25 @@ func TestGetResolveAndTagRetryShell(t *testing.T) {
 		if !strings.Contains(got, sub) {
 			t.Fatalf("missing substring %q in:\n%s", sub, got)
 		}
+	}
+
+	got = getResolveAndTagRetryShell(regcfg, "quay-proxy.ci.openshift.org/openshift/ci", isTag, 2, "linux/amd64")
+	if !strings.Contains(got, "malformed quay proxy tag") || !strings.Contains(got, "exit 1") {
+		t.Fatalf("expected malformed-tag shell guard, got:\n%s", got)
+	}
+}
+
+func TestGetQuayPromotionPod(t *testing.T) {
+	pod := newPromotionPod("ci-op-foo", api.PromotionQuayStepName, api.PromotionQuayStepName, "stable:cli", []string{"amd64"},
+		[]string{"/bin/sh", quayPromotionScriptMountPath + "/" + quayPromotionScriptKey}, nil, "promotion-quay-123")
+	testhelper.CompareWithFixture(t, pod)
+}
+
+func TestGetQuayPromotionPodArm64Only(t *testing.T) {
+	pod := newPromotionPod("ci-op-foo", api.PromotionQuayStepName, api.PromotionQuayStepName, "stable:cli", []string{"arm64"},
+		[]string{"/bin/sh", quayPromotionScriptMountPath + "/" + quayPromotionScriptKey}, nil, "promotion-quay-123")
+	if got := pod.Spec.NodeSelector["kubernetes.io/arch"]; got != "arm64" {
+		t.Fatalf("expected arm64 node selector, got %q", got)
 	}
 }
 

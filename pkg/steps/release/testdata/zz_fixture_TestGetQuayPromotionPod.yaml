@@ -1,0 +1,46 @@
+metadata:
+  creationTimestamp: null
+  labels:
+    ci-operator.openshift.io/save-container-logs: "true"
+  name: promotion-quay
+  namespace: ci-op-foo
+spec:
+  containers:
+  - command:
+    - /bin/sh
+    - /var/run/configmaps/ci.openshift.io/promotion-quay/promote.sh
+    env:
+    - name: KUBECONFIG
+      value: /etc/app-ci-kubeconfig/kubeconfig
+    - name: KUBECACHEDIR
+      value: /tmp/.kube/cache
+    image: stable:cli
+    name: promotion-quay
+    resources: {}
+    volumeMounts:
+    - mountPath: /etc/push-secret
+      name: push-secret
+      readOnly: true
+    - mountPath: /etc/app-ci-kubeconfig
+      name: app-ci-kubeconfig
+      readOnly: true
+    - mountPath: /var/run/configmaps/ci.openshift.io/promotion-quay
+      name: promotion-quay-script
+      readOnly: true
+  nodeSelector:
+    kubernetes.io/arch: amd64
+  restartPolicy: Never
+  volumes:
+  - name: push-secret
+    secret:
+      secretName: registry-push-credentials-ci-central
+  - name: app-ci-kubeconfig
+    secret:
+      secretName: promotion-quay-tagger-kubeconfig
+  - configMap:
+      items:
+      - key: promote.sh
+        path: promote.sh
+      name: promotion-quay-123
+    name: promotion-quay-script
+status: {}

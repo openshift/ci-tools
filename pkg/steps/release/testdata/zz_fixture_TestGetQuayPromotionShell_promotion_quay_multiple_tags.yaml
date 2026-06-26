@@ -1,0 +1,91 @@
+data:
+  promote.sh: |
+    function mirror {
+    for r in $(seq 1 $1); do
+      echo Mirror attempt $r
+      if oc image mirror --loglevel=$2 --keep-manifest-list --registry-config=$3 --max-per-registry=10 $4; then break; fi
+      if [ "${r}" -eq $1 ]; then
+        exit 1
+      fi
+      backoff=$(($RANDOM % 120))s
+      echo Sleeping randomized $backoff before retry
+      sleep $backoff
+    done
+    }
+    mirror 5 2 /etc/push-secret/.dockerconfigjson registry.build02.ci.openshift.org/ci-op-y2n8rsh3/pipeline@sha256:aaa=quay.io/openshift/ci:ocp_4.21_ovn-kubernetes_incoming
+    mirror 5 2 /etc/push-secret/.dockerconfigjson registry.build02.ci.openshift.org/ci-op-y2n8rsh3/pipeline@sha256:bbb=quay.io/openshift/ci:ocp_4.21_ovn-kubernetes-base_incoming
+    mirror 5 2 /etc/push-secret/.dockerconfigjson registry.build02.ci.openshift.org/ci-op-y2n8rsh3/pipeline@sha256:ccc=quay.io/openshift/ci:ocp_4.21_ovn-kubernetes-microshift_incoming
+    _OLD_EXISTS=false
+    if oc image info --registry-config=/etc/push-secret/.dockerconfigjson quay.io/openshift/ci:ocp_4.21_ovn-kubernetes >/dev/null 2>&1; then _OLD_EXISTS=true; fi
+    if [ "${_OLD_EXISTS}" = "true" ]; then
+      mirror 5 2 /etc/push-secret/.dockerconfigjson quay.io/openshift/ci:ocp_4.21_ovn-kubernetes=quay.io/openshift/ci:20240603235401_prune_ovn-kubernetes
+      mirror 5 2 /etc/push-secret/.dockerconfigjson quay.io/openshift/ci:ocp_4.21_ovn-kubernetes=quay.io/openshift/ci:ocp_4.21_ovn-kubernetes__pre
+    fi
+    mirror 5 2 /etc/push-secret/.dockerconfigjson quay.io/openshift/ci:ocp_4.21_ovn-kubernetes_incoming=quay.io/openshift/ci:ocp_4.21_ovn-kubernetes
+    if [ "${_OLD_EXISTS}" = "true" ]; then
+      mirror 5 2 /etc/push-secret/.dockerconfigjson quay.io/openshift/ci:ocp_4.21_ovn-kubernetes=quay.io/openshift/ci:ocp_4.21_ovn-kubernetes__post1
+    fi
+    _OLD_EXISTS=false
+    if oc image info --registry-config=/etc/push-secret/.dockerconfigjson quay.io/openshift/ci:ocp_4.21_ovn-kubernetes-base >/dev/null 2>&1; then _OLD_EXISTS=true; fi
+    if [ "${_OLD_EXISTS}" = "true" ]; then
+      mirror 5 2 /etc/push-secret/.dockerconfigjson quay.io/openshift/ci:ocp_4.21_ovn-kubernetes-base=quay.io/openshift/ci:20240603235401_prune_ovn-kubernetes-base
+      mirror 5 2 /etc/push-secret/.dockerconfigjson quay.io/openshift/ci:ocp_4.21_ovn-kubernetes-base=quay.io/openshift/ci:ocp_4.21_ovn-kubernetes-base__pre
+    fi
+    mirror 5 2 /etc/push-secret/.dockerconfigjson quay.io/openshift/ci:ocp_4.21_ovn-kubernetes-base_incoming=quay.io/openshift/ci:ocp_4.21_ovn-kubernetes-base
+    if [ "${_OLD_EXISTS}" = "true" ]; then
+      mirror 5 2 /etc/push-secret/.dockerconfigjson quay.io/openshift/ci:ocp_4.21_ovn-kubernetes-base=quay.io/openshift/ci:ocp_4.21_ovn-kubernetes-base__post1
+    fi
+    _OLD_EXISTS=false
+    if oc image info --registry-config=/etc/push-secret/.dockerconfigjson quay.io/openshift/ci:ocp_4.21_ovn-kubernetes-microshift >/dev/null 2>&1; then _OLD_EXISTS=true; fi
+    if [ "${_OLD_EXISTS}" = "true" ]; then
+      mirror 5 2 /etc/push-secret/.dockerconfigjson quay.io/openshift/ci:ocp_4.21_ovn-kubernetes-microshift=quay.io/openshift/ci:20240603235401_prune_ovn-kubernetes-microshift
+      mirror 5 2 /etc/push-secret/.dockerconfigjson quay.io/openshift/ci:ocp_4.21_ovn-kubernetes-microshift=quay.io/openshift/ci:ocp_4.21_ovn-kubernetes-microshift__pre
+    fi
+    mirror 5 2 /etc/push-secret/.dockerconfigjson quay.io/openshift/ci:ocp_4.21_ovn-kubernetes-microshift_incoming=quay.io/openshift/ci:ocp_4.21_ovn-kubernetes-microshift
+    if [ "${_OLD_EXISTS}" = "true" ]; then
+      mirror 5 2 /etc/push-secret/.dockerconfigjson quay.io/openshift/ci:ocp_4.21_ovn-kubernetes-microshift=quay.io/openshift/ci:ocp_4.21_ovn-kubernetes-microshift__post1
+    fi
+    for r in {1..5}; do
+      _digest=$(oc image info --registry-config=/etc/push-secret/.dockerconfigjson --filter-by-os=linux/amd64 quay.io/openshift/ci:ocp_4.21_ovn-kubernetes | sed -n '/^Digest:[[:space:]]/s/^Digest:[[:space:]]*//p' | head -n1)
+      if [ -n "${_digest}" ] && oc tag --source=docker --loglevel=2 --reference-policy='source' --import-mode='PreserveOriginal' --reference quay-proxy.ci.openshift.org/openshift/ci@${_digest} ocp/4.21:ovn-kubernetes; then
+        break
+      fi
+      echo "promotion-quay: digest-tag failed for ocp/4.21:ovn-kubernetes attempt ${r}/5 (QCI digest may have moved after mirror)" >&2
+      if [ "${r}" -eq 5 ]; then
+        exit 1
+      fi
+      echo "promotion-quay: retrying digest-tag for ocp/4.21:ovn-kubernetes (attempt $((r+1))/5 after randomized backoff)" >&2
+      backoff=$(($RANDOM % 120))s
+      sleep "${backoff}"
+    done
+
+    for r in {1..5}; do
+      _digest=$(oc image info --registry-config=/etc/push-secret/.dockerconfigjson --filter-by-os=linux/amd64 quay.io/openshift/ci:ocp_4.21_ovn-kubernetes-base | sed -n '/^Digest:[[:space:]]/s/^Digest:[[:space:]]*//p' | head -n1)
+      if [ -n "${_digest}" ] && oc tag --source=docker --loglevel=2 --reference-policy='source' --import-mode='PreserveOriginal' --reference quay-proxy.ci.openshift.org/openshift/ci@${_digest} ocp/4.21:ovn-kubernetes-base; then
+        break
+      fi
+      echo "promotion-quay: digest-tag failed for ocp/4.21:ovn-kubernetes-base attempt ${r}/5 (QCI digest may have moved after mirror)" >&2
+      if [ "${r}" -eq 5 ]; then
+        exit 1
+      fi
+      echo "promotion-quay: retrying digest-tag for ocp/4.21:ovn-kubernetes-base (attempt $((r+1))/5 after randomized backoff)" >&2
+      backoff=$(($RANDOM % 120))s
+      sleep "${backoff}"
+    done
+
+    for r in {1..5}; do
+      _digest=$(oc image info --registry-config=/etc/push-secret/.dockerconfigjson --filter-by-os=linux/amd64 quay.io/openshift/ci:ocp_4.21_ovn-kubernetes-microshift | sed -n '/^Digest:[[:space:]]/s/^Digest:[[:space:]]*//p' | head -n1)
+      if [ -n "${_digest}" ] && oc tag --source=docker --loglevel=2 --reference-policy='source' --import-mode='PreserveOriginal' --reference quay-proxy.ci.openshift.org/openshift/ci@${_digest} ocp/4.21:ovn-kubernetes-microshift; then
+        break
+      fi
+      echo "promotion-quay: digest-tag failed for ocp/4.21:ovn-kubernetes-microshift attempt ${r}/5 (QCI digest may have moved after mirror)" >&2
+      if [ "${r}" -eq 5 ]; then
+        exit 1
+      fi
+      echo "promotion-quay: retrying digest-tag for ocp/4.21:ovn-kubernetes-microshift (attempt $((r+1))/5 after randomized backoff)" >&2
+      backoff=$(($RANDOM % 120))s
+      sleep "${backoff}"
+    done
+metadata:
+  creationTimestamp: null
+  name: promotion-quay-script

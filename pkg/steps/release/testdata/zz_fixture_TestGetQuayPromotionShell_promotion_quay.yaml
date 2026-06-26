@@ -1,0 +1,50 @@
+data:
+  promote.sh: |-
+    function mirror {
+    for r in $(seq 1 $1); do
+      echo Mirror attempt $r
+      if oc image mirror --loglevel=$2 --keep-manifest-list --registry-config=$3 --max-per-registry=10 $4; then break; fi
+      if [ "${r}" -eq $1 ]; then
+        exit 1
+      fi
+      backoff=$(($RANDOM % 120))s
+      echo Sleeping randomized $backoff before retry
+      sleep $backoff
+    done
+    }
+    mirror 5 2 /etc/push-secret/.dockerconfigjson registry.build02.ci.openshift.org/ci-op-y2n8rsh3/pipeline@sha256:bbb=quay.io/openshift/ci:ci_a_latest_incoming
+    mirror 5 2 /etc/push-secret/.dockerconfigjson registry.build02.ci.openshift.org/ci-op-y2n8rsh3/pipeline@sha256:ddd=quay.io/openshift/ci:ci_c_latest_incoming
+    _OLD_EXISTS=false
+    if oc image info --registry-config=/etc/push-secret/.dockerconfigjson quay.io/openshift/ci:ci_a_latest >/dev/null 2>&1; then _OLD_EXISTS=true; fi
+    if [ "${_OLD_EXISTS}" = "true" ]; then
+      mirror 5 2 /etc/push-secret/.dockerconfigjson quay.io/openshift/ci:ci_a_latest=quay.io/openshift/ci:20240603235401_prune_ci_a_latest
+      mirror 5 2 /etc/push-secret/.dockerconfigjson quay.io/openshift/ci:ci_a_latest=quay.io/openshift/ci:ci_a_latest__pre
+    fi
+    mirror 5 2 /etc/push-secret/.dockerconfigjson quay.io/openshift/ci:ci_a_latest_incoming=quay.io/openshift/ci:ci_a_latest
+    if [ "${_OLD_EXISTS}" = "true" ]; then
+      mirror 5 2 /etc/push-secret/.dockerconfigjson quay.io/openshift/ci:ci_a_latest=quay.io/openshift/ci:ci_a_latest__post1
+    fi
+    _OLD_EXISTS=false
+    if oc image info --registry-config=/etc/push-secret/.dockerconfigjson quay.io/openshift/ci:ci_c_latest >/dev/null 2>&1; then _OLD_EXISTS=true; fi
+    if [ "${_OLD_EXISTS}" = "true" ]; then
+      mirror 5 2 /etc/push-secret/.dockerconfigjson quay.io/openshift/ci:ci_c_latest=quay.io/openshift/ci:20240603235401_prune_ci_c_latest
+      mirror 5 2 /etc/push-secret/.dockerconfigjson quay.io/openshift/ci:ci_c_latest=quay.io/openshift/ci:ci_c_latest__pre
+    fi
+    mirror 5 2 /etc/push-secret/.dockerconfigjson quay.io/openshift/ci:ci_c_latest_incoming=quay.io/openshift/ci:ci_c_latest
+    if [ "${_OLD_EXISTS}" = "true" ]; then
+      mirror 5 2 /etc/push-secret/.dockerconfigjson quay.io/openshift/ci:ci_c_latest=quay.io/openshift/ci:ci_c_latest__post1
+    fi
+    for r in {1..2}; do
+    echo "Tag attempt $r"
+
+    while read tag; do
+    oc tag --source=docker --loglevel=2 --reference-policy='source' --import-mode='PreserveOriginal' --reference $tag || break
+    done <<'EOF'
+    quay-proxy.ci.openshift.org/openshift/ci@sha256:ddd ci/${component}-quay:c
+    quay-proxy.ci.openshift.org/openshift/ci@sha256:bbb ci/ci-quay:${component}
+    EOF
+    [[ $? -ne 0 ]] && break
+    done
+metadata:
+  creationTimestamp: null
+  name: promotion-quay-script

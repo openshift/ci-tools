@@ -1,0 +1,5 @@
+cluster_profiles:
+- name: aws
+  lease_type: aws-quota-slice
+  cluster_type: aws
+  secret: cluster-secrets-aws

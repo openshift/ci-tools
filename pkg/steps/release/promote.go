@@ -389,7 +389,8 @@ func tagRetryShell(attempts int, echoLine, tagCmd, backoff string) string {
 	loop := fmt.Sprintf(`for r in {1..%d}; do
 echo %s
 %s
-[[ $? -ne 0 ]] && break`, attempts, echoLine, tagCmd)
+[[ $? -ne 0 ]] && break
+:`, attempts, echoLine, tagCmd)
 	if backoff != "" {
 		return loop + "\n" + backoff + "\ndone"
 	}

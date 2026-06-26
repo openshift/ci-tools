@@ -55,6 +55,7 @@ data:
     quay-proxy.ci.openshift.org/openshift/ci@sha256:bbb ci/ci-quay:sanitize-prow-jobs
     EOF
     [[ $? -ne 0 ]] && break
+    :
     done
 metadata:
   creationTimestamp: null

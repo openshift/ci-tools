@@ -44,6 +44,7 @@ data:
     quay-proxy.ci.openshift.org/openshift/ci@sha256:bbb ci/ci-quay:${component}
     EOF
     [[ $? -ne 0 ]] && break
+    :
     done
 metadata:
   creationTimestamp: null

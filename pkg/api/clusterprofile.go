@@ -1164,26 +1164,6 @@ func (p ClusterProfile) LeaseType() string {
 	}
 }
 
-func (p ClusterProfile) IPPoolLeaseType() string {
-	switch p {
-	case
-		ClusterProfileAWSUSEast1:
-		return "aws-ip-pools"
-	default:
-		return ""
-	}
-}
-
-// IPPoolLeaseShouldValidateBranch declares whether the ip-pool leases should only be applied to branches matching a
-// specific OpenShift validation model. returns true by default, but should return false for any cluster-profiles
-// that don't want this validation
-func (p ClusterProfile) IPPoolLeaseShouldValidateBranch() bool {
-	switch p {
-	default:
-		return true
-	}
-}
-
 // GetDefaultClusterProfileSecretName returns the default secret name for the profile
 func GetDefaultClusterProfileSecretName(profile ClusterProfile) string {
 	return fmt.Sprintf("cluster-secrets-%s", string(profile))

@@ -75,9 +75,10 @@ func TestIPPoolLeaseForTest(t *testing.T) {
 			name: "aws",
 			tests: MultiStageTestConfigurationLiteral{
 				ClusterProfileLiteral: &ClusterProfileLiteral{
-					Name:      "aws-us-east-1",
-					LeaseType: "aws-quota-slice",
-					Secret:    "cluster-secrets-aws",
+					Name:            "aws-us-east-1",
+					LeaseType:       "aws-quota-slice",
+					IPPoolLeaseType: "aws-ip-pools",
+					Secret:          "cluster-secrets-aws",
 				},
 			},
 			metadata: Metadata{Branch: "master"},
@@ -101,9 +102,10 @@ func TestIPPoolLeaseForTest(t *testing.T) {
 			name: "aws, with 4.16 branch",
 			tests: MultiStageTestConfigurationLiteral{
 				ClusterProfileLiteral: &ClusterProfileLiteral{
-					Name:      "aws-us-east-1",
-					LeaseType: "aws-quota-slice",
-					Secret:    "cluster-secrets-aws",
+					Name:            "aws-us-east-1",
+					LeaseType:       "aws-quota-slice",
+					IPPoolLeaseType: "aws-ip-pools",
+					Secret:          "cluster-secrets-aws",
 				},
 			},
 			metadata: Metadata{Branch: "release-4.16"},
@@ -128,9 +130,10 @@ func TestIPPoolLeaseForTest(t *testing.T) {
 			name: "aws, with 5.0 branch (should be valid)",
 			tests: MultiStageTestConfigurationLiteral{
 				ClusterProfileLiteral: &ClusterProfileLiteral{
-					Name:      "aws-us-east-1",
-					LeaseType: "aws-quota-slice",
-					Secret:    "cluster-secrets-aws",
+					Name:            "aws-us-east-1",
+					LeaseType:       "aws-quota-slice",
+					IPPoolLeaseType: "aws-ip-pools",
+					Secret:          "cluster-secrets-aws",
 				},
 			},
 			metadata: Metadata{Branch: "release-5.0"},
@@ -144,9 +147,10 @@ func TestIPPoolLeaseForTest(t *testing.T) {
 			name: "aws, with openshift-5.0 branch (should be valid)",
 			tests: MultiStageTestConfigurationLiteral{
 				ClusterProfileLiteral: &ClusterProfileLiteral{
-					Name:      "aws-us-east-1",
-					LeaseType: "aws-quota-slice",
-					Secret:    "cluster-secrets-aws",
+					Name:            "aws-us-east-1",
+					LeaseType:       "aws-quota-slice",
+					IPPoolLeaseType: "aws-ip-pools",
+					Secret:          "cluster-secrets-aws",
 				},
 			},
 			metadata: Metadata{Branch: "openshift-5.0"},
@@ -160,9 +164,10 @@ func TestIPPoolLeaseForTest(t *testing.T) {
 			name: "aws, with 5.1 branch (should be valid)",
 			tests: MultiStageTestConfigurationLiteral{
 				ClusterProfileLiteral: &ClusterProfileLiteral{
-					Name:      "aws-us-east-1",
-					LeaseType: "aws-quota-slice",
-					Secret:    "cluster-secrets-aws",
+					Name:            "aws-us-east-1",
+					LeaseType:       "aws-quota-slice",
+					IPPoolLeaseType: "aws-ip-pools",
+					Secret:          "cluster-secrets-aws",
 				},
 			},
 			metadata: Metadata{Branch: "release-5.1"},
@@ -175,7 +180,7 @@ func TestIPPoolLeaseForTest(t *testing.T) {
 	}
 	for _, tc := range testCases {
 		t.Run(tc.name, func(t *testing.T) {
-			ret := IPPoolLeaseForTest(ClusterProfile(tc.tests.ClusterProfileLiteral.Name), tc.metadata.Branch)
+			ret := IPPoolLeaseForTest(tc.tests.ClusterProfileLiteral.IPPoolLeaseType, tc.metadata.Branch)
 			if diff := cmp.Diff(tc.expected, ret); diff != "" {
 				t.Errorf("incorrect lease returned, diff: %s", diff)
 			}

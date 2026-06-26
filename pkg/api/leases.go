@@ -27,22 +27,15 @@ func LeasesForTest(test *TestStepConfiguration) (ret []StepLease) {
 
 const maxAddressesRequired = 13
 
-func IPPoolLeaseForTest(profile ClusterProfile, branch string) (ret StepLease) {
-	if profile == "" {
-		return
-	}
-
-	if lt := profile.IPPoolLeaseType(); lt != "" {
-		if !profile.IPPoolLeaseShouldValidateBranch() || branchValidForIPPoolLease(branch) {
-			ret = StepLease{
-				ResourceType: lt,
-				Env:          DefaultIPPoolLeaseEnv,
-				Count:        maxAddressesRequired,
-			}
+func IPPoolLeaseForTest(ipPoolLeaseType, branch string) StepLease {
+	if ipPoolLeaseType != "" && branchValidForIPPoolLease(branch) {
+		return StepLease{
+			ResourceType: ipPoolLeaseType,
+			Env:          DefaultIPPoolLeaseEnv,
+			Count:        maxAddressesRequired,
 		}
 	}
-
-	return
+	return StepLease{}
 }
 
 const (

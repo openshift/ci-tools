@@ -675,6 +675,7 @@ const ciOperatorReferenceYaml = "# The list of base images describe\n" +
 	"            # ClusterProfileLiteral defines the profile/cloud provider for end-to-end test steps.\n" +
 	"            cluster_profile_literal:\n" +
 	"                cluster_type: ' '\n" +
+	"                ip_pool_lease_type: ' '\n" +
 	"                lease_type: ' '\n" +
 	"                name: ' '\n" +
 	"                secret: ' '\n" +
@@ -1621,6 +1622,7 @@ const ciOperatorReferenceYaml = "# The list of base images describe\n" +
 	"        # ClusterProfileLiteral defines the profile/cloud provider for end-to-end test steps.\n" +
 	"        cluster_profile_literal:\n" +
 	"            cluster_type: ' '\n" +
+	"            ip_pool_lease_type: ' '\n" +
 	"            lease_type: ' '\n" +
 	"            name: ' '\n" +
 	"            secret: ' '\n" +

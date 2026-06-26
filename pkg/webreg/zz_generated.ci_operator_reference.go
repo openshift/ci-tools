@@ -1128,20 +1128,40 @@ const ciOperatorReferenceYaml = "# The list of base images describe\n" +
 	"        # You cannot set the Secret and Secrets attributes\n" +
 	"        # at the same time.\n" +
 	"        secret:\n" +
+	"            # Bundle is a named bundle reference from the GSM config mapping file.\n" +
+	"            # Mutually exclusive with Collection/Group and Name.\n" +
+	"            bundle: ' '\n" +
+	"            # Collection is the GSM collection the secret belongs to.\n" +
+	"            # Mutually exclusive with Bundle and Name.\n" +
+	"            collection: ' '\n" +
+	"            # Group is the group name within the collection.\n" +
+	"            # Required when Collection is set.\n" +
+	"            group: ' '\n" +
 	"            # Secret mount path. Defaults to /usr/test-secrets for first\n" +
 	"            # secret. /usr/test-secrets-2 for second, and so on.\n" +
 	"            mount_path: ' '\n" +
-	"            # Secret name, used inside test containers\n" +
+	"            # Secret name, used inside test containers.\n" +
+	"            # Mutually exclusive with Bundle and Collection/Group.\n" +
 	"            name: ' '\n" +
 	"        # Secrets is an optional array of secret objects\n" +
 	"        # which will be mounted inside the test container.\n" +
 	"        # You cannot set the Secret and Secrets attributes\n" +
 	"        # at the same time.\n" +
 	"        secrets:\n" +
-	"            - # Secret mount path. Defaults to /usr/test-secrets for first\n" +
+	"            - # Bundle is a named bundle reference from the GSM config mapping file.\n" +
+	"              # Mutually exclusive with Collection/Group and Name.\n" +
+	"              bundle: ' '\n" +
+	"              # Collection is the GSM collection the secret belongs to.\n" +
+	"              # Mutually exclusive with Bundle and Name.\n" +
+	"              collection: ' '\n" +
+	"              # Group is the group name within the collection.\n" +
+	"              # Required when Collection is set.\n" +
+	"              group: ' '\n" +
+	"              # Secret mount path. Defaults to /usr/test-secrets for first\n" +
 	"              # secret. /usr/test-secrets-2 for second, and so on.\n" +
 	"              mount_path: ' '\n" +
-	"              # Secret name, used inside test containers\n" +
+	"              # Secret name, used inside test containers.\n" +
+	"              # Mutually exclusive with Bundle and Collection/Group.\n" +
 	"              name: ' '\n" +
 	"        # ShardCount describes the number of jobs that should be generated as shards for this test\n" +
 	"        # Each generated job will be a duplication, but contain a suffix and the necessary SHARD_ARGS will be passed to the steps\n" +
@@ -2074,20 +2094,40 @@ const ciOperatorReferenceYaml = "# The list of base images describe\n" +
 	"      # You cannot set the Secret and Secrets attributes\n" +
 	"      # at the same time.\n" +
 	"      secret:\n" +
+	"        # Bundle is a named bundle reference from the GSM config mapping file.\n" +
+	"        # Mutually exclusive with Collection/Group and Name.\n" +
+	"        bundle: ' '\n" +
+	"        # Collection is the GSM collection the secret belongs to.\n" +
+	"        # Mutually exclusive with Bundle and Name.\n" +
+	"        collection: ' '\n" +
+	"        # Group is the group name within the collection.\n" +
+	"        # Required when Collection is set.\n" +
+	"        group: ' '\n" +
 	"        # Secret mount path. Defaults to /usr/test-secrets for first\n" +
 	"        # secret. /usr/test-secrets-2 for second, and so on.\n" +
 	"        mount_path: ' '\n" +
-	"        # Secret name, used inside test containers\n" +
+	"        # Secret name, used inside test containers.\n" +
+	"        # Mutually exclusive with Bundle and Collection/Group.\n" +
 	"        name: ' '\n" +
 	"      # Secrets is an optional array of secret objects\n" +
 	"      # which will be mounted inside the test container.\n" +
 	"      # You cannot set the Secret and Secrets attributes\n" +
 	"      # at the same time.\n" +
 	"      secrets:\n" +
-	"        - # Secret mount path. Defaults to /usr/test-secrets for first\n" +
+	"        - # Bundle is a named bundle reference from the GSM config mapping file.\n" +
+	"          # Mutually exclusive with Collection/Group and Name.\n" +
+	"          bundle: ' '\n" +
+	"          # Collection is the GSM collection the secret belongs to.\n" +
+	"          # Mutually exclusive with Bundle and Name.\n" +
+	"          collection: ' '\n" +
+	"          # Group is the group name within the collection.\n" +
+	"          # Required when Collection is set.\n" +
+	"          group: ' '\n" +
+	"          # Secret mount path. Defaults to /usr/test-secrets for first\n" +
 	"          # secret. /usr/test-secrets-2 for second, and so on.\n" +
 	"          mount_path: ' '\n" +
-	"          # Secret name, used inside test containers\n" +
+	"          # Secret name, used inside test containers.\n" +
+	"          # Mutually exclusive with Bundle and Collection/Group.\n" +
 	"          name: ' '\n" +
 	"      # ShardCount describes the number of jobs that should be generated as shards for this test\n" +
 	"      # Each generated job will be a duplication, but contain a suffix and the necessary SHARD_ARGS will be passed to the steps\n" +

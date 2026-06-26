@@ -84,6 +84,7 @@ const (
 	ClusterProfileEquinixOcpMetalQE          ClusterProfile = "equinix-ocp-metal-qe"
 	ClusterProfileEquinixOcpHCP              ClusterProfile = "equinix-ocp-hcp"
 	ClusterProfileFleetManagerQE             ClusterProfile = "fleet-manager-qe"
+	ClusterProfileGCD                        ClusterProfile = "gcd"
 	ClusterProfileGCPQE                      ClusterProfile = "gcp-qe"
 	ClusterProfileGCPQEC3Metal               ClusterProfile = "gcp-qe-c3-metal"
 	ClusterProfileGCPAutoReleaseQE           ClusterProfile = "gcp-autorelease-qe"
@@ -302,6 +303,7 @@ func ClusterProfiles() []ClusterProfile {
 		ClusterProfileEquinixOcpMetalQE,
 		ClusterProfileEquinixOcpHCP,
 		ClusterProfileFleetManagerQE,
+		ClusterProfileGCD,
 		ClusterProfileGCP,
 		ClusterProfileGCP2,
 		ClusterProfileGCP3,
@@ -558,6 +560,7 @@ func (p ClusterProfile) ClusterType() string {
 		ClusterProfileEquinixOcpHCP:
 		return "equinix-ocp-metal"
 	case
+		ClusterProfileGCD,
 		ClusterProfileGCPQE,
 		ClusterProfileGCPQEC3Metal,
 		ClusterProfileGCPAutoReleaseQE,
@@ -896,6 +899,8 @@ func (p ClusterProfile) LeaseType() string {
 		return "equinix-ocp-hcp-quota-slice"
 	case ClusterProfileFleetManagerQE:
 		return "fleet-manager-qe-quota-slice"
+	case ClusterProfileGCD:
+		return "gcd-quota-slice"
 	case ClusterProfileGCPQE:
 		return "gcp-qe-quota-slice"
 	case ClusterProfileGCPQEC3Metal:
@@ -1175,7 +1180,7 @@ func LeaseTypeFromClusterType(t string) (string, error) {
 	case
 		"aws", "aws-us-east-1", "aws-c2s", "aws-china", "aws-usgov", "aws-sc2s", "aws-eusc", "aws-osd-msp", "aws-opendatahub",
 		"alibaba", "azure-2", "azure4", "azure-arm64", "azurestack", "azuremag", "equinix-ocp-metal",
-		"gcp", "gcp-arm64", "gcp-opendatahub", "libvirt-ppc64le", "libvirt-ppc64le-s2s", "libvirt-s390x",
+		"gcd", "gcp", "gcp-arm64", "gcp-opendatahub", "libvirt-ppc64le", "libvirt-ppc64le-s2s", "libvirt-s390x",
 		"libvirt-s390x-1", "libvirt-s390x-2", "libvirt-s390x-amd64", "libvirt-s390x-vpn", "libvirt-s390x-vpn-oz", "libvirt-s390x-vpn-virt", "ibmcloud-multi-ppc64le",
 		"ibmcloud-multi-s390x", "nutanix", "nutanix-qe", "nutanix-qe-dis", "nutanix-qe-zone", "nutanix-qe-gpu",
 		"nutanix-qe-flow", "openstack", "openstack-osuosl", "openstack-vexxhost", "openstack-ppc64le",

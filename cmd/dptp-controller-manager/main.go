@@ -78,6 +78,7 @@ type options struct {
 	ephemeralClusterProvisinerOptions    ephemeralClusterProvisionerOptions
 	*flagutil.GitHubOptions
 	releaseRepoGitSyncPath string
+	registryAgentNeeded    bool
 }
 
 func (o *options) addDefaults() {
@@ -235,8 +236,10 @@ func newOpts() (*options, error) {
 		}
 	}
 
-	if opts.enabledControllersSet.Has(testimagesdistributor.ControllerName) && opts.stepConfigPath == "" {
-		errs = append(errs, fmt.Errorf("--step-config-path is required when the %s controller is enabled", testimagesdistributor.ControllerName))
+	opts.registryAgentNeeded = opts.enabledControllersSet.Has(testimagesdistributor.ControllerName) ||
+		opts.enabledControllersSet.Has(ephemeralcluster.ControllerName)
+	if opts.registryAgentNeeded && opts.stepConfigPath == "" {
+		errs = append(errs, fmt.Errorf("--step-config-path is required when the %s or %s controller is enabled", testimagesdistributor.ControllerName, ephemeralcluster.ControllerName))
 	}
 
 	if opts.enabledControllersSet.Has(serviceaccountsecretrefresher.ControllerName) {
@@ -492,14 +495,17 @@ func main() {
 		}
 	}
 
-	if opts.enabledControllersSet.Has(testimagesdistributor.ControllerName) {
+	var registryAgent agents.RegistryAgent
+	if opts.registryAgentNeeded {
 		registryErrCh := make(chan error)
-		registryConfigAgent, err := agents.NewRegistryAgent(opts.stepConfigPath, registryErrCh, registryAgentOption)
+		go func() { logrus.Fatal(<-registryErrCh) }()
+		registryAgent, err = agents.NewRegistryAgent(opts.stepConfigPath, registryErrCh, registryAgentOption)
 		if err != nil {
 			logrus.WithError(err).Fatal("failed to construct registryAgent")
 		}
-		go func() { logrus.Fatal(<-registryErrCh) }()
+	}
 
+	if opts.enabledControllersSet.Has(testimagesdistributor.ControllerName) {
 		registriesExceptAppCI := sets.New[string]()
 		for cluster := range allClustersExceptRegistryCluster {
 			domain, err := api.RegistryDomainForClusterName(cluster)
@@ -517,7 +523,7 @@ func main() {
 			registryMgr,
 			allClustersExceptRegistryCluster,
 			ciOPConfigAgent,
-			registryConfigAgent,
+			registryAgent,
 			opts.testImagesDistributorOptions.additionalImageStreamTags,
 			opts.testImagesDistributorOptions.additionalImageStreams,
 			opts.testImagesDistributorOptions.additionalImageStreamNamespaces,
@@ -544,7 +550,7 @@ func main() {
 
 	if opts.enabledControllersSet.Has(ephemeralcluster.ControllerName) {
 		log := logrus.NewEntry(logrus.StandardLogger())
-		if err := ephemeralcluster.AddToManager(log, mgr, allManagers, configAgent,
+		if err := ephemeralcluster.AddToManager(log, mgr, allManagers, configAgent, registryAgent,
 			ephemeralcluster.WithPolling(opts.ephemeralClusterProvisinerOptions.polling),
 			ephemeralcluster.WithCLIISTagRef(opts.ephemeralClusterProvisinerOptions.cliISTagRef)); err != nil {
 			logrus.WithError(err).Fatalf("Failed to construct the %s controller", ephemeralcluster.ControllerName)

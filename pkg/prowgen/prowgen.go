@@ -31,7 +31,7 @@ const (
 // new jobs are generated with GenerateJobs, the call site should also use
 // Prune() function to remove all stale jobs and label the jobs as simply
 // "generated".
-func GenerateJobs(configSpec *cioperatorapi.ReleaseBuildConfiguration, info *cioperatorapi.Metadata) (*prowconfig.JobConfig, error) {
+func GenerateJobs(configSpec *cioperatorapi.ReleaseBuildConfiguration, info *cioperatorapi.Metadata, clusterProfileResolver ClusterProfileResolver) (*prowconfig.JobConfig, error) {
 	orgrepo := fmt.Sprintf("%s/%s", info.Org, info.Repo)
 	presubmits := map[string][]prowconfig.Presubmit{}
 	postsubmits := map[string][]prowconfig.Postsubmit{}
@@ -46,7 +46,11 @@ func GenerateJobs(configSpec *cioperatorapi.ReleaseBuildConfiguration, info *cio
 
 		// Most of the time, this loop will only run once. the exception is if shard_count is set to an integer greater than 1
 		for i := 1; i <= shardCount; i++ {
-			g := NewProwJobBaseBuilderForTest(configSpec, info, NewCiOperatorPodSpecGenerator(), element)
+			g, err := NewProwJobBaseBuilderForTest(configSpec, info, NewCiOperatorPodSpecGenerator(), element, clusterProfileResolver)
+			if err != nil {
+				return nil, fmt.Errorf("new prowjob builder: %w", err)
+			}
+
 			name := element.As
 			if shardCount > 1 {
 				name = fmt.Sprintf("%s-%dof%d", name, i, shardCount)

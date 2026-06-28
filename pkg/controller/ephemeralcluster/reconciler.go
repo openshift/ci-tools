@@ -38,6 +38,7 @@ import (
 	"github.com/openshift/ci-tools/pkg/api"
 	ephemeralclusterv1 "github.com/openshift/ci-tools/pkg/api/ephemeralcluster/v1"
 	"github.com/openshift/ci-tools/pkg/jobconfig"
+	"github.com/openshift/ci-tools/pkg/load/agents"
 	"github.com/openshift/ci-tools/pkg/prowgen"
 	"github.com/openshift/ci-tools/pkg/steps"
 	cislices "github.com/openshift/ci-tools/pkg/util/slices"
@@ -111,13 +112,24 @@ func WithCLIISTagRef(isTagRef string) ReconcilerOption {
 
 type NewProwJobFunc func(spec prowv1.ProwJobSpec, extraLabels, extraAnnotations map[string]string, modifiers ...pjutil.Modifier) prowv1.ProwJob
 
+func clusterProfileResolverAdapter(registryAgent agents.RegistryAgent) func(string) (*api.ClusterProfileDetails, error) {
+	return func(name string) (*api.ClusterProfileDetails, error) {
+		cp, err := registryAgent.ResolveClusterProfile(name)
+		if err != nil {
+			return nil, err
+		}
+		return &cp, nil
+	}
+}
+
 type reconciler struct {
-	logger          *logrus.Entry
-	masterClient    ctrlruntimeclient.Client
-	buildClients    buildClients
-	newProwJob      NewProwJobFunc
-	prowConfigAgent *prowconfig.Agent
-	scheme          *runtime.Scheme
+	logger                 *logrus.Entry
+	masterClient           ctrlruntimeclient.Client
+	buildClients           buildClients
+	newProwJob             NewProwJobFunc
+	prowConfigAgent        *prowconfig.Agent
+	clusterProfileResolver prowgen.ClusterProfileResolver
+	scheme                 *runtime.Scheme
 
 	// Mock for testing
 	now         func() time.Time
@@ -130,7 +142,7 @@ func ECPredicateFilter(object ctrlruntimeclient.Object) bool {
 }
 
 func AddToManager(log *logrus.Entry, mgr manager.Manager, allManagers map[string]manager.Manager,
-	prowConfigAgent *prowconfig.Agent, opts ...ReconcilerOption) error {
+	prowConfigAgent *prowconfig.Agent, registryAgent agents.RegistryAgent, opts ...ReconcilerOption) error {
 	buildClients := make(map[string]ctrlruntimeclient.Client)
 	for clusterName, clusterManager := range allManagers {
 		buildClients[clusterName] = clusterManager.GetClient()
@@ -146,15 +158,16 @@ func AddToManager(log *logrus.Entry, mgr manager.Manager, allManagers map[string
 	}
 
 	r := reconciler{
-		logger:          log.WithField("controller", ControllerName),
-		masterClient:    mgr.GetClient(),
-		buildClients:    buildClients,
-		prowConfigAgent: prowConfigAgent,
-		scheme:          mgr.GetScheme(),
-		newProwJob:      pjutil.NewProwJob,
-		now:             time.Now,
-		polling:         func() time.Duration { return defaultReconcilerOpts.polling },
-		cliISTagRef:     cliISTagRef,
+		logger:                 log.WithField("controller", ControllerName),
+		masterClient:           mgr.GetClient(),
+		buildClients:           buildClients,
+		prowConfigAgent:        prowConfigAgent,
+		clusterProfileResolver: clusterProfileResolverAdapter(registryAgent),
+		scheme:                 mgr.GetScheme(),
+		newProwJob:             pjutil.NewProwJob,
+		now:                    time.Now,
+		polling:                func() time.Duration { return defaultReconcilerOpts.polling },
+		cliISTagRef:            cliISTagRef,
 	}
 
 	if err := ctrlbldr.ControllerManagedBy(mgr).
@@ -422,7 +435,7 @@ func (r *reconciler) makeProwJob(ciOperatorConfig *api.ReleaseBuildConfiguration
 		Org:    "org",
 		Repo:   "repo",
 		Branch: "branch",
-	})
+	}, r.clusterProfileResolver)
 	if err != nil {
 		return nil, fmt.Errorf("generate jobs: %w", err)
 	}

@@ -29,13 +29,13 @@ func TestGetClusterProfileDetails(t *testing.T) {
 	testCases := []struct {
 		name          string
 		profileName   string
-		expected      *api.ClusterProfileDetails
+		expected      api.ClusterProfileDetails
 		expectedError error
 	}{
 		{
 			name:        "profile found",
 			profileName: "aws",
-			expected: &api.ClusterProfileDetails{
+			expected: api.ClusterProfileDetails{
 				Name: "aws",
 				Owners: []api.ClusterProfileOwners{{
 					Org:   "openshift",
@@ -55,14 +55,12 @@ func TestGetClusterProfileDetails(t *testing.T) {
 
 	for _, tc := range testCases {
 		t.Run(tc.name, func(t *testing.T) {
-			result, err := agent.GetClusterProfileDetails(tc.profileName)
-			if tc.expected != nil {
-				if diff := cmp.Diff(result, tc.expected); diff != "" {
-					t.Errorf("result differs from expected: %v", diff)
-				}
-			}
+			result, err := agent.ResolveClusterProfile(tc.profileName)
 			if diff := cmp.Diff(tc.expectedError, err, testhelper.EquateErrorMessage); diff != "" {
 				t.Errorf("error differs from expected:\n%s", diff)
+			}
+			if diff := cmp.Diff(result, tc.expected); diff != "" {
+				t.Errorf("result differs from expected: %v", diff)
 			}
 		})
 	}

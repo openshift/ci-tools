@@ -14,6 +14,7 @@ type Resolver interface {
 	Resolve(name string, config api.MultiStageTestConfiguration) (api.MultiStageTestConfigurationLiteral, error)
 	ResolveWorkflow(name string) (api.MultiStageTestConfigurationLiteral, error)
 	ResolveChain(name string) (api.RegistryChain, error)
+	ResolveClusterProfile(name string) (api.ClusterProfileDetails, error)
 }
 
 type ReferenceByName map[string]api.LiteralTestStep
@@ -205,6 +206,14 @@ func (r *registry) ResolveChain(name string) (api.RegistryChain, error) {
 		ret.Steps = append(ret.Steps, api.TestStep{LiteralTestStep: &unique})
 	}
 	return ret, nil
+}
+
+func (r *registry) ResolveClusterProfile(name string) (api.ClusterProfileDetails, error) {
+	cp, ok := r.clusterProfiles[api.ClusterProfile(name)]
+	if !ok {
+		return api.ClusterProfileDetails{}, fmt.Errorf("no cluster profile named %s", name)
+	}
+	return cp, nil
 }
 
 // mergeEnvironments joins two environment maps.

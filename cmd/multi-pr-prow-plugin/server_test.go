@@ -833,7 +833,8 @@ func TestDetermineJobRuns(t *testing.T) {
 }
 
 type fakeCIOpConfigResolver struct {
-	configs map[api.Metadata]*api.ReleaseBuildConfiguration
+	configs         map[api.Metadata]*api.ReleaseBuildConfiguration
+	clusterProfiles map[string]*api.ClusterProfileDetails
 }
 
 func (r fakeCIOpConfigResolver) Config(m *api.Metadata) (*api.ReleaseBuildConfiguration, error) {
@@ -842,6 +843,14 @@ func (r fakeCIOpConfigResolver) Config(m *api.Metadata) (*api.ReleaseBuildConfig
 	}
 
 	return r.configs[*m], nil
+}
+
+func (r fakeCIOpConfigResolver) ClusterProfile(profileName string) (*api.ClusterProfileDetails, error) {
+	cp, ok := r.clusterProfiles[profileName]
+	if !ok {
+		return nil, fmt.Errorf("cluster profile %q not found", profileName)
+	}
+	return cp, nil
 }
 
 type fakeProwConfigGetter struct {

@@ -85,6 +85,7 @@ func (c *githubTrustedChecker) trustedUser(author, org, repo string, _ int) (boo
 
 type ciOpConfigResolver interface {
 	Config(*api.Metadata) (*api.ReleaseBuildConfiguration, error)
+	ClusterProfile(profileName string) (*api.ClusterProfileDetails, error)
 }
 
 type prowConfigGetter interface {
@@ -358,7 +359,12 @@ func (s *server) generateProwJob(jr jobRun) (*prowv1.ProwJob, error) {
 			test.Timeout.Duration = defaultMultiRefJobTimeout
 		}
 
-		jobBaseGen := prowgen.NewProwJobBaseBuilderForTest(ciopConfig, &testJobMetadata, prowgen.NewCiOperatorPodSpecGenerator(), test)
+		jobBaseGen, err := prowgen.NewProwJobBaseBuilderForTest(ciopConfig, &testJobMetadata,
+			prowgen.NewCiOperatorPodSpecGenerator(), test, s.ciOpConfigResolver.ClusterProfile)
+		if err != nil {
+			return nil, fmt.Errorf("could not create the prowjob builder: %w", err)
+		}
+
 		jobBaseGen.PodSpec.Add(prowgen.InjectTestFrom(&jr.JobMetadata))
 		jobBaseGen.PodSpec.Add(prowgen.CustomHashInput(jobName))
 

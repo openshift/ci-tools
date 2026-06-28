@@ -1,0 +1,16 @@
+agent: kubernetes
+always_run: true
+branches:
+- ^branch$
+- ^branch-
+context: ci/prow/testname
+decorate: true
+decoration_config:
+  skip_cloning: true
+labels:
+  ci-operator.openshift.io/cloud: aws
+  ci-operator.openshift.io/cloud-cluster-profile: aws
+  pj-rehearse.openshift.io/can-be-rehearsed: "true"
+name: pull-ci-org-repo-branch-testname
+rerun_command: /test testname
+trigger: (?m)^/test( | .* )testname,?($|\s.*)

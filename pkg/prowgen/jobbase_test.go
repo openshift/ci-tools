@@ -1,6 +1,7 @@
 package prowgen
 
 import (
+	"fmt"
 	"testing"
 	"time"
 
@@ -8,6 +9,7 @@ import (
 	prowv1 "sigs.k8s.io/prow/pkg/apis/prowjobs/v1"
 	v1 "sigs.k8s.io/prow/pkg/apis/prowjobs/v1"
 
+	"github.com/openshift/ci-tools/pkg/api"
 	ciop "github.com/openshift/ci-tools/pkg/api"
 	"github.com/openshift/ci-tools/pkg/testhelper"
 )
@@ -267,6 +269,13 @@ func TestGenerateJobBase(t *testing.T) {
 }
 
 func TestNewProwJobBaseBuilderForTest(t *testing.T) {
+	clusterProfileResolver := func(name string) (*api.ClusterProfileDetails, error) {
+		if name == "alibabacloud" {
+			return &api.ClusterProfileDetails{ClusterType: "alibabacloud"}, nil
+		}
+		return nil, fmt.Errorf("cluster profile %q not found", name)
+	}
+
 	ciopconfig := &ciop.ReleaseBuildConfiguration{}
 	defaultInfo := &ciop.Metadata{Org: "o", Repo: "r", Branch: "b"}
 	testCases := []struct {
@@ -466,8 +475,12 @@ func TestNewProwJobBaseBuilderForTest(t *testing.T) {
 			if tc.cfg == nil {
 				tc.cfg = ciopconfig
 			}
-			b := NewProwJobBaseBuilderForTest(tc.cfg, tc.info, NewCiOperatorPodSpecGenerator(), tc.test).Build("prefix")
-			testhelper.CompareWithFixture(t, b)
+			b, err := NewProwJobBaseBuilderForTest(tc.cfg, tc.info, NewCiOperatorPodSpecGenerator(), tc.test, clusterProfileResolver)
+			if err != nil {
+				t.Fatalf("failed to create the prowjob builder: %s", err)
+			}
+			prowjob := b.Build("prefix")
+			testhelper.CompareWithFixture(t, prowjob)
 		})
 	}
 }

@@ -55,6 +55,7 @@ const (
 
 type injectingResolverClient interface {
 	ConfigWithTest(base *api.Metadata, testSource *api.MetadataWithTest) (*api.ReleaseBuildConfiguration, error)
+	ClusterProfile(profileName string) (*api.ClusterProfileDetails, error)
 }
 
 type prowConfigGetter interface {
@@ -312,7 +313,8 @@ func (r *reconciler) triggerJobs(ctx context.Context,
 			prowjobsToCreate = append(prowjobsToCreate, aggregatedProwjobs...)
 
 			submitted := generateJobNameToSubmit(inject, pullRequests, jobSpec.ShardCount, jobSpec.ShardIndex)
-			aggregatorJob, err := generateAggregatorJob(baseMetadata, uid, mimickedJob, jobSpec.JobName(jobconfig.PeriodicPrefix), req.Name, req.Namespace, r.prowConfigGetter, time.Now(), submitted, r.defaultAggregatorJobTimeout)
+			aggregatorJob, err := generateAggregatorJob(baseMetadata, uid, mimickedJob, jobSpec.JobName(jobconfig.PeriodicPrefix),
+				req.Name, req.Namespace, r.prowConfigGetter, time.Now(), submitted, r.defaultAggregatorJobTimeout, r.configResolverClient)
 			if err != nil {
 				logger.WithError(err).Error("Failed to generate an aggregator prowjob")
 				statuses[mimickedJob] = &v1.PullRequestPayloadJobStatus{
@@ -628,7 +630,12 @@ func (r *reconciler) generateProwjob(ciopConfig *api.ReleaseBuildConfiguration,
 				test.Timeout.Duration = r.defaultMultiRefJobTimeout
 			}
 		}
-		jobBaseGen := prowgen.NewProwJobBaseBuilderForTest(ciopConfig, baseCiop, prowgen.NewCiOperatorPodSpecGenerator(), test)
+		jobBaseGen, err := prowgen.NewProwJobBaseBuilderForTest(ciopConfig, baseCiop,
+			prowgen.NewCiOperatorPodSpecGenerator(), test, r.configResolverClient.ClusterProfile)
+		if err != nil {
+			return nil, fmt.Errorf("failed to create the prowjob builder: %w", err)
+		}
+
 		jobBaseGen.PodSpec.Add(prowgen.InjectTestFrom(inject))
 		if latestPayloadPullspec != "" {
 			jobBaseGen.PodSpec.Add(prowgen.ReleaseLatest(latestPayloadPullspec))
@@ -802,7 +809,9 @@ func (r *reconciler) generateAggregatedProwjobs(uid string, ciopConfig *api.Rele
 	return ret, nil
 }
 
-func generateAggregatorJob(baseCiop *api.Metadata, uid, aggregatorJobName, jobName, prpqrName, prpqrNamespace string, getCfg prowConfigGetter, startTime time.Time, submitted string, aggregatedJobTimeout time.Duration) (*prowv1.ProwJob, error) {
+func generateAggregatorJob(baseCiop *api.Metadata, uid, aggregatorJobName, jobName, prpqrName, prpqrNamespace string,
+	getCfg prowConfigGetter, startTime time.Time, submitted string, aggregatedJobTimeout time.Duration,
+	configResolverClient injectingResolverClient) (*prowv1.ProwJob, error) {
 	ciopConfig := &api.ReleaseBuildConfiguration{
 		Metadata: *baseCiop,
 		Tests: []api.TestStepConfiguration{
@@ -840,7 +849,10 @@ func generateAggregatorJob(baseCiop *api.Metadata, uid, aggregatorJobName, jobNa
 	}
 
 	emptyMetadata := &api.Metadata{}
-	jobBaseGen := prowgen.NewProwJobBaseBuilderForTest(ciopConfig, emptyMetadata, prowgen.NewCiOperatorPodSpecGenerator(), ciopConfig.Tests[0])
+	jobBaseGen, err := prowgen.NewProwJobBaseBuilderForTest(ciopConfig, emptyMetadata, prowgen.NewCiOperatorPodSpecGenerator(), ciopConfig.Tests[0], configResolverClient.ClusterProfile)
+	if err != nil {
+		return nil, fmt.Errorf("couldn't create the prowjob builder: %w", err)
+	}
 
 	periodic := prowgen.GeneratePeriodicForTest(jobBaseGen, emptyMetadata, prowgen.FromConfigSpec(ciopConfig), func(options *prowgen.GeneratePeriodicOptions) {
 		options.Cron = "@yearly"

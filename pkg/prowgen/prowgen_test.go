@@ -1,6 +1,7 @@
 package prowgen
 
 import (
+	"fmt"
 	"sort"
 	"strings"
 	"testing"
@@ -35,6 +36,17 @@ func sorted(spec *corev1.PodSpec) {
 	}
 	if canSortArgs {
 		sort.Strings(container.Args)
+	}
+}
+
+func clusterProfileResolverFunc(profiles ...*api.ClusterProfileDetails) func(string) (*api.ClusterProfileDetails, error) {
+	return func(name string) (*api.ClusterProfileDetails, error) {
+		for _, cp := range profiles {
+			if string(cp.Name) == name {
+				return cp, nil
+			}
+		}
+		return nil, fmt.Errorf("cluster profile %q not found", name)
 	}
 }
 
@@ -111,10 +123,15 @@ func TestShouldAlwaysRun(t *testing.T) {
 }
 
 func TestGeneratePresubmitForTest(t *testing.T) {
+	clusterProfileResolver := clusterProfileResolverFunc(&ciop.ClusterProfileDetails{
+		Name:        "aws",
+		ClusterType: "aws",
+	})
+
 	tests := []struct {
 		description string
 
-		test           string
+		test           ciop.TestStepConfiguration
 		repoInfo       *ciop.Metadata
 		jobRelease     string
 		clone          bool
@@ -122,17 +139,27 @@ func TestGeneratePresubmitForTest(t *testing.T) {
 	}{
 		{
 			description: "presubmit for standard test",
-			test:        "testname",
+			test:        ciop.TestStepConfiguration{As: "testname"},
 			repoInfo:    &ciop.Metadata{Org: "org", Repo: "repo", Branch: "branch"},
 		},
 		{
+			description: "presubmit for multistage test",
+			test: ciop.TestStepConfiguration{
+				As: "testname",
+				MultiStageTestConfiguration: &ciop.MultiStageTestConfiguration{
+					ClusterProfile: "aws",
+				},
+			},
+			repoInfo: &ciop.Metadata{Org: "org", Repo: "repo", Branch: "branch"},
+		},
+		{
 			description: "presubmit for a test in a variant config",
-			test:        "testname",
+			test:        ciop.TestStepConfiguration{As: "testname"},
 			repoInfo:    &ciop.Metadata{Org: "org", Repo: "repo", Branch: "branch", Variant: "also"},
 		},
 		{
 			description: "presubmit with always_run false",
-			test:        "testname",
+			test:        ciop.TestStepConfiguration{As: "testname"},
 			repoInfo:    &ciop.Metadata{Org: "org", Repo: "repo", Branch: "branch"},
 			generateOption: func(options *generatePresubmitOptions) {
 				options.defaultDisable = true
@@ -140,7 +167,7 @@ func TestGeneratePresubmitForTest(t *testing.T) {
 		},
 		{
 			description: "presubmit with always_run but run_if_changed set",
-			test:        "testname",
+			test:        ciop.TestStepConfiguration{As: "testname"},
 			repoInfo:    &ciop.Metadata{Org: "org", Repo: "repo", Branch: "branch"},
 			generateOption: func(options *generatePresubmitOptions) {
 				options.defaultDisable = true
@@ -149,7 +176,7 @@ func TestGeneratePresubmitForTest(t *testing.T) {
 		},
 		{
 			description: "presubmit with always_run but pipeline_run_if_changed set",
-			test:        "testname",
+			test:        ciop.TestStepConfiguration{As: "testname"},
 			repoInfo:    &ciop.Metadata{Org: "org", Repo: "repo", Branch: "branch"},
 			generateOption: func(options *generatePresubmitOptions) {
 				options.defaultDisable = true
@@ -158,7 +185,7 @@ func TestGeneratePresubmitForTest(t *testing.T) {
 		},
 		{
 			description: "presubmit with always_run=false and pipeline_run_if_changed",
-			test:        "testname",
+			test:        ciop.TestStepConfiguration{As: "testname"},
 			repoInfo:    &ciop.Metadata{Org: "org", Repo: "repo", Branch: "branch"},
 			generateOption: func(options *generatePresubmitOptions) {
 				options.defaultDisable = false
@@ -167,7 +194,7 @@ func TestGeneratePresubmitForTest(t *testing.T) {
 		},
 		{
 			description: "presubmit with always_run but pipeline_skip_if_only_changed set",
-			test:        "testname",
+			test:        ciop.TestStepConfiguration{As: "testname"},
 			repoInfo:    &ciop.Metadata{Org: "org", Repo: "repo", Branch: "branch"},
 			generateOption: func(options *generatePresubmitOptions) {
 				options.defaultDisable = true
@@ -176,7 +203,7 @@ func TestGeneratePresubmitForTest(t *testing.T) {
 		},
 		{
 			description: "presubmit with always_run=false and pipeline_skip_if_only_changed",
-			test:        "testname",
+			test:        ciop.TestStepConfiguration{As: "testname"},
 			repoInfo:    &ciop.Metadata{Org: "org", Repo: "repo", Branch: "branch"},
 			generateOption: func(options *generatePresubmitOptions) {
 				options.defaultDisable = false
@@ -185,7 +212,7 @@ func TestGeneratePresubmitForTest(t *testing.T) {
 		},
 		{
 			description: "presubmit with always_run but optional true",
-			test:        "testname",
+			test:        ciop.TestStepConfiguration{As: "testname"},
 			repoInfo:    &ciop.Metadata{Org: "org", Repo: "repo", Branch: "branch"},
 			generateOption: func(options *generatePresubmitOptions) {
 				options.defaultDisable = true
@@ -194,7 +221,7 @@ func TestGeneratePresubmitForTest(t *testing.T) {
 		},
 		{
 			description: "presubmit with run_if_changed",
-			test:        "testname",
+			test:        ciop.TestStepConfiguration{As: "testname"},
 			repoInfo:    &ciop.Metadata{Org: "org", Repo: "repo", Branch: "branch"},
 			generateOption: func(options *generatePresubmitOptions) {
 				options.runIfChanged = "^README.md$"
@@ -202,7 +229,7 @@ func TestGeneratePresubmitForTest(t *testing.T) {
 		},
 		{
 			description: "presubmit with skip_if_only_changed",
-			test:        "testname",
+			test:        ciop.TestStepConfiguration{As: "testname"},
 			repoInfo:    &ciop.Metadata{Org: "org", Repo: "repo", Branch: "branch"},
 			generateOption: func(options *generatePresubmitOptions) {
 				options.skipIfOnlyChanged = "^README.md$"
@@ -210,7 +237,7 @@ func TestGeneratePresubmitForTest(t *testing.T) {
 		},
 		{
 			description: "optional presubmit",
-			test:        "testname",
+			test:        ciop.TestStepConfiguration{As: "testname"},
 			repoInfo:    &ciop.Metadata{Org: "org", Repo: "repo", Branch: "branch"},
 			generateOption: func(options *generatePresubmitOptions) {
 				options.optional = true
@@ -218,7 +245,7 @@ func TestGeneratePresubmitForTest(t *testing.T) {
 		},
 		{
 			description: "rehearsal disabled",
-			test:        "testname",
+			test:        ciop.TestStepConfiguration{As: "testname"},
 			repoInfo:    &ciop.Metadata{Org: "org", Repo: "repo", Branch: "branch"},
 			generateOption: func(options *generatePresubmitOptions) {
 				options.disableRehearsal = true
@@ -226,7 +253,7 @@ func TestGeneratePresubmitForTest(t *testing.T) {
 		},
 		{
 			description: "capabilities added",
-			test:        "testname",
+			test:        ciop.TestStepConfiguration{As: "testname"},
 			repoInfo:    &ciop.Metadata{Org: "org", Repo: "repo", Branch: "branch"},
 			generateOption: func(options *generatePresubmitOptions) {
 				options.Capabilities = []string{"intranet", "arm64", "rce", "sshd-bastion"} // rce - release-controller-eligible, sshd-bastion - for multiarch P/Z libvirt jobs
@@ -234,7 +261,7 @@ func TestGeneratePresubmitForTest(t *testing.T) {
 		},
 		{
 			description: "presubmit with max_concurrency",
-			test:        "testname",
+			test:        ciop.TestStepConfiguration{As: "testname"},
 			repoInfo:    &ciop.Metadata{Org: "org", Repo: "repo", Branch: "branch"},
 			generateOption: func(options *generatePresubmitOptions) {
 				options.maxConcurrency = 4
@@ -242,7 +269,7 @@ func TestGeneratePresubmitForTest(t *testing.T) {
 		},
 		{
 			description: "presubmit with skip_branches",
-			test:        "testname",
+			test:        ciop.TestStepConfiguration{As: "testname"},
 			repoInfo:    &ciop.Metadata{Org: "org", Repo: "repo", Branch: "branch"},
 			generateOption: func(options *generatePresubmitOptions) {
 				options.skipBranches = []string{"^branch-foo$", "^branch-bar$"}
@@ -255,18 +282,25 @@ func TestGeneratePresubmitForTest(t *testing.T) {
 			if generateOption == nil {
 				generateOption = func(options *generatePresubmitOptions) {}
 			}
-			test := ciop.TestStepConfiguration{As: tc.test}
-			jobBaseGen := NewProwJobBaseBuilderForTest(&ciop.ReleaseBuildConfiguration{}, tc.repoInfo, newFakePodSpecBuilder(), test)
-			testhelper.CompareWithFixture(t, generatePresubmitForTest(jobBaseGen, tc.test, tc.repoInfo, generateOption))
+			jobBaseGen, err := NewProwJobBaseBuilderForTest(&ciop.ReleaseBuildConfiguration{}, tc.repoInfo, newFakePodSpecBuilder(), tc.test, clusterProfileResolver)
+			if err != nil {
+				t.Fatalf("failed to create the prowjob builder: %s", err)
+			}
+			testhelper.CompareWithFixture(t, generatePresubmitForTest(jobBaseGen, tc.test.As, tc.repoInfo, generateOption))
 		})
 	}
 }
 
 func TestGeneratePeriodicForTest(t *testing.T) {
+	clusterProfileResolver := clusterProfileResolverFunc(&ciop.ClusterProfileDetails{
+		Name:        "aws",
+		ClusterType: "aws",
+	})
+
 	tests := []struct {
 		description string
 
-		test           string
+		test           ciop.TestStepConfiguration
 		repoInfo       *ciop.Metadata
 		jobRelease     string
 		clone          bool
@@ -274,15 +308,28 @@ func TestGeneratePeriodicForTest(t *testing.T) {
 	}{
 		{
 			description: "periodic for standard test",
-			test:        "testname",
+			test:        ciop.TestStepConfiguration{As: "testname"},
 			repoInfo:    &ciop.Metadata{Org: "org", Repo: "repo", Branch: "branch"},
 			generateOption: func(options *GeneratePeriodicOptions) {
 				options.Cron = "@yearly"
 			},
 		},
 		{
+			description: "periodic for multistage test",
+			test: ciop.TestStepConfiguration{
+				As: "testname",
+				MultiStageTestConfiguration: &ciop.MultiStageTestConfiguration{
+					ClusterProfile: "aws",
+				},
+			},
+			repoInfo: &ciop.Metadata{Org: "org", Repo: "repo", Branch: "branch"},
+			generateOption: func(options *GeneratePeriodicOptions) {
+				options.Cron = "@yearly"
+			},
+		},
+		{
 			description: "periodic for a test with retry",
-			test:        "testname",
+			test:        ciop.TestStepConfiguration{As: "testname"},
 			repoInfo:    &ciop.Metadata{Org: "org", Repo: "repo", Branch: "branch"},
 			generateOption: func(options *GeneratePeriodicOptions) {
 				options.Cron = "@yearly"
@@ -291,7 +338,7 @@ func TestGeneratePeriodicForTest(t *testing.T) {
 		},
 		{
 			description: "periodic for a test in a variant config",
-			test:        "testname",
+			test:        ciop.TestStepConfiguration{As: "testname"},
 			repoInfo:    &ciop.Metadata{Org: "org", Repo: "repo", Branch: "branch", Variant: "also"},
 			generateOption: func(options *GeneratePeriodicOptions) {
 				options.Cron = "@yearly"
@@ -299,7 +346,7 @@ func TestGeneratePeriodicForTest(t *testing.T) {
 		},
 		{
 			description: "periodic using interval",
-			test:        "testname",
+			test:        ciop.TestStepConfiguration{As: "testname"},
 			repoInfo:    &ciop.Metadata{Org: "org", Repo: "repo", Branch: "branch"},
 			generateOption: func(options *GeneratePeriodicOptions) {
 				options.Interval = "6h"
@@ -307,7 +354,7 @@ func TestGeneratePeriodicForTest(t *testing.T) {
 		},
 		{
 			description: "periodic with disabled rehearsal",
-			test:        "testname",
+			test:        ciop.TestStepConfiguration{As: "testname"},
 			repoInfo:    &ciop.Metadata{Org: "org", Repo: "repo", Branch: "branch"},
 			generateOption: func(options *GeneratePeriodicOptions) {
 				options.DisableRehearsal = true
@@ -316,7 +363,7 @@ func TestGeneratePeriodicForTest(t *testing.T) {
 		},
 		{
 			description: "periodic using minimum_interval",
-			test:        "testname",
+			test:        ciop.TestStepConfiguration{As: "testname"},
 			repoInfo:    &ciop.Metadata{Org: "org", Repo: "repo", Branch: "branch"},
 			generateOption: func(options *GeneratePeriodicOptions) {
 				options.MinimumInterval = "4h"
@@ -324,7 +371,7 @@ func TestGeneratePeriodicForTest(t *testing.T) {
 		},
 		{
 			description: "periodic with capabilities",
-			test:        "testname",
+			test:        ciop.TestStepConfiguration{As: "testname"},
 			repoInfo:    &ciop.Metadata{Org: "org", Repo: "repo", Branch: "branch"},
 			generateOption: func(options *GeneratePeriodicOptions) {
 				options.Cron = "@yearly"
@@ -333,7 +380,7 @@ func TestGeneratePeriodicForTest(t *testing.T) {
 		},
 		{
 			description: "periodic with max_concurrency",
-			test:        "testname",
+			test:        ciop.TestStepConfiguration{As: "testname"},
 			repoInfo:    &ciop.Metadata{Org: "org", Repo: "repo", Branch: "branch"},
 			generateOption: func(options *GeneratePeriodicOptions) {
 				options.Cron = "@yearly"
@@ -347,8 +394,11 @@ func TestGeneratePeriodicForTest(t *testing.T) {
 			if generateOption == nil {
 				generateOption = func(options *GeneratePeriodicOptions) {}
 			}
-			test := ciop.TestStepConfiguration{As: tc.test}
-			jobBaseGen := NewProwJobBaseBuilderForTest(&ciop.ReleaseBuildConfiguration{}, tc.repoInfo, newFakePodSpecBuilder(), test)
+			jobBaseGen, err := NewProwJobBaseBuilderForTest(&ciop.ReleaseBuildConfiguration{},
+				tc.repoInfo, newFakePodSpecBuilder(), tc.test, clusterProfileResolver)
+			if err != nil {
+				t.Fatalf("failed to create the prowjob builder: %s", err)
+			}
 			testhelper.CompareWithFixture(t, GeneratePeriodicForTest(jobBaseGen, tc.repoInfo, generateOption))
 		})
 	}
@@ -419,7 +469,12 @@ func TestGeneratePostSubmitForTest(t *testing.T) {
 				generateOption = func(options *generatePostsubmitOptions) {}
 			}
 			test := ciop.TestStepConfiguration{As: testname}
-			jobBaseGen := NewProwJobBaseBuilderForTest(&ciop.ReleaseBuildConfiguration{}, tc.repoInfo, newFakePodSpecBuilder(), test)
+			jobBaseGen, err := NewProwJobBaseBuilderForTest(&ciop.ReleaseBuildConfiguration{}, tc.repoInfo,
+				newFakePodSpecBuilder(), test, func(clusterProfile string) (*ciop.ClusterProfileDetails, error) { return nil, nil })
+			if err != nil {
+				t.Fatalf("failed to create the prowjob builder: %s", err)
+			}
+
 			testhelper.CompareWithFixture(t, generatePostsubmitForTest(jobBaseGen, tc.repoInfo, generateOption))
 		})
 	}
@@ -960,7 +1015,9 @@ func TestGenerateJobs(t *testing.T) {
 	}
 	for _, tc := range tests {
 		t.Run(tc.id, func(t *testing.T) {
-			jobConfig, err := GenerateJobs(tc.config, tc.repoInfo)
+			jobConfig, err := GenerateJobs(tc.config, tc.repoInfo, func(clusterProfile string) (*ciop.ClusterProfileDetails, error) {
+				return nil, nil
+			})
 			if err != nil {
 				t.Fatalf("unexpected error: %v", err)
 			}
@@ -1079,7 +1136,9 @@ func TestBundleWithCapabilities(t *testing.T) {
 				Branch: "main",
 			}
 
-			jobConfig, err := GenerateJobs(config, repoInfo)
+			jobConfig, err := GenerateJobs(config, repoInfo, func(clusterProfile string) (*ciop.ClusterProfileDetails, error) {
+				return nil, nil
+			})
 			if err != nil {
 				t.Fatalf("unexpected error generating jobs: %v", err)
 			}

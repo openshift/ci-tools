@@ -27,6 +27,7 @@ import (
 
 	"github.com/openshift/ci-tools/pkg/api"
 	ephemeralclusterv1 "github.com/openshift/ci-tools/pkg/api/ephemeralcluster/v1"
+	"github.com/openshift/ci-tools/pkg/load/agents"
 	"github.com/openshift/ci-tools/pkg/steps"
 	"github.com/openshift/ci-tools/pkg/testhelper"
 	ctrlruntimetest "github.com/openshift/ci-tools/pkg/testhelper/kubernetes/ctrlruntime"
@@ -35,6 +36,19 @@ import (
 const (
 	prowJobNamespace = "ci"
 )
+
+type fakeRegistryAgent struct {
+	agents.RegistryAgent
+	clusterProfiles map[string]*api.ClusterProfileDetails
+}
+
+func (f *fakeRegistryAgent) ResolveClusterProfile(name string) (api.ClusterProfileDetails, error) {
+	cp, ok := f.clusterProfiles[name]
+	if !ok {
+		return api.ClusterProfileDetails{}, fmt.Errorf("cluster profile %q not found", name)
+	}
+	return *cp, nil
+}
 
 func newProwJobFaker(name string, now time.Time) NewProwJobFunc {
 	return func(spec prowv1.ProwJobSpec, extraLabels, extraAnnotations map[string]string, modifiers ...pjutil.Modifier) prowv1.ProwJob {
@@ -141,6 +155,12 @@ func TestCreateProwJob(t *testing.T) {
 		},
 	}
 
+	fakeRegistryAgent := fakeRegistryAgent{
+		clusterProfiles: map[string]*api.ClusterProfileDetails{
+			"aws": {ClusterType: "aws"},
+		},
+	}
+
 	for _, tc := range []struct {
 		name         string
 		ec           ephemeralclusterv1.EphemeralCluster
@@ -191,6 +211,48 @@ func TestCreateProwJob(t *testing.T) {
 			},
 			req:     reconcile.Request{NamespacedName: types.NamespacedName{Namespace: "ns", Name: "ec"}},
 			wantRes: reconcile.Result{RequeueAfter: pollingTime},
+		},
+		{
+			name: "Invalid cluster profile",
+			ec: ephemeralclusterv1.EphemeralCluster{
+				ObjectMeta: metav1.ObjectMeta{
+					Namespace: "ns",
+					Name:      "ec",
+				},
+				Spec: ephemeralclusterv1.EphemeralClusterSpec{
+					CIOperator: ephemeralclusterv1.CIOperatorSpec{
+						BuildRootImage: &api.BuildRootImageConfiguration{
+							ImageStreamTagReference: &api.ImageStreamTagReference{
+								Namespace: "ocp",
+								Name:      "4.20",
+								Tag:       "cli",
+							},
+						},
+						BaseImages: map[string]api.ImageStreamTagReference{
+							"upi-installer": {
+								Namespace: "ocp",
+								Name:      "4.20",
+								Tag:       "upi-installer",
+							},
+						},
+						ExternalImages: map[string]api.ExternalImage{
+							"fedora": {Registry: "quay.io/fedora/fedora:43"},
+						},
+						Releases: map[string]api.UnresolvedRelease{
+							"initial": {Integration: &api.Integration{Name: "4.17", Namespace: "ocp"}},
+							"latest":  {Integration: &api.Integration{Name: "4.17", Namespace: "ocp"}},
+						},
+						Test: ephemeralclusterv1.TestSpec{
+							Workflow:       "test-workflow",
+							Env:            map[string]string{"foo": "bar"},
+							ClusterProfile: "aws-2",
+						},
+					},
+				},
+			},
+			req:     reconcile.Request{NamespacedName: types.NamespacedName{Namespace: "ns", Name: "ec"}},
+			wantRes: reconcile.Result{},
+			wantErr: errors.New(`terminal error: generate jobs: new prowjob builder: resolve cluster profile "aws-2": cluster profile "aws-2" not found`),
 		},
 		{
 			name: "Hive cluster request creates a ProwJob",
@@ -400,13 +462,14 @@ func TestCreateProwJob(t *testing.T) {
 			}
 
 			r := reconciler{
-				logger:          logrus.NewEntry(logrus.StandardLogger()),
-				masterClient:    client,
-				now:             func() time.Time { return fakeNow },
-				polling:         func() time.Duration { return pollingTime },
-				cliISTagRef:     api.ImageStreamTagReference{Namespace: "ocp", Name: "4.22", Tag: "cli"},
-				newProwJob:      newProwJobFaker("foobar", fakeNow),
-				prowConfigAgent: prowConfigAgent(pc),
+				logger:                 logrus.NewEntry(logrus.StandardLogger()),
+				masterClient:           client,
+				now:                    func() time.Time { return fakeNow },
+				polling:                func() time.Duration { return pollingTime },
+				cliISTagRef:            api.ImageStreamTagReference{Namespace: "ocp", Name: "4.22", Tag: "cli"},
+				newProwJob:             newProwJobFaker("foobar", fakeNow),
+				prowConfigAgent:        prowConfigAgent(pc),
+				clusterProfileResolver: clusterProfileResolverAdapter(&fakeRegistryAgent),
 			}
 
 			gotRes, gotErr := r.Reconcile(context.TODO(), reconcile.Request{NamespacedName: types.NamespacedName{Name: tc.ec.Name, Namespace: tc.ec.Namespace}})

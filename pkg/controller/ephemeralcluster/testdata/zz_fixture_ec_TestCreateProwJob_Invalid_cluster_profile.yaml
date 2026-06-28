@@ -1,0 +1,46 @@
+metadata:
+  creationTimestamp: null
+  name: ec
+  namespace: ns
+  resourceVersion: "1000"
+spec:
+  ciOperator:
+    baseImages:
+      upi-installer:
+        name: "4.20"
+        namespace: ocp
+        tag: upi-installer
+    buildRoot:
+      image_stream_tag:
+        name: "4.20"
+        namespace: ocp
+        tag: cli
+    externalImages:
+      fedora:
+        name: ""
+        namespace: ""
+        registry: quay.io/fedora/fedora:43
+        tag: ""
+    releases:
+      initial:
+        integration:
+          name: "4.17"
+          namespace: ocp
+      latest:
+        integration:
+          name: "4.17"
+          namespace: ocp
+    test:
+      clusterProfile: aws-2
+      env:
+        foo: bar
+      workflow: test-workflow
+status:
+  conditions:
+  - lastTransitionTime: "2025-04-02T12:12:12Z"
+    message: 'generate jobs: new prowjob builder: resolve cluster profile "aws-2":
+      cluster profile "aws-2" not found'
+    reason: CIOperatorJobsGenerateFailure
+    status: "False"
+    type: ProwJobCreating
+  phase: Failed

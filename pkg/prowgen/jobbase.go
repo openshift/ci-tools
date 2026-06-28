@@ -1,6 +1,7 @@
 package prowgen
 
 import (
+	"fmt"
 	"path"
 	"time"
 
@@ -9,10 +10,13 @@ import (
 	prowv1 "sigs.k8s.io/prow/pkg/apis/prowjobs/v1"
 	prowconfig "sigs.k8s.io/prow/pkg/config"
 
+	"github.com/openshift/ci-tools/pkg/api"
 	cioperatorapi "github.com/openshift/ci-tools/pkg/api"
 	"github.com/openshift/ci-tools/pkg/api/ocplifecycle"
 	jc "github.com/openshift/ci-tools/pkg/jobconfig"
 )
+
+type ClusterProfileResolver func(clusterProfile string) (*api.ClusterProfileDetails, error)
 
 type prowJobBaseBuilder struct {
 	PodSpec CiOperatorPodSpecGenerator
@@ -140,7 +144,8 @@ func NewProwJobBaseBuilder(configSpec *cioperatorapi.ReleaseBuildConfiguration, 
 // NewProwJobBaseBuilderForTest creates a new builder populated with defaults
 // for the given ci-operator test. The resulting builder is a superset of a
 // one built by NewProwJobBaseBuilder, with additional fields set for test
-func NewProwJobBaseBuilderForTest(configSpec *cioperatorapi.ReleaseBuildConfiguration, info *cioperatorapi.Metadata, podSpecGenerator CiOperatorPodSpecGenerator, test cioperatorapi.TestStepConfiguration) *prowJobBaseBuilder {
+func NewProwJobBaseBuilderForTest(configSpec *cioperatorapi.ReleaseBuildConfiguration, info *cioperatorapi.Metadata,
+	podSpecGenerator CiOperatorPodSpecGenerator, test cioperatorapi.TestStepConfiguration, clusterProfileResolver ClusterProfileResolver) (*prowJobBaseBuilder, error) {
 	p := NewProwJobBaseBuilder(configSpec, info, podSpecGenerator)
 	if test.Cluster != "" {
 		p.Cluster(test.Cluster)
@@ -186,8 +191,13 @@ func NewProwJobBaseBuilderForTest(configSpec *cioperatorapi.ReleaseBuildConfigur
 	case test.MultiStageTestConfiguration != nil:
 		p.PodSpec.Add(LeaseClient())
 		if clusterProfile := test.MultiStageTestConfiguration.ClusterProfile; clusterProfile != "" {
+			profileDetails, err := clusterProfileResolver(string(clusterProfile))
+			if err != nil {
+				return nil, fmt.Errorf("resolve cluster profile %q: %w", string(clusterProfile), err)
+			}
+
 			p.WithLabel(cioperatorapi.CloudClusterProfileLabel, string(clusterProfile))
-			p.WithLabel(cioperatorapi.CloudLabel, clusterProfile.ClusterType())
+			p.WithLabel(cioperatorapi.CloudLabel, profileDetails.ClusterType)
 		}
 		if configSpec.Releases != nil {
 			p.PodSpec.Add(CIPullSecret())
@@ -198,7 +208,7 @@ func NewProwJobBaseBuilderForTest(configSpec *cioperatorapi.ReleaseBuildConfigur
 			)
 		}
 	}
-	return p
+	return p, nil
 }
 
 // PathAlias sets UtilityConfig.PathAlias to the given value, including an empty

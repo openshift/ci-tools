@@ -13,6 +13,7 @@ import (
 	prowconfig "sigs.k8s.io/prow/pkg/config"
 	"sigs.k8s.io/prow/pkg/flagutil"
 
+	"github.com/openshift/ci-tools/pkg/api"
 	cioperatorapi "github.com/openshift/ci-tools/pkg/api"
 	"github.com/openshift/ci-tools/pkg/config"
 	jc "github.com/openshift/ci-tools/pkg/jobconfig"
@@ -123,14 +124,26 @@ func (o *options) generateJobsToDir(subDir string) error {
 func generateJobs(resolver registry.Resolver, output map[string]*prowconfig.JobConfig) func(configSpec *cioperatorapi.ReleaseBuildConfiguration, info *config.Info) error {
 	return func(configSpec *cioperatorapi.ReleaseBuildConfiguration, info *config.Info) error {
 		orgRepo := fmt.Sprintf("%s/%s", info.Org, info.Repo)
+		var clusterProfileResolver func(name string) (*api.ClusterProfileDetails, error) = func(name string) (*api.ClusterProfileDetails, error) {
+			return nil, fmt.Errorf("cluster profile resolver not available")
+		}
+
 		if resolver != nil {
 			resolved, err := registry.ResolveConfig(resolver, *configSpec)
 			if err != nil {
 				return fmt.Errorf("failed to resolve configuration: %w", err)
 			}
 			configSpec = &resolved
+			clusterProfileResolver = func(name string) (*api.ClusterProfileDetails, error) {
+				cp, err := resolver.ResolveClusterProfile(name)
+				if err != nil {
+					return nil, err
+				}
+				return &cp, nil
+			}
 		}
-		generated, err := prowgen.GenerateJobs(configSpec, &info.Metadata)
+
+		generated, err := prowgen.GenerateJobs(configSpec, &info.Metadata, clusterProfileResolver)
 		if err != nil {
 			return err
 		}

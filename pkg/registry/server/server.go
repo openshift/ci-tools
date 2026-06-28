@@ -514,7 +514,7 @@ func ResolveClusterProfile(agent agents.RegistryAgent, resolverMetrics *metrics.
 			logrus.WithError(err).Warning("failed to read query from request")
 			return
 		}
-		profileDetails, err := agent.GetClusterProfileDetails(profileNameFromQuery)
+		profileDetails, err := agent.ResolveClusterProfile(profileNameFromQuery)
 		if err != nil {
 			metrics.RecordError("cluster profile not found", resolverMetrics.ErrorRate)
 			w.WriteHeader(http.StatusNotFound)

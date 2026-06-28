@@ -51,9 +51,8 @@ func profilePrint(args []string) error {
 	for _, arg := range args {
 		p := api.ClusterProfile(arg)
 		l = append(l, P{
-			Profile:     p,
-			ClusterType: p.ClusterType(),
-			LeaseType:   p.LeaseType(),
+			Profile:   p,
+			LeaseType: p.LeaseType(),
 		})
 	}
 	return printYAML(l)

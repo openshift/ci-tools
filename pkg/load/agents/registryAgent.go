@@ -22,7 +22,6 @@ type RegistryAgent interface {
 	GetRegistryComponents() (registry.ReferenceByName, registry.ChainByName, registry.WorkflowByName, map[string]string, api.RegistryMetadata)
 	GetGeneration() int
 	GetClusterProfiles() api.ClusterProfilesMap
-	GetClusterProfileDetails(profileName string) (*api.ClusterProfileDetails, error)
 	registry.Resolver
 }
 
@@ -147,12 +146,12 @@ func (a *registryAgent) GetClusterProfiles() api.ClusterProfilesMap {
 }
 
 // GetClusterProfileDetails returns a struct with all details for a cluster profile
-func (a *registryAgent) GetClusterProfileDetails(profileName string) (*api.ClusterProfileDetails, error) {
+func (a *registryAgent) ResolveClusterProfile(profileName string) (api.ClusterProfileDetails, error) {
 	profileDetails, found := a.GetClusterProfiles()[api.ClusterProfile(profileName)]
 	if found {
-		return &profileDetails, nil
+		return profileDetails, nil
 	}
-	return nil, fmt.Errorf("cluster profile %s not found", profileName)
+	return api.ClusterProfileDetails{}, fmt.Errorf("cluster profile %s not found", profileName)
 }
 
 func (a *registryAgent) loadRegistry() error {

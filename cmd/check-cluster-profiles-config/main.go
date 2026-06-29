@@ -12,6 +12,7 @@ import (
 	"github.com/sirupsen/logrus"
 
 	coreapi "k8s.io/api/core/v1"
+	utilerrors "k8s.io/apimachinery/pkg/util/errors"
 	"k8s.io/apimachinery/pkg/util/sets"
 	ctrlruntimeclient "sigs.k8s.io/controller-runtime/pkg/client"
 	fakectrlruntimeclient "sigs.k8s.io/controller-runtime/pkg/client/fake"
@@ -174,18 +175,29 @@ func (validator *profileValidator) Validate(profiles api.ClusterProfilesList) er
 
 // checkCISecrets verifies that the secret for each cluster profile exists in the ci namespace
 func (validator *profileValidator) checkCISecrets() error {
-	for p := range validator.profiles {
-		profileDetails, err := server.NewResolverClient(configResolverAddress).ClusterProfile(p)
-		if err != nil {
-			return fmt.Errorf("failed to retrieve details from config resolver for '%s' cluster profile: %w", p, err)
+	// FIXME: temporary workaround, we should read this information from a config file.
+	clusterProfileSets := sets.New("openshift-org-aws", "openshift-org-azure", "openshift-org-gcp")
+	errs := make([]error, 0)
+
+	for profileName := range validator.profiles {
+		if clusterProfileSets.Has(profileName) {
+			continue
 		}
+
+		profileDetails, err := server.NewResolverClient(configResolverAddress).ClusterProfile(profileName)
+		if err != nil {
+			errs = append(errs, fmt.Errorf("failed to retrieve details from config resolver for '%s' cluster profile: %w", profileName, err))
+			continue
+		}
+
 		ciSecret := &coreapi.Secret{}
 		err = validator.kubeClient.Get(context.Background(), ctrlruntimeclient.ObjectKey{Namespace: "ci", Name: profileDetails.Secret}, ciSecret)
 		if err != nil {
-			return fmt.Errorf("failed to get secret '%s' for cluster profile '%s': %w", profileDetails.Secret, p, err)
+			errs = append(errs, fmt.Errorf("failed to get secret '%s' for cluster profile '%s': %w", profileDetails.Secret, profileName, err))
 		}
 	}
-	return nil
+
+	return utilerrors.NewAggregate(errs)
 }
 
 func normalize(profiles api.ClusterProfilesList) {

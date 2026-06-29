@@ -163,6 +163,7 @@ func NewProwJobBaseBuilderForTest(configSpec *cioperatorapi.ReleaseBuildConfigur
 	}
 
 	p.PodSpec.Add(Secrets(test.Secret), Secrets(test.Secrets...))
+	p.PodSpec.Add(GSMSecrets(test.Secret), GSMSecrets(test.Secrets...))
 	p.PodSpec.Add(Targets(test.As))
 
 	if test.ClusterClaim != nil {

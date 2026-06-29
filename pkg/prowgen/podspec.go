@@ -321,13 +321,28 @@ func Arg(name, value string) PodSpecMutator {
 	}
 }
 
-// Secrets exposes the configured secrets via mounted volumes and a `--secret-dir`
-// option passed to ci-operator
+// Secrets exposes the configured K8s secrets via mounted volumes and a `--secret-dir`
+// option passed to ci-operator. GSM-referenced secrets (Collection/Group or Bundle)
+// are skipped — those are handled via GSMSecrets().
 func Secrets(secrets ...*cioperatorapi.Secret) PodSpecMutator {
 	var mutators []PodSpecMutator
 	for i := range secrets {
-		if secrets[i] != nil {
-			mutators = append(mutators, makeSecretAddingMutator(secrets[i].Name))
+		if secrets[i] == nil || secrets[i].IsGSMReference() || secrets[i].IsBundleReference() {
+			continue
+		}
+		mutators = append(mutators, makeSecretAddingMutator(secrets[i].Name))
+	}
+	return aggregateMutator(mutators...)
+}
+
+// GSMSecrets returns a GSMConfig mutator if any of the provided secrets is a
+// GSM reference (Collection/Group or Bundle). Returns a no-op otherwise.
+func GSMSecrets(secrets ...*cioperatorapi.Secret) PodSpecMutator {
+	var mutators []PodSpecMutator
+	for _, s := range secrets {
+		if s != nil && (s.IsGSMReference() || s.IsBundleReference()) {
+			mutators = append(mutators, GSMConfig())
+			break
 		}
 	}
 	return aggregateMutator(mutators...)

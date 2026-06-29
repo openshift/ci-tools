@@ -377,6 +377,36 @@ func TestNewProwJobBaseBuilderForTest(t *testing.T) {
 			info: defaultInfo,
 		},
 		{
+			name: "container test with GSM bundle secret",
+			test: ciop.TestStepConfiguration{
+				As:                         "simple",
+				Commands:                   "make",
+				ContainerTestConfiguration: &ciop.ContainerTestConfiguration{From: "src"},
+				Secrets:                    []*ciop.Secret{{Bundle: "my-bundle", MountPath: "/path"}},
+			},
+			info: defaultInfo,
+		},
+		{
+			name: "container test with GSM collection group secret",
+			test: ciop.TestStepConfiguration{
+				As:                         "simple",
+				Commands:                   "make",
+				ContainerTestConfiguration: &ciop.ContainerTestConfiguration{From: "src"},
+				Secrets:                    []*ciop.Secret{{Collection: "col", Group: "grp", MountPath: "/path"}},
+			},
+			info: defaultInfo,
+		},
+		{
+			name: "container test with mixed k8s and GSM secrets",
+			test: ciop.TestStepConfiguration{
+				As:                         "simple",
+				Commands:                   "make",
+				ContainerTestConfiguration: &ciop.ContainerTestConfiguration{From: "src"},
+				Secrets:                    []*ciop.Secret{{Name: "k8s-secret", MountPath: "/k8s"}, {Bundle: "bnd", MountPath: "/bnd"}},
+			},
+			info: defaultInfo,
+		},
+		{
 			name: "multi-stage test with CSI enabled via ci-operator config",
 			cfg: &ciop.ReleaseBuildConfiguration{
 				Prowgen: &ciop.ProwgenOverrides{EnableSecretsStoreCSIDriver: true},

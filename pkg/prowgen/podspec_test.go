@@ -345,6 +345,18 @@ func TestSecrets(t *testing.T) {
 			name:    "multiple secrets",
 			secrets: []*api.Secret{{Name: "sekret"}, {Name: "another", MountPath: "/with/path"}},
 		},
+		{
+			name:    "gsm collection group secret is skipped",
+			secrets: []*api.Secret{{Collection: "col", Group: "grp", MountPath: "/path"}},
+		},
+		{
+			name:    "gsm bundle secret is skipped",
+			secrets: []*api.Secret{{Bundle: "my-bundle", MountPath: "/path"}},
+		},
+		{
+			name:    "mixed k8s and gsm secrets",
+			secrets: []*api.Secret{{Name: "k8s-secret"}, {Collection: "col", Group: "grp", MountPath: "/gsm"}, {Bundle: "bnd", MountPath: "/bnd"}},
+		},
 	}
 	for _, tc := range tests {
 		tc := tc
@@ -352,6 +364,47 @@ func TestSecrets(t *testing.T) {
 			t.Parallel()
 			g := NewCiOperatorPodSpecGenerator()
 			g.Add(Secrets(tc.secrets...))
+			podspec, err := g.Build()
+			if err != nil {
+				t.Fatalf("Unexpected error: %v", err)
+			}
+			testhelper.CompareWithFixture(t, podspec)
+		})
+	}
+}
+
+func TestGSMSecrets(t *testing.T) {
+	t.Parallel()
+	tests := []struct {
+		name    string
+		secrets []*api.Secret
+	}{
+		{
+			name: "no secrets is a nop",
+		},
+		{
+			name:    "k8s secrets only is a nop",
+			secrets: []*api.Secret{{Name: "k8s-secret"}},
+		},
+		{
+			name:    "collection group secret adds gsm config",
+			secrets: []*api.Secret{{Collection: "col", Group: "grp", MountPath: "/path"}},
+		},
+		{
+			name:    "bundle secret adds gsm config",
+			secrets: []*api.Secret{{Bundle: "my-bundle", MountPath: "/path"}},
+		},
+		{
+			name:    "mixed secrets adds gsm config",
+			secrets: []*api.Secret{{Name: "k8s-secret"}, {Bundle: "my-bundle", MountPath: "/path"}},
+		},
+	}
+	for _, tc := range tests {
+		tc := tc
+		t.Run(tc.name, func(t *testing.T) {
+			t.Parallel()
+			g := NewCiOperatorPodSpecGenerator()
+			g.Add(GSMSecrets(tc.secrets...))
 			podspec, err := g.Build()
 			if err != nil {
 				t.Fatalf("Unexpected error: %v", err)

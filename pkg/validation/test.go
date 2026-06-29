@@ -248,22 +248,52 @@ func (v *Validator) validateTestStepConfiguration(
 			validationErrors = append(validationErrors, fmt.Errorf("%s: secret/secrets can be only used with container-based tests (use credentials in multi-stage tests)", fieldRootN))
 		}
 
-		seen := sets.New[string]()
-		for _, secret := range test.Secrets {
-			// K8s object names must be valid DNS 1123 subdomains.
-			if len(validation.IsDNS1123Subdomain(secret.Name)) != 0 {
-				validationErrors = append(validationErrors, fmt.Errorf("%s.name: '%s' is not a valid Kubernetes object name", fieldRootN, secret.Name))
+		seenNames := sets.New[string]()
+		seenBundles := sets.New[string]()
+		type collectionGroup struct{ collection, group string }
+		seenCollectionGroups := sets.New[collectionGroup]()
+		for i, secret := range test.Secrets {
+			isGSM := secret.IsGSMReference() || secret.IsBundleReference()
+			hasGSMFields := secret.Collection != "" || secret.Group != "" || secret.Bundle != ""
+			if isGSM || hasGSMFields {
+				if secret.Name != "" {
+					validationErrors = append(validationErrors, fmt.Errorf("%s.secrets[%d]: `name` cannot be used with `bundle`, `collection`, or `group`", fieldRootN, i))
+				}
+				if secret.IsBundleReference() {
+					if secret.Collection != "" || secret.Group != "" {
+						validationErrors = append(validationErrors, fmt.Errorf("%s.secrets[%d]: `bundle` cannot be used with `collection` or `group`", fieldRootN, i))
+					}
+					if seenBundles.Has(secret.Bundle) {
+						validationErrors = append(validationErrors, fmt.Errorf("%s.secrets[%d]: duplicate bundle reference %q", fieldRootN, i, secret.Bundle))
+					}
+					seenBundles.Insert(secret.Bundle)
+				} else if secret.IsGSMReference() {
+					key := collectionGroup{secret.Collection, secret.Group}
+					if seenCollectionGroups.Has(key) {
+						validationErrors = append(validationErrors, fmt.Errorf("%s.secrets[%d]: duplicate collection/group reference %s/%s", fieldRootN, i, secret.Collection, secret.Group))
+					}
+					seenCollectionGroups.Insert(key)
+				} else if secret.Collection != "" {
+					validationErrors = append(validationErrors, fmt.Errorf("%s.secrets[%d].group: is required when `collection` is set", fieldRootN, i))
+				} else if secret.Group != "" {
+					validationErrors = append(validationErrors, fmt.Errorf("%s.secrets[%d].collection: is required when `group` is set", fieldRootN, i))
+				} else {
+					validationErrors = append(validationErrors, fmt.Errorf("%s.secrets[%d]: must specify `bundle` or `collection`+`group`", fieldRootN, i))
+				}
+			} else {
+				// K8s object names must be valid DNS 1123 subdomains.
+				if len(validation.IsDNS1123Subdomain(secret.Name)) != 0 {
+					validationErrors = append(validationErrors, fmt.Errorf("%s.secrets[%d].name: %q is not a valid Kubernetes object name", fieldRootN, i, secret.Name))
+				}
+				if seenNames.Has(secret.Name) {
+					validationErrors = append(validationErrors, fmt.Errorf("%s.secrets[%d]: duplicate secret name %q", fieldRootN, i, secret.Name))
+				}
+				seenNames.Insert(secret.Name)
 			}
-			// Validate no duplicate secret names, then append to list of names.
-			if seen.Has(secret.Name) {
-				validationErrors = append(validationErrors, fmt.Errorf("duplicate secret name entries found for %s", secret.Name))
-			}
-			seen.Insert(secret.Name)
-
 			// validate path only if name is passed
 			if secret.MountPath != "" {
 				if ok := filepath.IsAbs(secret.MountPath); !ok {
-					validationErrors = append(validationErrors, fmt.Errorf("%s.path: '%s' secret mount path must be an absolute path", fieldRootN, secret.MountPath))
+					validationErrors = append(validationErrors, fmt.Errorf("%s.secrets[%d].mount_path: %q is not an absolute path", fieldRootN, i, secret.MountPath))
 				}
 			}
 		}

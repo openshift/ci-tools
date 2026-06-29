@@ -232,7 +232,7 @@ func TestValidateTests(t *testing.T) {
 					},
 				},
 			},
-			expectedError: errors.New("tests[0].name: 'secret_test' is not a valid Kubernetes object name"),
+			expectedError: errors.New(`tests[0].secrets[0].name: "secret_test" is not a valid Kubernetes object name`),
 		},
 		{
 			id: "invalid secret and secrets both set",
@@ -274,7 +274,7 @@ func TestValidateTests(t *testing.T) {
 					},
 				},
 			},
-			expectedError: errors.New("duplicate secret name entries found for secret-test-a"),
+			expectedError: errors.New(`tests[0].secrets[1]: duplicate secret name "secret-test-a"`),
 		},
 		{
 			id: "valid secret",
@@ -349,7 +349,155 @@ func TestValidateTests(t *testing.T) {
 					},
 				},
 			},
-			expectedError: errors.New(`tests[0].path: 'path/to/secret' secret mount path must be an absolute path`),
+			expectedError: errors.New(`tests[0].secrets[0].mount_path: "path/to/secret" is not an absolute path`),
+		},
+		{
+			id: "valid GSM bundle secret",
+			tests: []api.TestStepConfiguration{
+				{
+					As:                         "unit",
+					Commands:                   "commands",
+					ContainerTestConfiguration: &api.ContainerTestConfiguration{From: "ignored"},
+					Secrets: []*api.Secret{
+						{
+							Bundle:    "my-bundle",
+							MountPath: "/path/to/secret",
+						},
+					},
+				},
+			},
+		},
+		{
+			id: "valid GSM collection group secret",
+			tests: []api.TestStepConfiguration{
+				{
+					As:                         "unit",
+					Commands:                   "commands",
+					ContainerTestConfiguration: &api.ContainerTestConfiguration{From: "ignored"},
+					Secrets: []*api.Secret{
+						{
+							Collection: "col",
+							Group:      "grp",
+							MountPath:  "/path/to/secret",
+						},
+					},
+				},
+			},
+		},
+		{
+			id: "valid mixed k8s and GSM secrets",
+			tests: []api.TestStepConfiguration{
+				{
+					As:                         "unit",
+					Commands:                   "commands",
+					ContainerTestConfiguration: &api.ContainerTestConfiguration{From: "ignored"},
+					Secrets: []*api.Secret{
+						{Name: "k8s-secret", MountPath: "/k8s"},
+						{Bundle: "my-bundle", MountPath: "/gsm"},
+						{Collection: "col", Group: "grp", MountPath: "/gsm2"},
+					},
+				},
+			},
+		},
+		{
+			id: "invalid GSM secret with name and bundle",
+			tests: []api.TestStepConfiguration{
+				{
+					As:                         "unit",
+					Commands:                   "commands",
+					ContainerTestConfiguration: &api.ContainerTestConfiguration{From: "ignored"},
+					Secrets: []*api.Secret{
+						{
+							Name:      "secret",
+							Bundle:    "my-bundle",
+							MountPath: "/path",
+						},
+					},
+				},
+			},
+			expectedError: errors.New(`tests[0].secrets[0]: ` + "`name` cannot be used with `bundle`, `collection`, or `group`"),
+		},
+		{
+			id: "invalid GSM secret with bundle and collection",
+			tests: []api.TestStepConfiguration{
+				{
+					As:                         "unit",
+					Commands:                   "commands",
+					ContainerTestConfiguration: &api.ContainerTestConfiguration{From: "ignored"},
+					Secrets: []*api.Secret{
+						{
+							Bundle:     "my-bundle",
+							Collection: "col",
+							MountPath:  "/path",
+						},
+					},
+				},
+			},
+			expectedError: errors.New(`tests[0].secrets[0]: ` + "`bundle` cannot be used with `collection` or `group`"),
+		},
+		{
+			id: "invalid GSM secret with collection but no group",
+			tests: []api.TestStepConfiguration{
+				{
+					As:                         "unit",
+					Commands:                   "commands",
+					ContainerTestConfiguration: &api.ContainerTestConfiguration{From: "ignored"},
+					Secrets: []*api.Secret{
+						{
+							Collection: "col",
+							MountPath:  "/path",
+						},
+					},
+				},
+			},
+			expectedError: errors.New("tests[0].secrets[0].group: is required when `collection` is set"),
+		},
+		{
+			id: "invalid GSM secret with group but no collection",
+			tests: []api.TestStepConfiguration{
+				{
+					As:                         "unit",
+					Commands:                   "commands",
+					ContainerTestConfiguration: &api.ContainerTestConfiguration{From: "ignored"},
+					Secrets: []*api.Secret{
+						{
+							Group:     "grp",
+							MountPath: "/path",
+						},
+					},
+				},
+			},
+			expectedError: errors.New("tests[0].secrets[0].collection: is required when `group` is set"),
+		},
+		{
+			id: "invalid duplicate bundle secrets",
+			tests: []api.TestStepConfiguration{
+				{
+					As:                         "unit",
+					Commands:                   "commands",
+					ContainerTestConfiguration: &api.ContainerTestConfiguration{From: "ignored"},
+					Secrets: []*api.Secret{
+						{Bundle: "my-bundle", MountPath: "/path1"},
+						{Bundle: "my-bundle", MountPath: "/path2"},
+					},
+				},
+			},
+			expectedError: errors.New(`tests[0].secrets[1]: duplicate bundle reference "my-bundle"`),
+		},
+		{
+			id: "invalid duplicate collection group secrets",
+			tests: []api.TestStepConfiguration{
+				{
+					As:                         "unit",
+					Commands:                   "commands",
+					ContainerTestConfiguration: &api.ContainerTestConfiguration{From: "ignored"},
+					Secrets: []*api.Secret{
+						{Collection: "col", Group: "grp", MountPath: "/path1"},
+						{Collection: "col", Group: "grp", MountPath: "/path2"},
+					},
+				},
+			},
+			expectedError: errors.New("tests[0].secrets[1]: duplicate collection/group reference col/grp"),
 		},
 		{
 			id:       "non-literal test is invalid in fully-resolved configuration",

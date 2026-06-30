@@ -1,4 +1,6 @@
 cluster_profiles:
+- name: aws
+  cluster_type: aws
 - name: aws-testing-complete
   owners:
     - org: org

@@ -1,10 +1,10 @@
-prowgen:
-  private: true
 build_root:
   image_stream_tag:
     name: release
     namespace: openshift
     tag: golang-1.10
+prowgen:
+  private: true
 resources:
   '*':
     limits:

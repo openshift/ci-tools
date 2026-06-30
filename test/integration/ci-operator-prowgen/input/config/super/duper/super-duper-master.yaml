@@ -42,8 +42,8 @@ tests:
   commands: make upload-results
   container:
     from: src
-  postsubmit: true
   max_concurrency: 6
+  postsubmit: true
 - as: lint
   commands: make test-lint
   container:

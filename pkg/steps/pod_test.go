@@ -228,6 +228,26 @@ func TestGetPodObjectMounts(t *testing.T) {
 				expectedPodStepTemplate.clusterClaim = &api.ClusterClaim{}
 			},
 		},
+		{
+			name: "with GSM secret results in CSI volume",
+			podStep: func(expectedPodStepTemplate *podStep) {
+				expectedPodStepTemplate.resolvedGSMCredentials = []api.CredentialReference{
+					{Collection: "my-collection", Group: "my-group", Field: "my-field", MountPath: "/usr/gsm-secrets"},
+				}
+			},
+		},
+		{
+			name: "with mixed K8s and GSM secrets",
+			podStep: func(expectedPodStepTemplate *podStep) {
+				expectedPodStepTemplate.config.Secrets = []*api.Secret{
+					{Name: "k8s-secret", MountPath: "/usr/k8s-secrets"},
+				}
+				expectedPodStepTemplate.resolvedGSMCredentials = []api.CredentialReference{
+					{Collection: "my-collection", Group: "my-group", Field: "key1", MountPath: "/usr/gsm-secrets"},
+					{Collection: "my-collection", Group: "my-group", Field: "key2", MountPath: "/usr/gsm-secrets"},
+				}
+			},
+		},
 	}
 
 	for _, tc := range testCases {
@@ -328,7 +348,7 @@ func TestTestStepAndRequires(t *testing.T) {
 	}
 	for _, tc := range tests {
 		t.Run(tc.name, func(t *testing.T) {
-			actual := TestStep(tc.config, nil, nil, nil, "").Requires()
+			actual := TestStep(tc.config, nil, nil, nil, "", false, nil).Requires()
 			if len(actual) == len(tc.expected) {
 				matches := true
 				for i := range actual {

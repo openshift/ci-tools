@@ -24,6 +24,7 @@ import (
 	"github.com/openshift/ci-tools/pkg/junit"
 	"github.com/openshift/ci-tools/pkg/kubernetes"
 	"github.com/openshift/ci-tools/pkg/results"
+	"github.com/openshift/ci-tools/pkg/steps/csi_secrets"
 	"github.com/openshift/ci-tools/pkg/util"
 	podsutils "github.com/openshift/ci-tools/pkg/util"
 )
@@ -47,18 +48,20 @@ var CleanupCtx = context.Background()
 // directory structure, and input image format. More sophisticated reuse of launching
 // pods should use RunPod which is more limited.
 type PodStepConfiguration struct {
-	WaitFlags          util.WaitForPodFlag
-	As                 string
-	From               api.ImageStreamTagReference
-	Commands           string
-	Labels             map[string]string
-	NodeName           string
-	ServiceAccountName string
-	Secrets            []*api.Secret
-	MemoryBackedVolume *api.MemoryBackedVolume
-	Clone              bool
-	NodeArchitecture   api.NodeArchitecture
-	NestedPodman       bool
+	WaitFlags                   util.WaitForPodFlag
+	As                          string
+	From                        api.ImageStreamTagReference
+	Commands                    string
+	Labels                      map[string]string
+	NodeName                    string
+	ServiceAccountName          string
+	Secrets                     []*api.Secret
+	MemoryBackedVolume          *api.MemoryBackedVolume
+	Clone                       bool
+	NodeArchitecture            api.NodeArchitecture
+	NestedPodman                bool
+	EnableSecretsStoreCSIDriver bool
+	GSMConfig                   *csi_secrets.GSMConfiguration
 }
 
 type GeneratePodOptions struct {
@@ -76,7 +79,8 @@ type podStep struct {
 
 	subTests []*junit.TestCase
 
-	clusterClaim *api.ClusterClaim
+	clusterClaim           *api.ClusterClaim
+	resolvedGSMCredentials []api.CredentialReference
 }
 
 func (s *podStep) Inputs() (api.InputDefinition, error) {
@@ -102,6 +106,12 @@ func (s *podStep) run(ctx context.Context) error {
 		return errors.New("pod step does not support an image stream tag reference outside the namespace")
 	}
 	image := fmt.Sprintf("%s:%s", s.config.From.Name, s.config.From.Tag)
+
+	if s.config.EnableSecretsStoreCSIDriver {
+		if err := s.resolveAndCreateGSMSecrets(ctx); err != nil {
+			return fmt.Errorf("failed to set up GSM secrets: %w", err)
+		}
+	}
 
 	pod, err := s.generatePodForStep(image, containerResources, s.config.Clone)
 	if err != nil {
@@ -186,19 +196,21 @@ func (s *podStep) ResolveMultiArch() sets.Set[string] {
 
 func (s *podStep) AddArchitectures(archs []string) {}
 
-func TestStep(config api.TestStepConfiguration, resources api.ResourceConfiguration, client kubernetes.PodClient, jobSpec *api.JobSpec, nodeName string) api.Step {
+func TestStep(config api.TestStepConfiguration, resources api.ResourceConfiguration, client kubernetes.PodClient, jobSpec *api.JobSpec, nodeName string, enableCSI bool, gsmConfig *csi_secrets.GSMConfiguration) api.Step {
 	return PodStep(
 		"test",
 		PodStepConfiguration{
-			As:                 config.As,
-			From:               api.ImageStreamTagReference{Name: api.PipelineImageStream, Tag: string(config.ContainerTestConfiguration.From)},
-			Commands:           config.Commands,
-			NodeName:           nodeName,
-			Secrets:            config.Secrets,
-			MemoryBackedVolume: config.ContainerTestConfiguration.MemoryBackedVolume,
-			Clone:              *config.ContainerTestConfiguration.Clone,
-			NodeArchitecture:   config.NodeArchitecture,
-			NestedPodman:       config.NestedPodman,
+			As:                          config.As,
+			From:                        api.ImageStreamTagReference{Name: api.PipelineImageStream, Tag: string(config.ContainerTestConfiguration.From)},
+			Commands:                    config.Commands,
+			NodeName:                    nodeName,
+			Secrets:                     config.Secrets,
+			MemoryBackedVolume:          config.ContainerTestConfiguration.MemoryBackedVolume,
+			Clone:                       *config.ContainerTestConfiguration.Clone,
+			NodeArchitecture:            config.NodeArchitecture,
+			NestedPodman:                config.NestedPodman,
+			EnableSecretsStoreCSIDriver: enableCSI,
+			GSMConfig:                   gsmConfig,
 		},
 		resources,
 		client,
@@ -294,8 +306,25 @@ func (s *podStep) generatePodForStep(image string, containerResources coreapi.Re
 	var secretVolumes []coreapi.Volume
 	var secretVolumeMounts []coreapi.VolumeMount
 	for i, secret := range s.config.Secrets {
+		if secret.Name == "" {
+			continue
+		}
 		secretVolumeMounts = append(secretVolumeMounts, getSecretVolumeMountFromSecret(secret.MountPath, i)...)
 		secretVolumes = append(secretVolumes, getVolumeFromSecret(secret.Name, i)...)
+	}
+	if len(s.resolvedGSMCredentials) > 0 {
+		ns := s.jobSpec.Namespace()
+		collectionMountGroups := csi_secrets.GroupCredentialsByCollectionGroupAndMountPath(s.resolvedGSMCredentials)
+		for _, credentials := range collectionMountGroups {
+			mountPath := credentials[0].MountPath
+			csiVolumeName := csi_secrets.GetCSIVolumeName(ns, credentials)
+			csiVolume := csi_secrets.BuildCSIVolume(csiVolumeName, csi_secrets.GetSPCName(ns, credentials))
+			secretVolumes = append(secretVolumes, csiVolume)
+			secretVolumeMounts = append(secretVolumeMounts, coreapi.VolumeMount{
+				Name:      csiVolumeName,
+				MountPath: mountPath,
+			})
+		}
 	}
 	if s.clusterClaim != nil {
 		secretVolumeMounts = append(secretVolumeMounts, []coreapi.VolumeMount{
@@ -394,6 +423,61 @@ func (s *podStep) setupNestedPodmanRBACs(ctx context.Context) error {
 		return fmt.Errorf("wait test NS to become privileged: %w", err)
 	}
 
+	return nil
+}
+
+func (s *podStep) resolveAndCreateGSMSecrets(ctx context.Context) error {
+	var gsmCredRefs []api.CredentialReference
+	for i, secret := range s.config.Secrets {
+		if !secret.IsGSMReference() && !secret.IsBundleReference() {
+			continue
+		}
+		mountPath := secret.MountPath
+		if mountPath == "" {
+			mountPath = testSecretDefaultPath
+			if i > 0 {
+				mountPath = fmt.Sprintf("%s-%d", testSecretDefaultPath, i+1)
+			}
+		}
+		gsmCredRefs = append(gsmCredRefs, api.CredentialReference{
+			As:         secret.As,
+			Collection: secret.Collection,
+			Field:      secret.Field,
+			Group:      secret.Group,
+			Bundle:     secret.Bundle,
+			MountPath:  mountPath,
+		})
+	}
+
+	if len(gsmCredRefs) == 0 {
+		return nil
+	}
+
+	if s.config.GSMConfig == nil || s.config.GSMConfig.Client == nil {
+		return fmt.Errorf("GSM client was not initialized - credentials file may be missing")
+	}
+
+	resolved, err := csi_secrets.ResolveCredentialReferences(
+		ctx, gsmCredRefs, s.config.GSMConfig.Config, s.config.GSMConfig.Client,
+		s.config.GSMConfig.ProjectConfig, nil)
+	if err != nil {
+		return fmt.Errorf("failed to resolve GSM credential references: %w", err)
+	}
+	if err := csi_secrets.ValidateNoGroupCollisionsOnMountPath(resolved); err != nil {
+		return fmt.Errorf("invalid GSM credentials: %w", err)
+	}
+
+	spcsToCreate, err := csi_secrets.BuildSPCsForCredentials(s.jobSpec.Namespace(), resolved)
+	if err != nil {
+		return fmt.Errorf("failed to build SecretProviderClass objects: %w", err)
+	}
+	for name := range spcsToCreate {
+		if err := s.client.Create(ctx, spcsToCreate[name]); err != nil && !kerrors.IsAlreadyExists(err) {
+			return fmt.Errorf("could not create SecretProviderClass: %w", err)
+		}
+	}
+
+	s.resolvedGSMCredentials = resolved
 	return nil
 }
 

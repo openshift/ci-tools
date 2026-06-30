@@ -385,6 +385,43 @@ func TestValidateTests(t *testing.T) {
 			},
 		},
 		{
+			id: "valid GSM collection group field secret",
+			tests: []api.TestStepConfiguration{
+				{
+					As:                         "unit",
+					Commands:                   "commands",
+					ContainerTestConfiguration: &api.ContainerTestConfiguration{From: "ignored"},
+					Secrets: []*api.Secret{
+						{
+							Collection: "col",
+							Group:      "grp",
+							Field:      "my-field",
+							MountPath:  "/path/to/secret",
+						},
+					},
+				},
+			},
+		},
+		{
+			id: "valid GSM collection group field secret with as",
+			tests: []api.TestStepConfiguration{
+				{
+					As:                         "unit",
+					Commands:                   "commands",
+					ContainerTestConfiguration: &api.ContainerTestConfiguration{From: "ignored"},
+					Secrets: []*api.Secret{
+						{
+							As:         "renamed",
+							Collection: "col",
+							Group:      "grp",
+							Field:      "my-field",
+							MountPath:  "/path/to/secret",
+						},
+					},
+				},
+			},
+		},
+		{
 			id: "valid mixed k8s and GSM secrets",
 			tests: []api.TestStepConfiguration{
 				{
@@ -415,7 +452,7 @@ func TestValidateTests(t *testing.T) {
 					},
 				},
 			},
-			expectedError: errors.New(`tests[0].secrets[0]: ` + "`name` cannot be used with `bundle`, `collection`, or `group`"),
+			expectedError: errors.New(`tests[0].secrets[0]: ` + "`name` cannot be used with `bundle`, `collection`, `group`, or `field`"),
 		},
 		{
 			id: "invalid GSM secret with bundle and collection",
@@ -433,7 +470,7 @@ func TestValidateTests(t *testing.T) {
 					},
 				},
 			},
-			expectedError: errors.New(`tests[0].secrets[0]: ` + "`bundle` cannot be used with `collection` or `group`"),
+			expectedError: errors.New(`tests[0].secrets[0]: ` + "`bundle` cannot be used with `collection`, `group`, or `field`"),
 		},
 		{
 			id: "invalid GSM secret with collection but no group",
@@ -468,6 +505,76 @@ func TestValidateTests(t *testing.T) {
 				},
 			},
 			expectedError: errors.New("tests[0].secrets[0].collection: is required when `group` is set"),
+		},
+		{
+			id: "invalid GSM secret with field but no collection or group",
+			tests: []api.TestStepConfiguration{
+				{
+					As:                         "unit",
+					Commands:                   "commands",
+					ContainerTestConfiguration: &api.ContainerTestConfiguration{From: "ignored"},
+					Secrets: []*api.Secret{
+						{
+							Field:     "my-field",
+							MountPath: "/path",
+						},
+					},
+				},
+			},
+			expectedError: errors.New("tests[0].secrets[0]: `field` requires `collection` and `group` to be set"),
+		},
+		{
+			id: "invalid secret with name and as",
+			tests: []api.TestStepConfiguration{
+				{
+					As:                         "unit",
+					Commands:                   "commands",
+					ContainerTestConfiguration: &api.ContainerTestConfiguration{From: "ignored"},
+					Secrets: []*api.Secret{
+						{
+							Name:      "secret",
+							As:        "renamed",
+							MountPath: "/path",
+						},
+					},
+				},
+			},
+			expectedError: errors.New(`tests[0].secrets[0]: ` + "`name` cannot be used with `bundle`, `collection`, `group`, or `field`"),
+		},
+		{
+			id: "invalid secret with as but no GSM fields",
+			tests: []api.TestStepConfiguration{
+				{
+					As:                         "unit",
+					Commands:                   "commands",
+					ContainerTestConfiguration: &api.ContainerTestConfiguration{From: "ignored"},
+					Secrets: []*api.Secret{
+						{
+							As:        "renamed",
+							MountPath: "/path",
+						},
+					},
+				},
+			},
+			expectedError: errors.New("tests[0].secrets[0]: `field` is required when `as` is specified"),
+		},
+		{
+			id: "invalid GSM secret with as and bundle",
+			tests: []api.TestStepConfiguration{
+				{
+					As:                         "unit",
+					Commands:                   "commands",
+					ContainerTestConfiguration: &api.ContainerTestConfiguration{From: "ignored"},
+					Secrets: []*api.Secret{
+						{
+							As:        "renamed",
+							Bundle:    "my-bundle",
+							MountPath: "/path",
+						},
+					},
+				},
+			},
+			expectedError: errors.New("tests[0].secrets[0]: `field` is required when `as` is specified"),
 		},
 		{
 			id: "invalid duplicate bundle secrets",

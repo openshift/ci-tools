@@ -1129,12 +1129,19 @@ const ciOperatorReferenceYaml = "# The list of base images describe\n" +
 	"        # You cannot set the Secret and Secrets attributes\n" +
 	"        # at the same time.\n" +
 	"        secret:\n" +
+	"            # As is an optional string under which the secret will be stored on the file system.\n" +
+	"            # Requires Field to be not empty.\n" +
+	"            as: ' '\n" +
 	"            # Bundle is a named bundle reference from the GSM config mapping file.\n" +
 	"            # Mutually exclusive with Collection/Group and Name.\n" +
 	"            bundle: ' '\n" +
 	"            # Collection is the GSM collection the secret belongs to.\n" +
 	"            # Mutually exclusive with Bundle and Name.\n" +
 	"            collection: ' '\n" +
+	"            # Field is the specific field name within the collection/group.\n" +
+	"            # When set, only this single field is mounted. When omitted, all fields\n" +
+	"            # in the collection/group are auto-discovered.\n" +
+	"            field: ' '\n" +
 	"            # Group is the group name within the collection.\n" +
 	"            # Required when Collection is set.\n" +
 	"            group: ' '\n" +
@@ -1149,12 +1156,19 @@ const ciOperatorReferenceYaml = "# The list of base images describe\n" +
 	"        # You cannot set the Secret and Secrets attributes\n" +
 	"        # at the same time.\n" +
 	"        secrets:\n" +
-	"            - # Bundle is a named bundle reference from the GSM config mapping file.\n" +
+	"            - # As is an optional string under which the secret will be stored on the file system.\n" +
+	"              # Requires Field to be not empty.\n" +
+	"              as: ' '\n" +
+	"              # Bundle is a named bundle reference from the GSM config mapping file.\n" +
 	"              # Mutually exclusive with Collection/Group and Name.\n" +
 	"              bundle: ' '\n" +
 	"              # Collection is the GSM collection the secret belongs to.\n" +
 	"              # Mutually exclusive with Bundle and Name.\n" +
 	"              collection: ' '\n" +
+	"              # Field is the specific field name within the collection/group.\n" +
+	"              # When set, only this single field is mounted. When omitted, all fields\n" +
+	"              # in the collection/group are auto-discovered.\n" +
+	"              field: ' '\n" +
 	"              # Group is the group name within the collection.\n" +
 	"              # Required when Collection is set.\n" +
 	"              group: ' '\n" +
@@ -2096,12 +2110,19 @@ const ciOperatorReferenceYaml = "# The list of base images describe\n" +
 	"      # You cannot set the Secret and Secrets attributes\n" +
 	"      # at the same time.\n" +
 	"      secret:\n" +
+	"        # As is an optional string under which the secret will be stored on the file system.\n" +
+	"        # Requires Field to be not empty.\n" +
+	"        as: ' '\n" +
 	"        # Bundle is a named bundle reference from the GSM config mapping file.\n" +
 	"        # Mutually exclusive with Collection/Group and Name.\n" +
 	"        bundle: ' '\n" +
 	"        # Collection is the GSM collection the secret belongs to.\n" +
 	"        # Mutually exclusive with Bundle and Name.\n" +
 	"        collection: ' '\n" +
+	"        # Field is the specific field name within the collection/group.\n" +
+	"        # When set, only this single field is mounted. When omitted, all fields\n" +
+	"        # in the collection/group are auto-discovered.\n" +
+	"        field: ' '\n" +
 	"        # Group is the group name within the collection.\n" +
 	"        # Required when Collection is set.\n" +
 	"        group: ' '\n" +
@@ -2116,12 +2137,19 @@ const ciOperatorReferenceYaml = "# The list of base images describe\n" +
 	"      # You cannot set the Secret and Secrets attributes\n" +
 	"      # at the same time.\n" +
 	"      secrets:\n" +
-	"        - # Bundle is a named bundle reference from the GSM config mapping file.\n" +
+	"        - # As is an optional string under which the secret will be stored on the file system.\n" +
+	"          # Requires Field to be not empty.\n" +
+	"          as: ' '\n" +
+	"          # Bundle is a named bundle reference from the GSM config mapping file.\n" +
 	"          # Mutually exclusive with Collection/Group and Name.\n" +
 	"          bundle: ' '\n" +
 	"          # Collection is the GSM collection the secret belongs to.\n" +
 	"          # Mutually exclusive with Bundle and Name.\n" +
 	"          collection: ' '\n" +
+	"          # Field is the specific field name within the collection/group.\n" +
+	"          # When set, only this single field is mounted. When omitted, all fields\n" +
+	"          # in the collection/group are auto-discovered.\n" +
+	"          field: ' '\n" +
 	"          # Group is the group name within the collection.\n" +
 	"          # Required when Collection is set.\n" +
 	"          group: ' '\n" +

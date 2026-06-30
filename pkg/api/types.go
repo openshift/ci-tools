@@ -1384,12 +1384,19 @@ type TestDependencies map[string]string
 // Secret describes a secret to be mounted inside a test
 // container.
 type Secret struct {
+	// As is an optional string under which the secret will be stored on the file system.
+	// Requires Field to be not empty.
+	As string `json:"as,omitempty"`
 	// Bundle is a named bundle reference from the GSM config mapping file.
 	// Mutually exclusive with Collection/Group and Name.
 	Bundle string `json:"bundle,omitempty"`
 	// Collection is the GSM collection the secret belongs to.
 	// Mutually exclusive with Bundle and Name.
 	Collection string `json:"collection,omitempty"`
+	// Field is the specific field name within the collection/group.
+	// When set, only this single field is mounted. When omitted, all fields
+	// in the collection/group are auto-discovered.
+	Field string `json:"field,omitempty"`
 	// Group is the group name within the collection.
 	// Required when Collection is set.
 	Group string `json:"group,omitempty"`

@@ -8,6 +8,7 @@ import (
 	"time"
 
 	"github.com/sirupsen/logrus"
+	"github.com/slack-go/slack"
 
 	prowconfig "sigs.k8s.io/prow/pkg/config"
 	"sigs.k8s.io/prow/pkg/config/secret"
@@ -28,9 +29,11 @@ type options struct {
 	githubEventServer                                githubeventserver.Options
 	configDir, forwardingConfigPath, pluginConfigDir string
 	hmacPath                                         string
+	slackTokenPath, opsChannelID                     string
 	workers, maxRetries                              int
 	configReload, fullResync, shutdownGracePeriod    time.Duration
 	retryExhaustedDelay                              time.Duration
+	slackReportPeriod                                time.Duration
 	maxConfigStaleness                               time.Duration
 }
 
@@ -41,11 +44,14 @@ func gatherOptions() options {
 	fs.StringVar(&o.forwardingConfigPath, "forwarding-config", "", "Path to the default and release branch forwarding configuration.")
 	fs.StringVar(&o.pluginConfigDir, "plugin-config-dir", "", "Path to Prow's sharded plugin configuration used to verify external-plugin coverage.")
 	fs.StringVar(&o.hmacPath, "hmac-secret-file", "/etc/webhook/hmac", "Path to the GitHub webhook HMAC secret.")
+	fs.StringVar(&o.slackTokenPath, "slack-token-path", "", "Optional path to a Slack token used to publish active fast-forward failure digests.")
+	fs.StringVar(&o.opsChannelID, "ops-channel-id", "CHY2E1BL4", "Channel ID for #ops-testplatform.")
 	fs.IntVar(&o.workers, "workers", 8, "Number of repositories reconciled concurrently.")
 	fs.IntVar(&o.maxRetries, "max-retries", 5, "Maximum fast reconciliation retries per repository.")
 	fs.DurationVar(&o.retryExhaustedDelay, "retry-exhausted-delay", 15*time.Minute, "Delay between reconciliation attempts after fast retries are exhausted.")
 	fs.DurationVar(&o.configReload, "config-reload-period", 5*time.Minute, "How often to reload desired state from configuration.")
 	fs.DurationVar(&o.fullResync, "full-resync-period", 12*time.Hour, "Safety-net interval for reconciling every configured repository.")
+	fs.DurationVar(&o.slackReportPeriod, "slack-report-period", 2*time.Hour, "How often to publish active fast-forward failures to Slack when --slack-token-path is set.")
 	fs.DurationVar(&o.maxConfigStaleness, "max-config-staleness", 15*time.Minute, "Config reload age after which readiness fails.")
 	fs.DurationVar(&o.shutdownGracePeriod, "shutdown-grace-period", 30*time.Second, "Maximum graceful shutdown duration.")
 	o.github.AddCustomizedFlags(fs, flagutil.ThrottlerDefaults(18000, 10))
@@ -83,6 +89,12 @@ func (o *options) validate() error {
 	if o.configReload <= 0 || o.fullResync <= 0 || o.retryExhaustedDelay <= 0 {
 		errs = append(errs, errors.New("periods and timeouts must be positive"))
 	}
+	if o.slackReportPeriod <= 0 {
+		errs = append(errs, errors.New("--slack-report-period must be positive"))
+	}
+	if o.slackTokenPath != "" && o.opsChannelID == "" {
+		errs = append(errs, errors.New("--ops-channel-id is required with --slack-token-path"))
+	}
 	if o.shutdownGracePeriod <= 0 {
 		errs = append(errs, errors.New("shutdown grace period must be positive"))
 	}
@@ -107,6 +119,11 @@ func main() {
 	if err := secret.Add(o.hmacPath); err != nil {
 		logrus.WithError(err).Fatal("start HMAC secret agent")
 	}
+	if o.slackTokenPath != "" {
+		if err := secret.Add(o.slackTokenPath); err != nil {
+			logrus.WithError(err).Fatal("start Slack token secret agent")
+		}
+	}
 	if raw, err := os.ReadFile(o.hmacPath); err != nil || len(raw) == 0 {
 		logrus.WithError(err).Fatal("webhook HMAC secret is missing or empty")
 	}
@@ -118,12 +135,21 @@ func main() {
 	refs := newGitHubRefClient(githubClient, healthState)
 
 	state := newDesiredState()
+	issueStore := newBranchIssueStore()
 	if _, err := githubClient.BotUser(); err != nil {
 		logrus.WithError(err).Fatal("validate GitHub credentials")
 	}
 	healthState.githubSucceeded()
 	controller := newController(refs, state, o.maxRetries, o.retryExhaustedDelay)
+	controller.issues = issueStore
 	ctx := interrupts.Context()
+
+	metrics.ExposeMetrics(componentName, prowconfig.PushGateway{}, o.instrumentation.MetricsPort)
+	pprofutil.Instrument(o.instrumentation)
+	health := pjutil.NewHealthOnPort(o.instrumentation.HealthPort)
+	health.ServeReady(func() bool { return healthState.ready(time.Now()) })
+	healthState.serverHealthy.Store(true)
+
 	reload := func() {
 		forwardingConfig, err := loadForwardingConfig(o.forwardingConfigPath)
 		if err != nil {
@@ -143,6 +169,7 @@ func main() {
 			logrus.WithError(err).Warn("external-plugin coverage is incomplete; continuing with desired-state reload")
 		}
 		changed := state.replace(next)
+		issueStore.prune(next)
 		controller.enqueue(changed...)
 		healthState.configSucceeded()
 		logrus.WithFields(logrus.Fields{"repositories": len(next), "changed": len(changed)}).Info("loaded desired state")
@@ -160,11 +187,11 @@ func main() {
 		controller.enqueue(state.keys()...)
 		lastFullResync.SetToCurrentTime()
 	})
+	if o.slackTokenPath != "" {
+		slackClient := slack.New(string(secret.GetSecret(o.slackTokenPath)))
+		go runSlackDigest(ctx, o.slackReportPeriod, newSlackDigestPublisher(slackClient, o.opsChannelID, issueStore))
+	}
 
-	metrics.ExposeMetrics(componentName, prowconfig.PushGateway{}, o.instrumentation.MetricsPort)
-	pprofutil.Instrument(o.instrumentation)
-	health := pjutil.NewHealthOnPort(o.instrumentation.HealthPort)
-	health.ServeReady(func() bool { return healthState.ready(time.Now()) })
 	eventServer := githubeventserver.New(o.githubEventServer, secret.GetTokenGenerator(o.hmacPath), logrus.WithField("component", componentName))
 	eventServer.RegisterPushEventHandler((&pushEventHandler{state: state, controller: controller}).handle)
 	interrupts.OnInterrupt(func() {
@@ -172,7 +199,6 @@ func main() {
 		controller.queue.ShutDown()
 		eventServer.GracefulShutdown()
 	})
-	healthState.serverHealthy.Store(true)
 	interrupts.ListenAndServe(eventServer, o.shutdownGracePeriod)
 	interrupts.WaitForGracefulShutdown()
 }

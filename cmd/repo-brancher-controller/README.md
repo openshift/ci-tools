@@ -26,6 +26,13 @@ readiness are exposed on `--health-port`, and Prometheus metrics on
 client. Transient failures continue at `--retry-exhausted-delay` after the fast
 retry budget is consumed.
 
+If `--slack-token-path` is set, the controller also publishes an active failure
+digest to `--ops-channel-id` every `--slack-report-period`, defaulting to two
+hours. The digest reports the total number of active fast-forward failures and
+shows the five most recently observed entries with compare links. A failure is
+removed from the digest after the matching source-to-target branch forwarding
+succeeds or the target is removed from desired state.
+
 ## Forwarding configuration
 
 The forwarding config separates default branches from release branches:

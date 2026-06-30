@@ -142,6 +142,7 @@ type refClient interface {
 type controller struct {
 	refs                refClient
 	state               *desiredState
+	issues              *branchIssueStore
 	queue               workqueue.TypedRateLimitingInterface[repoKey]
 	maxRetries          int
 	retryExhaustedDelay time.Duration
@@ -204,8 +205,18 @@ func (c *controller) processNext(ctx context.Context) bool {
 	queueDepth.Set(float64(c.queue.Len()))
 	defer c.queue.Done(key)
 
+	if ctx.Err() != nil {
+		c.queue.Forget(key)
+		return false
+	}
 	if err := c.reconcile(ctx, key); err != nil {
 		logger := logrus.WithField("repo", key.String()).WithError(err)
+		if ctx.Err() != nil {
+			reconciliationTotal.WithLabelValues("shutdown").Inc()
+			logger.Info("reconciliation stopped during shutdown")
+			c.queue.Forget(key)
+			return false
+		}
 		var aggregate *reconciliationErrors
 		if errors.As(err, &aggregate) {
 			if len(aggregate.permanent) > 0 {
@@ -249,6 +260,42 @@ func (c *controller) retry(key repoKey, logger *logrus.Entry) {
 	}
 }
 
+func (c *controller) recordTargetIssue(key repoKey, target, reason, sourceSHA, targetSHA string, err error, permanent bool) {
+	issueKey := branchIssueKey{org: key.org, repo: key.repo, source: key.source, target: target}
+	if c.issues != nil {
+		c.issues.upsert(branchIssue{
+			key:       issueKey,
+			reason:    reason,
+			sourceSHA: sourceSHA,
+			targetSHA: targetSHA,
+			lastError: err.Error(),
+		})
+	}
+	logger := logrus.WithFields(logrus.Fields{
+		"org":                 key.org,
+		"repo":                key.repo,
+		"source_branch":       key.source,
+		"target_branch":       target,
+		"source_sha":          sourceSHA,
+		"target_sha":          targetSHA,
+		"reason":              reason,
+		"github_compare_url":  issueKey.compareURL(),
+		"manual_intervention": permanent,
+	}).WithError(err)
+	if permanent {
+		logger.Error("branch fast-forward requires manual intervention")
+		return
+	}
+	logger.Warn("branch fast-forward failed")
+}
+
+func (c *controller) resolveTargetIssue(key repoKey, target string) {
+	if c.issues == nil {
+		return
+	}
+	c.issues.resolve(branchIssueKey{org: key.org, repo: key.repo, source: key.source, target: target})
+}
+
 func (c *controller) reconcile(ctx context.Context, key repoKey) error {
 	targetSet, configured := c.state.get(key)
 	if !configured {
@@ -268,10 +315,12 @@ func (c *controller) reconcile(ctx context.Context, key repoKey) error {
 	for _, target := range targets {
 		targetSHA, targetExists, err := c.refs.getRef(ctx, key.org, key.repo, target)
 		if err != nil {
+			c.recordTargetIssue(key, target, "get_target_ref_failed", sourceSHA, "", err, false)
 			aggregate.retryable = append(aggregate.retryable, fmt.Errorf("get target %s: %w", target, err))
 			continue
 		}
 		if targetExists && targetSHA == sourceSHA {
+			c.resolveTargetIssue(key, target)
 			continue
 		}
 		performed, err := c.state.ifTargetConfigured(key, target, func() error {
@@ -287,13 +336,24 @@ func (c *controller) reconcile(ctx context.Context, key repoKey) error {
 			wrapped := fmt.Errorf("fast-forward %s: %w", target, err)
 			var permanent permanentError
 			if errors.As(err, &permanent) {
+				reason := "non_fast_forward"
+				if !targetExists {
+					reason = "ref_creation_rejected"
+				}
+				c.recordTargetIssue(key, target, reason, sourceSHA, targetSHA, err, true)
 				aggregate.permanent = append(aggregate.permanent, wrapped)
 			} else {
+				reason := "update_ref_failed"
+				if !targetExists {
+					reason = "create_ref_failed"
+				}
+				c.recordTargetIssue(key, target, reason, sourceSHA, targetSHA, err, false)
 				aggregate.retryable = append(aggregate.retryable, wrapped)
 			}
 			continue
 		}
 		logrus.WithFields(logrus.Fields{"repo": key.org + "/" + key.repo, "source": key.source, "target": target, "sha": sourceSHA}).Info("fast-forwarded branch")
+		c.resolveTargetIssue(key, target)
 	}
 	if len(aggregate.retryable) == 0 && len(aggregate.permanent) == 0 {
 		return nil

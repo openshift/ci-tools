@@ -5,7 +5,6 @@ import (
 	"errors"
 	"fmt"
 	"io/fs"
-	"maps"
 	"os"
 	"path/filepath"
 	"strings"
@@ -275,38 +274,12 @@ func ClusterProfilesConfig(configPath string) (api.ClusterProfilesMap, error) {
 		return nil, fmt.Errorf("load cluster profile list: %w", err)
 	}
 
-	// TODO: The following code can be erased once profiles are completely moved
-	// from code in ci-tools to the config file in openshift/release
 	profilesFromConfigMap := make(api.ClusterProfilesMap)
 	for _, p := range profilesFromConfig.ClusterProfiles {
 		profilesFromConfigMap[p.Name] = p
 	}
 
-	mergedMap := make(api.ClusterProfilesMap)
-	maps.Copy(mergedMap, profilesFromConfigMap)
-
-	for _, profileName := range api.ClusterProfiles() {
-		profile, found := profilesFromConfigMap[profileName]
-		if !found {
-			profile = api.ClusterProfileDetails{Name: profileName}
-		}
-
-		// TODO: Remove these assignments once cluster profiles
-		// will be completely migrated into the yaml configuration.
-		if profile.Secret == "" {
-			profile.Secret = api.GetDefaultClusterProfileSecretName(profileName)
-		}
-		if profile.ClusterType == "" {
-			profile.ClusterType = profileName.ClusterType()
-		}
-		if profile.LeaseType == "" {
-			profile.LeaseType = profileName.LeaseType()
-		}
-
-		mergedMap[profileName] = profile
-	}
-
-	return mergedMap, nil
+	return profilesFromConfigMap, nil
 }
 
 func ClusterProfileSetDetails(path string) (api.ClusterProfileSetDetails, error) {

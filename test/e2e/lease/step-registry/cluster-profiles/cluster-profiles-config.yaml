@@ -5,3 +5,15 @@ cluster_profiles:
   cluster_type: aws
   lease_type: aws-quota-slice
   secret: cluster-secrets-aws
+- name: aws
+  owners:
+    - org: openshift
+  cluster_type: aws
+  lease_type: aws-quota-slice
+  secret: cluster-secrets-aws
+- name: azure4
+  owners:
+    - org: openshift
+  cluster_type: azure
+  lease_type: azure4-quota-slice
+  secret: cluster-secrets-azure4

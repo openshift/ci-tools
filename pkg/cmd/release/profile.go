@@ -2,58 +2,52 @@ package release
 
 import (
 	"fmt"
+	"path"
+	"slices"
+	"strings"
 
 	"github.com/spf13/cobra"
 
-	"k8s.io/apimachinery/pkg/util/sets"
-
 	"github.com/openshift/ci-tools/pkg/api"
+	"github.com/openshift/ci-tools/pkg/load"
 )
 
-func newProfileCommand() *cobra.Command {
+const (
+	clusterProfilesConfig = "ci-operator/step-registry/cluster-profiles/cluster-profiles-config.yaml"
+)
+
+func newProfileCommand(o *options) *cobra.Command {
 	return &cobra.Command{
 		Use:   "profile",
 		Short: "cluster profile commands",
 		RunE: func(_ *cobra.Command, args []string) error {
-			return cmdProfileList(args)
+			return cmdProfileList(o, args)
 		},
 	}
 }
 
-func cmdProfileList(args []string) error {
+func cmdProfileList(o *options, args []string) error {
+	profilesConfigPath := path.Join(o.rootPath, clusterProfilesConfig)
+	clusterProfiles, err := load.ClusterProfilesConfig(profilesConfigPath)
+	if err != nil {
+		return fmt.Errorf("read cluster profiles %s: %w", clusterProfilesConfig, err)
+	}
+
+	profiles := make([]api.ClusterProfileDetails, 0)
 	if len(args) == 0 {
-		for _, p := range api.ClusterProfiles() {
-			args = append(args, string(p))
+		for _, p := range clusterProfiles {
+			profiles = append(profiles, p)
 		}
 	} else {
-		valid := sets.New[string]()
-		for _, p := range api.ClusterProfiles() {
-			valid.Insert(string(p))
-		}
 		for _, arg := range args {
-			if !valid.Has(arg) {
+			if p, ok := clusterProfiles[arg]; !ok {
 				return fmt.Errorf("invalid cluster profile: %s", arg)
+			} else {
+				profiles = append(profiles, p)
 			}
 		}
 	}
-	return profilePrint(args)
-}
 
-func profilePrint(args []string) error {
-	type P struct {
-		Profile     api.ClusterProfile `json:"profile"`
-		ClusterType string             `json:"cluster_type"`
-		LeaseType   string             `json:"lease_type"`
-		Secret      string             `json:"secret"`
-		ConfigMap   string             `json:"config_map,omitempty"`
-	}
-	var l []P
-	for _, arg := range args {
-		p := api.ClusterProfile(arg)
-		l = append(l, P{
-			Profile:   p,
-			LeaseType: p.LeaseType(),
-		})
-	}
-	return printYAML(l)
+	slices.SortFunc(profiles, func(a, b api.ClusterProfileDetails) int { return strings.Compare(a.Name, b.Name) })
+	return printYAML(profiles)
 }

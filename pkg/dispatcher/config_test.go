@@ -434,7 +434,7 @@ func TestDetermineClusterForJob(t *testing.T) {
 			name:   "Vsphere job on vsphere02 with profile",
 			config: &configWithBuildFarmWithJobs,
 			jobBase: config.JobBase{Agent: "kubernetes", Name: "yalayala-vsphere", Labels: map[string]string{
-				api.CloudClusterProfileLabel: string(api.ClusterProfileVSphereElastic),
+				api.CloudClusterProfileLabel: "vsphere-elastic",
 			}},
 			expected: "vsphere02",
 		},
@@ -442,7 +442,7 @@ func TestDetermineClusterForJob(t *testing.T) {
 			name:   "Vsphere job not on vsphere02 with profile",
 			config: &configWithBuildFarmWithJobs,
 			jobBase: config.JobBase{Agent: "kubernetes", Name: "yalayala-vsphere", Labels: map[string]string{
-				api.CloudClusterProfileLabel: string(api.ClusterProfileVSphereElasticPoc),
+				api.CloudClusterProfileLabel: "vsphere-elastic-poc",
 			}},
 			expected:               "api.ci",
 			expectedCanBeRelocated: true,

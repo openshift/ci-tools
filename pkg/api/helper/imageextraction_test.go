@@ -34,7 +34,7 @@ func TestTestInputImageStreamTagsFromResolvedConfigReturnsAllImageStreamTags(t *
 				// We only care about the *api.ImageStreamTagReference fields so prevent the
 				// fuzzer a bit from creating unreadable output.
 				func(_ *string, _ fuzz.Continue) {},
-				func(_ *api.ClusterProfile, _ fuzz.Continue) {},
+				func(_ *string, _ fuzz.Continue) {},
 				// TestInputImageStreamTagsFromResolvedConfig assumes that the config is already
 				// resolved and will error if thats not the case (MultiStageTestConfiguration != nil && MultiStageTestConfigurationLiteral == nil)
 				func(_ **api.MultiStageTestConfiguration, _ fuzz.Continue) {},

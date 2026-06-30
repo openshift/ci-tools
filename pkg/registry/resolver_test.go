@@ -29,14 +29,14 @@ func TestResolve(t *testing.T) {
 	nodeArchitectureARM64 := api.NodeArchitectureARM64
 	yes := true
 	clusterProfilesMap := api.ClusterProfilesMap{
-		api.ClusterProfileAWS: api.ClusterProfileDetails{
+		"aws": api.ClusterProfileDetails{
 			Name:        "aws",
 			ClusterType: "aws",
 			LeaseType:   "aws-quota-slice",
 			Secret:      "cluster-secrets-aws",
 		},
-		api.ClusterProfileAzure4: api.ClusterProfileDetails{
-			Name:        api.ClusterProfileAzure4,
+		"azure4": api.ClusterProfileDetails{
+			Name:        "azure4",
 			ClusterType: "azure4",
 			LeaseType:   "azure4-quota-slice",
 			Secret:      "cluster-secrets-azure4",
@@ -57,7 +57,7 @@ func TestResolve(t *testing.T) {
 		// This is a full config that should not change (other than struct) when passed to the Resolver
 		name: "Full AWS IPI",
 		config: api.MultiStageTestConfiguration{
-			ClusterProfile:           api.ClusterProfileAWS,
+			ClusterProfile:           "aws",
 			AllowSkipOnSuccess:       &yes,
 			AllowBestEffortPostSteps: &yes,
 			Pre: []api.TestStep{{
@@ -132,7 +132,7 @@ func TestResolve(t *testing.T) {
 	}, {
 		name: "Test with observers",
 		config: api.MultiStageTestConfiguration{
-			ClusterProfile: api.ClusterProfileAWS,
+			ClusterProfile: "aws",
 			Test: []api.TestStep{{
 				Reference: &reference1,
 			}},
@@ -222,7 +222,7 @@ func TestResolve(t *testing.T) {
 	}, {
 		name: "Resolve observers envs from workflow",
 		config: api.MultiStageTestConfiguration{
-			ClusterProfile: api.ClusterProfileAWS,
+			ClusterProfile: "aws",
 			Test: []api.TestStep{{
 				Reference: &reference1,
 			}},
@@ -292,7 +292,7 @@ func TestResolve(t *testing.T) {
 	}, {
 		name: "Test with broken observer",
 		config: api.MultiStageTestConfiguration{
-			ClusterProfile: api.ClusterProfileAWS,
+			ClusterProfile: "aws",
 			Test: []api.TestStep{{
 				Reference: &reference1,
 			}},
@@ -319,7 +319,7 @@ func TestResolve(t *testing.T) {
 	}, {
 		name: "Test with reference",
 		config: api.MultiStageTestConfiguration{
-			ClusterProfile: api.ClusterProfileAWS,
+			ClusterProfile: "aws",
 			Test: []api.TestStep{{
 				Reference: &reference1,
 			}},
@@ -355,7 +355,7 @@ func TestResolve(t *testing.T) {
 	}, {
 		name: "Test with broken reference",
 		config: api.MultiStageTestConfiguration{
-			ClusterProfile: api.ClusterProfileAWS,
+			ClusterProfile: "aws",
 			Test: []api.TestStep{{
 				Reference: &reference1,
 			}},
@@ -376,7 +376,7 @@ func TestResolve(t *testing.T) {
 	}, {
 		name: "Test with chain and reference",
 		config: api.MultiStageTestConfiguration{
-			ClusterProfile: api.ClusterProfileAWS,
+			ClusterProfile: "aws",
 			Pre: []api.TestStep{{
 				Chain: &fipsPreChain,
 			}},
@@ -473,7 +473,7 @@ func TestResolve(t *testing.T) {
 	}, {
 		name: "Test with broken chain",
 		config: api.MultiStageTestConfiguration{
-			ClusterProfile: api.ClusterProfileAWS,
+			ClusterProfile: "aws",
 			Test: []api.TestStep{{
 				Reference: &fipsPreChain,
 			}},
@@ -497,7 +497,7 @@ func TestResolve(t *testing.T) {
 	}, {
 		name: "Test with chain and reference, invalid parameter",
 		config: api.MultiStageTestConfiguration{
-			ClusterProfile: api.ClusterProfileAWS,
+			ClusterProfile: "aws",
 			Pre:            []api.TestStep{{Chain: &fipsPreChain}},
 		},
 		chainMap: ChainByName{
@@ -524,7 +524,7 @@ func TestResolve(t *testing.T) {
 	}, {
 		name: "Test with nested chains",
 		config: api.MultiStageTestConfiguration{
-			ClusterProfile: api.ClusterProfileAWS,
+			ClusterProfile: "aws",
 			Pre: []api.TestStep{{
 				Chain: &nestedChains,
 			}},
@@ -602,7 +602,7 @@ func TestResolve(t *testing.T) {
 	}, {
 		name: "Test with duplicate names after unrolling chains",
 		config: api.MultiStageTestConfiguration{
-			ClusterProfile: api.ClusterProfileAWS,
+			ClusterProfile: "aws",
 			Pre: []api.TestStep{{
 				Chain: &nestedChains,
 			}},
@@ -687,7 +687,7 @@ func TestResolve(t *testing.T) {
 		},
 		workflowMap: WorkflowByName{
 			awsWorkflow: {
-				ClusterProfile: api.ClusterProfileAWS,
+				ClusterProfile: "aws",
 				Pre: []api.TestStep{{
 					Chain: &fipsPreChain,
 				}},
@@ -753,7 +753,7 @@ func TestResolve(t *testing.T) {
 			name: "Workflow with Test and ClusterProfile overridden",
 			config: api.MultiStageTestConfiguration{
 				Workflow:       &awsWorkflow,
-				ClusterProfile: api.ClusterProfileAzure4,
+				ClusterProfile: "azure4",
 				Test: []api.TestStep{{
 					LiteralTestStep: &api.LiteralTestStep{
 						As:       "custom-e2e",
@@ -767,7 +767,7 @@ func TestResolve(t *testing.T) {
 			},
 			workflowMap: WorkflowByName{
 				awsWorkflow: {
-					ClusterProfile: api.ClusterProfileAWS,
+					ClusterProfile: "aws",
 					Pre: []api.TestStep{{
 						LiteralTestStep: &api.LiteralTestStep{
 							As:       "ipi-install",
@@ -838,12 +838,12 @@ func TestResolve(t *testing.T) {
 		}, {
 			name: "Workflow with invalid parameter",
 			config: api.MultiStageTestConfiguration{
-				ClusterProfile: api.ClusterProfileAWS,
+				ClusterProfile: "aws",
 				Workflow:       &awsWorkflow,
 			},
 			workflowMap: WorkflowByName{
 				awsWorkflow: {
-					ClusterProfile: api.ClusterProfileAWS,
+					ClusterProfile: "aws",
 					Pre: []api.TestStep{{
 						LiteralTestStep: &api.LiteralTestStep{
 							As:       "ipi-install",
@@ -983,7 +983,7 @@ func TestResolve(t *testing.T) {
 			},
 			workflowMap: WorkflowByName{
 				awsWorkflow: {
-					ClusterProfile: api.ClusterProfileAWS,
+					ClusterProfile: "aws",
 					Pre: []api.TestStep{{
 						Chain: &fipsPreChain,
 					}},
@@ -1091,7 +1091,7 @@ func TestResolve(t *testing.T) {
 			},
 			workflowMap: WorkflowByName{
 				awsWorkflow: {
-					ClusterProfile: api.ClusterProfileAWS,
+					ClusterProfile: "aws",
 					Pre: []api.TestStep{{
 						Chain: &fipsPreChain,
 					}},
@@ -1198,7 +1198,7 @@ func TestResolve(t *testing.T) {
 			},
 			workflowMap: WorkflowByName{
 				awsWorkflow: {
-					ClusterProfile: api.ClusterProfileAWS,
+					ClusterProfile: "aws",
 					Pre: []api.TestStep{{
 						Chain: &fipsPreChain,
 					}},
@@ -1305,7 +1305,7 @@ func TestResolve(t *testing.T) {
 			},
 			workflowMap: WorkflowByName{
 				awsWorkflow: {
-					ClusterProfile: api.ClusterProfileAWS,
+					ClusterProfile: "aws",
 					Pre: []api.TestStep{{
 						Chain: &fipsPreChain,
 					}},
@@ -1411,7 +1411,7 @@ func TestResolve(t *testing.T) {
 			},
 			workflowMap: WorkflowByName{
 				awsWorkflow: {
-					ClusterProfile: api.ClusterProfileAWS,
+					ClusterProfile: "aws",
 					Pre: []api.TestStep{{
 						Chain: &fipsPreChain,
 					}},
@@ -1519,7 +1519,7 @@ func TestResolve(t *testing.T) {
 			},
 			workflowMap: WorkflowByName{
 				awsWorkflow: {
-					ClusterProfile: api.ClusterProfileAWS,
+					ClusterProfile: "aws",
 					Pre: []api.TestStep{{
 						Chain: &fipsPreChain,
 					}},
@@ -1605,7 +1605,7 @@ func TestResolve(t *testing.T) {
 			stepMap: ReferenceByName{teardownRef: {As: "ipi-teardown"}},
 			workflowMap: WorkflowByName{
 				awsWorkflow: {
-					ClusterProfile: api.ClusterProfileAWS,
+					ClusterProfile: "aws",
 					Pre:            []api.TestStep{{Chain: &fipsPreChain}},
 					Test:           []api.TestStep{{LiteralTestStep: &api.LiteralTestStep{As: "e2e"}}},
 					Post:           []api.TestStep{{Reference: &teardownRef}},
@@ -1646,7 +1646,7 @@ func TestResolve(t *testing.T) {
 			stepMap: ReferenceByName{teardownRef: {As: "ipi-teardown"}},
 			workflowMap: WorkflowByName{
 				awsWorkflow: {
-					ClusterProfile: api.ClusterProfileAWS,
+					ClusterProfile: "aws",
 					Pre:            []api.TestStep{{Chain: &fipsPreChain}},
 					Test:           []api.TestStep{{LiteralTestStep: &api.LiteralTestStep{As: "e2e"}}},
 					Post:           []api.TestStep{{Reference: &teardownRef}},

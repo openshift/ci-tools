@@ -99,11 +99,11 @@ var (
 	// Valid cluster profile options and their associated workflows.
 	// This is supposed to be a simple, non-exhaustive list of profiles that are
 	// commonly used.  Advanced users can edit the configuration themselves.
-	clusterProfiles = map[api.ClusterProfile]string{
-		api.ClusterProfileAWS: "ipi-aws",
-		api.ClusterProfileGCP: "ipi-gcp",
+	clusterProfiles = map[string]string{
+		"aws": "ipi-aws",
+		"gcp": "ipi-gcp",
 	}
-	clusterProfileList = func() (ret []api.ClusterProfile) {
+	clusterProfileList = func() (ret []string) {
 		for k := range clusterProfiles {
 			ret = append(ret, k)
 		}
@@ -162,7 +162,7 @@ type test struct {
 
 type e2eTest struct {
 	As           string                    `json:"as"`
-	Profile      api.ClusterProfile        `json:"profile"`
+	Profile      string                    `json:"profile"`
 	Command      string                    `json:"command"`
 	Cli          bool                      `json:"cli"`
 	Resources    *api.ResourceRequirements `json:"resources"`
@@ -339,11 +339,11 @@ A test named %s already exists. Please choose a different name.\n`, test.As)
 				}
 			}
 
-			test.Profile = api.ClusterProfile(fetchOrDefaultWithPrompt("Which specific cloud provider does the test require, if any? ", string(api.ClusterProfileAWS)))
+			test.Profile = fetchOrDefaultWithPrompt("Which specific cloud provider does the test require, if any? ", "aws")
 			for {
 				if clusterProfiles[test.Profile] == "" {
 					fmt.Printf("Cluster profile %s is not valid. Please choose one from: %s.\n", test.Profile, clusterProfileList)
-					test.Profile = api.ClusterProfile(fetchOrDefaultWithPrompt("Which specific cloud provider does the test require, if any? ", string(api.ClusterProfileAWS)))
+					test.Profile = fetchOrDefaultWithPrompt("Which specific cloud provider does the test require, if any? ", "aws")
 				} else {
 					break
 				}
@@ -715,7 +715,7 @@ func generateCIOperatorConfig(config initConfig, originConfig *api.PromotionConf
 				As: "e2e-aws",
 				MultiStageTestConfiguration: &api.MultiStageTestConfiguration{
 					Workflow:       &workflow,
-					ClusterProfile: api.ClusterProfileAWS,
+					ClusterProfile: "aws",
 				},
 			})
 		}

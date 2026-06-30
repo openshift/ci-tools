@@ -42,7 +42,7 @@ func sorted(spec *corev1.PodSpec) {
 func clusterProfileResolverFunc(profiles ...*api.ClusterProfileDetails) func(string) (*api.ClusterProfileDetails, error) {
 	return func(name string) (*api.ClusterProfileDetails, error) {
 		for _, cp := range profiles {
-			if string(cp.Name) == name {
+			if cp.Name == name {
 				return cp, nil
 			}
 		}

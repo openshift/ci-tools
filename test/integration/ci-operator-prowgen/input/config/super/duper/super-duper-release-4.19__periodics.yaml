@@ -1,5 +1,3 @@
-prowgen:
-  skip_operator_presubmits: true
 base_images:
   base:
     name: "4.19"
@@ -11,6 +9,8 @@ operator:
   bundles:
   - as: super-duper-bundle
     base_index: operator-index
+prowgen:
+  skip_operator_presubmits: true
 releases:
   initial:
     integration:

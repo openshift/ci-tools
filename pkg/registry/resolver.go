@@ -141,9 +141,9 @@ func (r *registry) resolveTest(
 	}
 
 	if config.ClusterProfile != "" {
-		profileDetails, ok := r.resolveClusterProfile(string(config.ClusterProfile))
+		profileDetails, ok := r.resolveClusterProfile(config.ClusterProfile)
 		if !ok {
-			resolveErrors = append(resolveErrors, fmt.Errorf("cluster profile %s is not defined", string(config.ClusterProfile)))
+			resolveErrors = append(resolveErrors, fmt.Errorf("cluster profile %s is not defined", config.ClusterProfile))
 		} else {
 			expandedFlow.ClusterProfileLiteral = api.FromClusterProfileDetails(&profileDetails)
 		}
@@ -209,7 +209,7 @@ func (r *registry) ResolveChain(name string) (api.RegistryChain, error) {
 }
 
 func (r *registry) ResolveClusterProfile(name string) (api.ClusterProfileDetails, error) {
-	cp, ok := r.clusterProfiles[api.ClusterProfile(name)]
+	cp, ok := r.clusterProfiles[name]
 	if !ok {
 		return api.ClusterProfileDetails{}, fmt.Errorf("no cluster profile named %s", name)
 	}
@@ -413,7 +413,7 @@ func (r *registry) iterateSteps(s api.TestStep, f func(*api.LiteralTestStep)) er
 }
 
 func (r *registry) resolveClusterProfile(profileName string) (api.ClusterProfileDetails, bool) {
-	profileDetails, ok := r.clusterProfiles[api.ClusterProfile(profileName)]
+	profileDetails, ok := r.clusterProfiles[profileName]
 	return profileDetails, ok
 }
 

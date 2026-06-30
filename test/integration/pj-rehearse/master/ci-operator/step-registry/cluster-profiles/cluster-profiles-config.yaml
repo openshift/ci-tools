@@ -1,0 +1,5 @@
+cluster_profiles:
+- cluster_type: azure4
+  lease_type: azure4-quota-slice
+  name: azure4
+  secret: cluster-secrets-azure4

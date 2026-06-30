@@ -175,14 +175,14 @@ func (validator *profileValidator) Validate(profiles api.ClusterProfilesList) er
 // checkCISecrets verifies that the secret for each cluster profile exists in the ci namespace
 func (validator *profileValidator) checkCISecrets() error {
 	for p := range validator.profiles {
-		profileDetails, err := server.NewResolverClient(configResolverAddress).ClusterProfile(p.Name())
+		profileDetails, err := server.NewResolverClient(configResolverAddress).ClusterProfile(p)
 		if err != nil {
-			return fmt.Errorf("failed to retrieve details from config resolver for '%s' cluster profile", p.Name())
+			return fmt.Errorf("failed to retrieve details from config resolver for '%s' cluster profile: %w", p, err)
 		}
 		ciSecret := &coreapi.Secret{}
 		err = validator.kubeClient.Get(context.Background(), ctrlruntimeclient.ObjectKey{Namespace: "ci", Name: profileDetails.Secret}, ciSecret)
 		if err != nil {
-			return fmt.Errorf("failed to get secret '%s' for cluster profile '%s': %w", profileDetails.Secret, p.Name(), err)
+			return fmt.Errorf("failed to get secret '%s' for cluster profile '%s': %w", profileDetails.Secret, p, err)
 		}
 	}
 	return nil

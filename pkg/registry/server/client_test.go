@@ -96,7 +96,7 @@ func TestClusterProfile(t *testing.T) {
 		LeaseType:   "aws-quota-slice",
 		Secret:      "cluster-secrets-aws",
 	}
-	awsName := awsProfile.Name.Name()
+	awsName := awsProfile.Name
 	jsonAwsProfile, err := json.MarshalIndent(awsProfile, "", "  ")
 	if err != nil {
 		t.Fatalf("%s: Failed to marshal cluster profile to JSON: %v", t.Name(), err)

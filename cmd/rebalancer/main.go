@@ -69,12 +69,12 @@ func main() {
 		logrus.WithError(err).Fatal("failed to fetch prometheus volumes")
 	}
 
-	buckets := make(map[api.ClusterProfile]float64)
-	membership := make(map[api.ClusterProfile][]api.ClusterProfile)
+	buckets := make(map[string]float64)
+	membership := make(map[string][]string)
 	for _, group := range o.profiles {
-		var profList []api.ClusterProfile
+		var profList []string
 		for _, p := range group {
-			prof := api.ClusterProfile(p)
+			prof := p
 			if _, exists := buckets[prof]; !exists {
 				buckets[prof] = 0
 			}
@@ -105,7 +105,7 @@ func main() {
 				continue
 			}
 
-			var bestProf api.ClusterProfile
+			var bestProf string
 			minVal := math.MaxFloat64
 			for _, prof := range group {
 				if val := buckets[prof]; val < minVal {

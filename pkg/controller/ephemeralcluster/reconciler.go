@@ -314,7 +314,7 @@ func (r *reconciler) generateCIOperatorConfig(log *logrus.Entry, ec *ephemeralcl
 					},
 				}},
 				Environment:    ec.Spec.CIOperator.Test.Env,
-				ClusterProfile: api.ClusterProfile(ec.Spec.CIOperator.Test.ClusterProfile),
+				ClusterProfile: ec.Spec.CIOperator.Test.ClusterProfile,
 			},
 		}},
 		Metadata: api.Metadata{Org: "org", Repo: "repo", Branch: "branch"},

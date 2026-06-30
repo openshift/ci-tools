@@ -4,7 +4,6 @@ import (
 	"fmt"
 	"path/filepath"
 	"regexp"
-	"slices"
 	"strings"
 	"time"
 
@@ -480,15 +479,13 @@ func validateTestStepDependencies(config *api.ReleaseBuildConfiguration) []error
 
 func (v *Validator) validateClusterProfile(fieldRoot string, profileName string, test string, metadata *api.Metadata) []error {
 	if v.validClusterProfiles != nil {
-		if _, ok := v.validClusterProfiles[api.ClusterProfile(profileName)]; ok {
-			if err := verifyClusterProfileOwnership(v.validClusterProfiles[api.ClusterProfile(profileName)], metadata); err != nil {
+		if _, ok := v.validClusterProfiles[profileName]; ok {
+			if err := verifyClusterProfileOwnership(v.validClusterProfiles[profileName], metadata); err != nil {
 				return []error{err}
 			}
+		} else {
+			return []error{fmt.Errorf("%s: invalid cluster profile %q", fieldRoot, profileName)}
 		}
-	}
-
-	if !slices.Contains(api.ClusterProfiles(), api.ClusterProfile(profileName)) {
-		return []error{fmt.Errorf("%s: invalid cluster profile %q", fieldRoot, profileName)}
 	}
 
 	if metadata == nil {
@@ -652,7 +649,7 @@ func (v *Validator) validateTestConfigurationType(
 		typeCount++
 		if testConfig.ClusterProfile != "" {
 			clusterCount++
-			validationErrors = append(validationErrors, v.validateClusterProfile(fieldRoot, string(testConfig.ClusterProfile), test.As, metadata)...)
+			validationErrors = append(validationErrors, v.validateClusterProfile(fieldRoot, testConfig.ClusterProfile, test.As, metadata)...)
 		}
 		context := newContext(fieldPath(fieldRoot), testConfig.Environment, releases, inputImagesSeen)
 		validationErrors = append(validationErrors, validateLeases(context.addField("leases"), testConfig.Leases)...)

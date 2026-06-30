@@ -41,6 +41,6 @@ directly or as the base for higher-level programs and scripts.`,
 	ret.AddCommand(newConfigCommand(&o))
 	ret.AddCommand(newJobCommand(&o))
 	ret.AddCommand(newRegistryCommand(&o))
-	ret.AddCommand(newProfileCommand())
+	ret.AddCommand(newProfileCommand(&o))
 	return &ret
 }

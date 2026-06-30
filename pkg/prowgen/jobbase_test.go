@@ -435,7 +435,7 @@ func TestNewProwJobBaseBuilderForTest(t *testing.T) {
 			test: ciop.TestStepConfiguration{
 				As: "simple",
 				MultiStageTestConfiguration: &ciop.MultiStageTestConfiguration{
-					ClusterProfile: ciop.ClusterProfileAlibabaCloud,
+					ClusterProfile: "alibabacloud",
 					Workflow:       pointer.StringPtr("workflow"),
 				},
 			},

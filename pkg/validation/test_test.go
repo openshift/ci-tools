@@ -2002,7 +2002,7 @@ func TestValidateTestConfigurationType(t *testing.T) {
 					Timeout:      &prowv1.Duration{Duration: time.Hour},
 				},
 				MultiStageTestConfiguration: &api.MultiStageTestConfiguration{
-					ClusterProfile: api.ClusterProfileAWS,
+					ClusterProfile: "aws",
 					Test: []api.TestStep{
 						{
 							LiteralTestStep: &api.LiteralTestStep{
@@ -2601,7 +2601,7 @@ func TestValidateClusterProfiles(t *testing.T) {
 	t.Parallel()
 	for _, tc := range []struct {
 		name               string
-		clusterProfile     api.ClusterProfile
+		clusterProfile     string
 		testName           string
 		metadata           *api.Metadata
 		clusterProfilesMap api.ClusterProfilesMap
@@ -2611,20 +2611,21 @@ func TestValidateClusterProfiles(t *testing.T) {
 		{
 			name:           "Valid cluster profile",
 			metadata:       &api.Metadata{},
-			clusterProfile: api.ClusterProfileAROHCPDev,
+			clusterProfile: "aro-hcp-dev",
 		},
 		{
-			name:           "invalid cluster profile",
-			metadata:       &api.Metadata{},
-			clusterProfile: "foobar",
-			wantErrs:       []error{errors.New(`foo: invalid cluster profile "foobar"`)},
+			name:               "invalid cluster profile",
+			metadata:           &api.Metadata{},
+			clusterProfilesMap: api.ClusterProfilesMap{},
+			clusterProfile:     "foobar",
+			wantErrs:           []error{errors.New(`foo: invalid cluster profile "foobar"`)},
 		},
 		{
 			name:           "Use cluster profile set",
 			metadata:       &api.Metadata{},
 			clusterProfile: "azure-2",
 			cpsDetails: api.ClusterProfileSetDetails{
-				ClusterProfileSets: map[api.ClusterProfile][]string{
+				ClusterProfileSets: map[string][]string{
 					"openshift-org-azure": {"azure-2"},
 				},
 			},
@@ -2636,7 +2637,7 @@ func TestValidateClusterProfiles(t *testing.T) {
 			testName:       "e2e-aws-ovn",
 			clusterProfile: "azure-2",
 			cpsDetails: api.ClusterProfileSetDetails{
-				ClusterProfileSets: map[api.ClusterProfile][]string{
+				ClusterProfileSets: map[string][]string{
 					"openshift-org-azure": {"azure-2"},
 				},
 				TestsAllowlist: map[utilregexp.Regexp]map[utilregexp.Regexp]map[utilregexp.Regexp][]utilregexp.Regexp{
@@ -2650,7 +2651,7 @@ func TestValidateClusterProfiles(t *testing.T) {
 			testName:       "aws-ipi-public-ipv4-pool-byo-subnet-amd-f28-destructive",
 			clusterProfile: "azure-2",
 			cpsDetails: api.ClusterProfileSetDetails{
-				ClusterProfileSets: map[api.ClusterProfile][]string{
+				ClusterProfileSets: map[string][]string{
 					"openshift-org-azure": {"azure-2"},
 				},
 				TestsAllowlist: map[utilregexp.Regexp]map[utilregexp.Regexp]map[utilregexp.Regexp][]utilregexp.Regexp{
@@ -2663,7 +2664,7 @@ func TestValidateClusterProfiles(t *testing.T) {
 			t.Parallel()
 
 			v := NewValidator(tc.clusterProfilesMap, nil, WithClusterProfileSetDetails(tc.cpsDetails))
-			gotErrs := v.validateClusterProfile("foo", string(tc.clusterProfile), tc.testName, tc.metadata)
+			gotErrs := v.validateClusterProfile("foo", tc.clusterProfile, tc.testName, tc.metadata)
 
 			wantErrMsg := "<nil>"
 			if tc.wantErrs != nil {

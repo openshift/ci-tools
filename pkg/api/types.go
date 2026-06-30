@@ -941,7 +941,7 @@ func (config TestStepConfiguration) GetClusterProfileName() string {
 		config.MultiStageTestConfigurationLiteral.ClusterProfileLiteral != nil:
 		return config.MultiStageTestConfigurationLiteral.ClusterProfileLiteral.Name
 	case config.MultiStageTestConfiguration != nil:
-		return config.MultiStageTestConfiguration.ClusterProfile.Name()
+		return config.MultiStageTestConfiguration.ClusterProfile
 	default:
 		return ""
 	}
@@ -967,7 +967,7 @@ type ClusterProfileLiteral struct {
 
 func FromClusterProfileDetails(profileDetails *ClusterProfileDetails) *ClusterProfileLiteral {
 	return &ClusterProfileLiteral{
-		Name:            string(profileDetails.Name),
+		Name:            profileDetails.Name,
 		LeaseType:       profileDetails.LeaseType,
 		IPPoolLeaseType: profileDetails.IPPoolLeaseType,
 		ClusterType:     profileDetails.ClusterType,
@@ -1287,7 +1287,7 @@ type TestStep struct {
 // the multiple stages of end to end tests.
 type MultiStageTestConfiguration struct {
 	// ClusterProfile defines the profile/cloud provider for end-to-end test steps.
-	ClusterProfile ClusterProfile `json:"cluster_profile,omitempty"`
+	ClusterProfile string `json:"cluster_profile,omitempty"`
 	// Pre is the array of test steps run to set up the environment for the test.
 	Pre []TestStep `json:"pre,omitempty"`
 	// Test is the array of test steps that define the actual test.
@@ -1436,7 +1436,7 @@ type ContainerTestConfiguration struct {
 // ClusterTestConfiguration describes a test that provisions
 // a cluster and runs a command in it.
 type ClusterTestConfiguration struct {
-	ClusterProfile ClusterProfile `json:"cluster_profile"`
+	ClusterProfile string `json:"cluster_profile"`
 }
 
 // PipelineImageStreamTagReference is a tag on the

@@ -98,6 +98,20 @@ func (f *targetErrorRefClient) updateRef(_ context.Context, _, _, branch, _ stri
 	return errors.New("temporary network failure")
 }
 
+type sourceErrorRefClient struct{ err error }
+
+func (f *sourceErrorRefClient) getRef(_ context.Context, _, _, _ string) (string, bool, error) {
+	return "", false, f.err
+}
+
+func (f *sourceErrorRefClient) createRef(context.Context, string, string, string, string) error {
+	return nil
+}
+
+func (f *sourceErrorRefClient) updateRef(context.Context, string, string, string, string) error {
+	return nil
+}
+
 func TestReconcilePreservesRetryableSiblingError(t *testing.T) {
 	key := repoKey{org: "org", repo: "repo", source: "main"}
 	state := newDesiredState()
@@ -139,6 +153,29 @@ func TestProcessNextReportsPermanentErrorWithRetryableSibling(t *testing.T) {
 	}
 	if got := counterValue(t, "retry"); got != beforeRetry+1 {
 		t.Fatalf("retry metric: want %v, got %v", beforeRetry+1, got)
+	}
+}
+
+func TestProcessNextDoesNotRetryDuringShutdown(t *testing.T) {
+	key := repoKey{org: "org", repo: "repo", source: "main"}
+	state := newDesiredState()
+	state.replace(map[repoKey]sets.Set[string]{key: sets.New("release-5.0")})
+	c := newController(&sourceErrorRefClient{err: context.Canceled}, state, 1)
+	defer c.queue.ShutDown()
+
+	ctx, cancel := context.WithCancel(context.Background())
+	c.enqueue(key)
+	cancel()
+	beforeRetry := counterValue(t, "retry")
+	beforeShutdown := counterValue(t, "shutdown")
+	if c.processNext(ctx) {
+		t.Fatal("processNext unexpectedly kept worker running")
+	}
+	if got := counterValue(t, "retry"); got != beforeRetry {
+		t.Fatalf("retry metric: want %v, got %v", beforeRetry, got)
+	}
+	if got := counterValue(t, "shutdown"); got != beforeShutdown {
+		t.Fatalf("shutdown metric: want %v, got %v", beforeShutdown, got)
 	}
 }
 

@@ -16,6 +16,7 @@ import (
 
 	"github.com/openshift/ci-tools/pkg/api"
 	base_steps "github.com/openshift/ci-tools/pkg/steps"
+	"github.com/openshift/ci-tools/pkg/steps/csi_secrets"
 	"github.com/openshift/ci-tools/pkg/steps/utils"
 	podsutils "github.com/openshift/ci-tools/pkg/util"
 )
@@ -637,9 +638,9 @@ func addCredentials(credentials []api.CredentialReference, pod *coreapi.Pod, use
 		var k8sSecretCreds []api.CredentialReference
 		var gsmCreds []api.CredentialReference
 		for _, cred := range credentials {
-			if isK8sSecretReference(cred) {
+			if csi_secrets.IsK8sSecretReference(cred) {
 				k8sSecretCreds = append(k8sSecretCreds, cred)
-			} else if isGSMReference(cred) {
+			} else if csi_secrets.IsGSMReference(cred) {
 				gsmCreds = append(gsmCreds, cred)
 			}
 		}
@@ -647,12 +648,12 @@ func addCredentials(credentials []api.CredentialReference, pod *coreapi.Pod, use
 		addK8sSecretVolumes(k8sSecretCreds)
 
 		// Add GSM credentials as CSI volumes
-		collectionMountGroups := groupCredentialsByCollectionGroupAndMountPath(gsmCreds)
+		collectionMountGroups := csi_secrets.GroupCredentialsByCollectionGroupAndMountPath(gsmCreds)
 		for _, credentials := range collectionMountGroups {
 			mountPath := credentials[0].MountPath
 
-			csiVolumeName := getCSIVolumeName(pod.Namespace, credentials)
-			csiVolume := BuildCSIVolume(csiVolumeName, getSPCName(pod.Namespace, credentials))
+			csiVolumeName := csi_secrets.GetCSIVolumeName(pod.Namespace, credentials)
+			csiVolume := csi_secrets.BuildCSIVolume(csiVolumeName, csi_secrets.GetSPCName(pod.Namespace, credentials))
 			pod.Spec.Volumes = append(pod.Spec.Volumes, csiVolume)
 			pod.Spec.Containers[0].VolumeMounts = append(pod.Spec.Containers[0].VolumeMounts, coreapi.VolumeMount{
 				Name:      csiVolumeName,

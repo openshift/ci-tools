@@ -1,4 +1,4 @@
-package multi_stage
+package csi_secrets
 
 import (
 	"crypto/sha256"
@@ -20,13 +20,21 @@ import (
 	gsmvalidation "github.com/openshift/ci-tools/pkg/gsm-validation"
 )
 
-// GSMproject is the name of the GCP Secret Manager project where the secrets are stored.
-const GSMproject = "openshift-ci-secrets"
+// GSMProject is the name of the GCP Secret Manager project where the secrets are stored.
+const GSMProject = "openshift-ci-secrets"
 const KubernetesDNSLabelLimit = 63
 
-// groupCredentialsByCollectionGroupAndMountPath groups credentials by (collection, group, mount_path)
+func IsK8sSecretReference(c api.CredentialReference) bool {
+	return c.Namespace != "" && c.Name != ""
+}
+
+func IsGSMReference(c api.CredentialReference) bool {
+	return c.Collection != "" && c.Group != "" && c.Field != ""
+}
+
+// GroupCredentialsByCollectionGroupAndMountPath groups credentials by (collection, group, mount_path)
 // to avoid duplicate mount paths, which causes Kubernetes errors.
-func groupCredentialsByCollectionGroupAndMountPath(credentials []api.CredentialReference) map[string][]api.CredentialReference {
+func GroupCredentialsByCollectionGroupAndMountPath(credentials []api.CredentialReference) map[string][]api.CredentialReference {
 	mountGroups := make(map[string][]api.CredentialReference)
 	for _, credential := range credentials {
 		key := fmt.Sprintf("%s:%s:%s", credential.Collection, credential.Group, credential.MountPath)
@@ -35,7 +43,7 @@ func groupCredentialsByCollectionGroupAndMountPath(credentials []api.CredentialR
 	return mountGroups
 }
 
-func buildGCPSecretsParameter(credentials []api.CredentialReference) (string, error) {
+func BuildGCPSecretsParameter(credentials []api.CredentialReference) (string, error) {
 	var secrets []config.Secret
 	for _, credential := range credentials {
 		gsmSecretName := gsm.GetGSMSecretName(credential.Collection, credential.Group, credential.Field)
@@ -43,12 +51,12 @@ func buildGCPSecretsParameter(credentials []api.CredentialReference) (string, er
 		if credential.As != "" {
 			mountName = credential.As
 		}
-		mountName, err := restoreForbiddenSymbolsInSecretName(mountName)
+		mountName, err := RestoreForbiddenSymbolsInSecretName(mountName)
 		if err != nil {
 			return "", fmt.Errorf("invalid mount name '%s': %w", mountName, err)
 		}
 		secrets = append(secrets, config.Secret{
-			ResourceName: fmt.Sprintf("projects/%s/secrets/%s/versions/latest", GSMproject, gsmSecretName),
+			ResourceName: fmt.Sprintf("projects/%s/secrets/%s/versions/latest", GSMProject, gsmSecretName),
 			FileName:     mountName,
 		})
 	}
@@ -59,9 +67,9 @@ func buildGCPSecretsParameter(credentials []api.CredentialReference) (string, er
 	return string(secretsYaml), nil
 }
 
-// restoreForbiddenSymbolsInSecretName replaces all replacement substrings with the original symbols,
+// RestoreForbiddenSymbolsInSecretName replaces all replacement substrings with the original symbols,
 // e.g. '--dot--awscreds' to '.awscreds'
-func restoreForbiddenSymbolsInSecretName(s string) (string, error) {
+func RestoreForbiddenSymbolsInSecretName(s string) (string, error) {
 	// This is an unfortunate workaround needed for the initial migration.
 	// Google Secret Manager doesn't support dots in Secret names. Due to migration from Vault,
 	// where we had to shard each (multi key-value) Vault secret into multiple ones in GSM,
@@ -81,11 +89,11 @@ func restoreForbiddenSymbolsInSecretName(s string) (string, error) {
 	}
 }
 
-// getSPCName generates a unique SPC name for a set of credentials.
+// GetSPCName generates a unique SPC name for a set of credentials.
 // All credentials in the input slice must have the same collection, group, and mount path
-// (enforced by groupCredentialsByCollectionGroupAndMountPath and ValidateNoGroupCollisionsOnMountPath).
+// (enforced by GroupCredentialsByCollectionGroupAndMountPath and ValidateNoGroupCollisionsOnMountPath).
 // The hash includes collection, group, mount path, and sorted field names to ensure uniqueness.
-func getSPCName(namespace string, credentials []api.CredentialReference) string {
+func GetSPCName(namespace string, credentials []api.CredentialReference) string {
 	if len(credentials) == 0 {
 		return strings.ToLower(fmt.Sprintf("%s-empty-spc", namespace))
 	}
@@ -111,14 +119,14 @@ func getSPCName(namespace string, credentials []api.CredentialReference) string 
 	return strings.ToLower(name)
 }
 
-// getCSIVolumeName generates a deterministic, DNS-compliant name for a CSI volume
+// GetCSIVolumeName generates a deterministic, DNS-compliant name for a CSI volume
 // based on the namespace and credentials. All credentials in the slice must have
 // the same collection, group, and mount path.
 //
 // The name is constructed as "<namespace>-<hash>", where the hash is computed from
 // the collection, group and mountPath. If the resulting name exceeds 63 characters
 // (the Kubernetes DNS label limit), only the hash is used as the name.
-func getCSIVolumeName(ns string, credentials []api.CredentialReference) string {
+func GetCSIVolumeName(ns string, credentials []api.CredentialReference) string {
 	if len(credentials) == 0 {
 		return strings.ToLower(fmt.Sprintf("%s-empty-vol", ns))
 	}
@@ -138,11 +146,11 @@ func getCSIVolumeName(ns string, credentials []api.CredentialReference) string {
 	return strings.ToLower(name)
 }
 
-func getCensorMountPath(secretName string) string {
+func GetCensorMountPath(secretName string) string {
 	return fmt.Sprintf("/censor/%s", secretName)
 }
 
-func buildSecretProviderClass(name, namespace, secrets string) *csiapi.SecretProviderClass {
+func BuildSecretProviderClass(name, namespace, secrets string) *csiapi.SecretProviderClass {
 	return &csiapi.SecretProviderClass{
 		TypeMeta: meta.TypeMeta{
 			Kind:       "SecretProviderClass",

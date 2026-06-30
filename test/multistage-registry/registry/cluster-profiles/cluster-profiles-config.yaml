@@ -1,4 +1,16 @@
 cluster_profiles:
+- cluster_type: aws
+  lease_type: aws-quota-slice
+  name: aws
+  secret: cluster-secrets-aws
 - name: odf-aws
   owners:
     - org: red-hat-storage
+- cluster_type: azure4
+  lease_type: azure4-quota-slice
+  name: azure4
+  secret: cluster-secrets-azure4
+- cluster_type: gcp
+  lease_type: gcp-quota-slice
+  name: gcp
+  secret: cluster-secrets-gcp

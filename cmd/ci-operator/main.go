@@ -1038,6 +1038,7 @@ func (o *options) Run() (errs []error) {
 	cfg.NodeArchitectures = nodeArchitectures
 	cfg.IntegratedStreams = streams
 	cfg.InjectedTest = o.injectTest != ""
+	cfg.EnableSecretsStoreCSIDriver = o.enableSecretsStoreCSIDriver
 	cfg.GSMConfig = gsmConfig
 	cfg.HTTPServerAddr = httpSrvAddr
 	cfg.HTTPServerMux = httpSrvMux

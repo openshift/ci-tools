@@ -180,3 +180,44 @@ func BuildCSIVolume(name, spcName string) coreapi.Volume {
 		},
 	}
 }
+
+// BuildSPCsForCredentials builds all SecretProviderClass objects needed for the given credentials.
+// It creates one SPC per (collection, group, mount_path) group for actual volumes, and one SPC
+// per unique credential for sidecar censoring. Callers are responsible for creating the returned
+// objects in the cluster.
+func BuildSPCsForCredentials(namespace string, credentials []api.CredentialReference) (map[string]*csiapi.SecretProviderClass, error) {
+	spcsToCreate := map[string]*csiapi.SecretProviderClass{}
+	collectionMountGroups := GroupCredentialsByMountPath(credentials)
+
+	for _, credentials := range collectionMountGroups {
+		spcName := GetSPCName(namespace, credentials)
+		secrets, err := BuildGCPSecretsParameter(credentials)
+		if err != nil {
+			return nil, fmt.Errorf("could not marshal secrets for mount path %s: %w", credentials[0].MountPath, err)
+		}
+		spcsToCreate[spcName] = BuildSecretProviderClass(spcName, namespace, secrets)
+	}
+
+	seenCredentials := make(map[string]bool)
+	for _, credential := range credentials {
+		fullSecretName := gsm.GetGSMSecretName(credential.Collection, credential.Group, credential.Field)
+		if seenCredentials[fullSecretName] {
+			continue
+		}
+		seenCredentials[fullSecretName] = true
+
+		censorMountPath := GetCensorMountPath(fullSecretName)
+		censoredCredential := credential
+		censoredCredential.MountPath = censorMountPath
+		individualCredentials := []api.CredentialReference{censoredCredential}
+		spcName := GetSPCName(namespace, individualCredentials)
+
+		secrets, err := BuildGCPSecretsParameter(individualCredentials)
+		if err != nil {
+			return nil, fmt.Errorf("could not marshal secrets for censored credential %s: %w", fullSecretName, err)
+		}
+		spcsToCreate[spcName] = BuildSecretProviderClass(spcName, namespace, secrets)
+	}
+
+	return spcsToCreate, nil
+}

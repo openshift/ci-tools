@@ -2,22 +2,29 @@ package steps
 
 import (
 	"context"
+	"sort"
 	"testing"
 	"time"
 
+	secretmanager "cloud.google.com/go/secretmanager/apiv1"
 	"github.com/google/go-cmp/cmp"
 
 	corev1 "k8s.io/api/core/v1"
+	"k8s.io/apimachinery/pkg/runtime"
 	utilpointer "k8s.io/utils/pointer"
 	ctrlruntimeclient "sigs.k8s.io/controller-runtime/pkg/client"
 	fakectrlruntimeclient "sigs.k8s.io/controller-runtime/pkg/client/fake"
 	prowapi "sigs.k8s.io/prow/pkg/apis/prowjobs/v1"
 	"sigs.k8s.io/prow/pkg/pod-utils/downwardapi"
+	csiapi "sigs.k8s.io/secrets-store-csi-driver/apis/v1"
 
 	"github.com/openshift/ci-tools/pkg/api"
+	gsm "github.com/openshift/ci-tools/pkg/gsm-secrets"
 	"github.com/openshift/ci-tools/pkg/kubernetes"
+	"github.com/openshift/ci-tools/pkg/steps/csi_secrets"
 	"github.com/openshift/ci-tools/pkg/steps/loggingclient"
 	"github.com/openshift/ci-tools/pkg/testhelper"
+	testhelper_kube "github.com/openshift/ci-tools/pkg/testhelper/kubernetes"
 )
 
 func preparePodStep(namespace string) (*podStep, stepExpectation) {
@@ -228,6 +235,26 @@ func TestGetPodObjectMounts(t *testing.T) {
 				expectedPodStepTemplate.clusterClaim = &api.ClusterClaim{}
 			},
 		},
+		{
+			name: "with GSM secret results in CSI volume",
+			podStep: func(expectedPodStepTemplate *podStep) {
+				expectedPodStepTemplate.resolvedGSMCredentials = []api.CredentialReference{
+					{Collection: "my-collection", Group: "my-group", Field: "my-field", MountPath: "/usr/gsm-secrets"},
+				}
+			},
+		},
+		{
+			name: "with mixed K8s and GSM secrets",
+			podStep: func(expectedPodStepTemplate *podStep) {
+				expectedPodStepTemplate.config.Secrets = []*api.Secret{
+					{Name: "k8s-secret", MountPath: "/usr/k8s-secrets"},
+				}
+				expectedPodStepTemplate.resolvedGSMCredentials = []api.CredentialReference{
+					{Collection: "my-collection", Group: "my-group", Field: "key1", MountPath: "/usr/gsm-secrets"},
+					{Collection: "my-collection", Group: "my-group", Field: "key2", MountPath: "/usr/gsm-secrets"},
+				}
+			},
+		},
 	}
 
 	for _, tc := range testCases {
@@ -328,7 +355,7 @@ func TestTestStepAndRequires(t *testing.T) {
 	}
 	for _, tc := range tests {
 		t.Run(tc.name, func(t *testing.T) {
-			actual := TestStep(tc.config, nil, nil, nil, "").Requires()
+			actual := TestStep(tc.config, nil, nil, nil, "", false, nil).Requires()
 			if len(actual) == len(tc.expected) {
 				matches := true
 				for i := range actual {
@@ -342,6 +369,157 @@ func TestTestStepAndRequires(t *testing.T) {
 				}
 			}
 			t.Errorf("incorrect requirements: %s", cmp.Diff(actual, tc.expected, api.Comparer()))
+		})
+	}
+}
+
+func TestResolveAndCreateGSMSecrets(t *testing.T) {
+	scheme := runtime.NewScheme()
+	_ = csiapi.AddToScheme(scheme)
+
+	gsmConfig := &csi_secrets.GSMConfiguration{
+		Config: &api.GSMConfig{},
+		Client: &secretmanager.Client{},
+		ProjectConfig: gsm.Config{
+			ProjectIdString: "test-project",
+			ProjectIdNumber: "123456",
+		},
+	}
+
+	testCases := []struct {
+		name                string
+		secrets             []*api.Secret
+		enableCSI           bool
+		gsmConfig           *csi_secrets.GSMConfiguration
+		expectedError       string
+		expectedCredentials []api.CredentialReference
+	}{
+		{
+			name:    "no secrets - nothing to resolve",
+			secrets: []*api.Secret{},
+		},
+		{
+			name: "only K8s secrets - skipped by resolution",
+			secrets: []*api.Secret{
+				{Name: "k8s-secret", MountPath: "/usr/k8s"},
+			},
+		},
+		{
+			name: "GSM explicit field secrets - resolved and SPCs created",
+			secrets: []*api.Secret{
+				{Collection: "test-col", Group: "test-group", Field: "field-a", MountPath: "/var/secrets"},
+				{Collection: "test-col", Group: "test-group", Field: "field-b", MountPath: "/var/secrets"},
+			},
+			enableCSI: true,
+			gsmConfig: gsmConfig,
+			expectedCredentials: []api.CredentialReference{
+				{Collection: "test-col", Group: "test-group", Field: "field-a", MountPath: "/var/secrets"},
+				{Collection: "test-col", Group: "test-group", Field: "field-b", MountPath: "/var/secrets"},
+			},
+		},
+		{
+			name: "mixed K8s and GSM secrets",
+			secrets: []*api.Secret{
+				{Name: "k8s-secret-from-cluster", MountPath: "/usr/k8s"},
+				{Collection: "test-col", Group: "test-group", Field: "cred1", MountPath: "/var/gsm"},
+			},
+			enableCSI: true,
+			gsmConfig: gsmConfig,
+			expectedCredentials: []api.CredentialReference{
+				{Collection: "test-col", Group: "test-group", Field: "cred1", MountPath: "/var/gsm"},
+			},
+		},
+		{
+			name: "GSM secret without GSM config",
+			secrets: []*api.Secret{
+				{Collection: "test-col", Group: "test-group", Field: "field-a", MountPath: "/var/secrets"},
+			},
+			enableCSI:     true,
+			gsmConfig:     nil,
+			expectedError: "GSM client was not initialized - credentials file may be missing",
+		},
+		{
+			name: "default mount paths when not specified",
+			secrets: []*api.Secret{
+				{Collection: "test-col", Group: "group1", Field: "field-a"},
+				{Collection: "test-col", Group: "group2", Field: "field-b"},
+			},
+			enableCSI: true,
+			gsmConfig: gsmConfig,
+			expectedCredentials: []api.CredentialReference{
+				{Collection: "test-col", Group: "group1", Field: "field-a", MountPath: "/usr/test-secrets"},
+				{Collection: "test-col", Group: "group2", Field: "field-b", MountPath: "/usr/test-secrets-2"},
+			},
+		},
+		{
+			name: "explicit field with as - as propagated",
+			secrets: []*api.Secret{
+				{Collection: "test-col", Group: "test-group", Field: "field-a", As: "renamed", MountPath: "/var/secrets"},
+			},
+			enableCSI: true,
+			gsmConfig: gsmConfig,
+			expectedCredentials: []api.CredentialReference{
+				{Collection: "test-col", Group: "test-group", Field: "field-a", As: "renamed", MountPath: "/var/secrets"},
+			},
+		},
+	}
+
+	for _, tc := range testCases {
+		t.Run(tc.name, func(t *testing.T) {
+			fakeClient := &testhelper_kube.FakePodClient{
+				FakePodExecutor: &testhelper_kube.FakePodExecutor{
+					LoggingClient: loggingclient.New(
+						fakectrlruntimeclient.NewClientBuilder().
+							WithScheme(scheme).
+							Build(), nil),
+				},
+			}
+
+			step := expectedPodStepTemplate()
+			step.client = fakeClient
+			step.config.Secrets = tc.secrets
+			step.config.EnableSecretsStoreCSIDriver = tc.enableCSI
+			step.config.GSMConfig = tc.gsmConfig
+
+			err := step.resolveAndCreateGSMSecrets(context.TODO())
+			if tc.expectedError != "" {
+				if err == nil {
+					t.Fatal("expected error but got nil")
+				}
+				if diff := cmp.Diff(tc.expectedError, err.Error(), testhelper.EquateErrorMessage); diff != "" {
+					t.Errorf("unexpected error (-want +got):\n%s", diff)
+				}
+				return
+			}
+			if err != nil {
+				t.Fatalf("unexpected error: %v", err)
+			}
+
+			if diff := cmp.Diff(tc.expectedCredentials, step.resolvedGSMCredentials); diff != "" {
+				t.Errorf("resolved credentials differ:\n%s", diff)
+			}
+
+			spcs := &csiapi.SecretProviderClassList{}
+			if err := fakeClient.List(context.TODO(), spcs, ctrlruntimeclient.InNamespace(step.jobSpec.Namespace())); err != nil {
+				t.Fatal(err)
+			}
+			sort.Slice(spcs.Items, func(i, j int) bool {
+				return spcs.Items[i].Name < spcs.Items[j].Name
+			})
+			testhelper.CompareWithFixture(t, spcs.Items, testhelper.WithPrefix("spcs"))
+
+			pod, err := step.generatePodForStep("test-image:latest", corev1.ResourceRequirements{}, false)
+			if err != nil {
+				t.Fatalf("unexpected error generating pod: %v", err)
+			}
+			sort.Slice(pod.Spec.Volumes, func(i, j int) bool {
+				return pod.Spec.Volumes[i].Name < pod.Spec.Volumes[j].Name
+			})
+			sort.Slice(pod.Spec.Containers[0].VolumeMounts, func(i, j int) bool {
+				return pod.Spec.Containers[0].VolumeMounts[i].Name < pod.Spec.Containers[0].VolumeMounts[j].Name
+			})
+			testhelper.CompareWithFixture(t, pod.Spec.Volumes, testhelper.WithPrefix("volumes"))
+			testhelper.CompareWithFixture(t, pod.Spec.Containers[0].VolumeMounts, testhelper.WithPrefix("mounts"))
 		})
 	}
 }

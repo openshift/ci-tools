@@ -254,14 +254,17 @@ func (v *Validator) validateTestStepConfiguration(
 		seenCollectionGroups := sets.New[collectionGroup]()
 		for i, secret := range test.Secrets {
 			isGSM := secret.IsGSMReference() || secret.IsBundleReference()
-			hasGSMFields := secret.Collection != "" || secret.Group != "" || secret.Bundle != ""
+			hasGSMFields := secret.Collection != "" || secret.Group != "" || secret.Bundle != "" || secret.Field != "" || secret.As != ""
 			if isGSM || hasGSMFields {
 				if secret.Name != "" {
-					validationErrors = append(validationErrors, fmt.Errorf("%s.secrets[%d]: `name` cannot be used with `bundle`, `collection`, or `group`", fieldRootN, i))
+					validationErrors = append(validationErrors, fmt.Errorf("%s.secrets[%d]: `name` cannot be used with `bundle`, `collection`, `group`, or `field`", fieldRootN, i))
+				}
+				if secret.As != "" && secret.Field == "" {
+					validationErrors = append(validationErrors, fmt.Errorf("%s.secrets[%d]: `field` is required when `as` is specified", fieldRootN, i))
 				}
 				if secret.IsBundleReference() {
-					if secret.Collection != "" || secret.Group != "" {
-						validationErrors = append(validationErrors, fmt.Errorf("%s.secrets[%d]: `bundle` cannot be used with `collection` or `group`", fieldRootN, i))
+					if secret.Collection != "" || secret.Group != "" || secret.Field != "" {
+						validationErrors = append(validationErrors, fmt.Errorf("%s.secrets[%d]: `bundle` cannot be used with `collection`, `group`, or `field`", fieldRootN, i))
 					}
 					if seenBundles.Has(secret.Bundle) {
 						validationErrors = append(validationErrors, fmt.Errorf("%s.secrets[%d]: duplicate bundle reference %q", fieldRootN, i, secret.Bundle))
@@ -277,6 +280,8 @@ func (v *Validator) validateTestStepConfiguration(
 					validationErrors = append(validationErrors, fmt.Errorf("%s.secrets[%d].group: is required when `collection` is set", fieldRootN, i))
 				} else if secret.Group != "" {
 					validationErrors = append(validationErrors, fmt.Errorf("%s.secrets[%d].collection: is required when `group` is set", fieldRootN, i))
+				} else if secret.Field != "" {
+					validationErrors = append(validationErrors, fmt.Errorf("%s.secrets[%d]: `field` requires `collection` and `group` to be set", fieldRootN, i))
 				} else {
 					validationErrors = append(validationErrors, fmt.Errorf("%s.secrets[%d]: must specify `bundle` or `collection`+`group`", fieldRootN, i))
 				}

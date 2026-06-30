@@ -1,4 +1,4 @@
-package multi_stage
+package csi_secrets
 
 import (
 	"context"
@@ -11,11 +11,6 @@ import (
 	"github.com/openshift/ci-tools/pkg/api"
 	gsm "github.com/openshift/ci-tools/pkg/gsm-secrets"
 )
-
-type collectionGroupKey struct {
-	collection string
-	group      string
-}
 
 // ValidateNoGroupCollisionsOnMountPath ensures that different groups within the same collection
 // don't share a mount path, which could cause file name collisions.
@@ -79,14 +74,13 @@ func ResolveCredentialReferences(
 	gsmConfig *api.GSMConfig,
 	gsmClient gsm.SecretManagerClient,
 	gsmProjectConfig gsm.Config,
-	discoveredFields map[collectionGroupKey][]string,
+	discoveredFields map[CollectionGroupKey][]string,
 ) ([]api.CredentialReference, error) {
 	var resolvedCredentials []api.CredentialReference
 	var errs []error
 
-	// Track discovered fields to avoid redundant GSM calls
 	if discoveredFields == nil {
-		discoveredFields = make(map[collectionGroupKey][]string)
+		discoveredFields = make(map[CollectionGroupKey][]string)
 	}
 
 	for _, cred := range credentials {
@@ -135,7 +129,7 @@ func ResolveCredentialReferences(
 				errs = append(errs, fmt.Errorf("auto-discovery for %s__%s requires GSM client, but client is not initialized", cred.Collection, cred.Group))
 				break
 			}
-			key := collectionGroupKey{
+			key := CollectionGroupKey{
 				cred.Collection,
 				cred.Group,
 			}
@@ -187,7 +181,7 @@ func expandBundle(
 	bundle *api.GSMBundle,
 	gsmClient gsm.SecretManagerClient,
 	gsmProjectConfig gsm.Config,
-	discoveredFields map[collectionGroupKey][]string,
+	discoveredFields map[CollectionGroupKey][]string,
 ) ([]api.CredentialReference, error) {
 	var resolvedCredentials []api.CredentialReference
 
@@ -196,7 +190,7 @@ func expandBundle(
 			if gsmClient == nil {
 				return nil, fmt.Errorf("bundle auto-discovery for %s__%s requires GSM client, but client is not initialized", secretEntry.Collection, secretEntry.Group)
 			}
-			key := collectionGroupKey{
+			key := CollectionGroupKey{
 				secretEntry.Collection,
 				secretEntry.Group,
 			}

@@ -1,4 +1,4 @@
-package multi_stage
+package csi_secrets
 
 import (
 	"fmt"
@@ -107,9 +107,9 @@ func TestGroupCredentialsByCollectionGroupAndMountPath(t *testing.T) {
 
 	for _, tc := range testCases {
 		t.Run(tc.name, func(t *testing.T) {
-			result := groupCredentialsByCollectionGroupAndMountPath(tc.credentials)
+			result := GroupCredentialsByCollectionGroupAndMountPath(tc.credentials)
 			if diff := cmp.Diff(tc.expected, result); diff != "" {
-				t.Errorf("groupCredentialsByCollectionGroupAndMountPath() mismatch (-want +got):\n%s", diff)
+				t.Errorf("GroupCredentialsByCollectionGroupAndMountPath() mismatch (-want +got):\n%s", diff)
 			}
 		})
 	}
@@ -133,7 +133,7 @@ func TestBuildGCPSecretsParameter(t *testing.T) {
 			},
 			expected: []config.Secret{
 				{
-					ResourceName: fmt.Sprintf("projects/%s/secrets/collection1__group1__cred1/versions/latest", GSMproject),
+					ResourceName: fmt.Sprintf("projects/%s/secrets/collection1__group1__cred1/versions/latest", GSMProject),
 					FileName:     "cred1",
 				},
 			},
@@ -146,11 +146,11 @@ func TestBuildGCPSecretsParameter(t *testing.T) {
 			},
 			expected: []config.Secret{
 				{
-					ResourceName: fmt.Sprintf("projects/%s/secrets/collection1__group1__cred1/versions/latest", GSMproject),
+					ResourceName: fmt.Sprintf("projects/%s/secrets/collection1__group1__cred1/versions/latest", GSMProject),
 					FileName:     "cred1",
 				},
 				{
-					ResourceName: fmt.Sprintf("projects/%s/secrets/collection2__group2__cred2/versions/latest", GSMproject),
+					ResourceName: fmt.Sprintf("projects/%s/secrets/collection2__group2__cred2/versions/latest", GSMProject),
 					FileName:     "cred2",
 				},
 			},
@@ -159,7 +159,7 @@ func TestBuildGCPSecretsParameter(t *testing.T) {
 
 	for _, tc := range testCases {
 		t.Run(tc.name, func(t *testing.T) {
-			yamlString, err := buildGCPSecretsParameter(tc.credentials)
+			yamlString, err := BuildGCPSecretsParameter(tc.credentials)
 			if err != nil {
 				t.Fatalf("unexpected error: %v", err)
 			}
@@ -171,7 +171,7 @@ func TestBuildGCPSecretsParameter(t *testing.T) {
 			}
 
 			if diff := cmp.Diff(tc.expected, actual); diff != "" {
-				t.Errorf("buildGCPSecretsParameter() mismatch (-want +got):\n%s", diff)
+				t.Errorf("BuildGCPSecretsParameter() mismatch (-want +got):\n%s", diff)
 			}
 		})
 	}
@@ -246,9 +246,9 @@ func TestGetSPCName(t *testing.T) {
 
 	for _, tc := range testCases {
 		t.Run(tc.name, func(t *testing.T) {
-			result := getSPCName(tc.namespace, tc.credentials)
+			result := GetSPCName(tc.namespace, tc.credentials)
 			if result != tc.expected {
-				t.Errorf("getSPCName() = %v, want %v", result, tc.expected)
+				t.Errorf("GetSPCName() = %v, want %v", result, tc.expected)
 			}
 		})
 	}
@@ -321,12 +321,12 @@ func TestCSIVolumeName(t *testing.T) {
 
 	for _, tc := range testCases {
 		t.Run(tc.name, func(t *testing.T) {
-			result := getCSIVolumeName(tc.namespace, tc.credentials)
+			result := GetCSIVolumeName(tc.namespace, tc.credentials)
 			if result != tc.expected {
-				t.Errorf("getCSIVolumeName() = %v, want %v", result, tc.expected)
+				t.Errorf("GetCSIVolumeName() = %v, want %v", result, tc.expected)
 			}
 			if len(result) > KubernetesDNSLabelLimit {
-				t.Errorf("getCSIVolumeName() result exceeds Kubernetes label char limit (%d chars): %v", len(result), result)
+				t.Errorf("GetCSIVolumeName() result exceeds Kubernetes label char limit (%d chars): %v", len(result), result)
 			}
 		})
 	}
@@ -339,7 +339,6 @@ func TestReplaceForbiddenSymbolsInCredentialName(t *testing.T) {
 		expected    string
 		expectError bool
 	}{
-		// Valid cases - letters, numbers, dashes, dots, and underscores are allowed
 		{
 			name:        "valid secret name with letters only",
 			secretName:  "credential",
@@ -364,7 +363,6 @@ func TestReplaceForbiddenSymbolsInCredentialName(t *testing.T) {
 			expected:    "MySecret-123",
 			expectError: false,
 		},
-		// Valid cases - replacement strings should be converted to dots and underscores
 		{
 			name:        "secret with dot replacement should work",
 			secretName:  fmt.Sprintf("%scredential", gsmvalidation.DotReplacementString),
@@ -449,7 +447,6 @@ func TestReplaceForbiddenSymbolsInCredentialName(t *testing.T) {
 			expected:    "some_key-secret",
 			expectError: false,
 		},
-		// Invalid cases - forbidden characters that are not allowed
 		{
 			name:        "secret with special characters should fail validation",
 			secretName:  "secret@domain.com",
@@ -489,7 +486,7 @@ func TestReplaceForbiddenSymbolsInCredentialName(t *testing.T) {
 	}
 	for _, tc := range testCases {
 		t.Run(tc.name, func(t *testing.T) {
-			result, err := restoreForbiddenSymbolsInSecretName(tc.secretName)
+			result, err := RestoreForbiddenSymbolsInSecretName(tc.secretName)
 
 			if tc.expectError {
 				if err == nil {

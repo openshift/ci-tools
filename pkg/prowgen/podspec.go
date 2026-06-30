@@ -13,7 +13,7 @@ import (
 
 	"github.com/openshift/ci-tools/pkg/api"
 	cioperatorapi "github.com/openshift/ci-tools/pkg/api"
-	"github.com/openshift/ci-tools/pkg/steps/multi_stage"
+	"github.com/openshift/ci-tools/pkg/steps/csi_secrets"
 	"github.com/openshift/ci-tools/pkg/steps/utils"
 )
 
@@ -537,7 +537,7 @@ var (
 		MountPath: cioperatorapi.GSMConfigMountPath,
 		ReadOnly:  true,
 	}
-	gsmCredentialsVolume = multi_stage.BuildCSIVolume(
+	gsmCredentialsVolume = csi_secrets.BuildCSIVolume(
 		cioperatorapi.GSMCredentialsVolumeMount,
 		cioperatorapi.GSMCiOperatorSPCName)
 	gsmCredentialsVolumeMount = corev1.VolumeMount{

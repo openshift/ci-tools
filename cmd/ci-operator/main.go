@@ -93,7 +93,7 @@ import (
 	"github.com/openshift/ci-tools/pkg/results"
 	"github.com/openshift/ci-tools/pkg/secrets"
 	"github.com/openshift/ci-tools/pkg/steps"
-	"github.com/openshift/ci-tools/pkg/steps/multi_stage"
+	"github.com/openshift/ci-tools/pkg/steps/csi_secrets"
 	tooldetector "github.com/openshift/ci-tools/pkg/tool-detector"
 	"github.com/openshift/ci-tools/pkg/util"
 	"github.com/openshift/ci-tools/pkg/util/gzip"
@@ -1010,7 +1010,7 @@ func (o *options) Run() (errs []error) {
 		return
 	}
 
-	var gsmConfig *multi_stage.GSMConfiguration
+	var gsmConfig *csi_secrets.GSMConfiguration
 	if o.enableSecretsStoreCSIDriver {
 		var opts []option.ClientOption
 		if o.gsmCredentialsFile != "" {
@@ -1025,7 +1025,7 @@ func (o *options) Run() (errs []error) {
 				logrus.WithError(err).Warn("Failed to close GSM client")
 			}
 		}()
-		gsmConfig = &multi_stage.GSMConfiguration{
+		gsmConfig = &csi_secrets.GSMConfiguration{
 			Config:          &o.gsmConfig,
 			CredentialsFile: o.gsmCredentialsFile,
 			ProjectConfig:   o.gsmProjectConfig,

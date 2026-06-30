@@ -1351,6 +1351,95 @@ func (r fakeCIOpConfigResolver) Config(m *api.Metadata) (*api.ReleaseBuildConfig
 	return &api.ReleaseBuildConfiguration{}, nil
 }
 
+type recordingCIOpConfigResolver struct {
+	configCalls []api.Metadata
+	errByOrg    map[string]error
+}
+
+func (r *recordingCIOpConfigResolver) Config(m *api.Metadata) (*api.ReleaseBuildConfiguration, error) {
+	r.configCalls = append(r.configCalls, *m)
+	if err, ok := r.errByOrg[m.Org]; ok {
+		return nil, err
+	}
+	if m.Org == "openshift" {
+		return &api.ReleaseBuildConfiguration{
+			PromotionConfiguration: &api.PromotionConfiguration{Targets: []api.PromotionTarget{{Namespace: "ocp"}}},
+		}, nil
+	}
+	return &api.ReleaseBuildConfiguration{}, nil
+}
+
+func TestResolveCIOpConfig(t *testing.T) {
+	configNotFoundErr := fmt.Errorf("got unexpected http 404 status code from configresolver: failed to get config")
+	configServerErr := fmt.Errorf("got unexpected http 500 status code from configresolver: internal error")
+
+	testCases := []struct {
+		name             string
+		org              string
+		errByOrg         map[string]error
+		wantErr          bool
+		wantConfig       bool
+		wantConfigCalls  []api.Metadata
+	}{
+		{
+			name: "openshift-priv falls back to openshift on config not found",
+			org:  openShiftPrivOrg,
+			errByOrg: map[string]error{
+				openShiftPrivOrg: configNotFoundErr,
+			},
+			wantConfig: true,
+			wantConfigCalls: []api.Metadata{
+				{Org: openShiftPrivOrg, Repo: "cluster-etcd-operator", Branch: "master"},
+				{Org: "openshift", Repo: "cluster-etcd-operator", Branch: "master"},
+			},
+		},
+		{
+			name: "openshift-priv does not fall back on non-not-found errors",
+			org:  openShiftPrivOrg,
+			errByOrg: map[string]error{
+				openShiftPrivOrg: configServerErr,
+			},
+			wantErr: true,
+			wantConfigCalls: []api.Metadata{
+				{Org: openShiftPrivOrg, Repo: "cluster-etcd-operator", Branch: "master"},
+			},
+		},
+		{
+			name: "openshift-priv returns error when fallback also fails",
+			org:  openShiftPrivOrg,
+			errByOrg: map[string]error{
+				openShiftPrivOrg: configNotFoundErr,
+				"openshift":      configNotFoundErr,
+			},
+			wantErr: true,
+			wantConfigCalls: []api.Metadata{
+				{Org: openShiftPrivOrg, Repo: "cluster-etcd-operator", Branch: "master"},
+				{Org: "openshift", Repo: "cluster-etcd-operator", Branch: "master"},
+			},
+		},
+	}
+
+	for _, tc := range testCases {
+		t.Run(tc.name, func(t *testing.T) {
+			resolver := &recordingCIOpConfigResolver{errByOrg: tc.errByOrg}
+			config, err := resolveCIOpConfig(resolver, tc.org, "cluster-etcd-operator", "master", logrus.NewEntry(logrus.New()))
+			if tc.wantErr {
+				if err == nil {
+					t.Fatal("expected error, got nil")
+				}
+			} else if err != nil {
+				t.Fatalf("unexpected error: %v", err)
+			}
+			if tc.wantConfig && config == nil {
+				t.Fatal("expected config, got nil")
+			}
+			if diff := cmp.Diff(tc.wantConfigCalls, resolver.configCalls); diff != "" {
+				t.Errorf("config resolver calls differ from expected:\n%s", diff)
+			}
+		})
+	}
+}
+
 func makeTrustedApps(slugs ...string) prowflagutil.Strings {
 	var s prowflagutil.Strings
 	for _, slug := range slugs {

@@ -46,6 +46,7 @@ const (
 	controllerName           = "prpqr_reconciler"
 	releaseJobNameLabel      = "releaseJobNameHash"
 	releaseJobNameAnnotation = "releaseJobName"
+	openShiftPrivOrg         = "openshift-priv"
 
 	conditionAllJobsTriggered = "AllJobsTriggered"
 	conditionWithErrors       = "WithErrors"
@@ -326,7 +327,7 @@ func (r *reconciler) triggerJobs(ctx context.Context,
 				}
 				continue
 			}
-			if hasPrivateOrgPR(pullRequests) {
+			if hasOpenShiftPrivPR(pullRequests) {
 				aggregatorJob.Spec.Hidden = true
 			}
 			statuses[mimickedJob] = &v1.PullRequestPayloadJobStatus{
@@ -662,7 +663,7 @@ func (r *reconciler) generateProwjob(ciopConfig *api.ReleaseBuildConfiguration,
 		// PRPQR (until aggregated jobs, but for them we'll have a sequence index)
 		jobBaseGen.PodSpec.Add(hashInput)
 
-		if hasPrivateOrgPR(prs) {
+		if hasOpenShiftPrivPR(prs) {
 			jobBaseGen.PodSpec.Add(prowgen.GitHubToken(true))
 		}
 
@@ -686,7 +687,7 @@ func (r *reconciler) generateProwjob(ciopConfig *api.ReleaseBuildConfiguration,
 		}
 		periodic.DecorationConfig.Timeout = &prowv1.Duration{Duration: r.defaultAggregatorJobTimeout}
 
-		if hasPrivateOrgPR(prs) {
+		if hasOpenShiftPrivPR(prs) {
 			periodic.DecorationConfig.OauthTokenSecret = &prowv1.OauthTokenSecret{
 				Key:  cioperatorapi.OauthTokenSecretKey,
 				Name: cioperatorapi.OauthTokenSecretName,
@@ -788,9 +789,9 @@ func (r *reconciler) clusterForJob(jobName string) (string, error) {
 	return cluster, nil
 }
 
-func hasPrivateOrgPR(prs []v1.PullRequestUnderTest) bool {
+func hasOpenShiftPrivPR(prs []v1.PullRequestUnderTest) bool {
 	for _, pr := range prs {
-		if pr.Org == "openshift-priv" {
+		if pr.Org == openShiftPrivOrg {
 			return true
 		}
 	}

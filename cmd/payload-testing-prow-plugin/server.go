@@ -429,6 +429,10 @@ func (s *server) handle(l *logrus.Entry, ic github.IssueCommentEvent) (string, [
 	}
 
 	ciOpConfig, err := s.ciOpConfigResolver.Config(&api.Metadata{Org: org, Repo: repo, Branch: pr.Base.Ref})
+	if err != nil && org == "openshift-priv" {
+		logger.WithField("fallback", "openshift").Info("falling back to openshift org config for openshift-priv repo")
+		ciOpConfig, err = s.ciOpConfigResolver.Config(&api.Metadata{Org: "openshift", Repo: repo, Branch: pr.Base.Ref})
+	}
 	if err != nil {
 		logger.WithError(err).Error("could not resolve ci-operator's config")
 		return formatError(fmt.Errorf("could not resolve ci-operator's config for %s/%s/%s: %w", org, repo, pr.Base.Ref, err)), nil

@@ -257,6 +257,21 @@ func TestReconcile(t *testing.T) {
 			},
 		},
 		{
+			name: "openshift-priv PR sets hidden and injects credentials",
+			prpqr: []ctrlruntimeclient.Object{
+				&v1.PullRequestPayloadQualificationRun{
+					ObjectMeta: metav1.ObjectMeta{Name: "prpqr-test", Namespace: "test-namespace"},
+					Spec: v1.PullRequestPayloadTestSpec{
+						PullRequests: []v1.PullRequestUnderTest{{Org: "openshift-priv", Repo: "cluster-etcd-operator", BaseRef: "master", BaseSHA: "abc123", PullRequest: &v1.PullRequest{Number: 42, Author: "test", SHA: "def456", Title: "fix: CVE-2026-1234"}}},
+						Jobs: v1.PullRequestPayloadJobSpec{
+							ReleaseControllerConfig: v1.ReleaseControllerConfig{OCP: "4.19", Release: "ci", Specifier: "informing"},
+							Jobs:                    []v1.ReleaseJobSpec{{CIOperatorConfig: v1.CIOperatorMetadata{Org: "test-org", Repo: "test-repo", Branch: "test-branch"}, Test: "test-name"}},
+						},
+					},
+				},
+			},
+		},
+		{
 			name: "override initial and base payload pullspecs",
 			prpqr: []ctrlruntimeclient.Object{
 				&v1.PullRequestPayloadQualificationRun{

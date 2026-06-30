@@ -326,6 +326,9 @@ func (r *reconciler) triggerJobs(ctx context.Context,
 				}
 				continue
 			}
+			if hasPrivateOrgPR(pullRequests) {
+				aggregatorJob.Spec.Hidden = true
+			}
 			statuses[mimickedJob] = &v1.PullRequestPayloadJobStatus{
 				ReleaseJobName: mimickedJob,
 				ProwJob:        aggregatorJob.Name,
@@ -659,6 +662,10 @@ func (r *reconciler) generateProwjob(ciopConfig *api.ReleaseBuildConfiguration,
 		// PRPQR (until aggregated jobs, but for them we'll have a sequence index)
 		jobBaseGen.PodSpec.Add(hashInput)
 
+		if hasPrivateOrgPR(prs) {
+			jobBaseGen.PodSpec.Add(prowgen.GitHubToken(true))
+		}
+
 		baseTestName := inject.JobName(jobconfig.PeriodicPrefix)
 		if shardCount > 1 {
 			baseTestName = fmt.Sprintf("%s-%dof%d", baseTestName, shardIndex, shardCount)
@@ -678,6 +685,14 @@ func (r *reconciler) generateProwjob(ciopConfig *api.ReleaseBuildConfiguration,
 			periodic.DecorationConfig = &prowv1.DecorationConfig{}
 		}
 		periodic.DecorationConfig.Timeout = &prowv1.Duration{Duration: r.defaultAggregatorJobTimeout}
+
+		if hasPrivateOrgPR(prs) {
+			periodic.DecorationConfig.OauthTokenSecret = &prowv1.OauthTokenSecret{
+				Key:  cioperatorapi.OauthTokenSecretKey,
+				Name: cioperatorapi.OauthTokenSecretName,
+			}
+			periodic.Hidden = true
+		}
 		break
 	}
 	// We did not find the injected test: this is a bug
@@ -771,6 +786,15 @@ func (r *reconciler) clusterForJob(jobName string) (string, error) {
 	r.jobClusterCache.clusterForJob[jobName] = cluster
 
 	return cluster, nil
+}
+
+func hasPrivateOrgPR(prs []v1.PullRequestUnderTest) bool {
+	for _, pr := range prs {
+		if pr.Org == "openshift-priv" {
+			return true
+		}
+	}
+	return false
 }
 
 func metadataFromPullRequestsUnderTest(prs []v1.PullRequestUnderTest) *api.Metadata {

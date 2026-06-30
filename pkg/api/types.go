@@ -1238,6 +1238,8 @@ type StepDependency struct {
 	Env string `json:"env"`
 	// PullSpec allows the ci-operator user to pass in an external pull-spec that should be used when resolving the dependency
 	PullSpec string `json:"-"`
+	// MountPath is where the dependency image will be mounted as a read-only volume.
+	MountPath string `json:"mount_path,omitempty"`
 }
 
 // StepDNSConfig defines a resource that needs to be acquired prior to execution.

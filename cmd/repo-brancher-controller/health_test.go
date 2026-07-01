@@ -18,12 +18,12 @@ func TestRuntimeHealthReadiness(t *testing.T) {
 		t.Fatal("healthy runtime should be ready")
 	}
 	if health.ready(time.Now().Add(2 * time.Minute)) {
-		t.Fatal("stale configuration and GitHub success must fail readiness")
+		t.Fatal("stale configuration must fail readiness")
 	}
 
 	health.lastConfigSuccess.Store(now.Unix())
 	health.lastGitHubSuccess.Store(now.Add(-2 * time.Minute).Unix())
-	if health.ready(now) {
-		t.Fatal("stale GitHub success must fail readiness")
+	if !health.ready(now) {
+		t.Fatal("stale GitHub success must not fail readiness when configuration is fresh")
 	}
 }

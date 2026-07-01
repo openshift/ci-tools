@@ -32,9 +32,5 @@ func (h *runtimeHealth) ready(now time.Time) bool {
 	if lastConfigSuccess == 0 || now.Sub(time.Unix(lastConfigSuccess, 0)) > h.maxConfigStaleness {
 		return false
 	}
-	lastGitHubSuccess := h.lastGitHubSuccess.Load()
-	if lastGitHubSuccess == 0 || now.Sub(time.Unix(lastGitHubSuccess, 0)) > h.maxConfigStaleness {
-		return false
-	}
 	return true
 }

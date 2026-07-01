@@ -337,9 +337,6 @@ func joinOcAdmReleaseNewCommand(config *api.ReleaseTagConfiguration, namespace, 
 }
 
 func buildOcAdmReleaseNewCommand(config *api.ReleaseTagConfiguration, namespace, streamName, cvo, destination, version string) string {
-	if !api.ConsolidatedQuayPromotionVersion(config.Name) {
-		return joinOcAdmReleaseNewCommand(config, namespace, cvo, destination, version, "--from-image-stream", streamName)
-	}
 	filePathVar := "${_CI_RELEASE_IS_FILE}"
 	fromStream := joinOcAdmReleaseNewCommand(config, namespace, cvo, destination, version, "--from-image-stream", streamName)
 	fromFile := joinOcAdmReleaseNewCommand(config, namespace, cvo, destination, version, "--from-image-stream-file", filePathVar)

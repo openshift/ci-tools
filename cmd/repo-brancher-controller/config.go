@@ -37,7 +37,7 @@ func loadDesiredState(configDir string, forwardingConfig *forwardingConfig) (map
 		}
 
 		for _, forwarding := range forwardingConfig.ReleaseBranches {
-			if isIgnored(forwarding.Ignore, info.Org, info.Repo) || !api.PromotesOfficialImage(configuration, api.WithoutOKD, forwarding.Source) {
+			if isIgnored(forwarding.Ignore, info.Org, info.Repo) {
 				continue
 			}
 			if info.Branch != "release-"+forwarding.Source && info.Branch != "openshift-"+forwarding.Source {

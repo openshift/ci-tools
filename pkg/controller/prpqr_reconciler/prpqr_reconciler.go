@@ -664,7 +664,7 @@ func (r *reconciler) generateProwjob(ciopConfig *api.ReleaseBuildConfiguration,
 		jobBaseGen.PodSpec.Add(hashInput)
 
 		if hasOpenShiftPrivPR(prs) {
-			jobBaseGen.PodSpec.Add(prowgen.GitHubToken(true))
+			jobBaseGen.PodSpec.Add(prowgen.GitHubToken(false))
 		}
 
 		baseTestName := inject.JobName(jobconfig.PeriodicPrefix)
@@ -688,10 +688,6 @@ func (r *reconciler) generateProwjob(ciopConfig *api.ReleaseBuildConfiguration,
 		periodic.DecorationConfig.Timeout = &prowv1.Duration{Duration: r.defaultAggregatorJobTimeout}
 
 		if hasOpenShiftPrivPR(prs) {
-			periodic.DecorationConfig.OauthTokenSecret = &prowv1.OauthTokenSecret{
-				Key:  cioperatorapi.OauthTokenSecretKey,
-				Name: cioperatorapi.OauthTokenSecretName,
-			}
 			periodic.Hidden = true
 		}
 		break

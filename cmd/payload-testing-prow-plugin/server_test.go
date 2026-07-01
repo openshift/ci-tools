@@ -1374,12 +1374,12 @@ func TestResolveCIOpConfig(t *testing.T) {
 	configServerErr := fmt.Errorf("got unexpected http 500 status code from configresolver: internal error")
 
 	testCases := []struct {
-		name             string
-		org              string
-		errByOrg         map[string]error
-		wantErr          bool
-		wantConfig       bool
-		wantConfigCalls  []api.Metadata
+		name            string
+		org             string
+		errByOrg        map[string]error
+		wantErr         bool
+		wantConfig      bool
+		wantConfigCalls []api.Metadata
 	}{
 		{
 			name: "openshift-priv falls back to openshift on config not found",

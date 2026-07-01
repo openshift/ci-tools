@@ -1715,7 +1715,7 @@ func TestFromConfig(t *testing.T) {
 		},
 		promote:       true,
 		expectedSteps: []string{"[output-images]", "[images]"},
-		expectedPost:  []string{"[promotion]", "[promotion-quay]"},
+		expectedPost:  []string{"[promotion-quay]"},
 	}, {
 		name: "promote 4.12 consolidated quay",
 		config: api.ReleaseBuildConfiguration{
@@ -1743,7 +1743,7 @@ func TestFromConfig(t *testing.T) {
 		},
 		promote:       true,
 		expectedSteps: []string{"[output-images]", "[images]"},
-		expectedPost:  []string{"[promotion]", "[promotion-quay]"},
+		expectedPost:  []string{"[promotion-quay]"},
 	}, {
 		name: "promote 5.0 legacy quay",
 		config: api.ReleaseBuildConfiguration{
@@ -1757,7 +1757,7 @@ func TestFromConfig(t *testing.T) {
 		},
 		promote:       true,
 		expectedSteps: []string{"[output-images]", "[images]"},
-		expectedPost:  []string{"[promotion]", "[promotion-quay]"},
+		expectedPost:  []string{"[promotion-quay]"},
 	}, {
 		name: "duplicate input images",
 		config: api.ReleaseBuildConfiguration{

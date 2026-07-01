@@ -575,14 +575,18 @@ type fakeResolverClient struct {
 }
 
 func (f *fakeResolverClient) ConfigWithTest(base *api.Metadata, testSource *api.MetadataWithTest) (*api.ReleaseBuildConfiguration, error) {
-	return &api.ReleaseBuildConfiguration{
+	cfg := &api.ReleaseBuildConfiguration{
 		Metadata: *base,
 		Tests: []api.TestStepConfiguration{
 			{
 				As: testSource.Test,
 			},
 		},
-	}, nil
+	}
+	if strings.Contains(base.Org, "openshift-priv") {
+		cfg.Prowgen = &api.ProwgenOverrides{Private: true}
+	}
+	return cfg, nil
 }
 
 func (r fakeResolverClient) ClusterProfile(profileName string) (*api.ClusterProfileDetails, error) {

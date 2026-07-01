@@ -428,7 +428,7 @@ func (s *server) handle(l *logrus.Entry, ic github.IssueCommentEvent) (string, [
 		return formatError(fmt.Errorf("could not get pull request https://github.com/%s/%s/pull/%d: %w", org, repo, prNumber, err)), nil
 	}
 
-	ciOpConfig, err := resolveCIOpConfig(s.ciOpConfigResolver, org, repo, pr.Base.Ref, logger)
+	ciOpConfig, err := s.ciOpConfigResolver.Config(&api.Metadata{Org: org, Repo: repo, Branch: pr.Base.Ref})
 	if err != nil {
 		logger.WithError(err).Error("could not resolve ci-operator's config")
 		return formatError(fmt.Errorf("could not resolve ci-operator's config for %s/%s/%s: %w", org, repo, pr.Base.Ref, err)), nil
@@ -877,19 +877,4 @@ Please contact an administrator to resolve this issue.`,
 
 type ciOpConfigResolver interface {
 	Config(*api.Metadata) (*api.ReleaseBuildConfiguration, error)
-}
-
-const openShiftPrivOrg = "openshift-priv"
-
-func isConfigResolverNotFound(err error) bool {
-	return err != nil && strings.Contains(err.Error(), "got unexpected http 404 status code from configresolver")
-}
-
-func resolveCIOpConfig(resolver ciOpConfigResolver, org, repo, branch string, logger *logrus.Entry) (*api.ReleaseBuildConfiguration, error) {
-	ciOpConfig, err := resolver.Config(&api.Metadata{Org: org, Repo: repo, Branch: branch})
-	if err != nil && org == openShiftPrivOrg && isConfigResolverNotFound(err) {
-		logger.WithField("fallback", "openshift").Info("falling back to openshift org config for openshift-priv repo")
-		ciOpConfig, err = resolver.Config(&api.Metadata{Org: "openshift", Repo: repo, Branch: branch})
-	}
-	return ciOpConfig, err
 }

@@ -43,11 +43,9 @@ import (
 )
 
 const (
-	controllerName           = "prpqr_reconciler"
-	releaseJobNameLabel      = "releaseJobNameHash"
-	releaseJobNameAnnotation = "releaseJobName"
-	openShiftPrivOrg         = "openshift-priv"
-
+	controllerName            = "prpqr_reconciler"
+	releaseJobNameLabel       = "releaseJobNameHash"
+	releaseJobNameAnnotation  = "releaseJobName"
 	conditionAllJobsTriggered = "AllJobsTriggered"
 	conditionWithErrors       = "WithErrors"
 
@@ -327,7 +325,7 @@ func (r *reconciler) triggerJobs(ctx context.Context,
 				}
 				continue
 			}
-			if hasOpenShiftPrivPR(pullRequests) {
+			if ciopConfig.Prowgen != nil && ciopConfig.Prowgen.Private {
 				aggregatorJob.Spec.Hidden = true
 			}
 			statuses[mimickedJob] = &v1.PullRequestPayloadJobStatus{
@@ -663,10 +661,6 @@ func (r *reconciler) generateProwjob(ciopConfig *api.ReleaseBuildConfiguration,
 		// PRPQR (until aggregated jobs, but for them we'll have a sequence index)
 		jobBaseGen.PodSpec.Add(hashInput)
 
-		if hasOpenShiftPrivPR(prs) {
-			jobBaseGen.PodSpec.Add(prowgen.GitHubToken(false))
-		}
-
 		baseTestName := inject.JobName(jobconfig.PeriodicPrefix)
 		if shardCount > 1 {
 			baseTestName = fmt.Sprintf("%s-%dof%d", baseTestName, shardIndex, shardCount)
@@ -686,10 +680,6 @@ func (r *reconciler) generateProwjob(ciopConfig *api.ReleaseBuildConfiguration,
 			periodic.DecorationConfig = &prowv1.DecorationConfig{}
 		}
 		periodic.DecorationConfig.Timeout = &prowv1.Duration{Duration: r.defaultAggregatorJobTimeout}
-
-		if hasOpenShiftPrivPR(prs) {
-			periodic.Hidden = true
-		}
 		break
 	}
 	// We did not find the injected test: this is a bug
@@ -783,15 +773,6 @@ func (r *reconciler) clusterForJob(jobName string) (string, error) {
 	r.jobClusterCache.clusterForJob[jobName] = cluster
 
 	return cluster, nil
-}
-
-func hasOpenShiftPrivPR(prs []v1.PullRequestUnderTest) bool {
-	for _, pr := range prs {
-		if pr.Org == openShiftPrivOrg {
-			return true
-		}
-	}
-	return false
 }
 
 func metadataFromPullRequestsUnderTest(prs []v1.PullRequestUnderTest) *api.Metadata {

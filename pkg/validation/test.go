@@ -983,6 +983,37 @@ func validateDependencies(fieldRoot string, dependencies []api.StepDependency) [
 		} else {
 			env.Insert(dependency.Env)
 		}
+		if dependency.MountPath != "" {
+			if !filepath.IsAbs(dependency.MountPath) {
+				errs = append(errs, fmt.Errorf("%s.dependencies[%d].mount_path is not absolute: %s", fieldRoot, i, dependency.MountPath))
+			}
+			for j, other := range dependencies[i+1:] {
+				if other.MountPath == "" {
+					continue
+				}
+				index := i + j + 1
+				if dependency.MountPath == other.MountPath {
+					errs = append(errs, fmt.Errorf("%s.dependencies[%d] and dependencies[%d] mount to the same location (%s)", fieldRoot, i, index, dependency.MountPath))
+					continue
+				}
+				relPath, err := filepath.Rel(other.MountPath, dependency.MountPath)
+				if err != nil {
+					errs = append(errs, fmt.Errorf("%s.dependencies[%d] could not check relative path to dependencies[%d] (%w)", fieldRoot, i, index, err))
+					continue
+				}
+				if !strings.Contains(relPath, "..") {
+					errs = append(errs, fmt.Errorf("%s.dependencies[%d] mounts at %s, which is under dependencies[%d] (%s)", fieldRoot, i, dependency.MountPath, index, other.MountPath))
+				}
+				relPath, err = filepath.Rel(dependency.MountPath, other.MountPath)
+				if err != nil {
+					errs = append(errs, fmt.Errorf("%s.dependencies[%d] could not check relative path to dependencies[%d] (%w)", fieldRoot, index, i, err))
+					continue
+				}
+				if !strings.Contains(relPath, "..") {
+					errs = append(errs, fmt.Errorf("%s.dependencies[%d] mounts at %s, which is under dependencies[%d] (%s)", fieldRoot, index, other.MountPath, i, dependency.MountPath))
+				}
+			}
+		}
 	}
 	return errs
 }

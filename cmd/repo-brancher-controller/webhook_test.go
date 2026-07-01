@@ -21,6 +21,7 @@ func TestPushEventHandler(t *testing.T) {
 		wantQueue int
 	}{
 		{name: "source push", event: github.PushEvent{Ref: "refs/heads/main", Repo: github.Repo{Owner: github.User{Login: "org"}, Name: "repo"}}, wantQueue: 1},
+		{name: "unconfigured branch", event: github.PushEvent{Ref: "refs/heads/other", Repo: github.Repo{Owner: github.User{Login: "org"}, Name: "repo"}}},
 		{name: "tag ignored", event: github.PushEvent{Ref: "refs/tags/main", Repo: github.Repo{Owner: github.User{Login: "org"}, Name: "repo"}}},
 		{name: "deleted branch ignored", event: github.PushEvent{Ref: "refs/heads/main", Deleted: true, Repo: github.Repo{Owner: github.User{Login: "org"}, Name: "repo"}}},
 	}

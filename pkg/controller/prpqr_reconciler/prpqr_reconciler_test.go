@@ -583,7 +583,7 @@ func (f *fakeResolverClient) ConfigWithTest(base *api.Metadata, testSource *api.
 			},
 		},
 	}
-	if strings.Contains(base.Org, "openshift-priv") {
+	if base.Org == "openshift-priv" {
 		cfg.Prowgen = &api.ProwgenOverrides{Private: true}
 	}
 	return cfg, nil

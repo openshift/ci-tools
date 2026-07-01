@@ -325,7 +325,7 @@ func (r *reconciler) triggerJobs(ctx context.Context,
 				}
 				continue
 			}
-			if ciopConfig.Prowgen != nil && ciopConfig.Prowgen.Private {
+			if ciopConfig.Prowgen != nil && ciopConfig.Prowgen.Private && !ciopConfig.Prowgen.Expose {
 				aggregatorJob.Spec.Hidden = true
 			}
 			statuses[mimickedJob] = &v1.PullRequestPayloadJobStatus{

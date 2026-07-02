@@ -8,4 +8,4 @@ if [[ -n ${ARTIFACT_DIR:-} ]]; then
 fi
 
 set -o xtrace
-gotestsum $JUNIT_ARG -- ${PACKAGES:-"./..."} -race ${TESTFLAGS:-}
+go run gotest.tools/gotestsum@latest $JUNIT_ARG -- ${PACKAGES:-"./..."} -race ${TESTFLAGS:-}

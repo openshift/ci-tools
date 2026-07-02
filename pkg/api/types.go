@@ -73,6 +73,9 @@ type ReleaseBuildConfiguration struct {
 
 	Prowgen *ProwgenOverrides `json:"prowgen,omitempty"`
 
+	// Set by prowgen when generating from --from-file; not serialized.
+	UnresolvedConfigPath string `json:"-"`
+
 	InputConfiguration `json:",inline"`
 
 	// BinaryBuildCommands will create a "bin" image based on "src" that

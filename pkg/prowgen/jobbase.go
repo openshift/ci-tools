@@ -43,6 +43,9 @@ func sparseCheckoutFiles(configSpec *cioperatorapi.ReleaseBuildConfiguration) []
 	if fromRepositorySet(configSpec) {
 		files.Insert(cioperatorapi.CIOperatorInrepoConfigFileName)
 	}
+	if configSpec.UnresolvedConfigPath != "" {
+		files.Insert(path.Base(configSpec.UnresolvedConfigPath))
+	}
 	for _, image := range configSpec.Images.Items {
 		if image.DockerfileLiteral != nil {
 			continue
@@ -131,6 +134,10 @@ func NewProwJobBaseBuilder(configSpec *cioperatorapi.ReleaseBuildConfiguration, 
 
 	if configSpec.CanonicalGoRepository != nil {
 		b.base.UtilityConfig.PathAlias = *configSpec.CanonicalGoRepository
+	}
+
+	if configSpec.UnresolvedConfigPath != "" {
+		b.PodSpec.Add(UnresolvedConfig(configSpec.UnresolvedConfigPath))
 	}
 
 	if private && !expose {

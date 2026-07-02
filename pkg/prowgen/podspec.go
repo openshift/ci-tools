@@ -578,6 +578,14 @@ func GSMConfig() PodSpecMutator {
 	}
 }
 
+func UnresolvedConfig(configPath string) PodSpecMutator {
+	return func(spec *corev1.PodSpec) error {
+		container := &spec.Containers[0]
+		addUniqueParameter(container, fmt.Sprintf("--unresolved-config=%s", configPath))
+		return nil
+	}
+}
+
 func Variant(variant string) PodSpecMutator {
 	return func(spec *corev1.PodSpec) error {
 		if len(variant) > 0 {

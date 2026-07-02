@@ -361,6 +361,7 @@ func TestBuild(t *testing.T) {
 		spec          jobSetSpecification
 		jobTuples     []prpqv1.ReleaseJobSpec
 		additionalPRs []prpqv1.PullRequestUnderTest
+		private       bool
 		expected      *prpqv1.PullRequestPayloadQualificationRun
 	}{
 		{
@@ -577,6 +578,56 @@ func TestBuild(t *testing.T) {
 				},
 			},
 		},
+		{
+			name:    "private repo sets Private on spec",
+			private: true,
+			spec: jobSetSpecification{
+				ocp:         "4.19",
+				releaseType: "ci",
+				jobs:        "informing",
+			},
+			jobTuples: []prpqv1.ReleaseJobSpec{
+				{
+					CIOperatorConfig: prpqv1.CIOperatorMetadata{
+						Org:    "openshift",
+						Repo:   "release",
+						Branch: "main",
+					},
+					Test: "e2e-aws-serial",
+				},
+			},
+			expected: &prpqv1.PullRequestPayloadQualificationRun{
+				ObjectMeta: metav1.ObjectMeta{
+					Name:      "some-guid-0",
+					Namespace: "ci",
+					Labels: map[string]string{
+						"dptp.openshift.io/requester": "payload-testing",
+						"event-GUID":                  "some-guid",
+						"prow.k8s.io/refs.org":        "org",
+						"prow.k8s.io/refs.pull":       "123",
+						"prow.k8s.io/refs.repo":       "repo",
+						"prow.k8s.io/refs.base_ref":   "ref",
+					},
+				},
+				Spec: prpqv1.PullRequestPayloadTestSpec{
+					Private: true,
+					PullRequests: []prpqv1.PullRequestUnderTest{{Org: "org",
+						Repo:        "repo",
+						BaseRef:     "ref",
+						BaseSHA:     "sha",
+						PullRequest: &prpqv1.PullRequest{Number: 123, Author: "login", SHA: "head-sha", Title: "title"}}},
+					Jobs: prpqv1.PullRequestPayloadJobSpec{
+						ReleaseControllerConfig: prpqv1.ReleaseControllerConfig{OCP: "4.19", Release: "ci", Specifier: "informing"},
+						Jobs: []prpqv1.ReleaseJobSpec{
+							{
+								CIOperatorConfig: prpqv1.CIOperatorMetadata{Org: "openshift", Repo: "release", Branch: "main"},
+								Test:             "e2e-aws-serial",
+							},
+						},
+					},
+				},
+			},
+		},
 	}
 	for _, tc := range testCases {
 		t.Run(tc.name, func(t *testing.T) {
@@ -599,7 +650,8 @@ func TestBuild(t *testing.T) {
 						Login: "login",
 					},
 				},
-				spec: tc.spec,
+				spec:    tc.spec,
+				private: tc.private,
 			}
 			actual := builder.build(tc.jobTuples, tc.additionalPRs)
 			if diff := cmp.Diff(tc.expected, actual, testhelper.RuntimeObjectIgnoreRvTypeMeta); diff != "" {
@@ -622,8 +674,10 @@ func (c *fakeTrustedChecker) trustedUser(author, _, _ string, _ int) (bool, erro
 func TestHandle(t *testing.T) {
 	ghc := fakegithub.NewFakeClient()
 	pr123 := github.PullRequest{}
+	privatePR := github.PullRequest{Base: github.PullRequestBranch{Repo: github.Repo{Private: true}}}
 	ghc.PullRequests = map[int]*github.PullRequest{
 		123: &pr123,
+		456: &privatePR,
 		999: {},
 	}
 
@@ -633,6 +687,7 @@ func TestHandle(t *testing.T) {
 		ic                    github.IssueCommentEvent
 		expectedMessage       string
 		expectedAdditionalPRs []config.AdditionalPR
+		expectedPrivate       bool
 	}{
 		{
 			name: "basic case",
@@ -663,6 +718,38 @@ func TestHandle(t *testing.T) {
 			expectedMessage: `trigger 2 job(s) of type informing for the nightly release of OCP 4.10
 - periodic-ci-openshift-release-master-nightly-4.10-e2e-aws-serial
 - periodic-ci-openshift-release-master-nightly-4.10-e2e-metal-ipi
+
+See details on https://pr-payload-tests.ci.openshift.org/runs/ci/guid-0
+`,
+		},
+		{
+			name: "private repo sets Private on PRPQR",
+			s: &server{
+				ghc:        ghc,
+				ctx:        context.TODO(),
+				kubeClient: fakeclient.NewClientBuilder().Build(),
+				namespace:  "ci",
+				jobResolver: newFakeJobResolver(map[string][]config.Job{"4.19": {
+					{Name: "periodic-ci-openshift-release-master-nightly-4.10-e2e-aws-serial"},
+				}}),
+				testResolver:       newFakeTestResolver(),
+				trustedChecker:     &fakeTrustedChecker{},
+				ciOpConfigResolver: &fakeCIOpConfigResolver{},
+			},
+			ic: github.IssueCommentEvent{
+				GUID: "guid",
+				Repo: github.Repo{Owner: github.User{Login: "openshift"}, Private: true},
+				Issue: github.Issue{
+					Number:      456,
+					PullRequest: &struct{}{},
+				},
+				Comment: github.IssueComment{
+					Body: "/payload 4.19 ci informing",
+				},
+			},
+			expectedPrivate: true,
+			expectedMessage: `trigger 1 job(s) of type informing for the ci release of OCP 4.19
+- periodic-ci-openshift-release-master-nightly-4.10-e2e-aws-serial
 
 See details on https://pr-payload-tests.ci.openshift.org/runs/ci/guid-0
 `,
@@ -1219,6 +1306,17 @@ trigger 0 job(s) of type all for the ci release of OCP 4.8
 			}
 			if diff := cmp.Diff(tc.expectedAdditionalPRs, actualAddtionalPRs, cmpopts.EquateEmpty()); diff != "" {
 				t.Errorf("%s differs from expectedAdditionalPRs:\n%s", tc.name, diff)
+			}
+			if tc.expectedPrivate && tc.s.kubeClient != nil {
+				var runs prpqv1.PullRequestPayloadQualificationRunList
+				if err := tc.s.kubeClient.List(context.Background(), &runs); err != nil {
+					t.Fatalf("failed to list PRPQRs: %v", err)
+				}
+				for _, run := range runs.Items {
+					if !run.Spec.Private {
+						t.Errorf("expected PRPQR %s to have Private=true", run.Name)
+					}
+				}
 			}
 		})
 	}

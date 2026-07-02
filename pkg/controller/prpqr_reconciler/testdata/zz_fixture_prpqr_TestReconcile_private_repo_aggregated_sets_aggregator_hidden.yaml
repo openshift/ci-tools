@@ -12,12 +12,14 @@
         release: ci
         specifier: informing
       releaseJobSpec:
-      - ciOperatorConfig:
+      - aggregatedCount: 2
+        ciOperatorConfig:
           branch: test-branch
           org: test-org
           repo: test-repo
         test: test-name
     payload: {}
+    private: true
     pullRequests:
     - baseRef: master
       baseSHA: abc123
@@ -36,9 +38,9 @@
       status: "True"
       type: AllJobsTriggered
     jobs:
-    - jobName: periodic-ci-test-org-test-repo-test-branch-test-name
+    - jobName: aggregator-periodic-ci-test-org-test-repo-test-branch-test-name
       prowJob: some-uuid
       status:
         startTime: "1970-01-01T00:00:00Z"
         state: triggered
-        url: https://prow.ci.openshift.org/view/gs/test-platform-results/openshift-priv-cluster-etcd-operator-42-test-name
+        url: https://prow.ci.openshift.org/view/gs/test-platform-results/aggregator-periodic-ci-test-org-test-repo-test-branch-test-name

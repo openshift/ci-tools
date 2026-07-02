@@ -380,13 +380,6 @@ func ResolveAndMergeConfigsAndInjectTest(configs Getter, resolver Resolver, reso
 				mergedConfig.Images.Items = append(mergedConfig.Images.Items, image)
 			}
 
-			if config.Prowgen != nil && config.Prowgen.Private {
-				if mergedConfig.Prowgen == nil {
-					mergedConfig.Prowgen = &api.ProwgenOverrides{}
-				}
-				mergedConfig.Prowgen.Private = true
-			}
-
 			// Attempt to handle a few simple raw_step types on a best-effort basis
 			for i := range config.RawSteps {
 				rawStep := config.RawSteps[i]

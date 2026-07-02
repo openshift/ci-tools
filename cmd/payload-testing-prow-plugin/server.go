@@ -447,6 +447,7 @@ func (s *server) handle(l *logrus.Entry, ic github.IssueCommentEvent) (string, [
 		guid:      guid,
 		counter:   0,
 		pr:        pr,
+		private:   pr.Base.Repo.Private,
 	}
 
 	includedAdditionalPRs := sets.New[config.AdditionalPR]()
@@ -552,6 +553,9 @@ func (s *server) handle(l *logrus.Entry, ic github.IssueCommentEvent) (string, [
 			if err != nil {
 				specLogger.WithError(err).Errorf("unable to get pr from github for: %s", prRef)
 				return formatError(fmt.Errorf("unable to get pr from github for: %s: %w", prRef, err)), nil
+			}
+			if pullRequest.Base.Repo.Private {
+				builder.private = true
 			}
 			additionalPRs = append(additionalPRs, prpqv1.PullRequestUnderTest{
 				Org:     prOrg,
@@ -781,6 +785,7 @@ type prpqrBuilder struct {
 	counter   int
 	pr        *github.PullRequest
 	spec      jobSetSpecification
+	private   bool
 }
 
 func (b *prpqrBuilder) build(releaseJobSpecs []prpqv1.ReleaseJobSpec, additionalPRs []prpqv1.PullRequestUnderTest) *prpqv1.PullRequestPayloadQualificationRun {
@@ -807,6 +812,7 @@ func (b *prpqrBuilder) build(releaseJobSpecs []prpqv1.ReleaseJobSpec, additional
 					Specifier: string(b.spec.jobs),
 				},
 			},
+			Private: b.private,
 			PullRequests: append(additionalPRs, prpqv1.PullRequestUnderTest{
 				Org:     b.org,
 				Repo:    b.repo,

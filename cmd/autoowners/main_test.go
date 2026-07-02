@@ -229,6 +229,8 @@ type fakeFileGetter struct {
 	aliases             []byte
 	customOwnersAliases []byte
 	invalidOwners       []byte
+	mixedOwners         []byte
+	filtersOnly         []byte
 	someError           error
 	notFound            error
 }
@@ -290,6 +292,22 @@ func (fg fakeFileGetter) GetFile(org, repo, filepath, commit string) ([]byte, er
 			return nil, fg.notFound
 		}
 	}
+	if org == "org8" && repo == "repo8" {
+		if filepath == "OWNERS" {
+			return fg.mixedOwners, nil
+		}
+		if filepath == "OWNERS_ALIASES" {
+			return nil, fg.notFound
+		}
+	}
+	if org == "org9" && repo == "repo9" {
+		if filepath == "OWNERS" {
+			return fg.filtersOnly, nil
+		}
+		if filepath == "OWNERS_ALIASES" {
+			return nil, fg.notFound
+		}
+	}
 
 	if filepath == "CUSTOM_OWNERS" {
 		return fg.customOwners, nil
@@ -327,6 +345,30 @@ approvers:
 - @abc
 - @team-a
 `)
+	fakeMixedOwners := []byte(`---
+reviewers:
+  - reviewer1
+  - reviewer2
+approvers:
+  - approver1
+  - approver2
+
+filters:
+  "^nightly-.*\\.yaml$":
+    approvers:
+      - nightly-approver1
+      - nightly-approver2
+      - approver1
+`)
+	fakeFiltersOnly := []byte(`---
+filters:
+  ".*\\.go$":
+    approvers:
+      - go-approver1
+      - go-approver2
+    reviewers:
+      - go-reviewer1
+`)
 	someError := fmt.Errorf("some error")
 	notFound := &github.FileNotFound{}
 
@@ -339,6 +381,8 @@ approvers:
 		aliases:             fakeOwnersAliases,
 		customOwnersAliases: fakeCustomAliases,
 		invalidOwners:       fakeInvalidOwners,
+		mixedOwners:         fakeMixedOwners,
+		filtersOnly:         fakeFiltersOnly,
 		someError:           someError,
 		notFound:            notFound,
 	}
@@ -453,6 +497,49 @@ approvers:
 				ownersFileExists: true,
 			},
 		},
+		{
+			description: "OWNERS with both top-level config and filters should preserve both",
+			given: orgRepo{
+				Organization: "org8",
+				Repository:   "repo8",
+			},
+			expectedHTTPResult: httpResult{
+				simpleConfig: SimpleConfig{
+					Config: repoowners.Config{
+						Approvers: []string{"approver1", "approver2"},
+						Reviewers: []string{"reviewer1", "reviewer2"},
+					},
+				},
+				fullConfig: FullConfig{
+					Filters: map[string]repoowners.Config{
+						"^nightly-.*\\.yaml$": {
+							Approvers: []string{"nightly-approver1", "nightly-approver2", "approver1"},
+						},
+					},
+				},
+				ownersFileExists: true,
+			},
+			expectedError: nil,
+		},
+		{
+			description: "OWNERS with only filters (no top-level config)",
+			given: orgRepo{
+				Organization: "org9",
+				Repository:   "repo9",
+			},
+			expectedHTTPResult: httpResult{
+				fullConfig: FullConfig{
+					Filters: map[string]repoowners.Config{
+						".*\\.go$": {
+							Approvers: []string{"go-approver1", "go-approver2"},
+							Reviewers: []string{"go-reviewer1"},
+						},
+					},
+				},
+				ownersFileExists: true,
+			},
+			expectedError: nil,
+		},
 	}
 
 	for _, tc := range testCases {
@@ -498,11 +585,108 @@ func TestResolveOwnerAliasesCleans(t *testing.T) {
 				},
 			}},
 		},
+		{
+			name: "mixed config - top-level becomes .* filter",
+			in: httpResult{
+				simpleConfig: SimpleConfig{Config: repoowners.Config{
+					Approvers: []string{"alice", "bob"},
+					Reviewers: []string{"charlie"},
+				}},
+				fullConfig: FullConfig{Filters: map[string]repoowners.Config{
+					".*\\.go$": {Approvers: []string{"go-team"}},
+				}},
+			},
+			expectedResult: FullConfig{Filters: map[string]repoowners.Config{
+				".*": {
+					Approvers:         []string{"hans"},
+					Reviewers:         []string{"hans"},
+					RequiredReviewers: []string{"hans"},
+					Labels:            []string{},
+				},
+				".*\\.go$": {
+					Approvers:         []string{"hans"},
+					Reviewers:         []string{"hans"},
+					RequiredReviewers: []string{"hans"},
+					Labels:            []string{},
+				},
+			}},
+		},
 	}
 
 	for _, tc := range testCases {
 		t.Run(tc.name, func(t *testing.T) {
 			assertEqual(t, tc.in.resolveOwnerAliases(cleaner), tc.expectedResult)
+		})
+	}
+}
+
+func TestResolveOwnerAliasesMixedConfig(t *testing.T) {
+	testCases := []struct {
+		name           string
+		in             httpResult
+		expectedResult interface{}
+	}{
+		{
+			name: "mixed config - top-level becomes .* filter",
+			in: httpResult{
+				simpleConfig: SimpleConfig{Config: repoowners.Config{
+					Approvers: []string{"alice", "bob"},
+					Reviewers: []string{"charlie"},
+				}},
+				fullConfig: FullConfig{Filters: map[string]repoowners.Config{
+					".*\\.go$": {Approvers: []string{"go-team"}},
+				}},
+			},
+			expectedResult: FullConfig{Filters: map[string]repoowners.Config{
+				".*": {
+					Approvers:         []string{"alice", "bob"},
+					Reviewers:         []string{"charlie"},
+					RequiredReviewers: []string{},
+					Labels:            []string{},
+				},
+				".*\\.go$": {
+					Approvers:         []string{"go-team"},
+					Reviewers:         []string{"go-team"},
+					RequiredReviewers: []string{},
+					Labels:            []string{},
+				},
+			}},
+		},
+		{
+			name: "mixed config - top-level merges with explicit .* filter",
+			in: httpResult{
+				simpleConfig: SimpleConfig{Config: repoowners.Config{
+					Approvers: []string{"alice", "bob"},
+					Reviewers: []string{"charlie"},
+				}},
+				fullConfig: FullConfig{Filters: map[string]repoowners.Config{
+					".*": {
+						Approvers: []string{"dan"},
+						Reviewers: []string{"eve"},
+					},
+					".*\\.go$": {Approvers: []string{"go-team"}},
+				}},
+			},
+			expectedResult: FullConfig{Filters: map[string]repoowners.Config{
+				".*": {
+					Approvers:         []string{"alice", "bob", "dan"},
+					Reviewers:         []string{"charlie", "eve"},
+					RequiredReviewers: []string{},
+					Labels:            []string{},
+				},
+				".*\\.go$": {
+					Approvers:         []string{"go-team"},
+					Reviewers:         []string{"go-team"},
+					RequiredReviewers: []string{},
+					Labels:            []string{},
+				},
+			}},
+		},
+	}
+
+	for _, tc := range testCases {
+		t.Run(tc.name, func(t *testing.T) {
+			assertEqual(t, tc.in.resolveOwnerAliases(noOpCleaner), tc.expectedResult)
 		})
 	}
 }

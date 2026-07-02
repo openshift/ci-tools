@@ -40,26 +40,55 @@ The forwarding config separates default branches from release branches:
 ```yaml
 default_branch:
   configs_promoting_to: "5.0"
-  targets:
-  - "5.0"
-  - "5.1"
-  ignore:
-  - Azure/ARO-HCP
+  forward:
+  - family: release
+    targets:
+    - "5.0"
+    - "5.1"
+    ignore:
+    - org: Azure
+      repo: ARO-HCP
+  - family: openshift
+    targets:
+    - "5.0"
+    - "5.1"
+    only:
+    - org: openshift
+      repo: kubecsr
 
 release_branches:
 - source: "5.0"
-  targets:
-  - "4.23"
-  ignore:
-  - Azure/ARO-HCP
+  forward:
+  - family: release
+    targets:
+    - "4.23"
+  - family: openshift
+    targets:
+    - "4.23"
+    only:
+    - org: openshift
+      repo: kubecsr
+    ignore:
+    - org: Azure
+      repo: ARO-HCP
 ```
 
 `default_branch` selects `main` and `master` ci-operator configurations that
-promote to the configured official OCP stream. Their default branches are
-forwarded to every `release-TARGET` branch. Each `release_branches` entry maps
-one `release-SOURCE` or `openshift-SOURCE` branch to multiple targets while
-preserving the branch prefix. Ignore entries are exact organizations or
-`org/repo` names and are scoped to their containing rule.
+promote to the configured official OCP stream. Each `forward` entry chooses the
+target branch family: `release` forwards to `release-TARGET`, and `openshift`
+forwards to `openshift-TARGET`.
+
+Each `release_branches` entry maps one configured source release. A `release`
+forward block matches `release-SOURCE`; an `openshift` forward block matches
+`openshift-SOURCE`. `only` and `ignore` entries are structured and scoped to
+their containing forward block. They may match by `org`, `repo`, exact `source`,
+exact `target`, or any combination of those selectors. Empty `only` means all
+repositories are included. When `only` and `ignore` both match, `ignore` wins.
+
+Legacy `targets` and string `ignore` fields are still accepted for backward
+compatibility. In legacy mode, `default_branch.targets` means release-family
+targets only, while `release_branches.targets` means both release and openshift
+families, matching the original controller behavior.
 
 The file is strictly validated on every reload. Invalid updates leave the last
 valid desired state active.

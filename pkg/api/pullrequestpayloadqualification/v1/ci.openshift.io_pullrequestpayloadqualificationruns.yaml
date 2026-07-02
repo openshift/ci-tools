@@ -160,6 +160,11 @@ spec:
                       type: object
                     type: array
                 type: object
+              private:
+                description: |-
+                  Private indicates at least one repo under test is private,
+                  requiring GitHub credentials and hidden ProwJobs.
+                type: boolean
               pullRequests:
                 description: PullRequests specifies the code to be tested. Omit to
                   not include any PR content. Immutable.

@@ -9,7 +9,6 @@ import (
 	"sync"
 	"time"
 
-	secretmanager "cloud.google.com/go/secretmanager/apiv1"
 	"github.com/sirupsen/logrus"
 
 	coreapi "k8s.io/api/core/v1"
@@ -30,6 +29,7 @@ import (
 	"github.com/openshift/ci-tools/pkg/junit"
 	"github.com/openshift/ci-tools/pkg/kubernetes"
 	"github.com/openshift/ci-tools/pkg/results"
+	"github.com/openshift/ci-tools/pkg/steps/csi_secrets"
 	"github.com/openshift/ci-tools/pkg/steps/loggingclient"
 	"github.com/openshift/ci-tools/pkg/steps/utils"
 )
@@ -51,19 +51,6 @@ type vpnConf struct {
 	WaitTimeout *string `json:"wait_timeout"`
 	// Runtime data for the step, not present in the configuration.
 	namespaceUID int64
-}
-
-// GSMConfiguration contains all Google Secret Manager (GSM) related configuration
-// needed for multi-stage test execution.
-type GSMConfiguration struct {
-	// Config contains bundle and secret definitions from gsm-config.yaml file
-	Config *api.GSMConfig
-	// CredentialsFile is the path to the GSM service account credentials
-	CredentialsFile string
-	// Client is the initialized Google Secret Manager client
-	Client *secretmanager.Client
-	// ProjectConfig contains GSM project metadata (ID and number)
-	ProjectConfig gsm.Config
 }
 
 const (
@@ -129,7 +116,7 @@ type multiStageTestStep struct {
 	cancelObservers                  func(context.CancelFunc)
 	nodeArchitecture                 api.NodeArchitecture
 	enableSecretsStoreCSIDriver      bool
-	gsm                              *GSMConfiguration
+	gsm                              *csi_secrets.GSMConfiguration
 	requireNestedPodman              bool
 	leaseProxyServerAvailable        bool
 	leaseProxyClientConfigMapBackoff wait.Backoff
@@ -149,7 +136,7 @@ func MultiStageTestStep(
 	targetAdditionalSuffix string,
 	cancelObservers func(context.CancelFunc),
 	enableSecretsStoreCSIDriver bool,
-	gsmConfig *GSMConfiguration,
+	gsmConfig *csi_secrets.GSMConfiguration,
 	leaseProxyServerAvailable bool,
 	leaseProxyClientConfigMapBackoff wait.Backoff,
 ) api.Step {
@@ -168,7 +155,7 @@ func newMultiStageTestStep(
 	targetAdditionalSuffix string,
 	cancelObservers func(context.CancelFunc),
 	enableSecretsStoreCSIDriver bool,
-	gsmConfig *GSMConfiguration,
+	gsmConfig *csi_secrets.GSMConfiguration,
 	leaseProxyServerAvailable bool,
 	leaseProxyClientConfigMapBackoff wait.Backoff,
 ) *multiStageTestStep {
@@ -627,7 +614,7 @@ func (s *multiStageTestStep) addCredentialsToCensoring(secretVolumes []coreapi.V
 	for _, step := range append(s.pre, append(s.test, s.post...)...) {
 		for _, credential := range step.Credentials {
 			// Skip K8s Secret credentials - they're already censored by secretsForCensoring()
-			if !isGSMReference(credential) {
+			if !csi_secrets.IsGSMReference(credential) {
 				continue
 			}
 			fullSecretName := gsm.GetGSMSecretName(credential.Collection, credential.Group, credential.Field)
@@ -639,13 +626,13 @@ func (s *multiStageTestStep) addCredentialsToCensoring(secretVolumes []coreapi.V
 
 			// Create individual SPC name for censoring - each credential
 			// had its SPC already created in init.go's createSPCs function
-			censorMountPath := getCensorMountPath(fullSecretName)
+			censorMountPath := csi_secrets.GetCensorMountPath(fullSecretName)
 			censoredCredential := credential
 			censoredCredential.MountPath = censorMountPath
 			individualCredentials := []api.CredentialReference{censoredCredential}
-			spcName := getSPCName(s.jobSpec.Namespace(), individualCredentials)
+			spcName := csi_secrets.GetSPCName(s.jobSpec.Namespace(), individualCredentials)
 
-			secretVolumes = append(secretVolumes, BuildCSIVolume(volumeName, spcName))
+			secretVolumes = append(secretVolumes, csi_secrets.BuildCSIVolume(volumeName, spcName))
 			secretVolumeMounts = append(secretVolumeMounts, coreapi.VolumeMount{
 				Name:      volumeName,
 				MountPath: getMountPath(fullSecretName),

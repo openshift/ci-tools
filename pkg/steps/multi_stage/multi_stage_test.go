@@ -17,6 +17,7 @@ import (
 	"github.com/openshift/ci-tools/pkg/api"
 	gsm "github.com/openshift/ci-tools/pkg/gsm-secrets"
 	"github.com/openshift/ci-tools/pkg/steps"
+	"github.com/openshift/ci-tools/pkg/steps/csi_secrets"
 	"github.com/openshift/ci-tools/pkg/steps/loggingclient"
 )
 
@@ -223,7 +224,7 @@ func TestAddCredentialsToCensoring(t *testing.T) {
 	newVolume := func(index int, collection, group, field string) coreapi.Volume {
 		readOnly := true
 		fullSecretName := gsm.GetGSMSecretName(collection, group, field)
-		censorMountPath := getCensorMountPath(fullSecretName)
+		censorMountPath := csi_secrets.GetCensorMountPath(fullSecretName)
 		individualCredentials := []api.CredentialReference{
 			{
 				Collection: collection,
@@ -240,7 +241,7 @@ func TestAddCredentialsToCensoring(t *testing.T) {
 					Driver:   "secrets-store.csi.k8s.io",
 					ReadOnly: &readOnly,
 					VolumeAttributes: map[string]string{
-						"secretProviderClass": getSPCName("test", individualCredentials),
+						"secretProviderClass": csi_secrets.GetSPCName("test", individualCredentials),
 					},
 				},
 			},

@@ -1,4 +1,4 @@
-package multi_stage
+package csi_secrets
 
 import (
 	"fmt"
@@ -8,6 +8,7 @@ import (
 	"github.com/google/go-cmp/cmp"
 
 	coreapi "k8s.io/api/core/v1"
+	csiapi "sigs.k8s.io/secrets-store-csi-driver/apis/v1"
 	"sigs.k8s.io/yaml"
 
 	"github.com/openshift/ci-tools/pkg/api"
@@ -107,9 +108,9 @@ func TestGroupCredentialsByCollectionGroupAndMountPath(t *testing.T) {
 
 	for _, tc := range testCases {
 		t.Run(tc.name, func(t *testing.T) {
-			result := groupCredentialsByCollectionGroupAndMountPath(tc.credentials)
+			result := GroupCredentialsByCollectionGroupAndMountPath(tc.credentials)
 			if diff := cmp.Diff(tc.expected, result); diff != "" {
-				t.Errorf("groupCredentialsByCollectionGroupAndMountPath() mismatch (-want +got):\n%s", diff)
+				t.Errorf("GroupCredentialsByCollectionGroupAndMountPath() mismatch (-want +got):\n%s", diff)
 			}
 		})
 	}
@@ -133,7 +134,7 @@ func TestBuildGCPSecretsParameter(t *testing.T) {
 			},
 			expected: []config.Secret{
 				{
-					ResourceName: fmt.Sprintf("projects/%s/secrets/collection1__group1__cred1/versions/latest", GSMproject),
+					ResourceName: fmt.Sprintf("projects/%s/secrets/collection1__group1__cred1/versions/latest", GSMProject),
 					FileName:     "cred1",
 				},
 			},
@@ -146,11 +147,11 @@ func TestBuildGCPSecretsParameter(t *testing.T) {
 			},
 			expected: []config.Secret{
 				{
-					ResourceName: fmt.Sprintf("projects/%s/secrets/collection1__group1__cred1/versions/latest", GSMproject),
+					ResourceName: fmt.Sprintf("projects/%s/secrets/collection1__group1__cred1/versions/latest", GSMProject),
 					FileName:     "cred1",
 				},
 				{
-					ResourceName: fmt.Sprintf("projects/%s/secrets/collection2__group2__cred2/versions/latest", GSMproject),
+					ResourceName: fmt.Sprintf("projects/%s/secrets/collection2__group2__cred2/versions/latest", GSMProject),
 					FileName:     "cred2",
 				},
 			},
@@ -159,7 +160,7 @@ func TestBuildGCPSecretsParameter(t *testing.T) {
 
 	for _, tc := range testCases {
 		t.Run(tc.name, func(t *testing.T) {
-			yamlString, err := buildGCPSecretsParameter(tc.credentials)
+			yamlString, err := BuildGCPSecretsParameter(tc.credentials)
 			if err != nil {
 				t.Fatalf("unexpected error: %v", err)
 			}
@@ -171,7 +172,7 @@ func TestBuildGCPSecretsParameter(t *testing.T) {
 			}
 
 			if diff := cmp.Diff(tc.expected, actual); diff != "" {
-				t.Errorf("buildGCPSecretsParameter() mismatch (-want +got):\n%s", diff)
+				t.Errorf("BuildGCPSecretsParameter() mismatch (-want +got):\n%s", diff)
 			}
 		})
 	}
@@ -246,9 +247,9 @@ func TestGetSPCName(t *testing.T) {
 
 	for _, tc := range testCases {
 		t.Run(tc.name, func(t *testing.T) {
-			result := getSPCName(tc.namespace, tc.credentials)
+			result := GetSPCName(tc.namespace, tc.credentials)
 			if result != tc.expected {
-				t.Errorf("getSPCName() = %v, want %v", result, tc.expected)
+				t.Errorf("GetSPCName() = %v, want %v", result, tc.expected)
 			}
 		})
 	}
@@ -321,12 +322,12 @@ func TestCSIVolumeName(t *testing.T) {
 
 	for _, tc := range testCases {
 		t.Run(tc.name, func(t *testing.T) {
-			result := getCSIVolumeName(tc.namespace, tc.credentials)
+			result := GetCSIVolumeName(tc.namespace, tc.credentials)
 			if result != tc.expected {
-				t.Errorf("getCSIVolumeName() = %v, want %v", result, tc.expected)
+				t.Errorf("GetCSIVolumeName() = %v, want %v", result, tc.expected)
 			}
 			if len(result) > KubernetesDNSLabelLimit {
-				t.Errorf("getCSIVolumeName() result exceeds Kubernetes label char limit (%d chars): %v", len(result), result)
+				t.Errorf("GetCSIVolumeName() result exceeds Kubernetes label char limit (%d chars): %v", len(result), result)
 			}
 		})
 	}
@@ -339,7 +340,6 @@ func TestReplaceForbiddenSymbolsInCredentialName(t *testing.T) {
 		expected    string
 		expectError bool
 	}{
-		// Valid cases - letters, numbers, dashes, dots, and underscores are allowed
 		{
 			name:        "valid secret name with letters only",
 			secretName:  "credential",
@@ -364,7 +364,6 @@ func TestReplaceForbiddenSymbolsInCredentialName(t *testing.T) {
 			expected:    "MySecret-123",
 			expectError: false,
 		},
-		// Valid cases - replacement strings should be converted to dots and underscores
 		{
 			name:        "secret with dot replacement should work",
 			secretName:  fmt.Sprintf("%scredential", gsmvalidation.DotReplacementString),
@@ -449,7 +448,6 @@ func TestReplaceForbiddenSymbolsInCredentialName(t *testing.T) {
 			expected:    "some_key-secret",
 			expectError: false,
 		},
-		// Invalid cases - forbidden characters that are not allowed
 		{
 			name:        "secret with special characters should fail validation",
 			secretName:  "secret@domain.com",
@@ -489,7 +487,7 @@ func TestReplaceForbiddenSymbolsInCredentialName(t *testing.T) {
 	}
 	for _, tc := range testCases {
 		t.Run(tc.name, func(t *testing.T) {
-			result, err := restoreForbiddenSymbolsInSecretName(tc.secretName)
+			result, err := RestoreForbiddenSymbolsInSecretName(tc.secretName)
 
 			if tc.expectError {
 				if err == nil {
@@ -540,6 +538,76 @@ func TestBuildCSIVolume(t *testing.T) {
 		t.Run(tc.name, func(t *testing.T) {
 			actual := BuildCSIVolume(tc.volumeName, tc.spcName)
 			testhelper.Diff(t, tc.name, actual, tc.expectedVolume)
+		})
+	}
+}
+
+func TestBuildSPCsForCredentials(t *testing.T) {
+	testCases := []struct {
+		name        string
+		namespace   string
+		credentials []api.CredentialReference
+		expectErr   bool
+		checkSPCs   func(t *testing.T, spcs map[string]*csiapi.SecretProviderClass)
+	}{
+		{
+			name:        "empty credentials",
+			namespace:   "test-ns",
+			credentials: []api.CredentialReference{},
+			checkSPCs: func(t *testing.T, spcs map[string]*csiapi.SecretProviderClass) {
+				if len(spcs) != 0 {
+					t.Errorf("expected 0 SPCs, got %d", len(spcs))
+				}
+			},
+		},
+		{
+			name:      "single credential produces volume SPC and censoring SPC",
+			namespace: "test-ns",
+			credentials: []api.CredentialReference{
+				{Collection: "col", Group: "grp", Field: "key", MountPath: "/secrets"},
+			},
+			checkSPCs: func(t *testing.T, spcs map[string]*csiapi.SecretProviderClass) {
+				if len(spcs) != 2 {
+					t.Errorf("expected 2 SPCs (1 volume + 1 censor), got %d", len(spcs))
+				}
+				for _, spc := range spcs {
+					if spc.Namespace != "test-ns" {
+						t.Errorf("expected namespace test-ns, got %s", spc.Namespace)
+					}
+					if spc.Spec.Provider != "gcp" {
+						t.Errorf("expected provider gcp, got %s", spc.Spec.Provider)
+					}
+				}
+			},
+		},
+		{
+			name:      "duplicate credentials are deduped in censoring SPCs",
+			namespace: "test-ns",
+			credentials: []api.CredentialReference{
+				{Collection: "col", Group: "grp", Field: "key", MountPath: "/path1"},
+				{Collection: "col", Group: "grp", Field: "key", MountPath: "/path2"},
+			},
+			checkSPCs: func(t *testing.T, spcs map[string]*csiapi.SecretProviderClass) {
+				// 2 volume SPCs (different mount paths) + 1 censoring SPC (deduped)
+				if len(spcs) != 3 {
+					t.Errorf("expected 3 SPCs (2 volume + 1 censor deduped), got %d", len(spcs))
+				}
+			},
+		},
+	}
+	for _, tc := range testCases {
+		t.Run(tc.name, func(t *testing.T) {
+			spcs, err := BuildSPCsForCredentials(tc.namespace, tc.credentials)
+			if tc.expectErr {
+				if err == nil {
+					t.Error("expected error, got nil")
+				}
+				return
+			}
+			if err != nil {
+				t.Fatalf("unexpected error: %v", err)
+			}
+			tc.checkSPCs(t, spcs)
 		})
 	}
 }

@@ -1,4 +1,4 @@
-package multi_stage
+package csi_secrets
 
 import (
 	"context"
@@ -15,8 +15,6 @@ import (
 	"github.com/openshift/ci-tools/pkg/testhelper"
 )
 
-// fakeGSMClient is a test double that should never be called
-// (discoveredFields cache should prevent actual API calls)
 type fakeGSMClient struct{}
 
 func (f *fakeGSMClient) ListSecrets(ctx context.Context, req *secretmanagerpb.ListSecretsRequest,
@@ -60,7 +58,7 @@ func TestResolveCredentialReferences(t *testing.T) {
 		name             string
 		credentials      []api.CredentialReference
 		gsmConfig        *api.GSMConfig
-		discoveredFields map[collectionGroupKey][]string
+		discoveredFields map[CollectionGroupKey][]string
 		expected         []api.CredentialReference
 		expectedError    error
 	}{
@@ -116,8 +114,8 @@ func TestResolveCredentialReferences(t *testing.T) {
 				},
 			},
 			gsmConfig: &api.GSMConfig{},
-			discoveredFields: map[collectionGroupKey][]string{
-				{collection: "my-creds", group: "aws"}: {"token", "password"},
+			discoveredFields: map[CollectionGroupKey][]string{
+				{Collection: "my-creds", Group: "aws"}: {"token", "password"},
 			},
 			expected: []api.CredentialReference{
 				{Collection: "my-creds", Group: "aws", Field: "token", MountPath: "/tmp/aws"},
@@ -175,8 +173,8 @@ func TestResolveCredentialReferences(t *testing.T) {
 					},
 				},
 			},
-			discoveredFields: map[collectionGroupKey][]string{
-				{collection: "my-creds", group: "aws"}: {"discovered-key-1", "discovered-key-2"},
+			discoveredFields: map[CollectionGroupKey][]string{
+				{Collection: "my-creds", Group: "aws"}: {"discovered-key-1", "discovered-key-2"},
 			},
 			expected: []api.CredentialReference{
 				{Collection: "my-creds", Group: "aws", Field: "discovered-key-1", MountPath: "/tmp/aws"},
@@ -232,8 +230,8 @@ func TestResolveCredentialReferences(t *testing.T) {
 					},
 				},
 			},
-			discoveredFields: map[collectionGroupKey][]string{
-				{collection: "auto", group: "group2"}: {"auto-field-1", "auto-field-2"},
+			discoveredFields: map[CollectionGroupKey][]string{
+				{Collection: "auto", Group: "group2"}: {"auto-field-1", "auto-field-2"},
 			},
 			expected: []api.CredentialReference{
 				{Collection: "bundle-creds", Group: "g1", Field: "bundle-field", MountPath: "/tmp/bundle"},
@@ -396,7 +394,7 @@ func TestExpandBundle(t *testing.T) {
 	for _, tc := range []struct {
 		name             string
 		bundle           *api.GSMBundle
-		discoveredFields map[collectionGroupKey][]string
+		discoveredFields map[CollectionGroupKey][]string
 		expected         []api.CredentialReference
 	}{
 		{
@@ -418,7 +416,7 @@ func TestExpandBundle(t *testing.T) {
 				{Collection: "my-creds", Group: "aws", Field: "access-key"},
 				{Collection: "my-creds", Group: "aws", Field: "secret-key", As: "renamed-secret"},
 			},
-			discoveredFields: map[collectionGroupKey][]string{},
+			discoveredFields: map[CollectionGroupKey][]string{},
 		},
 		{
 			name: "bundle without explicit fields",
@@ -431,8 +429,8 @@ func TestExpandBundle(t *testing.T) {
 					},
 				},
 			},
-			discoveredFields: map[collectionGroupKey][]string{
-				{collection: "my-creds", group: "aws"}: {"token", "password", "url"},
+			discoveredFields: map[CollectionGroupKey][]string{
+				{Collection: "my-creds", Group: "aws"}: {"token", "password", "url"},
 			},
 			expected: []api.CredentialReference{
 				{Collection: "my-creds", Group: "aws", Field: "token"},
@@ -459,8 +457,8 @@ func TestExpandBundle(t *testing.T) {
 					},
 				},
 			},
-			discoveredFields: map[collectionGroupKey][]string{
-				{collection: "my-creds", group: "aws"}: {"token", "password", "url"},
+			discoveredFields: map[CollectionGroupKey][]string{
+				{Collection: "my-creds", Group: "aws"}: {"token", "password", "url"},
 			},
 			expected: []api.CredentialReference{
 				{Collection: "my-creds", Group: "aws", Field: "token"},

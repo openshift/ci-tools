@@ -17,8 +17,8 @@ import (
 	"github.com/openshift/ci-tools/pkg/release"
 	"github.com/openshift/ci-tools/pkg/secrets"
 	"github.com/openshift/ci-tools/pkg/steps"
+	"github.com/openshift/ci-tools/pkg/steps/csi_secrets"
 	"github.com/openshift/ci-tools/pkg/steps/loggingclient"
-	"github.com/openshift/ci-tools/pkg/steps/multi_stage"
 )
 
 type Config struct {
@@ -45,7 +45,7 @@ type Config struct {
 	IntegratedStreams           map[string]*configresolver.IntegratedStream
 	InjectedTest                bool
 	EnableSecretsStoreCSIDriver bool
-	GSMConfig                   *multi_stage.GSMConfiguration
+	GSMConfig                   *csi_secrets.GSMConfiguration
 	MetricsAgent                *metrics.MetricsAgent
 	SkippedImages               sets.Set[string]
 	params                      *api.DeferredParameters

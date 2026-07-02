@@ -20,6 +20,7 @@ import (
 
 	"github.com/openshift/ci-tools/pkg/api"
 	gsm "github.com/openshift/ci-tools/pkg/gsm-secrets"
+	"github.com/openshift/ci-tools/pkg/steps/csi_secrets"
 	"github.com/openshift/ci-tools/pkg/steps/loggingclient"
 	"github.com/openshift/ci-tools/pkg/testhelper"
 	testhelper_kube "github.com/openshift/ci-tools/pkg/testhelper/kubernetes"
@@ -65,8 +66,8 @@ func TestCreateSPCs(t *testing.T) {
 	credential2 := api.CredentialReference{Collection: "test-2", Group: "group2", Field: "credential2", MountPath: "/tmp/path2"}
 
 	newGroupedSPC := func(ns string, credentials []api.CredentialReference) csiapi.SecretProviderClass {
-		secret, _ := buildGCPSecretsParameter(credentials)
-		spc := buildSecretProviderClass(getSPCName(ns, credentials), ns, secret)
+		secret, _ := csi_secrets.BuildGCPSecretsParameter(credentials)
+		spc := csi_secrets.BuildSecretProviderClass(csi_secrets.GetSPCName(ns, credentials), ns, secret)
 		// Set ResourceVersion for fake client compatibility
 		spc.ResourceVersion = "1"
 		return *spc
@@ -77,9 +78,9 @@ func TestCreateSPCs(t *testing.T) {
 		censorMountPath := fmt.Sprintf("/censor/%s", fullSecretName)
 		credential := api.CredentialReference{Collection: collection, Group: group, Field: field, MountPath: censorMountPath}
 		credentials := []api.CredentialReference{credential}
-		secret, _ := buildGCPSecretsParameter(credentials)
+		secret, _ := csi_secrets.BuildGCPSecretsParameter(credentials)
 
-		spc := buildSecretProviderClass(getSPCName(ns, credentials), ns, secret)
+		spc := csi_secrets.BuildSecretProviderClass(csi_secrets.GetSPCName(ns, credentials), ns, secret)
 		// Set ResourceVersion for fake client compatibility
 		spc.ResourceVersion = "1"
 		return *spc
@@ -160,7 +161,7 @@ func TestCreateSPCs(t *testing.T) {
 				jobSpec:                     &api.JobSpec{},
 				client:                      fakeClient,
 				enableSecretsStoreCSIDriver: true,
-				gsm: &GSMConfiguration{
+				gsm: &csi_secrets.GSMConfiguration{
 					Config: &api.GSMConfig{},
 					ProjectConfig: gsm.Config{
 						ProjectIdString: "test-project",

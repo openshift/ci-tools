@@ -115,6 +115,7 @@ const (
 	ClusterProfilePOWERVS7                   ClusterProfile = "powervs-7"
 	ClusterProfilePOWERVS8                   ClusterProfile = "powervs-8"
 	ClusterProfilePOWERVS9                   ClusterProfile = "powervs-9"
+	ClusterProfilePOWERVSSNO                 ClusterProfile = "powervs-sno"
 	ClusterProfileLibvirtPpc64le             ClusterProfile = "libvirt-ppc64le"
 	ClusterProfileLibvirtPpc64leS2S          ClusterProfile = "libvirt-ppc64le-s2s"
 	ClusterProfileLibvirtS390x               ClusterProfile = "libvirt-s390x"
@@ -608,6 +609,8 @@ func (p ClusterProfile) ClusterType() string {
 		return "powervs-8"
 	case ClusterProfilePOWERVS9:
 		return "powervs-9"
+	case ClusterProfilePOWERVSSNO:
+		return "powervs-sno"
 	case ClusterProfileLibvirtPpc64le:
 		return "libvirt-ppc64le"
 	case ClusterProfileLibvirtPpc64leS2S:
@@ -955,6 +958,8 @@ func (p ClusterProfile) LeaseType() string {
 		return "powervs-8-quota-slice"
 	case ClusterProfilePOWERVS9:
 		return "powervs-9-quota-slice"
+	case ClusterProfilePOWERVSSNO:
+		return "powervs-sno-quota-slice"
 	case ClusterProfileLibvirtPpc64le:
 		return "libvirt-ppc64le-quota-slice"
 	case ClusterProfileLibvirtPpc64leS2S:
@@ -1194,7 +1199,7 @@ func LeaseTypeFromClusterType(t string) (string, error) {
 		"ibmcloud-multi-s390x", "nutanix", "nutanix-qe", "nutanix-qe-dis", "nutanix-qe-zone", "nutanix-qe-gpu",
 		"nutanix-qe-flow", "openstack", "openstack-osuosl", "openstack-vexxhost", "openstack-ppc64le",
 		"openstack-nerc-dev", "vsphere", "ovirt", "packet", "packet-edge", "powervc-1", "powervs-multi-1",
-		"powervs-1", "powervs-2", "powervs-3", "powervs-4", "powervs-5", "powervs-6", "powervs-7", "powervs-8", "powervs-9",
+		"powervs-1", "powervs-2", "powervs-3", "powervs-4", "powervs-5", "powervs-6", "powervs-7", "powervs-8", "powervs-9", "powervs-sno",
 		"kubevirt", "aws-cpaas", "osd-ephemeral", "gcp-virtualization", "aws-virtualization",
 		"azure-virtualization", "hypershift-aws", "hypershift-aks", "hypershift-azure",
 		"hypershift-powervs", "hypershift-powervs-cb", "hypershift-gcp", "aws-mco-qe",

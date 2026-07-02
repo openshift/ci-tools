@@ -5,14 +5,22 @@ import (
 	"fmt"
 	"io"
 	"os"
+	"path/filepath"
+	"regexp"
 	"sort"
 	"strings"
 	"sync"
 	"sync/atomic"
 	"time"
 
+	"github.com/aws/aws-sdk-go-v2/aws"
+	"github.com/openshift/ci-tools/pkg/kubernetes/pkg/credentialprovider"
+	"github.com/openshift/ci-tools/pkg/util/buildspec"
 	"github.com/sirupsen/logrus"
 	"golang.org/x/sync/errgroup"
+	"k8s.io/apimachinery/pkg/util/json"
+	"k8s.io/utils/ptr"
+	"sigs.k8s.io/yaml"
 
 	corev1 "k8s.io/api/core/v1"
 	kerrors "k8s.io/apimachinery/pkg/api/errors"
@@ -30,6 +38,10 @@ import (
 	buildapi "github.com/openshift/api/build/v1"
 	imagev1 "github.com/openshift/api/image/v1"
 
+	"github.com/aws/aws-sdk-go-v2/config"
+	"github.com/aws/aws-sdk-go-v2/service/cloudwatchlogs"
+	"github.com/aws/aws-sdk-go-v2/service/codebuild"
+	codebuildtypes "github.com/aws/aws-sdk-go-v2/service/codebuild/types"
 	"github.com/openshift/ci-tools/pkg/api"
 	apiutils "github.com/openshift/ci-tools/pkg/api/utils"
 	"github.com/openshift/ci-tools/pkg/kubernetes"
@@ -173,6 +185,7 @@ type sourceStep struct {
 	pullSecret      *corev1.Secret
 	architectures   sets.Set[string]
 	metricsAgent    *metrics.MetricsAgent
+	buildType       string
 }
 
 func (s *sourceStep) Inputs() (api.InputDefinition, error) {
@@ -196,6 +209,7 @@ func (s *sourceStep) run(ctx context.Context) error {
 		ctx,
 		s.client,
 		s.podClient,
+		s.buildType,
 		*createBuild(s.config, s.jobSpec, clonerefsRef, s.resources, s.cloneAuthConfig, s.pullSecret, fromDigest), s.metricsAgent, newImageBuildOptions(s.architectures.UnsortedList()),
 	)
 }
@@ -480,7 +494,7 @@ func newImageBuildOptions(archs []string) ImageBuildOptions {
 	return ImageBuildOptions{Architectures: archs}
 }
 
-func handleBuilds(ctx context.Context, buildClient BuildClient, podClient kubernetes.PodClient, build buildapi.Build, metricsAgent *metrics.MetricsAgent, opts ...ImageBuildOptions) error {
+func handleBuilds(ctx context.Context, buildClient BuildClient, podClient kubernetes.PodClient, buildType string, build buildapi.Build, metricsAgent *metrics.MetricsAgent, opts ...ImageBuildOptions) error {
 	var wg sync.WaitGroup
 
 	o := ImageBuildOptions{}
@@ -496,7 +510,7 @@ func handleBuilds(ctx context.Context, buildClient BuildClient, podClient kubern
 		go func(b buildapi.Build) {
 			defer wg.Done()
 			metricsAgent.AddNodeWorkload(ctx, b.Namespace, fmt.Sprintf("%s-build", b.Name), b.Name, podClient)
-			if err := handleBuild(ctx, buildClient, podClient, b); err != nil {
+			if err := handleBuild(ctx, buildClient, podClient, b, buildType); err != nil {
 				errChan <- fmt.Errorf("error occurred handling build %s: %w", b.Name, err)
 			}
 			metricsAgent.RemoveNodeWorkload(b.Name)
@@ -554,33 +568,14 @@ func constructMultiArchBuilds(build buildapi.Build, stepArchitectures []string) 
 	return ret
 }
 
-func handleBuild(ctx context.Context, client BuildClient, podClient kubernetes.PodClient, build buildapi.Build) error {
+func handleBuild(ctx context.Context, buildClient BuildClient, podClient kubernetes.PodClient, build buildapi.Build, buildType string) error {
 	const attempts = 5
-	ns, name := build.Namespace, build.Name
 	var errs []error
 	if err := wait.ExponentialBackoff(wait.Backoff{Duration: time.Minute, Factor: 1.5, Steps: attempts}, func() (bool, error) {
-		var attempt buildapi.Build
-
-		build.DeepCopyInto(&attempt)
-		if err := client.Create(ctx, &attempt); err == nil {
-			logrus.Infof("Created build %q", name)
-		} else if kerrors.IsAlreadyExists(err) {
-			logrus.Infof("Found existing build %q", name)
-		} else {
-			return false, fmt.Errorf("could not create build %s: %w", name, err)
+		if buildType == "aws" {
+			return awsBuild(ctx, buildClient, build, &errs)
 		}
-
-		client.MetricsAgent().AddNodeWorkload(ctx, ns, fmt.Sprintf("%s-build", name), name, podClient)
-		client.MetricsAgent().StoreMachinesSnapshotForBuildPod(ctx, ns, fmt.Sprintf("%s-build", name), podClient)
-		if err := waitForBuildOrTimeout(ctx, client, podClient, ns, name); err != nil {
-			errs = append(errs, err)
-			return false, handleFailedBuild(ctx, client, ns, name, err)
-		}
-		if err := gatherSuccessfulBuildLog(client, ns, name); err != nil {
-			// log error but do not fail successful build
-			logrus.WithError(err).Warnf("Failed gathering successful build %s logs into artifacts.", name)
-		}
-		return true, nil
+		return openshiftBuild(ctx, buildClient, podClient, build, &errs)
 	}); err != nil {
 		if err == wait.ErrWaitTimeout {
 			return fmt.Errorf("build not successful after %d attempts: %w", attempts, utilerrors.NewAggregate(errs))
@@ -852,6 +847,7 @@ func SourceStep(
 	cloneAuthConfig *CloneAuthConfig,
 	pullSecret *corev1.Secret,
 	metricsAgent *metrics.MetricsAgent,
+	buildType string,
 ) api.Step {
 	return &sourceStep{
 		config:          config,
@@ -863,6 +859,7 @@ func SourceStep(
 		pullSecret:      pullSecret,
 		architectures:   sets.New[string](),
 		metricsAgent:    metricsAgent,
+		buildType:       buildType,
 	}
 }
 
@@ -915,4 +912,326 @@ func addLabelsToBuild(refs *prowv1.Refs, build *buildapi.Build, contextDir strin
 	sort.Slice(build.Spec.Output.ImageLabels, func(i, j int) bool {
 		return build.Spec.Output.ImageLabels[i].Name < build.Spec.Output.ImageLabels[j].Name
 	})
+}
+
+func openshiftBuild(ctx context.Context, buildClient BuildClient, podClient kubernetes.PodClient, build buildapi.Build, errs *[]error) (bool, error) {
+	var attempt buildapi.Build
+	ns, name := build.Namespace, build.Name
+	build.DeepCopyInto(&attempt)
+	if err := buildClient.Create(ctx, &attempt); err == nil {
+		logrus.Infof("Created build %q", name)
+	} else if kerrors.IsAlreadyExists(err) {
+		logrus.Infof("Found existing build %q", name)
+	} else {
+		return false, fmt.Errorf("could not create build %s: %w", name, err)
+	}
+
+	buildClient.MetricsAgent().AddNodeWorkload(ctx, ns, fmt.Sprintf("%s-build", name), name, podClient)
+	buildClient.MetricsAgent().StoreMachinesSnapshotForBuildPod(ctx, ns, fmt.Sprintf("%s-build", name), podClient)
+	if err := waitForBuildOrTimeout(ctx, buildClient, podClient, ns, name); err != nil {
+		*errs = append(*errs, err)
+		return false, handleFailedBuild(ctx, buildClient, ns, name, err)
+	}
+	if err := gatherSuccessfulBuildLog(buildClient, ns, name); err != nil {
+		// log error but do not fail successful build
+		logrus.WithError(err).Warnf("Failed gathering successful build %s logs into artifacts.", name)
+	}
+	return true, nil
+}
+
+func awsBuild(ctx context.Context, buildClient BuildClient, build buildapi.Build, errs *[]error) (bool, error) {
+	projectName := fmt.Sprintf("%s-%s", build.Namespace, build.Name)
+	sdkConfig, err := config.LoadDefaultConfig(ctx)
+	if err != nil {
+		*errs = append(*errs, err)
+		return false, fmt.Errorf("could not load aws credentials: %w", err)
+	}
+
+	cbClient := codebuild.NewFromConfig(sdkConfig)
+	projects, err := cbClient.BatchGetProjects(ctx, &codebuild.BatchGetProjectsInput{Names: []string{projectName}})
+	if err != nil {
+		*errs = append(*errs, err)
+		return false, fmt.Errorf("could not get project %s: %w", projectName, err)
+	}
+
+	projectExists := len(projects.Projects) > 0
+	if !projectExists {
+		is := &imagev1.ImageStreamTag{}
+		credentials, err := awsBuildAssemblyCredentials(ctx, buildClient, build, is, errs)
+		if err != nil {
+			return false, err
+		}
+		buildSpec, err := awsBuildSpec(build, string(credentials), is.Image.DockerImageReference, buildClient.LocalRegistryDNS())
+		if err != nil {
+			return false, err
+		}
+
+		err = awsBuildCreateCloudBuildProject(ctx, build, cbClient, buildSpec, projectName, errs)
+		if err != nil {
+			return false, err
+		}
+	}
+
+	sbi := &codebuild.StartBuildInput{
+		ProjectName: &projectName,
+	}
+
+	awsBuildResult, err := cbClient.StartBuild(ctx, sbi)
+	if err != nil {
+		*errs = append(*errs, err)
+		return false, fmt.Errorf("could not start build at codebuild project %s: %w", projectName, err)
+	}
+
+	err = awsBuildWaitForIt(ctx, sdkConfig, cbClient, awsBuildResult, build.Name)
+	if err != nil {
+		*errs = append(*errs, err)
+		return false, fmt.Errorf("could not wait/pull logs for build %s: %w", build.Namespace, err)
+	}
+
+	return true, nil
+}
+
+func awsBuildSpec(build buildapi.Build, credentials string, imageStreamReference, localRegistryDNS string) (buildspec.BuildSpec, error) {
+	commands := []string{
+		`mkdir -p ~/.docker`,
+		`echo "$credentials" > ~/.docker/config.json`,
+		`echo "$dockerfile" > Dockerfile`,
+	}
+	for i, image := range build.Spec.CommonSpec.Source.Images {
+		commands = append(commands, fmt.Sprintf(`docker create --name c%d %s`, i, util.ShellEscape(image.From.Name)))
+		for _, path := range image.Paths {
+			commands = append(commands, fmt.Sprintf(`docker cp c%d:%s %s`, i, util.ShellEscape(path.SourcePath), util.ShellEscape(path.DestinationDir)))
+		}
+		commands = append(commands, fmt.Sprintf(`docker rm c%d`, i))
+	}
+
+	buildEnv := []string{}
+	buildArgs := []string{}
+	for _, env := range build.Spec.CommonSpec.Strategy.DockerStrategy.Env {
+		buildEnv = append(buildEnv, fmt.Sprintf(`--build-arg %s='%s'`, env.Name, util.ShellEscape(env.Value)))
+		buildArgs = append(buildArgs, fmt.Sprintf(`ARG %s`, env.Name))
+	}
+
+	re := regexp.MustCompile(`image-registry\.openshift-image-registry\.svc[.:a-z0-9]*`)
+	imageStreamReference = re.ReplaceAllString(imageStreamReference, localRegistryDNS)
+	commands = append(commands, fmt.Sprintf(`docker buildx build %s --platform linux/%s --tag %s/%s/%s --output type=registry .`, strings.Join(buildEnv, " "), build.Spec.NodeSelector["kubernetes.io/arch"], localRegistryDNS, build.Namespace, build.Spec.Output.To.Name))
+	if build.Spec.CommonSpec.Source.Dockerfile == nil {
+		return buildspec.BuildSpec{}, fmt.Errorf("no Dockerfile defined on build.spec")
+	}
+	dockerFile := strings.ReplaceAll(*build.Spec.CommonSpec.Source.Dockerfile, build.Spec.CommonSpec.Strategy.DockerStrategy.From.Name, fmt.Sprintf("%s\n%s", imageStreamReference, strings.Join(buildArgs, "\n")))
+
+	return buildspec.BuildSpec{
+		Env: buildspec.Env{
+			Variables: buildspec.Variables{
+				DockerFile:  dockerFile,
+				Credentials: credentials,
+			},
+		},
+		Phases: buildspec.Phases{
+			Build: buildspec.BuildPhase{
+				OnFailure: "ABORT",
+				Commands:  commands,
+			},
+		},
+		Version: "0.2",
+	}, nil
+}
+
+func awsBuildAssemblyCredentials(ctx context.Context, buildClient BuildClient, build buildapi.Build, is *imagev1.ImageStreamTag, errs *[]error) ([]byte, error) {
+	if build.Spec.Strategy.DockerStrategy == nil || build.Spec.Strategy.DockerStrategy.PullSecret == nil {
+		err := fmt.Errorf("build %s has no pull secret configured", build.Name)
+		*errs = append(*errs, err)
+		return nil, err
+	}
+	secretName := build.Spec.Strategy.DockerStrategy.PullSecret.Name
+	secret := &corev1.Secret{}
+	err := buildClient.Get(ctx, ctrlruntimeclient.ObjectKey{Namespace: build.Namespace, Name: secretName}, secret)
+	if err != nil {
+		*errs = append(*errs, err)
+		if kerrors.IsNotFound(err) {
+			return nil, fmt.Errorf("could not get secret %s: %w", secretName, err)
+		}
+		return nil, fmt.Errorf("could not get secret %s: %w", secretName, err)
+	}
+
+	isName := build.Spec.Strategy.DockerStrategy.From.Name
+	err = buildClient.Get(ctx, ctrlruntimeclient.ObjectKey{Namespace: build.Namespace, Name: isName}, is)
+	if err != nil {
+		*errs = append(*errs, err)
+		if kerrors.IsNotFound(err) {
+			return nil, fmt.Errorf("could not get imagestream %s: %w", isName, err)
+		}
+		return nil, fmt.Errorf("could not get imagestream %s: %w", isName, err)
+	}
+
+	dockerConfigJSON, found := secret.Data[corev1.DockerConfigJsonKey]
+	if !found {
+		*errs = append(*errs, fmt.Errorf("key %s not found on secret %s", corev1.DockerConfigJsonKey, secret.Name))
+		return nil, fmt.Errorf("key %s not found on secret %s", corev1.DockerConfigJsonKey, secret.Name)
+	}
+
+	manifestToolDockerCfg := buildClient.ManifestToolDockerCfg()
+	pushCredentialsData, err := os.ReadFile(manifestToolDockerCfg)
+	if err != nil {
+		*errs = append(*errs, err)
+		return nil, fmt.Errorf("could not read secret %s: %w", manifestToolDockerCfg, err)
+	}
+	pushCredentials := credentialprovider.DockerConfigJSON{}
+	err = json.Unmarshal(pushCredentialsData, &pushCredentials)
+	if err != nil {
+		*errs = append(*errs, err)
+		return nil, fmt.Errorf("could not unmarshal secret %s: %w", manifestToolDockerCfg, err)
+	}
+
+	registryCredentials := credentialprovider.DockerConfigJSON{}
+	err = json.Unmarshal(dockerConfigJSON, &registryCredentials)
+	if err != nil {
+		*errs = append(*errs, err)
+		return nil, fmt.Errorf("could not unmarshal secret %s: %w", secret.Name, err)
+	}
+	if registryCredentials.Auths == nil {
+		registryCredentials.Auths = map[string]credentialprovider.DockerConfigEntry{}
+	}
+	localRegistryDNS := buildClient.LocalRegistryDNS()
+	localRegistryAuth, exists := pushCredentials.Auths[localRegistryDNS]
+	if !exists {
+		err := fmt.Errorf("local registry auth %s not found", localRegistryDNS)
+		*errs = append(*errs, err)
+		return nil, err
+	}
+	registryCredentials.Auths[localRegistryDNS] = localRegistryAuth
+	marshalledRegistryCredentials, err := json.Marshal(registryCredentials)
+	if err != nil {
+		*errs = append(*errs, err)
+		return nil, fmt.Errorf("could not marshal manifesttooldockercfg combined with registry-pull-credentials: %w", err)
+	}
+	return marshalledRegistryCredentials, nil
+}
+
+func awsBuildCreateCloudBuildProject(ctx context.Context, build buildapi.Build, cbClient *codebuild.Client, buildSpec buildspec.BuildSpec, projectName string, errs *[]error) error {
+	awsBuildImage := "aws/codebuild/amazonlinux2-x86_64-standard:6.0"
+	awsEnvironmentTypeContainer := codebuildtypes.EnvironmentTypeLinuxContainer
+	if build.Spec.NodeSelector["kubernetes.io/arch"] == "arm64" {
+		awsBuildImage = "aws/codebuild/amazonlinux2-aarch64-standard:3.0"
+		awsEnvironmentTypeContainer = codebuildtypes.EnvironmentTypeArmContainer
+	}
+	const ServiceRole string = "codebuild-ci-operator"
+	marshaledBuildSpec, err := yaml.Marshal(buildSpec)
+	if err != nil {
+		*errs = append(*errs, err)
+		return fmt.Errorf("could not marshal codebuild buildspec: %w", err)
+	}
+	logrus.Infof("Creating %s project", projectName)
+	_, err = cbClient.CreateProject(ctx, &codebuild.CreateProjectInput{
+		Name:             &projectName,
+		TimeoutInMinutes: ptr.To(int32(60 * 8)),
+		Artifacts: &codebuildtypes.ProjectArtifacts{
+			Type: codebuildtypes.ArtifactsTypeNoArtifacts,
+		},
+		Environment: &codebuildtypes.ProjectEnvironment{
+			Type:        awsEnvironmentTypeContainer,
+			Image:       &awsBuildImage,
+			ComputeType: codebuildtypes.ComputeTypeBuildGeneral1Medium,
+		},
+		Source: &codebuildtypes.ProjectSource{
+			Type:      codebuildtypes.SourceTypeNoSource,
+			Buildspec: ptr.To(string(marshaledBuildSpec)),
+		},
+		ServiceRole: ptr.To(ServiceRole),
+	})
+	if err != nil {
+		*errs = append(*errs, err)
+		return fmt.Errorf("could not create codebuild project %s: %w", projectName, err)
+	}
+	return nil
+}
+
+func awsBuildWaitForIt(ctx context.Context, sdkConfig aws.Config, cbClient *codebuild.Client, buildOutput *codebuild.StartBuildOutput, imageName string) error {
+	artifactDir, set := api.Artifacts()
+	if !set {
+		return fmt.Errorf("no artifacts directory configured")
+	}
+	dir := filepath.Join(artifactDir, "build-logs")
+	if err := os.MkdirAll(dir, 0750); err != nil {
+		return fmt.Errorf("could not create artifacts/build-logs dir: %w", err)
+	}
+	logPath := filepath.Join(dir, fmt.Sprintf("%s.log", imageName))
+	log, err := os.Create(logPath)
+	if err != nil {
+		return fmt.Errorf("failed to create %s: %w", logPath, err)
+	}
+	defer log.Close()
+	buildId := aws.ToString(buildOutput.Build.Id)
+	logrus.Infof("Waiting for build %s to complete", buildId)
+	for {
+		// avoid maximum number of attempts
+		time.Sleep(10 * time.Second)
+
+		if ctx.Err() != nil {
+			return fmt.Errorf("build polling canceled: %w", ctx.Err())
+		}
+
+		buildInputs := codebuild.BatchGetBuildsInput{Ids: []string{buildId}}
+		builds, err := cbClient.BatchGetBuilds(ctx, &buildInputs)
+		if err != nil {
+			return fmt.Errorf("could not get build %s: %w", buildId, err)
+		}
+
+		if len(builds.Builds) == 0 {
+			return fmt.Errorf("no builds found with id %s", buildId)
+		}
+
+		build := builds.Builds[0]
+		status := build.BuildStatus
+		if status == codebuildtypes.StatusTypeSucceeded {
+			return awsBuildGatherLogs(ctx, sdkConfig, build, log)
+		} else if status == codebuildtypes.StatusTypeFailed || status == codebuildtypes.StatusTypeStopped {
+			if err := awsBuildGatherLogs(ctx, sdkConfig, build, log); err != nil {
+				return err
+			}
+			logFile, err := os.Open(logPath)
+			defer logFile.Close()
+			if err != nil {
+				return fmt.Errorf("could not open %s: %w", logPath, err)
+			}
+			if _, err := io.Copy(os.Stdout, logFile); err != nil {
+				logrus.WithError(err).Warn("Unable to copy log output from failed aws codebuild.")
+			}
+			return fmt.Errorf("build %s failed or was stopped with status: %s", buildId, status)
+		}
+	}
+}
+
+func awsBuildGatherLogs(ctx context.Context, sdkConfig aws.Config, build codebuildtypes.Build, log *os.File) error {
+	buildId := aws.ToString(build.Id)
+	if build.Logs == nil || build.Logs.GroupName == nil || build.Logs.StreamName == nil {
+		return fmt.Errorf("cloudwatch log location is missing for build %s", buildId)
+	}
+	cloudwatch := cloudwatchlogs.NewFromConfig(sdkConfig)
+	input := &cloudwatchlogs.GetLogEventsInput{
+		LogGroupName:  build.Logs.GroupName,
+		LogStreamName: build.Logs.StreamName,
+		StartFromHead: &[]bool{true}[0],
+	}
+	paginator := cloudwatchlogs.NewGetLogEventsPaginator(cloudwatch, input)
+	for paginator.HasMorePages() {
+		page, err := paginator.NextPage(ctx)
+		if err != nil {
+			return fmt.Errorf("could not read logs for build %s: %w", buildId, err)
+		}
+		if len(page.Events) == 0 {
+			break
+		}
+		for _, event := range page.Events {
+			if event.Timestamp == nil || event.Message == nil {
+				continue
+			}
+			timestamp := time.Unix(*event.Timestamp/1000, 0)
+			_, err := log.Write([]byte(fmt.Sprintf("[%s] %s", timestamp.Format(time.RFC3339), *event.Message)))
+			if err != nil {
+				return fmt.Errorf("could not write log for %s on %s: %w", buildId, log.Name(), err)
+			}
+		}
+	}
+	return nil
 }

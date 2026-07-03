@@ -12,41 +12,40 @@ import (
 	gsm "github.com/openshift/ci-tools/pkg/gsm-secrets"
 )
 
-// ValidateNoGroupCollisionsOnMountPath ensures that different groups within the same collection
-// don't share a mount path, which could cause file name collisions.
-//
-// Example of invalid configuration:
-//   - collection: my-creds, group: aws, field: access-key, mount_path: /tmp/secrets
-//   - collection: my-creds, group: gcp, field: access-key, mount_path: /tmp/secrets
-//
-// Both would try to create /tmp/secrets/access-key.
-// Expects the credentials to already have been resolved into concrete (collection, group, field) tuples.
-func ValidateNoGroupCollisionsOnMountPath(credentials []api.CredentialReference) error {
-	type collectionMountKey struct {
-		collection string
-		mountPath  string
-	}
-	mountPathGroups := make(map[collectionMountKey]map[string]bool)
-
+// ValidateNoFileCollisionsOnMountPath ensures that no two credentials at the same
+// mount path produce the same file name. Checks across all collections and groups.
+// Expects credentials to already have been resolved into concrete (collection, group, field) tuples.
+func ValidateNoFileCollisionsOnMountPath(credentials []api.CredentialReference) error {
+	byMountPath := make(map[string][]api.CredentialReference)
 	for _, cred := range credentials {
-		key := collectionMountKey{
-			collection: cred.Collection,
-			mountPath:  cred.MountPath,
-		}
-		if mountPathGroups[key] == nil {
-			mountPathGroups[key] = make(map[string]bool)
-		}
-		mountPathGroups[key][cred.Group] = true
+		byMountPath[cred.MountPath] = append(byMountPath[cred.MountPath], cred)
 	}
 
-	for key, groups := range mountPathGroups {
-		if len(groups) > 1 {
-			var groupList []string
-			for group := range groups {
-				groupList = append(groupList, group)
+	for mountPath, creds := range byMountPath {
+		type credSource struct {
+			collection, group, field string
+		}
+		seenFiles := make(map[string]credSource)
+		for _, cred := range creds {
+			fileName := cred.Field
+			if cred.As != "" {
+				fileName = cred.As
 			}
-			return fmt.Errorf("multiple groups (%v) found for collection=%s, mount_path=%s - different groups in the same collection must use different mount paths to avoid file name collisions",
-				groupList, key.collection, key.mountPath)
+			restored, err := RestoreForbiddenSymbolsInSecretName(fileName)
+			if err != nil {
+				return fmt.Errorf("invalid field name %q at mount_path %s: %w", fileName, mountPath, err)
+			}
+			src := credSource{cred.Collection, cred.Group, cred.Field}
+			if existing, ok := seenFiles[restored]; ok {
+				return fmt.Errorf(
+					"file name collision at mount_path=%s: %s/%s/%s and %s/%s/%s both produce file %q",
+					mountPath,
+					existing.collection, existing.group, existing.field,
+					src.collection, src.group, src.field,
+					restored,
+				)
+			}
+			seenFiles[restored] = src
 		}
 	}
 	return nil

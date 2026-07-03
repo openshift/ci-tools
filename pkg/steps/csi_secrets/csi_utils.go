@@ -24,25 +24,29 @@ import (
 const GSMProject = "openshift-ci-secrets"
 const KubernetesDNSLabelLimit = 63
 
+// IsK8sSecretReference returns true if the credential refers to a K8s Secret (has namespace and name).
 func IsK8sSecretReference(c api.CredentialReference) bool {
 	return c.Namespace != "" && c.Name != ""
 }
 
+// IsGSMReference returns true if the credential is a fully resolved GSM reference (has collection, group, and field).
 func IsGSMReference(c api.CredentialReference) bool {
 	return c.Collection != "" && c.Group != "" && c.Field != ""
 }
 
-// GroupCredentialsByCollectionGroupAndMountPath groups credentials by (collection, group, mount_path)
-// to avoid duplicate mount paths, which causes Kubernetes errors.
-func GroupCredentialsByCollectionGroupAndMountPath(credentials []api.CredentialReference) map[string][]api.CredentialReference {
+// GroupCredentialsByMountPath groups resolved credentials by mount_path to produce
+// one CSI volume per unique path. Expects all bundles and auto-discovery to have
+// been resolved into concrete (collection, group, field) tuples beforehand.
+func GroupCredentialsByMountPath(credentials []api.CredentialReference) map[string][]api.CredentialReference {
 	mountGroups := make(map[string][]api.CredentialReference)
 	for _, credential := range credentials {
-		key := fmt.Sprintf("%s:%s:%s", credential.Collection, credential.Group, credential.MountPath)
-		mountGroups[key] = append(mountGroups[key], credential)
+		mountGroups[credential.MountPath] = append(mountGroups[credential.MountPath], credential)
 	}
 	return mountGroups
 }
 
+// BuildGCPSecretsParameter builds the YAML "secrets" parameter for a SecretProviderClass
+// from the given credentials. Each credential maps to a GSM secret path and a mount file name.
 func BuildGCPSecretsParameter(credentials []api.CredentialReference) (string, error) {
 	var secrets []config.Secret
 	for _, credential := range credentials {
@@ -89,28 +93,24 @@ func RestoreForbiddenSymbolsInSecretName(s string) (string, error) {
 	}
 }
 
-// GetSPCName generates a unique SPC name for a set of credentials.
-// All credentials in the input slice must have the same collection, group, and mount path
-// (enforced by GroupCredentialsByCollectionGroupAndMountPath and ValidateNoGroupCollisionsOnMountPath).
-// The hash includes collection, group, mount path, and sorted field names to ensure uniqueness.
+// GetSPCName generates a unique SPC name for a set of credentials that share
+// a mount path. The hash includes the mount path and sorted collection:group:field
+// tuples to ensure uniqueness even when credentials span multiple collections.
 func GetSPCName(namespace string, credentials []api.CredentialReference) string {
 	if len(credentials) == 0 {
 		return strings.ToLower(fmt.Sprintf("%s-empty-spc", namespace))
 	}
-	collection := credentials[0].Collection
-	group := credentials[0].Group
 	mountPath := credentials[0].MountPath
 
 	var parts []string
-	parts = append(parts, collection, group, mountPath)
+	parts = append(parts, mountPath)
 
-	// Sort credential field names for deterministic hashing
-	var credFields []string
+	var credKeys []string
 	for _, cred := range credentials {
-		credFields = append(credFields, cred.Field)
+		credKeys = append(credKeys, fmt.Sprintf("%s:%s:%s", cred.Collection, cred.Group, cred.Field))
 	}
-	sort.Strings(credFields)
-	parts = append(parts, credFields...)
+	sort.Strings(credKeys)
+	parts = append(parts, credKeys...)
 
 	hash := sha256.Sum256([]byte(strings.Join(parts, "-")))
 	hashStr := fmt.Sprintf("%x", hash[:12])
@@ -120,21 +120,14 @@ func GetSPCName(namespace string, credentials []api.CredentialReference) string 
 }
 
 // GetCSIVolumeName generates a deterministic, DNS-compliant name for a CSI volume
-// based on the namespace and credentials. All credentials in the slice must have
-// the same collection, group, and mount path.
-//
-// The name is constructed as "<namespace>-<hash>", where the hash is computed from
-// the collection, group and mountPath. If the resulting name exceeds 63 characters
-// (the Kubernetes DNS label limit), only the hash is used as the name.
+// based on the namespace and mount path. One mount path produces one CSI volume.
 func GetCSIVolumeName(ns string, credentials []api.CredentialReference) string {
 	if len(credentials) == 0 {
 		return strings.ToLower(fmt.Sprintf("%s-empty-vol", ns))
 	}
-	collection := credentials[0].Collection
-	group := credentials[0].Group
 	mountPath := credentials[0].MountPath
 
-	hash := sha256.Sum256([]byte(strings.Join([]string{collection, group, mountPath}, "-")))
+	hash := sha256.Sum256([]byte(mountPath))
 	hashStr := fmt.Sprintf("%x", hash[:8])
 	name := fmt.Sprintf("%s-%s", ns, hashStr)
 
@@ -146,10 +139,12 @@ func GetCSIVolumeName(ns string, credentials []api.CredentialReference) string {
 	return strings.ToLower(name)
 }
 
+// GetCensorMountPath returns the mount path used for sidecar censoring of a GSM secret.
 func GetCensorMountPath(secretName string) string {
 	return fmt.Sprintf("/censor/%s", secretName)
 }
 
+// BuildSecretProviderClass constructs a SecretProviderClass object for the GCP provider.
 func BuildSecretProviderClass(name, namespace, secrets string) *csiapi.SecretProviderClass {
 	return &csiapi.SecretProviderClass{
 		TypeMeta: meta.TypeMeta{
@@ -170,6 +165,7 @@ func BuildSecretProviderClass(name, namespace, secrets string) *csiapi.SecretPro
 	}
 }
 
+// BuildCSIVolume constructs a CSI volume that references the given SecretProviderClass.
 func BuildCSIVolume(name, spcName string) coreapi.Volume {
 	return coreapi.Volume{
 		Name: name,

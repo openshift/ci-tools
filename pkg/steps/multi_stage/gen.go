@@ -648,7 +648,7 @@ func addCredentials(credentials []api.CredentialReference, pod *coreapi.Pod, use
 		addK8sSecretVolumes(k8sSecretCreds)
 
 		// Add GSM credentials as CSI volumes
-		collectionMountGroups := csi_secrets.GroupCredentialsByCollectionGroupAndMountPath(gsmCreds)
+		collectionMountGroups := csi_secrets.GroupCredentialsByMountPath(gsmCreds)
 		for _, credentials := range collectionMountGroups {
 			mountPath := credentials[0].MountPath
 

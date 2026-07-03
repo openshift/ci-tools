@@ -15,7 +15,7 @@ import (
 	"github.com/openshift/ci-tools/pkg/testhelper"
 )
 
-func TestGroupCredentialsByCollectionGroupAndMountPath(t *testing.T) {
+func TestGroupCredentialsByMountPath(t *testing.T) {
 	testCases := []struct {
 		name        string
 		credentials []api.CredentialReference
@@ -32,58 +32,58 @@ func TestGroupCredentialsByCollectionGroupAndMountPath(t *testing.T) {
 				{Collection: "collection1", Group: "group1", Field: "cred1", MountPath: "/tmp/cred1"},
 			},
 			expected: map[string][]api.CredentialReference{
-				"collection1:group1:/tmp/cred1": {
+				"/tmp/cred1": {
 					{Collection: "collection1", Group: "group1", Field: "cred1", MountPath: "/tmp/cred1"},
 				},
 			},
 		},
 		{
-			name: "usual scenario: credentials with different collections, groups and paths",
+			name: "usual scenario: credentials with different mount paths stay separate",
 			credentials: []api.CredentialReference{
 				{Collection: "collection1", Group: "group1", Field: "cred1", MountPath: "/tmp/cred1"},
 				{Collection: "collection2", Group: "group2", Field: "cred2", MountPath: "/tmp/cred2"},
 			},
 			expected: map[string][]api.CredentialReference{
-				"collection1:group1:/tmp/cred1": {
+				"/tmp/cred1": {
 					{Collection: "collection1", Group: "group1", Field: "cred1", MountPath: "/tmp/cred1"},
 				},
-				"collection2:group2:/tmp/cred2": {
+				"/tmp/cred2": {
 					{Collection: "collection2", Group: "group2", Field: "cred2", MountPath: "/tmp/cred2"},
 				},
 			},
 		},
 		{
-			name: "usual scenario: credentials with same collection but different group and mount paths",
+			name: "usual scenario: same mount path groups together regardless of collection or group",
 			credentials: []api.CredentialReference{
 				{Collection: "my-creds", Group: "aws", Field: "key1", MountPath: "/tmp/aws"},
 				{Collection: "my-creds", Group: "aws", Field: "different-key", MountPath: "/tmp/aws"},
 				{Collection: "my-creds", Group: "gcp", Field: "key2", MountPath: "/tmp/gcp"},
 			},
 			expected: map[string][]api.CredentialReference{
-				"my-creds:aws:/tmp/aws": {
+				"/tmp/aws": {
 					{Collection: "my-creds", Group: "aws", Field: "key1", MountPath: "/tmp/aws"},
 					{Collection: "my-creds", Group: "aws", Field: "different-key", MountPath: "/tmp/aws"},
 				},
-				"my-creds:gcp:/tmp/gcp": {
+				"/tmp/gcp": {
 					{Collection: "my-creds", Group: "gcp", Field: "key2", MountPath: "/tmp/gcp"},
 				},
 			},
 		},
 		{
-			name: "usual scenario: credentials with same collection, group and path",
+			name: "usual scenario: same collection, group and path",
 			credentials: []api.CredentialReference{
 				{Collection: "collection1", Group: "group1", Field: "cred1", MountPath: "/tmp/shared"},
 				{Collection: "collection1", Group: "group1", Field: "cred2", MountPath: "/tmp/shared"},
 			},
 			expected: map[string][]api.CredentialReference{
-				"collection1:group1:/tmp/shared": {
+				"/tmp/shared": {
 					{Collection: "collection1", Group: "group1", Field: "cred1", MountPath: "/tmp/shared"},
 					{Collection: "collection1", Group: "group1", Field: "cred2", MountPath: "/tmp/shared"},
 				},
 			},
 		},
 		{
-			name: "usual scenario: mixed grouping - some grouped together, some separate",
+			name: "usual scenario: multi-collection bundle: different collections at same path merge into one group",
 			credentials: []api.CredentialReference{
 				{Collection: "colours", Group: "primary", Field: "red", MountPath: "/tmp/path"},
 				{Collection: "colours", Group: "primary", Field: "blue", MountPath: "/tmp/path"},
@@ -91,14 +91,12 @@ func TestGroupCredentialsByCollectionGroupAndMountPath(t *testing.T) {
 				{Collection: "shapes", Group: "angular", Field: "square", MountPath: "/tmp/other"},
 			},
 			expected: map[string][]api.CredentialReference{
-				"colours:primary:/tmp/path": {
+				"/tmp/path": {
 					{Collection: "colours", Group: "primary", Field: "red", MountPath: "/tmp/path"},
 					{Collection: "colours", Group: "primary", Field: "blue", MountPath: "/tmp/path"},
-				},
-				"shapes:round:/tmp/path": {
 					{Collection: "shapes", Group: "round", Field: "circle", MountPath: "/tmp/path"},
 				},
-				"shapes:angular:/tmp/other": {
+				"/tmp/other": {
 					{Collection: "shapes", Group: "angular", Field: "square", MountPath: "/tmp/other"},
 				},
 			},
@@ -107,9 +105,9 @@ func TestGroupCredentialsByCollectionGroupAndMountPath(t *testing.T) {
 
 	for _, tc := range testCases {
 		t.Run(tc.name, func(t *testing.T) {
-			result := GroupCredentialsByCollectionGroupAndMountPath(tc.credentials)
+			result := GroupCredentialsByMountPath(tc.credentials)
 			if diff := cmp.Diff(tc.expected, result); diff != "" {
-				t.Errorf("GroupCredentialsByCollectionGroupAndMountPath() mismatch (-want +got):\n%s", diff)
+				t.Errorf("GroupCredentialsByMountPath() mismatch (-want +got):\n%s", diff)
 			}
 		})
 	}
@@ -190,7 +188,7 @@ func TestGetSPCName(t *testing.T) {
 			credentials: []api.CredentialReference{
 				{Collection: "collection1", Group: "group1", Field: "cred1", MountPath: "/tmp/cred1"},
 			},
-			expected: "test-ns-37fbca68ecf3629da44421f3-spc",
+			expected: "test-ns-413eed400e7af60b8833c3f8-spc",
 		},
 		{
 			name:      "typical ci-operator namespace",
@@ -198,16 +196,16 @@ func TestGetSPCName(t *testing.T) {
 			credentials: []api.CredentialReference{
 				{Collection: "collection1", Group: "group1", Field: "cred1", MountPath: "/tmp/cred1"},
 			},
-			expected: "ci-op-abc123def456-37fbca68ecf3629da44421f3-spc",
+			expected: "ci-op-abc123def456-413eed400e7af60b8833c3f8-spc",
 		},
 		{
-			name:      "multiple credentials same collection group and mount path",
+			name:      "multiple credentials same mount path",
 			namespace: "test-ns",
 			credentials: []api.CredentialReference{
 				{Collection: "collection1", Group: "group1", Field: "cred1", MountPath: "/tmp/shared"},
 				{Collection: "collection1", Group: "group1", Field: "cred2", MountPath: "/tmp/shared"},
 			},
-			expected: "test-ns-0dac9a0bb0cfa2cd7454405a-spc",
+			expected: "test-ns-3282fd6f77af324290aa5447-spc",
 		},
 		{
 			name:      "different fields produce different hash",
@@ -215,7 +213,7 @@ func TestGetSPCName(t *testing.T) {
 			credentials: []api.CredentialReference{
 				{Collection: "colours", Group: "primary", Field: "red", MountPath: "/tmp/path"},
 			},
-			expected: "test-ns-57f5da70d2e3196fac95df08-spc",
+			expected: "test-ns-260b2418a28eeaa5a9e3a995-spc",
 		},
 		{
 			name:      "different groups produce different hash (aws)",
@@ -223,7 +221,7 @@ func TestGetSPCName(t *testing.T) {
 			credentials: []api.CredentialReference{
 				{Collection: "my-creds", Group: "aws", Field: "access-key", MountPath: "/tmp/aws"},
 			},
-			expected: "test-ns-1347c8e8837d7e97560e7150-spc",
+			expected: "test-ns-c133d70a71fa6d3410fc8889-spc",
 		},
 		{
 			name:      "different groups produce different hash (gcp)",
@@ -231,16 +229,26 @@ func TestGetSPCName(t *testing.T) {
 			credentials: []api.CredentialReference{
 				{Collection: "my-creds", Group: "gcp", Field: "access-key", MountPath: "/tmp/gcp"},
 			},
-			expected: "test-ns-33eddd4dbdaacb84bff886db-spc",
+			expected: "test-ns-baddf8f68cf0aafe2acd532e-spc",
 		},
 		{
-			name:      "fields are sorted for deterministic hashing",
+			name:      "credential keys are sorted for deterministic hashing",
 			namespace: "test-ns",
 			credentials: []api.CredentialReference{
 				{Collection: "colours", Group: "primary", Field: "blue", MountPath: "/tmp/path"},
 				{Collection: "colours", Group: "primary", Field: "red", MountPath: "/tmp/path"},
 			},
-			expected: "test-ns-9f663213b58aa5ec3db559e4-spc",
+			expected: "test-ns-cfe2f25c28f9af63ee0c82cc-spc",
+		},
+		{
+			name:      "multi-collection credentials at same mount path produce single hash",
+			namespace: "test-ns",
+			credentials: []api.CredentialReference{
+				{Collection: "col-a", Group: "grp-x", Field: "login", MountPath: "/var/bundle"},
+				{Collection: "col-a", Group: "grp-x", Field: "pswd", MountPath: "/var/bundle"},
+				{Collection: "col-b", Group: "grp-y", Field: "config", MountPath: "/var/bundle"},
+			},
+			expected: "test-ns-6f9da35a0c07b54ee330ab7b-spc",
 		},
 	}
 
@@ -267,7 +275,7 @@ func TestCSIVolumeName(t *testing.T) {
 			credentials: []api.CredentialReference{
 				{Collection: "coll1", Group: "default", Field: "field1", MountPath: "/tmp/cred1"},
 			},
-			expected: "test-ns-3194a3eba8e37c2a",
+			expected: "test-ns-a6ea5e284a092d64",
 		},
 		{
 			name:      "mount path with dots",
@@ -275,7 +283,7 @@ func TestCSIVolumeName(t *testing.T) {
 			credentials: []api.CredentialReference{
 				{Collection: "coll1", Group: "default", Field: "field1", MountPath: "/tmp/cred.with.dots"},
 			},
-			expected: "test-ns-314371647aefa581",
+			expected: "test-ns-b8aa56363fadb89b",
 		},
 		{
 			name:      "mount path with underscores",
@@ -283,7 +291,7 @@ func TestCSIVolumeName(t *testing.T) {
 			credentials: []api.CredentialReference{
 				{Collection: "coll1", Group: "default", Field: "field1", MountPath: "/tmp/cred_with_underscores"},
 			},
-			expected: "test-ns-4c64a633af543812",
+			expected: "test-ns-09b39d03e50b0a50",
 		},
 		{
 			name:      "long names stay within 63 char limit",
@@ -291,7 +299,7 @@ func TestCSIVolumeName(t *testing.T) {
 			credentials: []api.CredentialReference{
 				{Collection: "some-long-collection-name", Group: "default", Field: "field1", MountPath: "/long/mount/path/that/exceeds/kubernetes/limits"},
 			},
-			expected: "long-namespace-name-within-limits-057ce95edd368edd",
+			expected: "long-namespace-name-within-limits-758f3a0a3e8edb80",
 		},
 		{
 			name:      "long namespace triggers hash-only mode",
@@ -299,23 +307,15 @@ func TestCSIVolumeName(t *testing.T) {
 			credentials: []api.CredentialReference{
 				{Collection: "collection", Group: "default", Field: "field1", MountPath: "/tmp"},
 			},
-			expected: "644c2cb4c1712501c5cab0651185bac2",
+			expected: "e9671acd244849c57167c658fa2f9697",
 		},
 		{
-			name:      "different groups produce different volume names (aws)",
+			name:      "same mount path produces same volume name regardless of collection/group",
 			namespace: "test-ns",
 			credentials: []api.CredentialReference{
 				{Collection: "my-creds", Group: "aws", Field: "key", MountPath: "/tmp/secrets"},
 			},
-			expected: "test-ns-1cb1b8a131a84b72",
-		},
-		{
-			name:      "different groups produce different volume names (gcp)",
-			namespace: "test-ns",
-			credentials: []api.CredentialReference{
-				{Collection: "my-creds", Group: "gcp", Field: "key", MountPath: "/tmp/secrets"},
-			},
-			expected: "test-ns-122de8ec25d37ef5",
+			expected: "test-ns-203f6fcff3e34ef1",
 		},
 	}
 

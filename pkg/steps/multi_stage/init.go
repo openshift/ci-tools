@@ -77,7 +77,7 @@ func (s *multiStageTestStep) resolveCredentials(ctx context.Context) error {
 		if err != nil {
 			return fmt.Errorf("failed to resolve credentials for step %s: %w", step.As, err)
 		}
-		if err := csi_secrets.ValidateNoGroupCollisionsOnMountPath(resolvedCredentials); err != nil {
+		if err := csi_secrets.ValidateNoFileCollisionsOnMountPath(resolvedCredentials); err != nil {
 			return fmt.Errorf("invalid credentials for step %s: %w", step.As, err)
 		}
 		step.Credentials = resolvedCredentials
@@ -145,18 +145,28 @@ func (s *multiStageTestStep) createCredentials(ctx context.Context, credentials 
 // to fetch the appropriate secrets from GCP. This is done before
 // the individual steps are run to make sure the appropriate
 // SecretProviderClasses already exist and are available for the test pods.
+// The credentials parameter is used only for sidecar censoring SPCs;
+// volume SPCs are derived per-step to match addCredentials() grouping.
 func (s *multiStageTestStep) createSPCs(ctx context.Context, credentials []api.CredentialReference) error {
 	logrus.Infof("Creating SPCs for actual credential usage...")
 	spcsToCreate := map[string]*csiapi.SecretProviderClass{}
-	collectionMountGroups := csi_secrets.GroupCredentialsByCollectionGroupAndMountPath(credentials)
-
-	for _, credentials := range collectionMountGroups {
-		spcName := csi_secrets.GetSPCName(s.jobSpec.Namespace(), credentials)
-		secrets, err := csi_secrets.BuildGCPSecretsParameter(credentials)
-		if err != nil {
-			return fmt.Errorf("could not marshal secrets for mount path %s: %w", credentials[0].MountPath, err)
+	// Create volume SPCs per-step so the SPC names match what addCredentials
+	// computes per-pod (it only sees one step's credentials at a time).
+	for _, step := range s.getAllStepPtrs() {
+		var stepGSMCreds []api.CredentialReference
+		for _, cred := range step.Credentials {
+			if csi_secrets.IsGSMReference(cred) {
+				stepGSMCreds = append(stepGSMCreds, cred)
+			}
 		}
-		spcsToCreate[spcName] = csi_secrets.BuildSecretProviderClass(spcName, s.jobSpec.Namespace(), secrets)
+		for _, creds := range csi_secrets.GroupCredentialsByMountPath(stepGSMCreds) {
+			spcName := csi_secrets.GetSPCName(s.jobSpec.Namespace(), creds)
+			secrets, err := csi_secrets.BuildGCPSecretsParameter(creds)
+			if err != nil {
+				return fmt.Errorf("could not marshal secrets for mount path %s: %w", creds[0].MountPath, err)
+			}
+			spcsToCreate[spcName] = csi_secrets.BuildSecretProviderClass(spcName, s.jobSpec.Namespace(), secrets)
+		}
 	}
 
 	// Create SPCs for sidecar censoring; each credential gets its own SPC.

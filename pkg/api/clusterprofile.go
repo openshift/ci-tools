@@ -57,8 +57,8 @@ func (cp *ClusterProfiles) Resolve() error {
 			}
 
 			if allClusters.Len() > 0 {
-				owner.Konflux.Clusters = allClusters.UnsortedList()
-				slices.Sort(owner.Konflux.Clusters)
+				owner.Konflux.ClustersResolved = allClusters.UnsortedList()
+				slices.Sort(owner.Konflux.ClustersResolved)
 			}
 		}
 	}
@@ -80,9 +80,10 @@ type ClusterProfile struct {
 }
 
 type ClusterProfileKonfluxOwner struct {
-	Tenant        string   `yaml:"tenant,omitempty" json:"tenant,omitempty"`
-	Clusters      []string `yaml:"clusters,omitempty" json:"clusters,omitempty"`
-	ClusterGroups []string `yaml:"cluster_groups,omitempty" json:"cluster_groups,omitempty"`
+	Tenant           string   `yaml:"tenant,omitempty" json:"tenant,omitempty"`
+	Clusters         []string `yaml:"clusters,omitempty" json:"clusters,omitempty"`
+	ClusterGroups    []string `yaml:"cluster_groups,omitempty" json:"cluster_groups,omitempty"`
+	ClustersResolved []string `yaml:"-" json:"-"`
 }
 
 type ClusterProfileOwners struct {

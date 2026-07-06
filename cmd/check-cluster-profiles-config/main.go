@@ -102,7 +102,7 @@ func main() {
 
 	normalizedProfiles := normalize(profiles.ClusterProfiles)
 
-	if diff := cmp.Diff(&profiles, normalizedProfiles); diff != "" {
+	if diff := cmp.Diff(profiles.ClusterProfiles, normalizedProfiles); diff != "" {
 		fmt.Print(diff)
 		logger.Fatal("\nProfiles have not been normalized, run `make check-cluster-profiles`")
 	}

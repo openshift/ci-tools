@@ -32,7 +32,7 @@ type stepLease struct {
 	resources []string
 }
 
-type ClusterProfileGetter func(name string) (*api.ClusterProfileDetails, error)
+type ClusterProfileGetter func(name string) (*api.ClusterProfile, error)
 
 // leaseStep wraps another step and acquires/releases one or more leases.
 type leaseStep struct {
@@ -46,7 +46,7 @@ type leaseStep struct {
 	// for sending heartbeats during lease acquisition
 	namespace             func() string
 	clusterProfileSetName string
-	clusterProfile        *api.ClusterProfileDetails
+	clusterProfile        *api.ClusterProfile
 	stsHomeRoleARN        string
 	stsHubRoleARN         string
 	stsTargetRoleARN      string

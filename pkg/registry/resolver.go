@@ -14,7 +14,7 @@ type Resolver interface {
 	Resolve(name string, config api.MultiStageTestConfiguration) (api.MultiStageTestConfigurationLiteral, error)
 	ResolveWorkflow(name string) (api.MultiStageTestConfigurationLiteral, error)
 	ResolveChain(name string) (api.RegistryChain, error)
-	ResolveClusterProfile(name string) (api.ClusterProfileDetails, error)
+	ResolveClusterProfile(name string) (api.ClusterProfile, error)
 }
 
 type ReferenceByName map[string]api.LiteralTestStep
@@ -208,10 +208,10 @@ func (r *registry) ResolveChain(name string) (api.RegistryChain, error) {
 	return ret, nil
 }
 
-func (r *registry) ResolveClusterProfile(name string) (api.ClusterProfileDetails, error) {
+func (r *registry) ResolveClusterProfile(name string) (api.ClusterProfile, error) {
 	cp, ok := r.clusterProfiles[name]
 	if !ok {
-		return api.ClusterProfileDetails{}, fmt.Errorf("no cluster profile named %s", name)
+		return api.ClusterProfile{}, fmt.Errorf("no cluster profile named %s", name)
 	}
 	return cp, nil
 }
@@ -412,7 +412,7 @@ func (r *registry) iterateSteps(s api.TestStep, f func(*api.LiteralTestStep)) er
 	return nil
 }
 
-func (r *registry) resolveClusterProfile(profileName string) (api.ClusterProfileDetails, bool) {
+func (r *registry) resolveClusterProfile(profileName string) (api.ClusterProfile, bool) {
 	profileDetails, ok := r.clusterProfiles[profileName]
 	return profileDetails, ok
 }

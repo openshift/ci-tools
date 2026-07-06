@@ -10,29 +10,31 @@ import (
 	utilregexp "github.com/openshift/ci-tools/pkg/util/regexp"
 )
 
-func ClusterProfileFromParams(params Parameters) (*ClusterProfileDetails, error) {
-	return GetParamTyped[*ClusterProfileDetails](params, ClusterProfileDetailsParam)
+func ClusterProfileFromParams(params Parameters) (*ClusterProfile, error) {
+	return GetParamTyped[*ClusterProfile](params, ClusterProfileDetailsParam)
 }
 
 type ClusterProfileKonfluxConfig struct {
 	ClusterGroups map[string][]string `yaml:"cluster_groups,omitempty" json:"cluster_groups,omitempty"`
 }
 
-type ClusterProfilesList struct {
-	KonfluxConfig   *ClusterProfileKonfluxConfig `yaml:"konflux,omitempty" json:"konflux,omitempty"`
-	ClusterProfiles []ClusterProfileDetails      `yaml:"cluster_profiles,omitempty" json:"cluster_profiles,omitempty"`
+// +kubebuilder:object:generate=false
+type ClusterProfiles struct {
+	ClusterProfiles          []ClusterProfile             `yaml:"cluster_profiles,omitempty" json:"cluster_profiles,omitempty"`
+	KonfluxConfig            *ClusterProfileKonfluxConfig `yaml:"konflux,omitempty" json:"konflux,omitempty"`
+	ClusterProfileSetsConfig *ClusterProfileSetsConfig    `yaml:"cluster_profile_sets_config,omitempty" json:"cluster_profile_sets_config,omitempty"`
 }
 
-func (cpl *ClusterProfilesList) Resolve() error {
+func (cp *ClusterProfiles) Resolve() error {
 	errs := make([]error, 0)
 
 	clusterGroups := make(map[string][]string)
-	if cpl.KonfluxConfig != nil {
-		clusterGroups = cpl.KonfluxConfig.ClusterGroups
+	if cp.KonfluxConfig != nil {
+		clusterGroups = cp.KonfluxConfig.ClusterGroups
 	}
 
-	for i := range cpl.ClusterProfiles {
-		profile := &cpl.ClusterProfiles[i]
+	for i := range cp.ClusterProfiles {
+		profile := &cp.ClusterProfiles[i]
 
 	ownersLoop:
 		for j := range profile.Owners {
@@ -64,9 +66,9 @@ func (cpl *ClusterProfilesList) Resolve() error {
 	return aggerrs.NewAggregate(errs)
 }
 
-type ClusterProfilesMap map[string]ClusterProfileDetails
+type ClusterProfilesMap map[string]ClusterProfile
 
-type ClusterProfileDetails struct {
+type ClusterProfile struct {
 	Name            string                 `yaml:"name,omitempty" json:"name,omitempty"`
 	Owners          []ClusterProfileOwners `yaml:"owners,omitempty" json:"owners,omitempty"`
 	ClusterType     string                 `yaml:"cluster_type,omitempty" json:"cluster_type,omitempty"`
@@ -74,6 +76,7 @@ type ClusterProfileDetails struct {
 	IPPoolLeaseType string                 `yaml:"ip_pool_lease_type,omitempty" json:"ip_pool_lease_type,omitempty"`
 	Secret          string                 `yaml:"secret,omitempty" json:"secret,omitempty"`
 	ConfigMap       string                 `yaml:"config_map,omitempty" json:"config_map,omitempty"`
+	SetMembers      []string               `yaml:"set_members,omitempty" json:"set_members,omitempty"`
 }
 
 type ClusterProfileKonfluxOwner struct {
@@ -89,7 +92,15 @@ type ClusterProfileOwners struct {
 }
 type ClusterClaimOwnersMap map[string]ClusterClaimDetails
 
-// TODO: This will replace `ClusterProfileSetDetails` once the migration is complete.
+// +kubebuilder:object:generate=false
+type ClusterProfileSetsConfig struct {
+	// TestsExceptions holds a list of tests for which we do not enfoce policy
+	// regarding the cluster profile sets usage.
+	// This deeply nested type match the following pattern:
+	//  "org/repo": "branch": "variant": "test"
+	TestsExceptions map[utilregexp.Regexp]map[utilregexp.Regexp]map[utilregexp.Regexp][]utilregexp.Regexp `json:"tests_exceptions,omitempty"`
+}
+
 // +kubebuilder:object:generate=false
 type ClusterProfileSetDetails struct {
 	ClusterProfileSets map[string][]string `json:"cluster_profile_sets,omitempty"`

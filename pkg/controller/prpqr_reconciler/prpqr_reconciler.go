@@ -55,7 +55,7 @@ const (
 
 type injectingResolverClient interface {
 	ConfigWithTest(base *api.Metadata, testSource *api.MetadataWithTest) (*api.ReleaseBuildConfiguration, error)
-	ClusterProfile(profileName string) (*api.ClusterProfileDetails, error)
+	ClusterProfile(profileName string) (*api.ClusterProfile, error)
 }
 
 type prowConfigGetter interface {

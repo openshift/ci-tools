@@ -197,7 +197,7 @@ func Registry(root string, flags RegistryFlag) (registry.ReferenceByName, regist
 	if _, err = registry.NewGraph(references, chains, workflows, observers); err != nil {
 		return nil, nil, nil, nil, nil, nil, nil, err
 	}
-	profiles, err = ClusterProfilesConfig(clusterProfilesConfigPath)
+	profiles, err = ClusterProfilesMap(clusterProfilesConfigPath)
 	if err != nil {
 		return nil, nil, nil, nil, nil, nil, nil, err
 	}
@@ -248,16 +248,16 @@ func loadWorkflow(bytes []byte) (string, string, api.MultiStageTestConfiguration
 	return workflow.Workflow.As, workflow.Workflow.Documentation, workflow.Workflow.Steps, nil
 }
 
-func ClusterProfileList(clusterProfileListPath string) (api.ClusterProfilesList, error) {
-	profiles := api.ClusterProfilesList{}
+func ClusterProfiles(clusterProfilesPath string) (api.ClusterProfiles, error) {
+	profiles := api.ClusterProfiles{}
 
-	content, err := os.ReadFile(clusterProfileListPath)
+	content, err := os.ReadFile(clusterProfilesPath)
 	if err != nil {
-		return profiles, fmt.Errorf("read file %s: %w", clusterProfileListPath, err)
+		return profiles, fmt.Errorf("read file %s: %w", clusterProfilesPath, err)
 	}
 
 	if err = yaml.Unmarshal(content, &profiles); err != nil {
-		return profiles, fmt.Errorf("unmarshal file %s: %w", clusterProfileListPath, err)
+		return profiles, fmt.Errorf("unmarshal file %s: %w", clusterProfilesPath, err)
 	}
 
 	if err := profiles.Resolve(); err != nil {
@@ -267,9 +267,9 @@ func ClusterProfileList(clusterProfileListPath string) (api.ClusterProfilesList,
 	return profiles, nil
 }
 
-// ClusterProfilesConfig loads cluster profile information from its config in the release repository
-func ClusterProfilesConfig(configPath string) (api.ClusterProfilesMap, error) {
-	profilesFromConfig, err := ClusterProfileList(configPath)
+// ClusterProfilesMap loads cluster profile information from its config in the release repository
+func ClusterProfilesMap(clusterProfilesPath string) (api.ClusterProfilesMap, error) {
+	profilesFromConfig, err := ClusterProfiles(clusterProfilesPath)
 	if err != nil {
 		return nil, fmt.Errorf("load cluster profile list: %w", err)
 	}

@@ -269,9 +269,9 @@ func TestGenerateJobBase(t *testing.T) {
 }
 
 func TestNewProwJobBaseBuilderForTest(t *testing.T) {
-	clusterProfileResolver := func(name string) (*api.ClusterProfileDetails, error) {
+	clusterProfileResolver := func(name string) (*api.ClusterProfile, error) {
 		if name == "alibabacloud" {
-			return &api.ClusterProfileDetails{ClusterType: "alibabacloud"}, nil
+			return &api.ClusterProfile{ClusterType: "alibabacloud"}, nil
 		}
 		return nil, fmt.Errorf("cluster profile %q not found", name)
 	}

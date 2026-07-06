@@ -524,7 +524,7 @@ func isPrivateMirrorOf(privRepo string, ownerOrg string, ownerRepos []string) bo
 
 // verifyClusterProfileOwnership checks if metadata's org and repo match those in the profile,
 // verifying if it's one of the owners of the profile.
-func verifyClusterProfileOwnership(profile api.ClusterProfileDetails, m *api.Metadata) error {
+func verifyClusterProfileOwnership(profile api.ClusterProfile, m *api.Metadata) error {
 	if m == nil || m.Org == "" {
 		return fmt.Errorf("can't do ownership check, metadata not defined")
 	}

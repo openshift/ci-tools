@@ -59,7 +59,7 @@ func (o *options) parse() error {
 		return fmt.Errorf("failed to load registry: %w", err)
 	}
 
-	profiles, err := load.ClusterProfilesConfig(profilesConfigPath)
+	profiles, err := load.ClusterProfilesMap(profilesConfigPath)
 	if err != nil {
 		return fmt.Errorf("failed to load cluster profile config: %w", err)
 	}

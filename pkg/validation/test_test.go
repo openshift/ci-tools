@@ -2245,7 +2245,7 @@ func TestValidateTestConfigurationType(t *testing.T) {
 
 func TestVerifyClusterProfileOwnership(t *testing.T) {
 	cpMap := api.ClusterProfilesMap{
-		"profile-with-one-owner": api.ClusterProfileDetails{
+		"profile-with-one-owner": api.ClusterProfile{
 			Name: "profile-with-one-owner",
 			Owners: []api.ClusterProfileOwners{
 				{
@@ -2253,7 +2253,7 @@ func TestVerifyClusterProfileOwnership(t *testing.T) {
 				},
 			},
 		},
-		"profile-with-one-owner-w-multiple-repos": api.ClusterProfileDetails{
+		"profile-with-one-owner-w-multiple-repos": api.ClusterProfile{
 			Name: "profile-with-one-owner-w-multiple-repos",
 			Owners: []api.ClusterProfileOwners{
 				{
@@ -2262,7 +2262,7 @@ func TestVerifyClusterProfileOwnership(t *testing.T) {
 				},
 			},
 		},
-		"profile-with-multiple-orgs-and-repos": api.ClusterProfileDetails{
+		"profile-with-multiple-orgs-and-repos": api.ClusterProfile{
 			Name: "profile-with-multiple-orgs-and-repos",
 			Owners: []api.ClusterProfileOwners{
 				{
@@ -2278,11 +2278,11 @@ func TestVerifyClusterProfileOwnership(t *testing.T) {
 				},
 			},
 		},
-		"profile-with-no-owners-specified": api.ClusterProfileDetails{
+		"profile-with-no-owners-specified": api.ClusterProfile{
 			Name:   "profile-with-no-owners-specified",
 			Owners: []api.ClusterProfileOwners{},
 		},
-		"profile-with-flattened-org-owner": api.ClusterProfileDetails{
+		"profile-with-flattened-org-owner": api.ClusterProfile{
 			Name: "profile-with-flattened-org-owner",
 			Owners: []api.ClusterProfileOwners{
 				{
@@ -2295,7 +2295,7 @@ func TestVerifyClusterProfileOwnership(t *testing.T) {
 				},
 			},
 		},
-		"profile-with-non-flattened-org-owner": api.ClusterProfileDetails{
+		"profile-with-non-flattened-org-owner": api.ClusterProfile{
 			Name: "profile-with-non-flattened-org-owner",
 			Owners: []api.ClusterProfileOwners{
 				{
@@ -2304,7 +2304,7 @@ func TestVerifyClusterProfileOwnership(t *testing.T) {
 				},
 			},
 		},
-		"profile-with-flattened-wildcard-owner": api.ClusterProfileDetails{
+		"profile-with-flattened-wildcard-owner": api.ClusterProfile{
 			Name: "profile-with-flattened-wildcard-owner",
 			Owners: []api.ClusterProfileOwners{
 				{
@@ -2312,7 +2312,7 @@ func TestVerifyClusterProfileOwnership(t *testing.T) {
 				},
 			},
 		},
-		"profile-with-non-flattened-wildcard-owner": api.ClusterProfileDetails{
+		"profile-with-non-flattened-wildcard-owner": api.ClusterProfile{
 			Name: "profile-with-non-flattened-wildcard-owner",
 			Owners: []api.ClusterProfileOwners{
 				{
@@ -2325,7 +2325,7 @@ func TestVerifyClusterProfileOwnership(t *testing.T) {
 
 	for _, tc := range []struct {
 		name     string
-		profile  api.ClusterProfileDetails
+		profile  api.ClusterProfile
 		metadata *api.Metadata
 		expected error
 	}{

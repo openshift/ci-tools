@@ -965,7 +965,7 @@ type ClusterProfileLiteral struct {
 	Secret          string `yaml:"secret,omitempty" json:"secret,omitempty"`
 }
 
-func FromClusterProfileDetails(profileDetails *ClusterProfileDetails) *ClusterProfileLiteral {
+func FromClusterProfileDetails(profileDetails *ClusterProfile) *ClusterProfileLiteral {
 	return &ClusterProfileLiteral{
 		Name:            profileDetails.Name,
 		LeaseType:       profileDetails.LeaseType,

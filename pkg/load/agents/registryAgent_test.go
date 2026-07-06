@@ -29,13 +29,13 @@ func TestGetClusterProfileDetails(t *testing.T) {
 	testCases := []struct {
 		name          string
 		profileName   string
-		expected      api.ClusterProfileDetails
+		expected      api.ClusterProfile
 		expectedError error
 	}{
 		{
 			name:        "profile found",
 			profileName: "aws",
-			expected: api.ClusterProfileDetails{
+			expected: api.ClusterProfile{
 				Name: "aws",
 				Owners: []api.ClusterProfileOwners{{
 					Org:   "openshift",

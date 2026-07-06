@@ -351,20 +351,20 @@ func TestResolveClusterProfileList(t *testing.T) {
 
 	for _, tc := range []struct {
 		name         string
-		profiles     ClusterProfilesList
-		wantProfiles ClusterProfilesList
+		profiles     ClusterProfiles
+		wantProfiles ClusterProfiles
 		wantErr      string
 	}{
 		{
 			name: "Resolve cluster groups",
-			profiles: ClusterProfilesList{
+			profiles: ClusterProfiles{
 				KonfluxConfig: &ClusterProfileKonfluxConfig{
 					ClusterGroups: map[string][]string{
 						"prod": {"prod_1"},
 						"stg":  {"stg_0"},
 					},
 				},
-				ClusterProfiles: []ClusterProfileDetails{{
+				ClusterProfiles: []ClusterProfile{{
 					Name: "aws",
 					Owners: []ClusterProfileOwners{{
 						Konflux: &ClusterProfileKonfluxOwner{
@@ -383,14 +383,14 @@ func TestResolveClusterProfileList(t *testing.T) {
 					}},
 				}},
 			},
-			wantProfiles: ClusterProfilesList{
+			wantProfiles: ClusterProfiles{
 				KonfluxConfig: &ClusterProfileKonfluxConfig{
 					ClusterGroups: map[string][]string{
 						"prod": {"prod_1"},
 						"stg":  {"stg_0"},
 					},
 				},
-				ClusterProfiles: []ClusterProfileDetails{{
+				ClusterProfiles: []ClusterProfile{{
 					Name: "aws",
 					Owners: []ClusterProfileOwners{{
 						Konflux: &ClusterProfileKonfluxOwner{
@@ -412,8 +412,8 @@ func TestResolveClusterProfileList(t *testing.T) {
 		},
 		{
 			name: "Cluster group does not exist",
-			profiles: ClusterProfilesList{
-				ClusterProfiles: []ClusterProfileDetails{{
+			profiles: ClusterProfiles{
+				ClusterProfiles: []ClusterProfile{{
 					Name: "aws",
 					Owners: []ClusterProfileOwners{{
 						Konflux: &ClusterProfileKonfluxOwner{

@@ -116,6 +116,17 @@ Resources:
                   - "servicequotas:Get*"
                   - "servicequotas:List*"
                 Resource: "*"
+        - PolicyName: ci-user-permission-boundary
+          PolicyDocument:
+            Version: "2012-10-17"
+            Statement:
+              - Sid: EC2Snapshots
+                Effect: Allow
+                Action:
+                  - "ec2:CreateSnapshot"
+                  - "ec2:DescribeSnapshots"
+                  - "ec2:DeleteSnapshot"
+                Resource: "*"
 
 Outputs:
   RoleArn:

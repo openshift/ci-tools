@@ -16,7 +16,7 @@ import (
 	jc "github.com/openshift/ci-tools/pkg/jobconfig"
 )
 
-type ClusterProfileResolver func(clusterProfile string) (*api.ClusterProfileDetails, error)
+type ClusterProfileResolver func(clusterProfile string) (*api.ClusterProfile, error)
 
 type prowJobBaseBuilder struct {
 	PodSpec CiOperatorPodSpecGenerator

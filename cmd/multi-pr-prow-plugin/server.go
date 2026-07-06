@@ -85,7 +85,7 @@ func (c *githubTrustedChecker) trustedUser(author, org, repo string, _ int) (boo
 
 type ciOpConfigResolver interface {
 	Config(*api.Metadata) (*api.ReleaseBuildConfiguration, error)
-	ClusterProfile(profileName string) (*api.ClusterProfileDetails, error)
+	ClusterProfile(profileName string) (*api.ClusterProfile, error)
 }
 
 type prowConfigGetter interface {

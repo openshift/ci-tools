@@ -541,7 +541,7 @@ func pruneProwjobsForTests(t *testing.T, items []prowv1.ProwJob) {
 }
 
 type fakeResolverClient struct {
-	clusterProfiles map[string]*api.ClusterProfileDetails
+	clusterProfiles map[string]*api.ClusterProfile
 }
 
 func (f *fakeResolverClient) ConfigWithTest(base *api.Metadata, testSource *api.MetadataWithTest) (*api.ReleaseBuildConfiguration, error) {
@@ -555,7 +555,7 @@ func (f *fakeResolverClient) ConfigWithTest(base *api.Metadata, testSource *api.
 	}, nil
 }
 
-func (r fakeResolverClient) ClusterProfile(profileName string) (*api.ClusterProfileDetails, error) {
+func (r fakeResolverClient) ClusterProfile(profileName string) (*api.ClusterProfile, error) {
 	cp, ok := r.clusterProfiles[profileName]
 	if !ok {
 		return nil, fmt.Errorf("cluster profile %q not found", profileName)

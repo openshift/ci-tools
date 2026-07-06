@@ -112,8 +112,8 @@ func WithCLIISTagRef(isTagRef string) ReconcilerOption {
 
 type NewProwJobFunc func(spec prowv1.ProwJobSpec, extraLabels, extraAnnotations map[string]string, modifiers ...pjutil.Modifier) prowv1.ProwJob
 
-func clusterProfileResolverAdapter(registryAgent agents.RegistryAgent) func(string) (*api.ClusterProfileDetails, error) {
-	return func(name string) (*api.ClusterProfileDetails, error) {
+func clusterProfileResolverAdapter(registryAgent agents.RegistryAgent) func(string) (*api.ClusterProfile, error) {
+	return func(name string) (*api.ClusterProfile, error) {
 		cp, err := registryAgent.ResolveClusterProfile(name)
 		if err != nil {
 			return nil, err

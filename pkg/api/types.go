@@ -965,13 +965,13 @@ type ClusterProfileLiteral struct {
 	Secret          string `yaml:"secret,omitempty" json:"secret,omitempty"`
 }
 
-func FromClusterProfileDetails(profileDetails *ClusterProfileDetails) *ClusterProfileLiteral {
+func FromClusterProfile(clusterProfile *ClusterProfile) *ClusterProfileLiteral {
 	return &ClusterProfileLiteral{
-		Name:            profileDetails.Name,
-		LeaseType:       profileDetails.LeaseType,
-		IPPoolLeaseType: profileDetails.IPPoolLeaseType,
-		ClusterType:     profileDetails.ClusterType,
-		Secret:          profileDetails.Secret,
+		Name:            clusterProfile.Name,
+		LeaseType:       clusterProfile.LeaseType,
+		IPPoolLeaseType: clusterProfile.IPPoolLeaseType,
+		ClusterType:     clusterProfile.ClusterType,
+		Secret:          clusterProfile.Secret,
 	}
 }
 

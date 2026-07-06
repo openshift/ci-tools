@@ -39,13 +39,13 @@ const (
 
 type fakeRegistryAgent struct {
 	agents.RegistryAgent
-	clusterProfiles map[string]*api.ClusterProfileDetails
+	clusterProfiles map[string]*api.ClusterProfile
 }
 
-func (f *fakeRegistryAgent) ResolveClusterProfile(name string) (api.ClusterProfileDetails, error) {
+func (f *fakeRegistryAgent) ResolveClusterProfile(name string) (api.ClusterProfile, error) {
 	cp, ok := f.clusterProfiles[name]
 	if !ok {
-		return api.ClusterProfileDetails{}, fmt.Errorf("cluster profile %q not found", name)
+		return api.ClusterProfile{}, fmt.Errorf("cluster profile %q not found", name)
 	}
 	return *cp, nil
 }
@@ -156,7 +156,7 @@ func TestCreateProwJob(t *testing.T) {
 	}
 
 	fakeRegistryAgent := fakeRegistryAgent{
-		clusterProfiles: map[string]*api.ClusterProfileDetails{
+		clusterProfiles: map[string]*api.ClusterProfile{
 			"aws": {ClusterType: "aws"},
 		},
 	}

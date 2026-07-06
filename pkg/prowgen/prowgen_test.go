@@ -39,8 +39,8 @@ func sorted(spec *corev1.PodSpec) {
 	}
 }
 
-func clusterProfileResolverFunc(profiles ...*api.ClusterProfileDetails) func(string) (*api.ClusterProfileDetails, error) {
-	return func(name string) (*api.ClusterProfileDetails, error) {
+func clusterProfileResolverFunc(profiles ...*api.ClusterProfile) func(string) (*api.ClusterProfile, error) {
+	return func(name string) (*api.ClusterProfile, error) {
 		for _, cp := range profiles {
 			if cp.Name == name {
 				return cp, nil
@@ -123,7 +123,7 @@ func TestShouldAlwaysRun(t *testing.T) {
 }
 
 func TestGeneratePresubmitForTest(t *testing.T) {
-	clusterProfileResolver := clusterProfileResolverFunc(&ciop.ClusterProfileDetails{
+	clusterProfileResolver := clusterProfileResolverFunc(&ciop.ClusterProfile{
 		Name:        "aws",
 		ClusterType: "aws",
 	})
@@ -292,7 +292,7 @@ func TestGeneratePresubmitForTest(t *testing.T) {
 }
 
 func TestGeneratePeriodicForTest(t *testing.T) {
-	clusterProfileResolver := clusterProfileResolverFunc(&ciop.ClusterProfileDetails{
+	clusterProfileResolver := clusterProfileResolverFunc(&ciop.ClusterProfile{
 		Name:        "aws",
 		ClusterType: "aws",
 	})
@@ -470,7 +470,7 @@ func TestGeneratePostSubmitForTest(t *testing.T) {
 			}
 			test := ciop.TestStepConfiguration{As: testname}
 			jobBaseGen, err := NewProwJobBaseBuilderForTest(&ciop.ReleaseBuildConfiguration{}, tc.repoInfo,
-				newFakePodSpecBuilder(), test, func(clusterProfile string) (*ciop.ClusterProfileDetails, error) { return nil, nil })
+				newFakePodSpecBuilder(), test, func(clusterProfile string) (*ciop.ClusterProfile, error) { return nil, nil })
 			if err != nil {
 				t.Fatalf("failed to create the prowjob builder: %s", err)
 			}
@@ -1015,7 +1015,7 @@ func TestGenerateJobs(t *testing.T) {
 	}
 	for _, tc := range tests {
 		t.Run(tc.id, func(t *testing.T) {
-			jobConfig, err := GenerateJobs(tc.config, tc.repoInfo, func(clusterProfile string) (*ciop.ClusterProfileDetails, error) {
+			jobConfig, err := GenerateJobs(tc.config, tc.repoInfo, func(clusterProfile string) (*ciop.ClusterProfile, error) {
 				return nil, nil
 			})
 			if err != nil {
@@ -1136,7 +1136,7 @@ func TestBundleWithCapabilities(t *testing.T) {
 				Branch: "main",
 			}
 
-			jobConfig, err := GenerateJobs(config, repoInfo, func(clusterProfile string) (*ciop.ClusterProfileDetails, error) {
+			jobConfig, err := GenerateJobs(config, repoInfo, func(clusterProfile string) (*ciop.ClusterProfile, error) {
 				return nil, nil
 			})
 			if err != nil {

@@ -22,7 +22,7 @@ type ResolverClient interface {
 	Config(*api.Metadata) (*api.ReleaseBuildConfiguration, error)
 	ConfigWithTest(base *api.Metadata, testSource *api.MetadataWithTest) (*api.ReleaseBuildConfiguration, error)
 	Resolve([]byte) (*api.ReleaseBuildConfiguration, error)
-	ClusterProfile(profileName string) (*api.ClusterProfileDetails, error)
+	ClusterProfile(profileName string) (*api.ClusterProfile, error)
 	IntegratedStream(namespace, name string) (*configresolver.IntegratedStream, error)
 }
 
@@ -168,7 +168,7 @@ func doRequest(req *http.Request) ([]byte, error) {
 
 // ClusterProfile gets the info about a desired cluster profile by creating a request
 // to config resolver
-func (r *resolverClient) ClusterProfile(profileName string) (*api.ClusterProfileDetails, error) {
+func (r *resolverClient) ClusterProfile(profileName string) (*api.ClusterProfile, error) {
 	logrus.Infof("Loading information from %s for cluster profile %s", r.Address, profileName)
 	req, err := http.NewRequest("GET", fmt.Sprintf("%s/clusterProfile", r.Address), nil)
 	if err != nil {
@@ -183,7 +183,7 @@ func (r *resolverClient) ClusterProfile(profileName string) (*api.ClusterProfile
 		return nil, err
 	}
 
-	cp := &api.ClusterProfileDetails{}
+	cp := &api.ClusterProfile{}
 	if err = json.Unmarshal(data, cp); err != nil {
 		return nil, fmt.Errorf("failed to unmarshal %s cluster profile information from configresolver: %w\nvalue:\n%s", profileName, err, string(data))
 	}

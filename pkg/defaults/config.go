@@ -49,7 +49,7 @@ type Config struct {
 	MetricsAgent                *metrics.MetricsAgent
 	SkippedImages               sets.Set[string]
 	params                      *api.DeferredParameters
-	ClusterProfileGetter        func(profileName string) (*api.ClusterProfileDetails, error)
+	ClusterProfileGetter        func(profileName string) (*api.ClusterProfile, error)
 
 	HTTPServerAddr string
 	HTTPServerMux  *http.ServeMux

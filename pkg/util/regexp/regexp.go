@@ -15,7 +15,7 @@ func (re *Regexp) AppendText(b []byte) ([]byte, error) {
 }
 
 // MarshalText implements [encoding.TextMarshaler].
-func (re *Regexp) MarshalText() ([]byte, error) {
+func (re Regexp) MarshalText() ([]byte, error) {
 	return re.Pattern.AppendText(nil)
 }
 

@@ -28,12 +28,12 @@ func newProfileCommand(o *options) *cobra.Command {
 
 func cmdProfileList(o *options, args []string) error {
 	profilesConfigPath := path.Join(o.rootPath, clusterProfilesConfig)
-	clusterProfiles, err := load.ClusterProfilesConfig(profilesConfigPath)
+	clusterProfiles, err := load.ClusterProfilesMap(profilesConfigPath)
 	if err != nil {
 		return fmt.Errorf("read cluster profiles %s: %w", clusterProfilesConfig, err)
 	}
 
-	profiles := make([]api.ClusterProfileDetails, 0)
+	profiles := make([]api.ClusterProfile, 0)
 	if len(args) == 0 {
 		for _, p := range clusterProfiles {
 			profiles = append(profiles, p)
@@ -48,6 +48,6 @@ func cmdProfileList(o *options, args []string) error {
 		}
 	}
 
-	slices.SortFunc(profiles, func(a, b api.ClusterProfileDetails) int { return strings.Compare(a.Name, b.Name) })
+	slices.SortFunc(profiles, func(a, b api.ClusterProfile) int { return strings.Compare(a.Name, b.Name) })
 	return printYAML(profiles)
 }

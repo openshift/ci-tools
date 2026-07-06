@@ -63,7 +63,7 @@ func main() {
 	logger := logrus.WithField("component", "check-cluster-profiles-config")
 	o := gatherOptions()
 
-	profiles, err := load.ClusterProfileList(o.configPath)
+	profiles, err := load.ClusterProfiles(o.configPath)
 	if err != nil {
 		logger.WithError(err).Fatal("failed to load cluster profiles from config file")
 	}
@@ -75,7 +75,7 @@ func main() {
 			logger.WithError(err).Fatal("failed to validate cluster profiles")
 		}
 
-		normalize(profiles)
+		profiles.Items = normalize(profiles.Items)
 
 		if err := writeConfig(o.configPath, profiles); err != nil {
 			logger.WithError(err).Fatal("failed to write cluster profiles")
@@ -100,10 +100,9 @@ func main() {
 		logger.WithError(err).Fatal("failed to validate cluster profiles")
 	}
 
-	normalizedProfiles := profiles.DeepCopy()
-	normalize(*normalizedProfiles)
+	normalizedProfiles := normalize(profiles.Items)
 
-	if diff := cmp.Diff(&profiles, normalizedProfiles); diff != "" {
+	if diff := cmp.Diff(profiles.Items, normalizedProfiles); diff != "" {
 		fmt.Print(diff)
 		logger.Fatal("\nProfiles have not been normalized, run `make check-cluster-profiles`")
 	}
@@ -115,7 +114,7 @@ func main() {
 	logger.Info("Cluster profiles successfully checked.")
 }
 
-func writeConfig(configPath string, profiles api.ClusterProfilesList) error {
+func writeConfig(configPath string, profiles api.ClusterProfiles) error {
 	bytes, err := yaml.Marshal(&profiles)
 	if err != nil {
 		return fmt.Errorf("marshal profiles: %w", err)
@@ -128,8 +127,8 @@ func writeConfig(configPath string, profiles api.ClusterProfilesList) error {
 	return nil
 }
 
-func (validator *profileValidator) Validate(profiles api.ClusterProfilesList) error {
-	for _, p := range profiles.ClusterProfiles {
+func (validator *profileValidator) Validate(profiles api.ClusterProfiles) error {
+	for _, p := range profiles.Items {
 		// Check for duplicate orgs/tenants
 		tenantMap := sets.New[string]()
 		orgMap := sets.New[string]()
@@ -200,11 +199,19 @@ func (validator *profileValidator) checkCISecrets() error {
 	return utilerrors.NewAggregate(errs)
 }
 
-func normalize(profiles api.ClusterProfilesList) {
-	for i := range profiles.ClusterProfiles {
-		profile := &profiles.ClusterProfiles[i]
-		sortOwners(profile.Owners)
+func normalize(profiles []api.ClusterProfile) []api.ClusterProfile {
+	if profiles == nil {
+		return nil
 	}
+
+	res := make([]api.ClusterProfile, len(profiles))
+	for i, profile := range profiles {
+		profile := profile.DeepCopy()
+		sortOwners(profile.Owners)
+		res[i] = *profile
+	}
+
+	return res
 }
 
 // sortOwners does what follows:

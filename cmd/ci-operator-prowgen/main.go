@@ -124,7 +124,7 @@ func (o *options) generateJobsToDir(subDir string) error {
 func generateJobs(resolver registry.Resolver, output map[string]*prowconfig.JobConfig) func(configSpec *cioperatorapi.ReleaseBuildConfiguration, info *config.Info) error {
 	return func(configSpec *cioperatorapi.ReleaseBuildConfiguration, info *config.Info) error {
 		orgRepo := fmt.Sprintf("%s/%s", info.Org, info.Repo)
-		var clusterProfileResolver func(name string) (*api.ClusterProfileDetails, error) = func(name string) (*api.ClusterProfileDetails, error) {
+		var clusterProfileResolver func(name string) (*api.ClusterProfile, error) = func(name string) (*api.ClusterProfile, error) {
 			return nil, fmt.Errorf("cluster profile resolver not available")
 		}
 
@@ -134,7 +134,7 @@ func generateJobs(resolver registry.Resolver, output map[string]*prowconfig.JobC
 				return fmt.Errorf("failed to resolve configuration: %w", err)
 			}
 			configSpec = &resolved
-			clusterProfileResolver = func(name string) (*api.ClusterProfileDetails, error) {
+			clusterProfileResolver = func(name string) (*api.ClusterProfile, error) {
 				cp, err := resolver.ResolveClusterProfile(name)
 				if err != nil {
 					return nil, err

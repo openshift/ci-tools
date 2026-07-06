@@ -29,13 +29,13 @@ func TestResolve(t *testing.T) {
 	nodeArchitectureARM64 := api.NodeArchitectureARM64
 	yes := true
 	clusterProfilesMap := api.ClusterProfilesMap{
-		"aws": api.ClusterProfileDetails{
+		"aws": api.ClusterProfile{
 			Name:        "aws",
 			ClusterType: "aws",
 			LeaseType:   "aws-quota-slice",
 			Secret:      "cluster-secrets-aws",
 		},
-		"azure4": api.ClusterProfileDetails{
+		"azure4": api.ClusterProfile{
 			Name:        "azure4",
 			ClusterType: "azure4",
 			LeaseType:   "azure4-quota-slice",

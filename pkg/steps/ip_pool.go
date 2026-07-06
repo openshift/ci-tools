@@ -123,7 +123,7 @@ func (s *ipPoolStep) run(ctx context.Context, minute time.Duration) error {
 			return fmt.Errorf("get cluster profile from parameters: %w", err)
 		}
 	} else if clusterProfileDetails != nil {
-		s.profile = api.FromClusterProfileDetails(clusterProfileDetails)
+		s.profile = api.FromClusterProfile(clusterProfileDetails)
 	}
 
 	var ipPoolLeaseType string

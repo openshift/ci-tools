@@ -86,7 +86,7 @@ func TestConfig(t *testing.T) {
 }
 
 func TestClusterProfile(t *testing.T) {
-	awsProfile := &api.ClusterProfileDetails{
+	awsProfile := &api.ClusterProfile{
 		Name: "aws",
 		Owners: []api.ClusterProfileOwners{{
 			Org:   "openshift",
@@ -126,7 +126,7 @@ func TestClusterProfile(t *testing.T) {
 	var testCases = []struct {
 		name           string
 		handlerWrapper func(t *testing.T, jsonConfig []byte) http.Handler
-		expected       *api.ClusterProfileDetails
+		expected       *api.ClusterProfile
 		expectedError  error
 	}{
 		{

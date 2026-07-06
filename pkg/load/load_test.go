@@ -267,7 +267,7 @@ func TestRegistry(t *testing.T) {
 	}
 }
 
-func TestClusterProfilesConfig(t *testing.T) {
+func TestClusterProfilesMap(t *testing.T) {
 	var testCases = []struct {
 		name     string
 		expected api.ClusterProfilesMap
@@ -386,7 +386,7 @@ cluster_profiles:
 				t.Fatalf("Failed to close tmp file: %v", err)
 			}
 
-			actual, err := ClusterProfilesConfig(tmpFile.Name())
+			actual, err := ClusterProfilesMap(tmpFile.Name())
 			if err != nil {
 				t.Fatalf("load cluster profile config: %s", err)
 			}

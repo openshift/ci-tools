@@ -20,7 +20,7 @@ type ClusterProfileKonfluxConfig struct {
 
 // +kubebuilder:object:generate=false
 type ClusterProfiles struct {
-	ClusterProfiles          []ClusterProfile             `yaml:"cluster_profiles,omitempty" json:"cluster_profiles,omitempty"`
+	Items                    []ClusterProfile             `yaml:"cluster_profiles,omitempty" json:"cluster_profiles,omitempty"`
 	KonfluxConfig            *ClusterProfileKonfluxConfig `yaml:"konflux,omitempty" json:"konflux,omitempty"`
 	ClusterProfileSetsConfig *ClusterProfileSetsConfig    `yaml:"cluster_profile_sets_config,omitempty" json:"cluster_profile_sets_config,omitempty"`
 }
@@ -33,8 +33,8 @@ func (cp *ClusterProfiles) Resolve() error {
 		clusterGroups = cp.KonfluxConfig.ClusterGroups
 	}
 
-	for i := range cp.ClusterProfiles {
-		profile := &cp.ClusterProfiles[i]
+	for i := range cp.Items {
+		profile := &cp.Items[i]
 
 	ownersLoop:
 		for j := range profile.Owners {
@@ -95,7 +95,7 @@ type ClusterClaimOwnersMap map[string]ClusterClaimDetails
 
 // +kubebuilder:object:generate=false
 type ClusterProfileSetsConfig struct {
-	// TestsExceptions holds a list of tests for which we do not enfoce policy
+	// TestsExceptions holds a list of tests for which we do not enforce policy
 	// regarding the cluster profile sets usage.
 	// This deeply nested type match the following pattern:
 	//  "org/repo": "branch": "variant": "test"

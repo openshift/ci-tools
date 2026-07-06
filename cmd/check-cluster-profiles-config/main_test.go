@@ -24,7 +24,7 @@ func TestValidate(t *testing.T) {
 		{
 			name: "Valid config file",
 			profiles: api.ClusterProfiles{
-				ClusterProfiles: []api.ClusterProfile{
+				Items: []api.ClusterProfile{
 					{
 						Name:   "aws",
 						Owners: []api.ClusterProfileOwners{{Org: "aws", Repos: []string{"repo1"}}},
@@ -40,7 +40,7 @@ func TestValidate(t *testing.T) {
 		{
 			name: "Duplicated profile in config file",
 			profiles: api.ClusterProfiles{
-				ClusterProfiles: []api.ClusterProfile{
+				Items: []api.ClusterProfile{
 					{
 						Name:   "aws",
 						Owners: []api.ClusterProfileOwners{{Org: "aws", Repos: []string{"repo1"}}},
@@ -58,7 +58,7 @@ func TestValidate(t *testing.T) {
 		{
 			name: "Duplicated org within profile",
 			profiles: api.ClusterProfiles{
-				ClusterProfiles: []api.ClusterProfile{
+				Items: []api.ClusterProfile{
 					{
 						Name: "aws",
 						Owners: []api.ClusterProfileOwners{
@@ -73,7 +73,7 @@ func TestValidate(t *testing.T) {
 		{
 			name: "Invalid owner",
 			profiles: api.ClusterProfiles{
-				ClusterProfiles: []api.ClusterProfile{
+				Items: []api.ClusterProfile{
 					{
 						Name:   "aws",
 						Owners: []api.ClusterProfileOwners{{}},
@@ -85,7 +85,7 @@ func TestValidate(t *testing.T) {
 		{
 			name: "Konflux and org mutually exclusive",
 			profiles: api.ClusterProfiles{
-				ClusterProfiles: []api.ClusterProfile{
+				Items: []api.ClusterProfile{
 					{
 						Name: "aws",
 						Owners: []api.ClusterProfileOwners{{
@@ -126,12 +126,12 @@ func TestNormalize(t *testing.T) {
 		{
 			name: "Profile with nil owners",
 			profiles: api.ClusterProfiles{
-				ClusterProfiles: []api.ClusterProfile{
+				Items: []api.ClusterProfile{
 					{Name: "aws", Secret: "aws-secret", Owners: nil},
 				},
 			},
 			wantProfiles: api.ClusterProfiles{
-				ClusterProfiles: []api.ClusterProfile{
+				Items: []api.ClusterProfile{
 					{Name: "aws", Secret: "aws-secret", Owners: nil},
 				},
 			},
@@ -139,12 +139,12 @@ func TestNormalize(t *testing.T) {
 		{
 			name: "Profile with empty owners slice",
 			profiles: api.ClusterProfiles{
-				ClusterProfiles: []api.ClusterProfile{
+				Items: []api.ClusterProfile{
 					{Name: "aws", Secret: "aws-secret", Owners: []api.ClusterProfileOwners{}},
 				},
 			},
 			wantProfiles: api.ClusterProfiles{
-				ClusterProfiles: []api.ClusterProfile{
+				Items: []api.ClusterProfile{
 					{Name: "aws", Secret: "aws-secret", Owners: []api.ClusterProfileOwners{}},
 				},
 			},
@@ -152,7 +152,7 @@ func TestNormalize(t *testing.T) {
 		{
 			name: "Owner with nil repos",
 			profiles: api.ClusterProfiles{
-				ClusterProfiles: []api.ClusterProfile{
+				Items: []api.ClusterProfile{
 					{
 						Name: "aws",
 						Owners: []api.ClusterProfileOwners{
@@ -162,7 +162,7 @@ func TestNormalize(t *testing.T) {
 				},
 			},
 			wantProfiles: api.ClusterProfiles{
-				ClusterProfiles: []api.ClusterProfile{
+				Items: []api.ClusterProfile{
 					{
 						Name: "aws",
 						Owners: []api.ClusterProfileOwners{
@@ -175,7 +175,7 @@ func TestNormalize(t *testing.T) {
 		{
 			name: "Owner with empty repos slice",
 			profiles: api.ClusterProfiles{
-				ClusterProfiles: []api.ClusterProfile{
+				Items: []api.ClusterProfile{
 					{
 						Name: "aws",
 						Owners: []api.ClusterProfileOwners{
@@ -185,7 +185,7 @@ func TestNormalize(t *testing.T) {
 				},
 			},
 			wantProfiles: api.ClusterProfiles{
-				ClusterProfiles: []api.ClusterProfile{
+				Items: []api.ClusterProfile{
 					{
 						Name: "aws",
 						Owners: []api.ClusterProfileOwners{
@@ -198,7 +198,7 @@ func TestNormalize(t *testing.T) {
 		{
 			name: "Mix of nil and empty repos",
 			profiles: api.ClusterProfiles{
-				ClusterProfiles: []api.ClusterProfile{
+				Items: []api.ClusterProfile{
 					{
 						Name: "aws",
 						Owners: []api.ClusterProfileOwners{
@@ -209,7 +209,7 @@ func TestNormalize(t *testing.T) {
 				},
 			},
 			wantProfiles: api.ClusterProfiles{
-				ClusterProfiles: []api.ClusterProfile{
+				Items: []api.ClusterProfile{
 					{
 						Name: "aws",
 						Owners: []api.ClusterProfileOwners{
@@ -223,7 +223,7 @@ func TestNormalize(t *testing.T) {
 		{
 			name: "All owners with nil repos",
 			profiles: api.ClusterProfiles{
-				ClusterProfiles: []api.ClusterProfile{
+				Items: []api.ClusterProfile{
 					{
 						Name: "aws",
 						Owners: []api.ClusterProfileOwners{
@@ -235,7 +235,7 @@ func TestNormalize(t *testing.T) {
 				},
 			},
 			wantProfiles: api.ClusterProfiles{
-				ClusterProfiles: []api.ClusterProfile{
+				Items: []api.ClusterProfile{
 					{
 						Name: "aws",
 						Owners: []api.ClusterProfileOwners{
@@ -250,7 +250,7 @@ func TestNormalize(t *testing.T) {
 		{
 			name: "Profile with unsorted repos",
 			profiles: api.ClusterProfiles{
-				ClusterProfiles: []api.ClusterProfile{
+				Items: []api.ClusterProfile{
 					{
 						Name: "aws",
 						Owners: []api.ClusterProfileOwners{
@@ -260,7 +260,7 @@ func TestNormalize(t *testing.T) {
 				},
 			},
 			wantProfiles: api.ClusterProfiles{
-				ClusterProfiles: []api.ClusterProfile{
+				Items: []api.ClusterProfile{
 					{
 						Name: "aws",
 						Owners: []api.ClusterProfileOwners{
@@ -273,7 +273,7 @@ func TestNormalize(t *testing.T) {
 		{
 			name: "Profile with unsorted orgs",
 			profiles: api.ClusterProfiles{
-				ClusterProfiles: []api.ClusterProfile{
+				Items: []api.ClusterProfile{
 					{
 						Name: "aws",
 						Owners: []api.ClusterProfileOwners{
@@ -284,7 +284,7 @@ func TestNormalize(t *testing.T) {
 				},
 			},
 			wantProfiles: api.ClusterProfiles{
-				ClusterProfiles: []api.ClusterProfile{
+				Items: []api.ClusterProfile{
 					{
 						Name: "aws",
 						Owners: []api.ClusterProfileOwners{
@@ -298,7 +298,7 @@ func TestNormalize(t *testing.T) {
 		{
 			name: "Profile with already sorted owners and repos",
 			profiles: api.ClusterProfiles{
-				ClusterProfiles: []api.ClusterProfile{
+				Items: []api.ClusterProfile{
 					{
 						Name: "aws",
 						Owners: []api.ClusterProfileOwners{
@@ -309,7 +309,7 @@ func TestNormalize(t *testing.T) {
 				},
 			},
 			wantProfiles: api.ClusterProfiles{
-				ClusterProfiles: []api.ClusterProfile{
+				Items: []api.ClusterProfile{
 					{
 						Name: "aws",
 						Owners: []api.ClusterProfileOwners{
@@ -323,7 +323,7 @@ func TestNormalize(t *testing.T) {
 		{
 			name: "Profile with different orgs - sorts orgs alphabetically",
 			profiles: api.ClusterProfiles{
-				ClusterProfiles: []api.ClusterProfile{
+				Items: []api.ClusterProfile{
 					{
 						Name: "aws",
 						Owners: []api.ClusterProfileOwners{
@@ -334,7 +334,7 @@ func TestNormalize(t *testing.T) {
 				},
 			},
 			wantProfiles: api.ClusterProfiles{
-				ClusterProfiles: []api.ClusterProfile{
+				Items: []api.ClusterProfile{
 					{
 						Name: "aws",
 						Owners: []api.ClusterProfileOwners{
@@ -348,7 +348,7 @@ func TestNormalize(t *testing.T) {
 		{
 			name: "Case-sensitive org sorting",
 			profiles: api.ClusterProfiles{
-				ClusterProfiles: []api.ClusterProfile{
+				Items: []api.ClusterProfile{
 					{
 						Name: "aws",
 						Owners: []api.ClusterProfileOwners{
@@ -361,7 +361,7 @@ func TestNormalize(t *testing.T) {
 				},
 			},
 			wantProfiles: api.ClusterProfiles{
-				ClusterProfiles: []api.ClusterProfile{
+				Items: []api.ClusterProfile{
 					{
 						Name: "aws",
 						Owners: []api.ClusterProfileOwners{
@@ -377,7 +377,7 @@ func TestNormalize(t *testing.T) {
 		{
 			name: "Multiple profiles - sorts each independently",
 			profiles: api.ClusterProfiles{
-				ClusterProfiles: []api.ClusterProfile{
+				Items: []api.ClusterProfile{
 					{
 						Name: "aws",
 						Owners: []api.ClusterProfileOwners{
@@ -395,7 +395,7 @@ func TestNormalize(t *testing.T) {
 				},
 			},
 			wantProfiles: api.ClusterProfiles{
-				ClusterProfiles: []api.ClusterProfile{
+				Items: []api.ClusterProfile{
 					{
 						Name: "aws",
 						Owners: []api.ClusterProfileOwners{
@@ -416,7 +416,7 @@ func TestNormalize(t *testing.T) {
 		{
 			name: "Single org with single repo",
 			profiles: api.ClusterProfiles{
-				ClusterProfiles: []api.ClusterProfile{
+				Items: []api.ClusterProfile{
 					{
 						Name: "aws",
 						Owners: []api.ClusterProfileOwners{
@@ -426,7 +426,7 @@ func TestNormalize(t *testing.T) {
 				},
 			},
 			wantProfiles: api.ClusterProfiles{
-				ClusterProfiles: []api.ClusterProfile{
+				Items: []api.ClusterProfile{
 					{
 						Name: "aws",
 						Owners: []api.ClusterProfileOwners{
@@ -439,7 +439,7 @@ func TestNormalize(t *testing.T) {
 		{
 			name: "Complex: unsorted orgs and repos, with duplicates",
 			profiles: api.ClusterProfiles{
-				ClusterProfiles: []api.ClusterProfile{
+				Items: []api.ClusterProfile{
 					{
 						Name: "aws",
 						Owners: []api.ClusterProfileOwners{
@@ -452,7 +452,7 @@ func TestNormalize(t *testing.T) {
 				},
 			},
 			wantProfiles: api.ClusterProfiles{
-				ClusterProfiles: []api.ClusterProfile{
+				Items: []api.ClusterProfile{
 					{
 						Name: "aws",
 						Owners: []api.ClusterProfileOwners{
@@ -471,7 +471,7 @@ func TestNormalize(t *testing.T) {
 		t.Run(tc.name, func(t *testing.T) {
 			t.Parallel()
 
-			tc.profiles.ClusterProfiles = normalize(tc.profiles.ClusterProfiles)
+			tc.profiles.Items = normalize(tc.profiles.Items)
 
 			if diff := cmp.Diff(tc.wantProfiles, tc.profiles); diff != "" {
 				t.Errorf("normalized result differs from expected (-want +got):\n%s", diff)

@@ -75,7 +75,7 @@ func main() {
 			logger.WithError(err).Fatal("failed to validate cluster profiles")
 		}
 
-		profiles.ClusterProfiles = normalize(profiles.ClusterProfiles)
+		profiles.Items = normalize(profiles.Items)
 
 		if err := writeConfig(o.configPath, profiles); err != nil {
 			logger.WithError(err).Fatal("failed to write cluster profiles")
@@ -100,9 +100,9 @@ func main() {
 		logger.WithError(err).Fatal("failed to validate cluster profiles")
 	}
 
-	normalizedProfiles := normalize(profiles.ClusterProfiles)
+	normalizedProfiles := normalize(profiles.Items)
 
-	if diff := cmp.Diff(profiles.ClusterProfiles, normalizedProfiles); diff != "" {
+	if diff := cmp.Diff(profiles.Items, normalizedProfiles); diff != "" {
 		fmt.Print(diff)
 		logger.Fatal("\nProfiles have not been normalized, run `make check-cluster-profiles`")
 	}
@@ -128,7 +128,7 @@ func writeConfig(configPath string, profiles api.ClusterProfiles) error {
 }
 
 func (validator *profileValidator) Validate(profiles api.ClusterProfiles) error {
-	for _, p := range profiles.ClusterProfiles {
+	for _, p := range profiles.Items {
 		// Check for duplicate orgs/tenants
 		tenantMap := sets.New[string]()
 		orgMap := sets.New[string]()

@@ -275,7 +275,7 @@ func ClusterProfilesMap(clusterProfilesPath string) (api.ClusterProfilesMap, err
 	}
 
 	profilesFromConfigMap := make(api.ClusterProfilesMap)
-	for _, p := range profilesFromConfig.ClusterProfiles {
+	for _, p := range profilesFromConfig.Items {
 		profilesFromConfigMap[p.Name] = p
 	}
 

@@ -346,7 +346,7 @@ func TestInputImageTagStepConfiguration(t *testing.T) {
 	}
 }
 
-func TestResolveClusterProfileList(t *testing.T) {
+func TestResolveClusterProfiles(t *testing.T) {
 	t.Parallel()
 
 	for _, tc := range []struct {
@@ -364,7 +364,7 @@ func TestResolveClusterProfileList(t *testing.T) {
 						"stg":  {"stg_0"},
 					},
 				},
-				ClusterProfiles: []ClusterProfile{{
+				Items: []ClusterProfile{{
 					Name: "aws",
 					Owners: []ClusterProfileOwners{{
 						Konflux: &ClusterProfileKonfluxOwner{
@@ -390,21 +390,23 @@ func TestResolveClusterProfileList(t *testing.T) {
 						"stg":  {"stg_0"},
 					},
 				},
-				ClusterProfiles: []ClusterProfile{{
+				Items: []ClusterProfile{{
 					Name: "aws",
 					Owners: []ClusterProfileOwners{{
 						Konflux: &ClusterProfileKonfluxOwner{
-							Tenant:        "knflx-tenant",
-							ClusterGroups: []string{"prod", "stg"},
-							Clusters:      []string{"dev", "prod_1", "stg_0"},
+							Tenant:           "knflx-tenant",
+							ClusterGroups:    []string{"prod", "stg"},
+							Clusters:         []string{"dev"},
+							ClustersResolved: []string{"dev", "prod_1", "stg_0"},
 						},
 					}},
 				}, {
 					Name: "aws-2",
 					Owners: []ClusterProfileOwners{{
 						Konflux: &ClusterProfileKonfluxOwner{
-							Tenant:   "knflx-tenant-2",
-							Clusters: []string{"dev"},
+							Tenant:           "knflx-tenant-2",
+							Clusters:         []string{"dev"},
+							ClustersResolved: []string{"dev"},
 						},
 					}},
 				}},
@@ -413,7 +415,7 @@ func TestResolveClusterProfileList(t *testing.T) {
 		{
 			name: "Cluster group does not exist",
 			profiles: ClusterProfiles{
-				ClusterProfiles: []ClusterProfile{{
+				Items: []ClusterProfile{{
 					Name: "aws",
 					Owners: []ClusterProfileOwners{{
 						Konflux: &ClusterProfileKonfluxOwner{

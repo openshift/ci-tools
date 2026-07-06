@@ -145,7 +145,7 @@ func (r *registry) resolveTest(
 		if !ok {
 			resolveErrors = append(resolveErrors, fmt.Errorf("cluster profile %s is not defined", config.ClusterProfile))
 		} else {
-			expandedFlow.ClusterProfileLiteral = api.FromClusterProfileDetails(&profileDetails)
+			expandedFlow.ClusterProfileLiteral = api.FromClusterProfile(&profileDetails)
 		}
 	}
 

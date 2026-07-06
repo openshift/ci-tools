@@ -267,7 +267,7 @@ func TestRegistry(t *testing.T) {
 	}
 }
 
-func TestClusterProfilesConfig(t *testing.T) {
+func TestClusterProfilesMap(t *testing.T) {
 	var testCases = []struct {
 		name     string
 		expected api.ClusterProfilesMap

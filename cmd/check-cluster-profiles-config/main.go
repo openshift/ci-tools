@@ -34,7 +34,7 @@ type options struct {
 }
 
 type profileValidator struct {
-	profiles   api.ClusterProfilesMap
+	profiles   api.ClusterProfiles
 	kubeClient ctrlruntimeclient.Client
 }
 
@@ -54,7 +54,7 @@ func gatherOptions() options {
 
 func newValidator(client ctrlruntimeclient.Client) *profileValidator {
 	return &profileValidator{
-		profiles:   make(api.ClusterProfilesMap),
+		profiles:   api.ClusterProfiles{Items: make([]api.ClusterProfile, 0)},
 		kubeClient: client,
 	}
 }
@@ -163,36 +163,34 @@ func (validator *profileValidator) Validate(profiles api.ClusterProfiles) error 
 		}
 
 		// Check if a profile isn't already defined in the config
-		if _, found := validator.profiles[p.Name]; found {
+		if _, found := validator.profiles.Get(p.Name); found {
 			return fmt.Errorf("cluster profile '%v' already exists in the configuration file", p.Name)
 		}
 
-		validator.profiles[p.Name] = p
+		validator.profiles.Items = append(validator.profiles.Items, p)
 	}
 	return nil
 }
 
 // checkCISecrets verifies that the secret for each cluster profile exists in the ci namespace
 func (validator *profileValidator) checkCISecrets() error {
-	// FIXME: temporary workaround, we should read this information from a config file.
-	clusterProfileSets := sets.New("openshift-org-aws", "openshift-org-azure", "openshift-org-gcp")
 	errs := make([]error, 0)
 
-	for profileName := range validator.profiles {
-		if clusterProfileSets.Has(profileName) {
+	for _, profile := range validator.profiles.Items {
+		if profile.IsASet() {
 			continue
 		}
 
-		profileDetails, err := server.NewResolverClient(configResolverAddress).ClusterProfile(profileName)
+		profileDetails, err := server.NewResolverClient(configResolverAddress).ClusterProfile(profile.Name)
 		if err != nil {
-			errs = append(errs, fmt.Errorf("failed to retrieve details from config resolver for '%s' cluster profile: %w", profileName, err))
+			errs = append(errs, fmt.Errorf("failed to retrieve details from config resolver for '%s' cluster profile: %w", profile.Name, err))
 			continue
 		}
 
 		ciSecret := &coreapi.Secret{}
 		err = validator.kubeClient.Get(context.Background(), ctrlruntimeclient.ObjectKey{Namespace: "ci", Name: profileDetails.Secret}, ciSecret)
 		if err != nil {
-			errs = append(errs, fmt.Errorf("failed to get secret '%s' for cluster profile '%s': %w", profileDetails.Secret, profileName, err))
+			errs = append(errs, fmt.Errorf("failed to get secret '%s' for cluster profile '%s': %w", profileDetails.Secret, profile.Name, err))
 		}
 	}
 

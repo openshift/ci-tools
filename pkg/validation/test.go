@@ -484,8 +484,8 @@ func validateTestStepDependencies(config *api.ReleaseBuildConfiguration) []error
 
 func (v *Validator) validateClusterProfile(fieldRoot string, profileName string, test string, metadata *api.Metadata) []error {
 	if v.validClusterProfiles != nil {
-		if _, ok := v.validClusterProfiles[profileName]; ok {
-			if err := verifyClusterProfileOwnership(v.validClusterProfiles[profileName], metadata); err != nil {
+		if profile, ok := v.validClusterProfiles.Get(profileName); ok {
+			if err := verifyClusterProfileOwnership(profile, metadata); err != nil {
 				return []error{err}
 			}
 		} else {

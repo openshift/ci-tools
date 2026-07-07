@@ -270,13 +270,13 @@ func TestRegistry(t *testing.T) {
 func TestClusterProfilesMap(t *testing.T) {
 	var testCases = []struct {
 		name     string
-		expected api.ClusterProfilesMap
+		expected api.ClusterProfiles
 		testYaml string
 	}{
 		{
 			name:     "emptyOwnersFile",
 			testYaml: ``,
-			expected: api.ClusterProfilesMap{},
+			expected: api.ClusterProfiles{},
 		},
 		{
 			name: "profilesWithOwners",
@@ -292,19 +292,21 @@ cluster_profiles:
     - repo1
     - repo2
 `,
-			expected: api.ClusterProfilesMap{
-				"aws": {
-					Name: "aws",
-					Owners: []api.ClusterProfileOwners{{
-						Org: "org1",
-					}},
-				},
-				"aws-2": {
-					Name: "aws-2",
-					Owners: []api.ClusterProfileOwners{{
-						Org:   "org2",
-						Repos: []string{"repo1", "repo2"},
-					}},
+			expected: api.ClusterProfiles{
+				Items: []api.ClusterProfile{
+					{
+						Name: "aws",
+						Owners: []api.ClusterProfileOwners{{
+							Org: "org1",
+						}},
+					},
+					{
+						Name: "aws-2",
+						Owners: []api.ClusterProfileOwners{{
+							Org:   "org2",
+							Repos: []string{"repo1", "repo2"},
+						}},
+					},
 				},
 			},
 		},
@@ -315,9 +317,11 @@ cluster_profiles:
 - name: aws
 - name: aws-2
 `,
-			expected: api.ClusterProfilesMap{
-				"aws":   {Name: "aws"},
-				"aws-2": {Name: "aws-2"},
+			expected: api.ClusterProfiles{
+				Items: []api.ClusterProfile{
+					{Name: "aws"},
+					{Name: "aws-2"},
+				},
 			},
 		},
 		{
@@ -341,28 +345,32 @@ cluster_profiles:
 - name: vsphere-connected-2
   secret: non-default-secret-name-vsphere
 `,
-			expected: api.ClusterProfilesMap{
-				"aws": {Name: "aws"},
-				"aws-us-east-1": {
-					Name: "aws-us-east-1",
-					Owners: []api.ClusterProfileOwners{
-						{Org: "openshift"},
-						{Org: "openshift-priv"},
+			expected: api.ClusterProfiles{
+				Items: []api.ClusterProfile{
+					{
+						Name: "aws",
 					},
-					IPPoolLeaseType: "aws-ip-pools",
-					Secret:          "non-default-secret-name-aws",
-				},
-				"aws-2": {
-					Name: "aws-2",
-					Owners: []api.ClusterProfileOwners{{
-						Org:   "org2",
-						Repos: []string{"repo1", "repo2"},
-					}},
-					Secret: "non-default-secret-name-aws",
-				},
-				"vsphere-connected-2": {
-					Name:   "vsphere-connected-2",
-					Secret: "non-default-secret-name-vsphere",
+					{
+						Name: "aws-us-east-1",
+						Owners: []api.ClusterProfileOwners{
+							{Org: "openshift"},
+							{Org: "openshift-priv"},
+						},
+						IPPoolLeaseType: "aws-ip-pools",
+						Secret:          "non-default-secret-name-aws",
+					},
+					{
+						Name: "aws-2",
+						Owners: []api.ClusterProfileOwners{{
+							Org:   "org2",
+							Repos: []string{"repo1", "repo2"},
+						}},
+						Secret: "non-default-secret-name-aws",
+					},
+					{
+						Name:   "vsphere-connected-2",
+						Secret: "non-default-secret-name-vsphere",
+					},
 				},
 			},
 		},
@@ -386,7 +394,7 @@ cluster_profiles:
 				t.Fatalf("Failed to close tmp file: %v", err)
 			}
 
-			actual, err := ClusterProfilesMap(tmpFile.Name())
+			actual, err := ClusterProfiles(tmpFile.Name())
 			if err != nil {
 				t.Fatalf("load cluster profile config: %s", err)
 			}

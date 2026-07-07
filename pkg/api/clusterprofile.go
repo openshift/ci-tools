@@ -25,6 +25,16 @@ type ClusterProfiles struct {
 	ClusterProfileSetsConfig *ClusterProfileSetsConfig    `yaml:"cluster_profile_sets_config,omitempty" json:"cluster_profile_sets_config,omitempty"`
 }
 
+func (cp *ClusterProfiles) Get(name string) (ClusterProfile, bool) {
+	for i := range cp.Items {
+		p := &cp.Items[i]
+		if p.Name == name {
+			return *p, true
+		}
+	}
+	return ClusterProfile{}, false
+}
+
 func (cp *ClusterProfiles) Resolve() error {
 	errs := make([]error, 0)
 
@@ -66,8 +76,6 @@ func (cp *ClusterProfiles) Resolve() error {
 	return aggerrs.NewAggregate(errs)
 }
 
-type ClusterProfilesMap map[string]ClusterProfile
-
 type ClusterProfile struct {
 	Name            string                 `yaml:"name,omitempty" json:"name,omitempty"`
 	Owners          []ClusterProfileOwners `yaml:"owners,omitempty" json:"owners,omitempty"`
@@ -77,6 +85,10 @@ type ClusterProfile struct {
 	Secret          string                 `yaml:"secret,omitempty" json:"secret,omitempty"`
 	ConfigMap       string                 `yaml:"config_map,omitempty" json:"config_map,omitempty"`
 	SetMembers      []string               `yaml:"set_members,omitempty" json:"set_members,omitempty"`
+}
+
+func (cp *ClusterProfile) IsASet() bool {
+	return len(cp.SetMembers) > 0
 }
 
 type ClusterProfileKonfluxOwner struct {

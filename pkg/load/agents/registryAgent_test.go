@@ -12,8 +12,8 @@ import (
 
 func TestGetClusterProfileDetails(t *testing.T) {
 	agent := &registryAgent{
-		clusterProfiles: api.ClusterProfilesMap{
-			"aws": {
+		clusterProfiles: api.ClusterProfiles{
+			Items: []api.ClusterProfile{{
 				Name: "aws",
 				Owners: []api.ClusterProfileOwners{{
 					Org:   "openshift",
@@ -22,7 +22,7 @@ func TestGetClusterProfileDetails(t *testing.T) {
 				ClusterType: "aws",
 				LeaseType:   "aws-quota-slice",
 				Secret:      "cluster-secrets-aws",
-			},
+			}},
 		},
 	}
 

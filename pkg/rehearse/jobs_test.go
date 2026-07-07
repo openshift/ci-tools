@@ -295,11 +295,11 @@ func TestInlineCiopConfig(t *testing.T) {
 		},
 	}
 
-	references, chains, workflows, _, _, _, observers, err := load.Registry(testingRegistry, load.RegistryFlag(0))
+	references, chains, workflows, clusterProfiles, _, _, observers, err := load.Registry(testingRegistry, load.RegistryFlag(0))
 	if err != nil {
 		t.Fatalf("Failed to read registry: %v", err)
 	}
-	resolver := registry.NewResolver(references, chains, workflows, observers, nil)
+	resolver := registry.NewResolver(references, chains, workflows, observers, clusterProfiles)
 	for _, tc := range testCases {
 		t.Run(tc.description, func(t *testing.T) {
 			logger := logrus.NewEntry(logrus.New())
@@ -579,11 +579,11 @@ func TestExecuteJobsErrors(t *testing.T) {
 		failToCreate: sets.New[string]("rehearse-123-job2"),
 	}}
 
-	references, chains, workflows, _, _, _, observers, err := load.Registry(testingRegistry, load.RegistryFlag(0))
+	references, chains, workflows, clusterProfiles, _, _, observers, err := load.Registry(testingRegistry, load.RegistryFlag(0))
 	if err != nil {
 		t.Fatalf("Failed to read registry: %v", err)
 	}
-	resolver := registry.NewResolver(references, chains, workflows, observers, nil)
+	resolver := registry.NewResolver(references, chains, workflows, observers, clusterProfiles)
 	for _, tc := range testCases {
 		t.Run(tc.description, func(t *testing.T) {
 			logger := logrus.NewEntry(logrus.New())
@@ -650,11 +650,11 @@ func TestExecuteJobsUnsuccessful(t *testing.T) {
 		},
 	}}
 
-	references, chains, workflows, _, _, _, observers, err := load.Registry(testingRegistry, load.RegistryFlag(0))
+	references, chains, workflows, clusterProfiles, _, _, observers, err := load.Registry(testingRegistry, load.RegistryFlag(0))
 	if err != nil {
 		t.Fatalf("Failed to read registry: %v", err)
 	}
-	resolver := registry.NewResolver(references, chains, workflows, observers, nil)
+	resolver := registry.NewResolver(references, chains, workflows, observers, clusterProfiles)
 	for _, tc := range testCases {
 		t.Run(tc.description, func(t *testing.T) {
 			logger := logrus.NewEntry(logrus.New())
@@ -762,11 +762,11 @@ func TestExecuteJobsPositive(t *testing.T) {
 		},
 	}
 
-	references, chains, workflows, _, _, _, observers, err := load.Registry(testingRegistry, load.RegistryFlag(0))
+	references, chains, workflows, clusterProfiles, _, _, observers, err := load.Registry(testingRegistry, load.RegistryFlag(0))
 	if err != nil {
 		t.Fatalf("Failed to read registry: %v", err)
 	}
-	resolver := registry.NewResolver(references, chains, workflows, observers, nil)
+	resolver := registry.NewResolver(references, chains, workflows, observers, clusterProfiles)
 	for _, tc := range testCases {
 		t.Run(tc.description, func(t *testing.T) {
 			logger := logrus.NewEntry(logrus.New())

@@ -32,7 +32,7 @@ type options struct {
 
 	resolver                 registry.Resolver
 	ciOPConfigAgent          agents.ConfigAgent
-	clusterProfiles          api.ClusterProfilesMap
+	clusterProfiles          api.ClusterProfiles
 	clusterClaimOwners       api.ClusterClaimOwnersMap
 	clusterProfileSetDetails api.ClusterProfileSetDetails
 }
@@ -59,7 +59,7 @@ func (o *options) parse() error {
 		return fmt.Errorf("failed to load registry: %w", err)
 	}
 
-	profiles, err := load.ClusterProfilesMap(profilesConfigPath)
+	profiles, err := load.ClusterProfiles(profilesConfigPath)
 	if err != nil {
 		return fmt.Errorf("failed to load cluster profile config: %w", err)
 	}
@@ -110,7 +110,7 @@ func (o *options) validate() (ret []error) {
 	outputCh := make(chan promotedTag)
 	errCh := make(chan error)
 	map_ := func() error {
-		validator := validation.NewValidator(o.clusterProfiles, o.clusterClaimOwners,
+		validator := validation.NewValidator(&o.clusterProfiles, o.clusterClaimOwners,
 			validation.WithClusterProfileSetDetails(o.clusterProfileSetDetails))
 		for c := range inputCh {
 			if err := o.validateConfiguration(&validator, outputCh, c); err != nil {

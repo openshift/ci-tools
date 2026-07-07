@@ -2244,84 +2244,93 @@ func TestValidateTestConfigurationType(t *testing.T) {
 }
 
 func TestVerifyClusterProfileOwnership(t *testing.T) {
-	cpMap := api.ClusterProfilesMap{
-		"profile-with-one-owner": api.ClusterProfile{
-			Name: "profile-with-one-owner",
-			Owners: []api.ClusterProfileOwners{
-				{
-					Org: "org",
+	profiles := api.ClusterProfiles{
+		Items: []api.ClusterProfile{
+			{
+				Name: "profile-with-one-owner",
+				Owners: []api.ClusterProfileOwners{
+					{
+						Org: "org",
+					},
 				},
 			},
-		},
-		"profile-with-one-owner-w-multiple-repos": api.ClusterProfile{
-			Name: "profile-with-one-owner-w-multiple-repos",
-			Owners: []api.ClusterProfileOwners{
-				{
-					Org:   "org2",
-					Repos: []string{"repo21", "repo22"},
+			{
+				Name: "profile-with-one-owner-w-multiple-repos",
+				Owners: []api.ClusterProfileOwners{
+					{
+						Org:   "org2",
+						Repos: []string{"repo21", "repo22"},
+					},
 				},
 			},
-		},
-		"profile-with-multiple-orgs-and-repos": api.ClusterProfile{
-			Name: "profile-with-multiple-orgs-and-repos",
-			Owners: []api.ClusterProfileOwners{
-				{
-					Org:   "org1",
-					Repos: []string{"repo1"},
-				},
-				{
-					Org:   "org2",
-					Repos: []string{"repo21", "repo22"},
-				},
-				{
-					Org: "org3",
-				},
-			},
-		},
-		"profile-with-no-owners-specified": api.ClusterProfile{
-			Name:   "profile-with-no-owners-specified",
-			Owners: []api.ClusterProfileOwners{},
-		},
-		"profile-with-flattened-org-owner": api.ClusterProfile{
-			Name: "profile-with-flattened-org-owner",
-			Owners: []api.ClusterProfileOwners{
-				{
-					Org:   "openshift",
-					Repos: []string{"csi-operator", "installer"},
-				},
-				{
-					Org:   "operator-framework",
-					Repos: []string{"operator-marketplace"},
+			{
+				Name: "profile-with-multiple-orgs-and-repos",
+				Owners: []api.ClusterProfileOwners{
+					{
+						Org:   "org1",
+						Repos: []string{"repo1"},
+					},
+					{
+						Org:   "org2",
+						Repos: []string{"repo21", "repo22"},
+					},
+					{
+						Org: "org3",
+					},
 				},
 			},
-		},
-		"profile-with-non-flattened-org-owner": api.ClusterProfile{
-			Name: "profile-with-non-flattened-org-owner",
-			Owners: []api.ClusterProfileOwners{
-				{
-					Org:   "stolostron",
-					Repos: []string{"acm-cli", "observatorium-operator"},
+			{
+				Name:   "profile-with-no-owners-specified",
+				Owners: []api.ClusterProfileOwners{},
+			},
+			{
+				Name: "profile-with-flattened-org-owner",
+				Owners: []api.ClusterProfileOwners{
+					{
+						Org:   "openshift",
+						Repos: []string{"csi-operator", "installer"},
+					},
+					{
+						Org:   "operator-framework",
+						Repos: []string{"operator-marketplace"},
+					},
 				},
 			},
-		},
-		"profile-with-flattened-wildcard-owner": api.ClusterProfile{
-			Name: "profile-with-flattened-wildcard-owner",
-			Owners: []api.ClusterProfileOwners{
-				{
-					Org: "openshift",
+			{
+				Name: "profile-with-non-flattened-org-owner",
+				Owners: []api.ClusterProfileOwners{
+					{
+						Org:   "stolostron",
+						Repos: []string{"acm-cli", "observatorium-operator"},
+					},
 				},
 			},
-		},
-		"profile-with-non-flattened-wildcard-owner": api.ClusterProfile{
-			Name: "profile-with-non-flattened-wildcard-owner",
-			Owners: []api.ClusterProfileOwners{
-				{
-					Org: "stolostron",
+			{
+				Name: "profile-with-flattened-wildcard-owner",
+				Owners: []api.ClusterProfileOwners{
+					{
+						Org: "openshift",
+					},
+				},
+			},
+			{
+				Name: "profile-with-non-flattened-wildcard-owner",
+				Owners: []api.ClusterProfileOwners{
+					{
+						Org: "stolostron",
+					},
 				},
 			},
 		},
 	}
-	v := NewValidator(cpMap, nil)
+	v := NewValidator(&profiles, nil)
+	getProfile := func(name string) api.ClusterProfile {
+		p, ok := v.validClusterProfiles.Get(name)
+		if !ok {
+			t.Fatalf("cluster profile %s not found", name)
+		}
+		return p
+	}
 
 	for _, tc := range []struct {
 		name     string
@@ -2331,7 +2340,7 @@ func TestVerifyClusterProfileOwnership(t *testing.T) {
 	}{
 		{
 			name:    "ownership not restricted",
-			profile: v.validClusterProfiles["profile-with-no-owners-specified"],
+			profile: getProfile("profile-with-no-owners-specified"),
 			metadata: &api.Metadata{
 				Org:  "any-org",
 				Repo: "any-repo",
@@ -2339,7 +2348,7 @@ func TestVerifyClusterProfileOwnership(t *testing.T) {
 		},
 		{
 			name:    "not one of owners",
-			profile: v.validClusterProfiles["profile-with-one-owner"],
+			profile: getProfile("profile-with-one-owner"),
 			metadata: &api.Metadata{
 				Org:  "wrong-org",
 				Repo: "any-repo",
@@ -2348,7 +2357,7 @@ func TestVerifyClusterProfileOwnership(t *testing.T) {
 		},
 		{
 			name:    "basic ok case",
-			profile: v.validClusterProfiles["profile-with-one-owner"],
+			profile: getProfile("profile-with-one-owner"),
 			metadata: &api.Metadata{
 				Org:  "org",
 				Repo: "any-repo",
@@ -2356,7 +2365,7 @@ func TestVerifyClusterProfileOwnership(t *testing.T) {
 		},
 		{
 			name:    "complex case ok",
-			profile: v.validClusterProfiles["profile-with-multiple-orgs-and-repos"],
+			profile: getProfile("profile-with-multiple-orgs-and-repos"),
 			metadata: &api.Metadata{
 				Org:  "org2",
 				Repo: "repo22",
@@ -2364,7 +2373,7 @@ func TestVerifyClusterProfileOwnership(t *testing.T) {
 		},
 		{
 			name:    "complex case ok - no repos",
-			profile: v.validClusterProfiles["profile-with-multiple-orgs-and-repos"],
+			profile: getProfile("profile-with-multiple-orgs-and-repos"),
 			metadata: &api.Metadata{
 				Org:  "org3",
 				Repo: "any-repo",
@@ -2372,7 +2381,7 @@ func TestVerifyClusterProfileOwnership(t *testing.T) {
 		},
 		{
 			name:    "complex case nok",
-			profile: v.validClusterProfiles["profile-with-multiple-orgs-and-repos"],
+			profile: getProfile("profile-with-multiple-orgs-and-repos"),
 			metadata: &api.Metadata{
 				Org:  "org2",
 				Repo: "wrong-repo",
@@ -2381,7 +2390,7 @@ func TestVerifyClusterProfileOwnership(t *testing.T) {
 		},
 		{
 			name:    "missing metadata - empty",
-			profile: v.validClusterProfiles["profile-with-multiple-orgs-and-repos"],
+			profile: getProfile("profile-with-multiple-orgs-and-repos"),
 			metadata: &api.Metadata{
 				Org:  "",
 				Repo: "",
@@ -2390,13 +2399,13 @@ func TestVerifyClusterProfileOwnership(t *testing.T) {
 		},
 		{
 			name:     "missing metadata - nil",
-			profile:  v.validClusterProfiles["profile-with-multiple-orgs-and-repos"],
+			profile:  getProfile("profile-with-multiple-orgs-and-repos"),
 			metadata: nil,
 			expected: fmt.Errorf("can't do ownership check, metadata not defined"),
 		},
 		{
 			name:    "openshift-priv mirror of flattened org repo is allowed",
-			profile: v.validClusterProfiles["profile-with-flattened-org-owner"],
+			profile: getProfile("profile-with-flattened-org-owner"),
 			metadata: &api.Metadata{
 				Org:  "openshift-priv",
 				Repo: "csi-operator",
@@ -2404,7 +2413,7 @@ func TestVerifyClusterProfileOwnership(t *testing.T) {
 		},
 		{
 			name:    "openshift-priv mirror of another flattened org repo is allowed",
-			profile: v.validClusterProfiles["profile-with-flattened-org-owner"],
+			profile: getProfile("profile-with-flattened-org-owner"),
 			metadata: &api.Metadata{
 				Org:  "openshift-priv",
 				Repo: "operator-marketplace",
@@ -2412,7 +2421,7 @@ func TestVerifyClusterProfileOwnership(t *testing.T) {
 		},
 		{
 			name:    "openshift-priv mirror of non-flattened org repo is allowed with collapsed name",
-			profile: v.validClusterProfiles["profile-with-non-flattened-org-owner"],
+			profile: getProfile("profile-with-non-flattened-org-owner"),
 			metadata: &api.Metadata{
 				Org:  "openshift-priv",
 				Repo: "stolostron-acm-cli",
@@ -2420,7 +2429,7 @@ func TestVerifyClusterProfileOwnership(t *testing.T) {
 		},
 		{
 			name:    "openshift-priv non-flattened org repo without collapsed name is rejected",
-			profile: v.validClusterProfiles["profile-with-non-flattened-org-owner"],
+			profile: getProfile("profile-with-non-flattened-org-owner"),
 			metadata: &api.Metadata{
 				Org:  "openshift-priv",
 				Repo: "acm-cli",
@@ -2429,7 +2438,7 @@ func TestVerifyClusterProfileOwnership(t *testing.T) {
 		},
 		{
 			name:    "openshift-priv unknown repo is rejected",
-			profile: v.validClusterProfiles["profile-with-flattened-org-owner"],
+			profile: getProfile("profile-with-flattened-org-owner"),
 			metadata: &api.Metadata{
 				Org:  "openshift-priv",
 				Repo: "unknown-repo",
@@ -2438,7 +2447,7 @@ func TestVerifyClusterProfileOwnership(t *testing.T) {
 		},
 		{
 			name:    "openshift-priv non-matching prefix for non-flattened wildcard owner is rejected",
-			profile: v.validClusterProfiles["profile-with-one-owner"],
+			profile: getProfile("profile-with-one-owner"),
 			metadata: &api.Metadata{
 				Org:  "openshift-priv",
 				Repo: "any-repo",
@@ -2447,7 +2456,7 @@ func TestVerifyClusterProfileOwnership(t *testing.T) {
 		},
 		{
 			name:    "openshift-priv wildcard flattened org owner extends to mirrors",
-			profile: v.validClusterProfiles["profile-with-flattened-wildcard-owner"],
+			profile: getProfile("profile-with-flattened-wildcard-owner"),
 			metadata: &api.Metadata{
 				Org:  "openshift-priv",
 				Repo: "any-repo",
@@ -2455,7 +2464,7 @@ func TestVerifyClusterProfileOwnership(t *testing.T) {
 		},
 		{
 			name:    "openshift-priv wildcard non-flattened org owner extends to prefixed mirrors",
-			profile: v.validClusterProfiles["profile-with-non-flattened-wildcard-owner"],
+			profile: getProfile("profile-with-non-flattened-wildcard-owner"),
 			metadata: &api.Metadata{
 				Org:  "openshift-priv",
 				Repo: "stolostron-some-repo",
@@ -2463,7 +2472,7 @@ func TestVerifyClusterProfileOwnership(t *testing.T) {
 		},
 		{
 			name:    "openshift-priv wildcard non-flattened org owner rejects wrong prefix",
-			profile: v.validClusterProfiles["profile-with-non-flattened-wildcard-owner"],
+			profile: getProfile("profile-with-non-flattened-wildcard-owner"),
 			metadata: &api.Metadata{
 				Org:  "openshift-priv",
 				Repo: "other-org-some-repo",
@@ -2707,30 +2716,32 @@ func TestValidateClusterProfiles(t *testing.T) {
 
 	t.Parallel()
 	for _, tc := range []struct {
-		name               string
-		clusterProfile     string
-		testName           string
-		metadata           *api.Metadata
-		clusterProfilesMap api.ClusterProfilesMap
-		cpsDetails         api.ClusterProfileSetDetails
-		wantErrs           []error
+		name            string
+		clusterProfile  string
+		testName        string
+		metadata        *api.Metadata
+		clusterProfiles *api.ClusterProfiles
+		cpsDetails      api.ClusterProfileSetDetails
+		wantErrs        []error
 	}{
 		{
-			name:           "Valid cluster profile",
-			metadata:       &api.Metadata{},
-			clusterProfile: "aro-hcp-dev",
+			name:            "Valid cluster profile",
+			metadata:        &api.Metadata{Org: "org"},
+			clusterProfile:  "aro-hcp-dev",
+			clusterProfiles: &api.ClusterProfiles{Items: []api.ClusterProfile{{Name: "aro-hcp-dev"}}},
 		},
 		{
-			name:               "invalid cluster profile",
-			metadata:           &api.Metadata{},
-			clusterProfilesMap: api.ClusterProfilesMap{},
-			clusterProfile:     "foobar",
-			wantErrs:           []error{errors.New(`foo: invalid cluster profile "foobar"`)},
+			name:            "invalid cluster profile",
+			metadata:        &api.Metadata{},
+			clusterProfile:  "foobar",
+			clusterProfiles: &api.ClusterProfiles{},
+			wantErrs:        []error{errors.New(`foo: invalid cluster profile "foobar"`)},
 		},
 		{
-			name:           "Use cluster profile set",
-			metadata:       &api.Metadata{},
-			clusterProfile: "azure-2",
+			name:            "Use cluster profile set",
+			metadata:        &api.Metadata{Org: "org"},
+			clusterProfile:  "azure-2",
+			clusterProfiles: &api.ClusterProfiles{Items: []api.ClusterProfile{{Name: "azure-2"}}},
 			cpsDetails: api.ClusterProfileSetDetails{
 				ClusterProfileSets: map[string][]string{
 					"openshift-org-azure": {"azure-2"},
@@ -2739,10 +2750,11 @@ func TestValidateClusterProfiles(t *testing.T) {
 			wantErrs: []error{errors.New(`foo: invalid cluster profile "azure-2", use the cluster profile set "openshift-org-azure" instead`)},
 		},
 		{
-			name:           "Skip allowlisted test",
-			metadata:       &api.Metadata{Org: "openshift", Repo: "ci-tools", Branch: "main"},
-			testName:       "e2e-aws-ovn",
-			clusterProfile: "azure-2",
+			name:            "Skip allowlisted test",
+			metadata:        &api.Metadata{Org: "openshift", Repo: "ci-tools", Branch: "main"},
+			testName:        "e2e-aws-ovn",
+			clusterProfile:  "azure-2",
+			clusterProfiles: &api.ClusterProfiles{Items: []api.ClusterProfile{{Name: "azure-2"}}},
 			cpsDetails: api.ClusterProfileSetDetails{
 				ClusterProfileSets: map[string][]string{
 					"openshift-org-azure": {"azure-2"},
@@ -2753,10 +2765,11 @@ func TestValidateClusterProfiles(t *testing.T) {
 			},
 		},
 		{
-			name:           "Skip allowlisted test that matches a pattern",
-			metadata:       &api.Metadata{Org: "openshift-priv", Repo: "openshift-tests-private", Branch: "main", Variant: "nightly"},
-			testName:       "aws-ipi-public-ipv4-pool-byo-subnet-amd-f28-destructive",
-			clusterProfile: "azure-2",
+			name:            "Skip allowlisted test that matches a pattern",
+			metadata:        &api.Metadata{Org: "openshift-priv", Repo: "openshift-tests-private", Branch: "main", Variant: "nightly"},
+			testName:        "aws-ipi-public-ipv4-pool-byo-subnet-amd-f28-destructive",
+			clusterProfile:  "azure-2",
+			clusterProfiles: &api.ClusterProfiles{Items: []api.ClusterProfile{{Name: "azure-2"}}},
 			cpsDetails: api.ClusterProfileSetDetails{
 				ClusterProfileSets: map[string][]string{
 					"openshift-org-azure": {"azure-2"},
@@ -2770,7 +2783,7 @@ func TestValidateClusterProfiles(t *testing.T) {
 		t.Run(tc.name, func(t *testing.T) {
 			t.Parallel()
 
-			v := NewValidator(tc.clusterProfilesMap, nil, WithClusterProfileSetDetails(tc.cpsDetails))
+			v := NewValidator(tc.clusterProfiles, nil, WithClusterProfileSetDetails(tc.cpsDetails))
 			gotErrs := v.validateClusterProfile("foo", tc.clusterProfile, tc.testName, tc.metadata)
 
 			wantErrMsg := "<nil>"

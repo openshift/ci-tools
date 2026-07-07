@@ -25,7 +25,7 @@ type ObserverByName map[string]api.Observer
 // Validate verifies the internal consistency of steps, chains, and workflows.
 // A superset of this validation is performed later when actual test
 // configurations are resolved.
-func Validate(stepsByName ReferenceByName, chainsByName ChainByName, workflowsByName WorkflowByName, observersByName ObserverByName, clusterProfiles api.ClusterProfilesMap) error {
+func Validate(stepsByName ReferenceByName, chainsByName ChainByName, workflowsByName WorkflowByName, observersByName ObserverByName, clusterProfiles api.ClusterProfiles) error {
 	reg := registry{stepsByName, chainsByName, workflowsByName, observersByName, clusterProfiles}
 	var ret []error
 	for k := range chainsByName {
@@ -56,10 +56,10 @@ type registry struct {
 	chainsByName    ChainByName
 	workflowsByName WorkflowByName
 	observersByName ObserverByName
-	clusterProfiles api.ClusterProfilesMap
+	clusterProfiles api.ClusterProfiles
 }
 
-func NewResolver(stepsByName ReferenceByName, chainsByName ChainByName, workflowsByName WorkflowByName, observersByName ObserverByName, clusterProfiles api.ClusterProfilesMap) Resolver {
+func NewResolver(stepsByName ReferenceByName, chainsByName ChainByName, workflowsByName WorkflowByName, observersByName ObserverByName, clusterProfiles api.ClusterProfiles) Resolver {
 	return &registry{
 		stepsByName:     stepsByName,
 		chainsByName:    chainsByName,
@@ -141,11 +141,11 @@ func (r *registry) resolveTest(
 	}
 
 	if config.ClusterProfile != "" {
-		profileDetails, ok := r.resolveClusterProfile(config.ClusterProfile)
+		profile, ok := r.resolveClusterProfile(config.ClusterProfile)
 		if !ok {
 			resolveErrors = append(resolveErrors, fmt.Errorf("cluster profile %s is not defined", config.ClusterProfile))
 		} else {
-			expandedFlow.ClusterProfileLiteral = api.FromClusterProfile(&profileDetails)
+			expandedFlow.ClusterProfileLiteral = api.FromClusterProfile(&profile)
 		}
 	}
 
@@ -209,7 +209,7 @@ func (r *registry) ResolveChain(name string) (api.RegistryChain, error) {
 }
 
 func (r *registry) ResolveClusterProfile(name string) (api.ClusterProfile, error) {
-	cp, ok := r.clusterProfiles[name]
+	cp, ok := r.clusterProfiles.Get(name)
 	if !ok {
 		return api.ClusterProfile{}, fmt.Errorf("no cluster profile named %s", name)
 	}
@@ -413,8 +413,8 @@ func (r *registry) iterateSteps(s api.TestStep, f func(*api.LiteralTestStep)) er
 }
 
 func (r *registry) resolveClusterProfile(profileName string) (api.ClusterProfile, bool) {
-	profileDetails, ok := r.clusterProfiles[profileName]
-	return profileDetails, ok
+	profile, ok := r.clusterProfiles.Get(profileName)
+	return profile, ok
 }
 
 // ResolveConfig uses a resolver to resolve an entire ci-operator config

@@ -249,8 +249,6 @@ func (v *Validator) validateTestStepConfiguration(
 
 		seenNames := sets.New[string]()
 		seenBundles := sets.New[string]()
-		type collectionGroup struct{ collection, group string }
-		seenCollectionGroups := sets.New[collectionGroup]()
 		for i, secret := range test.Secrets {
 			isGSM := secret.IsGSMReference() || secret.IsBundleReference()
 			hasGSMFields := secret.Collection != "" || secret.Group != "" || secret.Bundle != "" || secret.Field != "" || secret.As != ""
@@ -270,11 +268,10 @@ func (v *Validator) validateTestStepConfiguration(
 					}
 					seenBundles.Insert(secret.Bundle)
 				} else if secret.IsGSMReference() {
-					key := collectionGroup{secret.Collection, secret.Group}
-					if seenCollectionGroups.Has(key) {
-						validationErrors = append(validationErrors, fmt.Errorf("%s.secrets[%d]: duplicate collection/group reference %s/%s", fieldRootN, i, secret.Collection, secret.Group))
-					}
-					seenCollectionGroups.Insert(key)
+					// No duplicate check — same (collection, group) at different
+					// mount paths is valid (e.g. auto-discovery at one path and
+					// explicit field at another). Runtime validation
+					// (ValidateNoFileCollisionsOnMountPath) catches real collisions.
 				} else if secret.Collection != "" {
 					validationErrors = append(validationErrors, fmt.Errorf("%s.secrets[%d].group: is required when `collection` is set", fieldRootN, i))
 				} else if secret.Group != "" {

@@ -1,4 +1,4 @@
-package multi_stage
+package csi_secrets
 
 import (
 	"context"
@@ -15,8 +15,6 @@ import (
 	"github.com/openshift/ci-tools/pkg/testhelper"
 )
 
-// fakeGSMClient is a test double that should never be called
-// (discoveredFields cache should prevent actual API calls)
 type fakeGSMClient struct{}
 
 func (f *fakeGSMClient) ListSecrets(ctx context.Context, req *secretmanagerpb.ListSecretsRequest,
@@ -60,7 +58,7 @@ func TestResolveCredentialReferences(t *testing.T) {
 		name             string
 		credentials      []api.CredentialReference
 		gsmConfig        *api.GSMConfig
-		discoveredFields map[collectionGroupKey][]string
+		discoveredFields map[CollectionGroupKey][]string
 		expected         []api.CredentialReference
 		expectedError    error
 	}{
@@ -116,8 +114,8 @@ func TestResolveCredentialReferences(t *testing.T) {
 				},
 			},
 			gsmConfig: &api.GSMConfig{},
-			discoveredFields: map[collectionGroupKey][]string{
-				{collection: "my-creds", group: "aws"}: {"token", "password"},
+			discoveredFields: map[CollectionGroupKey][]string{
+				{Collection: "my-creds", Group: "aws"}: {"token", "password"},
 			},
 			expected: []api.CredentialReference{
 				{Collection: "my-creds", Group: "aws", Field: "token", MountPath: "/tmp/aws"},
@@ -175,8 +173,8 @@ func TestResolveCredentialReferences(t *testing.T) {
 					},
 				},
 			},
-			discoveredFields: map[collectionGroupKey][]string{
-				{collection: "my-creds", group: "aws"}: {"discovered-key-1", "discovered-key-2"},
+			discoveredFields: map[CollectionGroupKey][]string{
+				{Collection: "my-creds", Group: "aws"}: {"discovered-key-1", "discovered-key-2"},
 			},
 			expected: []api.CredentialReference{
 				{Collection: "my-creds", Group: "aws", Field: "discovered-key-1", MountPath: "/tmp/aws"},
@@ -232,8 +230,8 @@ func TestResolveCredentialReferences(t *testing.T) {
 					},
 				},
 			},
-			discoveredFields: map[collectionGroupKey][]string{
-				{collection: "auto", group: "group2"}: {"auto-field-1", "auto-field-2"},
+			discoveredFields: map[CollectionGroupKey][]string{
+				{Collection: "auto", Group: "group2"}: {"auto-field-1", "auto-field-2"},
 			},
 			expected: []api.CredentialReference{
 				{Collection: "bundle-creds", Group: "g1", Field: "bundle-field", MountPath: "/tmp/bundle"},
@@ -396,7 +394,7 @@ func TestExpandBundle(t *testing.T) {
 	for _, tc := range []struct {
 		name             string
 		bundle           *api.GSMBundle
-		discoveredFields map[collectionGroupKey][]string
+		discoveredFields map[CollectionGroupKey][]string
 		expected         []api.CredentialReference
 	}{
 		{
@@ -418,7 +416,7 @@ func TestExpandBundle(t *testing.T) {
 				{Collection: "my-creds", Group: "aws", Field: "access-key"},
 				{Collection: "my-creds", Group: "aws", Field: "secret-key", As: "renamed-secret"},
 			},
-			discoveredFields: map[collectionGroupKey][]string{},
+			discoveredFields: map[CollectionGroupKey][]string{},
 		},
 		{
 			name: "bundle without explicit fields",
@@ -431,8 +429,8 @@ func TestExpandBundle(t *testing.T) {
 					},
 				},
 			},
-			discoveredFields: map[collectionGroupKey][]string{
-				{collection: "my-creds", group: "aws"}: {"token", "password", "url"},
+			discoveredFields: map[CollectionGroupKey][]string{
+				{Collection: "my-creds", Group: "aws"}: {"token", "password", "url"},
 			},
 			expected: []api.CredentialReference{
 				{Collection: "my-creds", Group: "aws", Field: "token"},
@@ -459,8 +457,8 @@ func TestExpandBundle(t *testing.T) {
 					},
 				},
 			},
-			discoveredFields: map[collectionGroupKey][]string{
-				{collection: "my-creds", group: "aws"}: {"token", "password", "url"},
+			discoveredFields: map[CollectionGroupKey][]string{
+				{Collection: "my-creds", Group: "aws"}: {"token", "password", "url"},
 			},
 			expected: []api.CredentialReference{
 				{Collection: "my-creds", Group: "aws", Field: "token"},
@@ -483,7 +481,7 @@ func TestExpandBundle(t *testing.T) {
 	}
 }
 
-func TestValidateNoGroupCollisionsOnMountPath(t *testing.T) {
+func TestValidateNoFileCollisionsOnMountPath(t *testing.T) {
 	for _, tc := range []struct {
 		name        string
 		credentials []api.CredentialReference
@@ -494,99 +492,72 @@ func TestValidateNoGroupCollisionsOnMountPath(t *testing.T) {
 			credentials: []api.CredentialReference{},
 		},
 		{
-			name: "only one credential",
+			name: "single credential",
 			credentials: []api.CredentialReference{
-				{
-					Collection: "test-collection",
-					Field:      "key",
-					Group:      "aws",
-					MountPath:  "path`",
-				},
+				{Collection: "col", Group: "grp", Field: "key", MountPath: "/tmp/secrets"},
 			},
 		},
 		{
-			name: "same collection and group but different mount paths",
+			name: "same field name at different mount paths is ok",
 			credentials: []api.CredentialReference{
-				{
-					Collection: "test-collection",
-					Field:      "key",
-					Group:      "aws",
-					MountPath:  "/tmp/aws-secrets",
-				},
-				{
-					Collection: "test-collection",
-					Field:      "key",
-					Group:      "gcp",
-					MountPath:  "/tmp/gcp-secrets",
-				},
+				{Collection: "col", Group: "aws", Field: "key", MountPath: "/tmp/aws"},
+				{Collection: "col", Group: "gcp", Field: "key", MountPath: "/tmp/gcp"},
 			},
 		},
 		{
-			name: "same collection and group and same mount path",
+			name: "different field names at same mount path is ok",
 			credentials: []api.CredentialReference{
-				{
-					Collection: "test-collection",
-					Field:      "key",
-					Group:      "aws",
-					MountPath:  "/tmp/secrets",
-				},
-				{
-					Collection: "test-collection",
-					Field:      "key",
-					Group:      "gcp",
-					MountPath:  "/tmp/secrets",
-				},
+				{Collection: "col-a", Group: "grp1", Field: "login", MountPath: "/tmp/secrets"},
+				{Collection: "col-b", Group: "grp2", Field: "password", MountPath: "/tmp/secrets"},
+			},
+		},
+		{
+			name: "same field name from different collections at same path collides",
+			credentials: []api.CredentialReference{
+				{Collection: "col-a", Group: "grp1", Field: "key", MountPath: "/tmp/secrets"},
+				{Collection: "col-b", Group: "grp2", Field: "key", MountPath: "/tmp/secrets"},
 			},
 			expectError: true,
 		},
 		{
-			name: "different collections with same groups",
+			name: "same field name from different groups in same collection collides",
 			credentials: []api.CredentialReference{
-				{
-					Collection: "test-collection",
-					Field:      "something",
-					Group:      "aws",
-					MountPath:  "/tmp/secrets",
-				},
-				{
-					Collection: "another-collection",
-					Field:      "key",
-					Group:      "aws",
-					MountPath:  "/tmp/secrets",
-				},
-			},
-		},
-		{
-			name: "multiple fields, one collision",
-			credentials: []api.CredentialReference{
-				{
-					Collection: "collection1",
-					Field:      "key",
-					Group:      "aws",
-					MountPath:  "/tmp/secrets",
-				},
-				{
-					Collection: "collection1",
-					Field:      "password",
-					Group:      "aws",
-					MountPath:  "/tmp/secrets",
-				},
-				{
-					Collection: "collection1",
-					Field:      "key",
-					Group:      "gcp",
-					MountPath:  "/tmp/secrets",
-				},
+				{Collection: "col", Group: "aws", Field: "key", MountPath: "/tmp/secrets"},
+				{Collection: "col", Group: "gcp", Field: "key", MountPath: "/tmp/secrets"},
 			},
 			expectError: true,
+		},
+		{
+			name: "`as` rename that collides with another field",
+			credentials: []api.CredentialReference{
+				{Collection: "col", Group: "grp", Field: "original", MountPath: "/tmp/secrets"},
+				{Collection: "col", Group: "grp", Field: "renamed", As: "original", MountPath: "/tmp/secrets"},
+			},
+			expectError: true,
+		},
+		{
+			name: "denormalized name collision via --dot--",
+			credentials: []api.CredentialReference{
+				{Collection: "col-a", Group: "grp", Field: "config--dot--yaml", MountPath: "/tmp/secrets"},
+				{Collection: "col-b", Group: "grp", Field: "config--dot--yaml", MountPath: "/tmp/secrets"},
+			},
+			expectError: true,
+		},
+		{
+			name: "multi-collection bundle with unique field names is ok",
+			credentials: []api.CredentialReference{
+				{Collection: "col-a", Group: "grp-x", Field: "login", MountPath: "/var/bundle"},
+				{Collection: "col-a", Group: "grp-x", Field: "pswd", MountPath: "/var/bundle"},
+				{Collection: "col-b", Group: "grp-y", Field: "token", MountPath: "/var/bundle"},
+			},
 		},
 	} {
 		t.Run(tc.name, func(t *testing.T) {
-			actualErr := ValidateNoGroupCollisionsOnMountPath(tc.credentials)
+			actualErr := ValidateNoFileCollisionsOnMountPath(tc.credentials)
 			if tc.expectError && actualErr == nil {
 				t.Fatal("expected error but got none")
 			}
-			if tc.expectError == false && actualErr != nil {
+			if !tc.expectError && actualErr != nil {
 				t.Fatalf("expected no error but got: %v", actualErr)
 			}
 		})

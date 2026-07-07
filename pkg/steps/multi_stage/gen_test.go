@@ -21,6 +21,7 @@ import (
 	prowdapi "sigs.k8s.io/prow/pkg/pod-utils/downwardapi"
 
 	"github.com/openshift/ci-tools/pkg/api"
+	"github.com/openshift/ci-tools/pkg/steps/csi_secrets"
 	"github.com/openshift/ci-tools/pkg/testhelper"
 )
 
@@ -574,20 +575,20 @@ func TestAddCSICredentials(t *testing.T) {
 						{
 							VolumeMounts: []coreapi.VolumeMount{
 								{
-									Name: getCSIVolumeName("pod-ns", []api.CredentialReference{{Collection: "ns", Group: "default", Field: "field1", MountPath: "/tmp"}}), MountPath: "/tmp",
+									Name: csi_secrets.GetCSIVolumeName("pod-ns", []api.CredentialReference{{Collection: "ns", Group: "default", Field: "field1", MountPath: "/tmp"}}), MountPath: "/tmp",
 								},
 							},
 						},
 					},
 					Volumes: []coreapi.Volume{
 						{
-							Name: getCSIVolumeName("pod-ns", []api.CredentialReference{{Collection: "ns", Group: "default", Field: "field1", MountPath: "/tmp"}}),
+							Name: csi_secrets.GetCSIVolumeName("pod-ns", []api.CredentialReference{{Collection: "ns", Group: "default", Field: "field1", MountPath: "/tmp"}}),
 							VolumeSource: coreapi.VolumeSource{
 								CSI: &coreapi.CSIVolumeSource{
 									Driver:   "secrets-store.csi.k8s.io",
 									ReadOnly: &readOnly,
 									VolumeAttributes: map[string]string{
-										"secretProviderClass": getSPCName("pod-ns", []api.CredentialReference{{Collection: "ns", Group: "default", Field: "field1", MountPath: "/tmp"}}),
+										"secretProviderClass": csi_secrets.GetSPCName("pod-ns", []api.CredentialReference{{Collection: "ns", Group: "default", Field: "field1", MountPath: "/tmp"}}),
 									},
 								},
 							},
@@ -619,33 +620,33 @@ func TestAddCSICredentials(t *testing.T) {
 						{
 							VolumeMounts: []coreapi.VolumeMount{
 								{
-									Name: getCSIVolumeName("pod-ns", []api.CredentialReference{{Collection: "ns", Group: "default", Field: "field1", MountPath: "/tmp"}}), MountPath: "/tmp"},
+									Name: csi_secrets.GetCSIVolumeName("pod-ns", []api.CredentialReference{{Collection: "ns", Group: "default", Field: "field1", MountPath: "/tmp"}}), MountPath: "/tmp"},
 								{
-									Name: getCSIVolumeName("pod-ns", []api.CredentialReference{{Collection: "other", Group: "default", Field: "field2", MountPath: "/tamp"}}), MountPath: "/tamp"},
+									Name: csi_secrets.GetCSIVolumeName("pod-ns", []api.CredentialReference{{Collection: "other", Group: "default", Field: "field2", MountPath: "/tamp"}}), MountPath: "/tamp"},
 							},
 						},
 					},
 					Volumes: []coreapi.Volume{
 						{
-							Name: getCSIVolumeName("pod-ns", []api.CredentialReference{{Collection: "ns", Group: "default", Field: "field1", MountPath: "/tmp"}}),
+							Name: csi_secrets.GetCSIVolumeName("pod-ns", []api.CredentialReference{{Collection: "ns", Group: "default", Field: "field1", MountPath: "/tmp"}}),
 							VolumeSource: coreapi.VolumeSource{
 								CSI: &coreapi.CSIVolumeSource{
 									Driver:   "secrets-store.csi.k8s.io",
 									ReadOnly: &readOnly,
 									VolumeAttributes: map[string]string{
-										"secretProviderClass": getSPCName("pod-ns", []api.CredentialReference{{Collection: "ns", Group: "default", Field: "field1", MountPath: "/tmp"}}),
+										"secretProviderClass": csi_secrets.GetSPCName("pod-ns", []api.CredentialReference{{Collection: "ns", Group: "default", Field: "field1", MountPath: "/tmp"}}),
 									},
 								},
 							},
 						},
 						{
-							Name: getCSIVolumeName("pod-ns", []api.CredentialReference{{Collection: "other", Group: "default", Field: "field2", MountPath: "/tamp"}}),
+							Name: csi_secrets.GetCSIVolumeName("pod-ns", []api.CredentialReference{{Collection: "other", Group: "default", Field: "field2", MountPath: "/tamp"}}),
 							VolumeSource: coreapi.VolumeSource{
 								CSI: &coreapi.CSIVolumeSource{
 									Driver:   "secrets-store.csi.k8s.io",
 									ReadOnly: &readOnly,
 									VolumeAttributes: map[string]string{
-										"secretProviderClass": getSPCName("pod-ns", []api.CredentialReference{{Collection: "other", Group: "default", Field: "field2", MountPath: "/tamp"}}),
+										"secretProviderClass": csi_secrets.GetSPCName("pod-ns", []api.CredentialReference{{Collection: "other", Group: "default", Field: "field2", MountPath: "/tamp"}}),
 									},
 								},
 							},
@@ -673,17 +674,17 @@ func TestAddCSICredentials(t *testing.T) {
 				},
 				Spec: coreapi.PodSpec{
 					Containers: []coreapi.Container{{VolumeMounts: []coreapi.VolumeMount{
-						{Name: getCSIVolumeName("pod-ns", []api.CredentialReference{{Collection: "test-ns", Group: "default", Field: "hive-hive-credentials", MountPath: "/tmp"}}), MountPath: "/tmp"},
+						{Name: csi_secrets.GetCSIVolumeName("pod-ns", []api.CredentialReference{{Collection: "test-ns", Group: "default", Field: "hive-hive-credentials", MountPath: "/tmp"}}), MountPath: "/tmp"},
 					}}},
 					Volumes: []coreapi.Volume{
 						{
-							Name: getCSIVolumeName("pod-ns", []api.CredentialReference{{Collection: "test-ns", Group: "default", Field: "hive-hive-credentials", MountPath: "/tmp"}}),
+							Name: csi_secrets.GetCSIVolumeName("pod-ns", []api.CredentialReference{{Collection: "test-ns", Group: "default", Field: "hive-hive-credentials", MountPath: "/tmp"}}),
 							VolumeSource: coreapi.VolumeSource{
 								CSI: &coreapi.CSIVolumeSource{
 									Driver:   "secrets-store.csi.k8s.io",
 									ReadOnly: &readOnly,
 									VolumeAttributes: map[string]string{
-										"secretProviderClass": getSPCName("pod-ns", []api.CredentialReference{{Collection: "test-ns", Group: "default", Field: "hive-hive-credentials", MountPath: "/tmp"}}),
+										"secretProviderClass": csi_secrets.GetSPCName("pod-ns", []api.CredentialReference{{Collection: "test-ns", Group: "default", Field: "hive-hive-credentials", MountPath: "/tmp"}}),
 									},
 								},
 							},

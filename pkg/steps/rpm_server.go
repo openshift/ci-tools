@@ -196,8 +196,23 @@ fi
 		deployment.OwnerReferences = append(deployment.OwnerReferences, *owner)
 	}
 
-	if err := s.client.Create(ctx, deployment); err != nil && !kerrors.IsAlreadyExists(err) {
-		return fmt.Errorf("could not create RPM repo server deployment: %w", err)
+	existingDeployment := &appsapi.Deployment{}
+	err := s.client.Get(ctx, ctrlruntimeclient.ObjectKey{
+		Namespace: s.jobSpec.Namespace(),
+		Name:      RPMRepoName,
+	}, existingDeployment)
+	if err != nil {
+		if existingDeployment.Spec.Template.Spec.Containers[0].Image != ist.Image.DockerImageReference {
+			if err := s.client.Update(ctx, deployment); err != nil {
+				return fmt.Errorf("could not update RPM repo server deployment: %w", err)
+			}
+		}
+	} else if kerrors.IsNotFound(err) {
+		if err := s.client.Create(ctx, deployment); err != nil {
+			return fmt.Errorf("could not create RPM repo server deployment: %w", err)
+		}
+	} else {
+		return fmt.Errorf("could not get RPM repo server deployment: %w", err)
 	}
 
 	service := &coreapi.Service{

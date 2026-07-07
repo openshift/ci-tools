@@ -152,6 +152,49 @@ func TestGeneratePods(t *testing.T) {
 			},
 		},
 		{
+			name: "service account token projection",
+			config: &api.ReleaseBuildConfiguration{
+				Tests: []api.TestStepConfiguration{{
+					As: "test",
+					MultiStageTestConfigurationLiteral: &api.MultiStageTestConfigurationLiteral{
+						Test: []api.LiteralTestStep{{
+							As:       "step0",
+							From:     "src",
+							Commands: "command0",
+							ServiceAccountTokens: []api.ServiceAccountTokenVolume{{
+								Audience:  "gcp-wif-audience",
+								MountPath: "/var/run/secrets/wif",
+							}, {
+								Audience:          "vault",
+								MountPath:         "/var/run/secrets/vault",
+								ExpirationSeconds: ptr.To(int64(7200)),
+							}},
+						}},
+					},
+				}},
+			},
+		},
+		{
+			name: "service account token projection with no_kubeconfig",
+			config: &api.ReleaseBuildConfiguration{
+				Tests: []api.TestStepConfiguration{{
+					As: "test",
+					MultiStageTestConfigurationLiteral: &api.MultiStageTestConfigurationLiteral{
+						Test: []api.LiteralTestStep{{
+							As:           "step0",
+							From:         "src",
+							Commands:     "command0",
+							NoKubeconfig: ptr.To(true),
+							ServiceAccountTokens: []api.ServiceAccountTokenVolume{{
+								Audience:  "gcp-wif-audience",
+								MountPath: "/var/run/secrets/wif",
+							}},
+						}},
+					},
+				}},
+			},
+		},
+		{
 			name: "lease proxy server available",
 			config: &api.ReleaseBuildConfiguration{
 				Tests: []api.TestStepConfiguration{{

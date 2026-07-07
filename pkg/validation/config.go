@@ -17,6 +17,7 @@ import (
 type Validator struct {
 	validClusterProfiles    api.ClusterProfilesMap
 	validClusterClaimOwners api.ClusterClaimOwnersMap
+	allowedAudiences        api.AllowedAudiencesMap
 	// hasTrapCache avoids redundant regexp searches on step commands.
 	hasTrapCache map[string]bool
 	cpsDetails   api.ClusterProfileSetDetails
@@ -26,6 +27,10 @@ type ValidatorOption func(*Validator)
 
 func WithClusterProfileSetDetails(cpsDetails api.ClusterProfileSetDetails) func(*Validator) {
 	return func(v *Validator) { v.cpsDetails = cpsDetails }
+}
+
+func WithAllowedAudiences(audiences api.AllowedAudiencesMap) func(*Validator) {
+	return func(v *Validator) { v.allowedAudiences = audiences }
 }
 
 // NewValidator creates an object that optimizes bulk validations.
@@ -693,6 +698,6 @@ func Observer(observer api.Observer) []error {
 	// this observer in the future. This technically disallows users from using `from:`
 	// to refer to an image from a release payload for an observer, but this should be
 	// not of any real issue and will at least be obvious to the user on presubmit.
-	errs = append(errs, validateFromAndFromImage(newContext("", nil, nil, nil), observer.From, observer.FromImage, nil, nil)...)
+	errs = append(errs, validateFromAndFromImage(newContext("", nil, nil, nil, nil), observer.From, observer.FromImage, nil, nil)...)
 	return errs
 }

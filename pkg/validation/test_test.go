@@ -1350,6 +1350,63 @@ func TestValidateTestSteps(t *testing.T) {
 			errors.New("test best-effort contains best_effort without timeout"),
 		},
 	}, {
+		name: "SA token mount path collides with credential mount path",
+		steps: []api.TestStep{{
+			LiteralTestStep: &api.LiteralTestStep{
+				As:        "as",
+				From:      "from",
+				Commands:  "commands",
+				Resources: resources,
+				Credentials: []api.CredentialReference{{
+					Namespace: "ns", Name: "cred", MountPath: "/var/run/secrets/creds",
+				}},
+				ServiceAccountTokens: []api.ServiceAccountTokenVolume{{
+					Audience: "aud", MountPath: "/var/run/secrets/creds",
+				}},
+			},
+		}},
+		errs: []error{
+			errors.New(`test[0].service_account_tokens[0].mount_path: collides with credentials[0] mount path "/var/run/secrets/creds"`),
+		},
+	}, {
+		name: "SA token mount path under credential mount path",
+		steps: []api.TestStep{{
+			LiteralTestStep: &api.LiteralTestStep{
+				As:        "as",
+				From:      "from",
+				Commands:  "commands",
+				Resources: resources,
+				Credentials: []api.CredentialReference{{
+					Namespace: "ns", Name: "cred", MountPath: "/var/run/secrets",
+				}},
+				ServiceAccountTokens: []api.ServiceAccountTokenVolume{{
+					Audience: "aud", MountPath: "/var/run/secrets/wif",
+				}},
+			},
+		}},
+		errs: []error{
+			errors.New("test[0].service_account_tokens[0].mount_path: /var/run/secrets/wif is under credentials[0] mount path /var/run/secrets"),
+		},
+	}, {
+		name: "credential mount path under SA token mount path",
+		steps: []api.TestStep{{
+			LiteralTestStep: &api.LiteralTestStep{
+				As:        "as",
+				From:      "from",
+				Commands:  "commands",
+				Resources: resources,
+				Credentials: []api.CredentialReference{{
+					Namespace: "ns", Name: "cred", MountPath: "/var/run/secrets/wif/nested",
+				}},
+				ServiceAccountTokens: []api.ServiceAccountTokenVolume{{
+					Audience: "aud", MountPath: "/var/run/secrets/wif",
+				}},
+			},
+		}},
+		errs: []error{
+			errors.New("test[0].service_account_tokens[0].mount_path: credentials[0] mount path /var/run/secrets/wif/nested is under /var/run/secrets/wif"),
+		},
+	}, {
 		name: "cluster claim release",
 		steps: []api.TestStep{{
 			LiteralTestStep: &api.LiteralTestStep{
@@ -1361,7 +1418,7 @@ func TestValidateTestSteps(t *testing.T) {
 		clusterClaim: api.ClaimRelease{ReleaseName: "myclaim-as", OverrideName: "myclaim"},
 	}} {
 		t.Run(tc.name, func(t *testing.T) {
-			context := newContext("test", nil, tc.releases, make(testInputImages))
+			context := newContext("test", nil, tc.releases, make(testInputImages), nil)
 			if tc.seen != nil {
 				context.namesSeen = tc.seen
 			}
@@ -1402,7 +1459,7 @@ func TestValidatePostSteps(t *testing.T) {
 		}},
 	}} {
 		t.Run(tc.name, func(t *testing.T) {
-			context := newContext("test", nil, tc.releases, make(testInputImages))
+			context := newContext("test", nil, tc.releases, make(testInputImages), nil)
 			if tc.seen != nil {
 				context.namesSeen = tc.seen
 			}
@@ -1440,7 +1497,7 @@ func TestValidateParameters(t *testing.T) {
 	}} {
 		t.Run(tc.name, func(t *testing.T) {
 			v := NewValidator(nil, nil)
-			err := v.validateLiteralTestStep(newContext("test", tc.env, tc.releases, make(testInputImages)), testStageTest, api.LiteralTestStep{
+			err := v.validateLiteralTestStep(newContext("test", tc.env, tc.releases, make(testInputImages), nil), testStageTest, api.LiteralTestStep{
 				As:       "as",
 				From:     "from",
 				Commands: "commands",
@@ -2784,6 +2841,108 @@ func TestValidateClusterProfiles(t *testing.T) {
 
 			if diff := cmp.Diff(wantErrMsg, gotErrMsg); diff != "" {
 				t.Errorf("unexpected errors: %s", diff)
+			}
+		})
+	}
+}
+
+func TestVerifyAudienceOwnership(t *testing.T) {
+	for _, tc := range []struct {
+		name     string
+		audience api.AllowedAudienceDetails
+		metadata *api.Metadata
+		expected error
+	}{
+		{
+			name: "nil metadata is allowed",
+			audience: api.AllowedAudienceDetails{
+				Audience: "my-audience",
+				Owners:   []api.AllowedAudienceOwners{{Org: "org"}},
+			},
+		},
+		{
+			name: "empty org metadata is allowed",
+			audience: api.AllowedAudienceDetails{
+				Audience: "my-audience",
+				Owners:   []api.AllowedAudienceOwners{{Org: "org"}},
+			},
+			metadata: &api.Metadata{},
+		},
+		{
+			name: "no owners means unrestricted",
+			audience: api.AllowedAudienceDetails{
+				Audience: "my-audience",
+			},
+			metadata: &api.Metadata{Org: "any-org", Repo: "any-repo"},
+		},
+		{
+			name: "matching org with nil repos (wildcard) is allowed",
+			audience: api.AllowedAudienceDetails{
+				Audience: "my-audience",
+				Owners:   []api.AllowedAudienceOwners{{Org: "my-org"}},
+			},
+			metadata: &api.Metadata{Org: "my-org", Repo: "any-repo"},
+		},
+		{
+			name: "matching org and repo is allowed",
+			audience: api.AllowedAudienceDetails{
+				Audience: "my-audience",
+				Owners: []api.AllowedAudienceOwners{{
+					Org:   "my-org",
+					Repos: []string{"my-repo", "other-repo"},
+				}},
+			},
+			metadata: &api.Metadata{Org: "my-org", Repo: "my-repo"},
+		},
+		{
+			name: "matching org but wrong repo is rejected",
+			audience: api.AllowedAudienceDetails{
+				Audience: "my-audience",
+				Owners: []api.AllowedAudienceOwners{{
+					Org:   "my-org",
+					Repos: []string{"allowed-repo"},
+				}},
+			},
+			metadata: &api.Metadata{Org: "my-org", Repo: "other-repo"},
+			expected: fmt.Errorf("my-org/other-repo is not allowed to use service account token audience \"my-audience\""),
+		},
+		{
+			name: "wrong org is rejected",
+			audience: api.AllowedAudienceDetails{
+				Audience: "my-audience",
+				Owners:   []api.AllowedAudienceOwners{{Org: "my-org"}},
+			},
+			metadata: &api.Metadata{Org: "other-org", Repo: "my-repo"},
+			expected: fmt.Errorf("other-org/my-repo is not allowed to use service account token audience \"my-audience\""),
+		},
+		{
+			name: "multiple owners, second matches",
+			audience: api.AllowedAudienceDetails{
+				Audience: "my-audience",
+				Owners: []api.AllowedAudienceOwners{
+					{Org: "org-a", Repos: []string{"repo-a"}},
+					{Org: "org-b"},
+				},
+			},
+			metadata: &api.Metadata{Org: "org-b", Repo: "any-repo"},
+		},
+		{
+			name: "multiple owners, none match",
+			audience: api.AllowedAudienceDetails{
+				Audience: "restricted",
+				Owners: []api.AllowedAudienceOwners{
+					{Org: "org-a"},
+					{Org: "org-b", Repos: []string{"specific-repo"}},
+				},
+			},
+			metadata: &api.Metadata{Org: "org-c", Repo: "any-repo"},
+			expected: fmt.Errorf("org-c/any-repo is not allowed to use service account token audience \"restricted\""),
+		},
+	} {
+		t.Run(tc.name, func(t *testing.T) {
+			actual := verifyAudienceOwnership(tc.audience, tc.metadata)
+			if diff := cmp.Diff(tc.expected, actual, testhelper.EquateErrorMessage); diff != "" {
+				t.Errorf("expected differs from actual: %s\n", diff)
 			}
 		})
 	}

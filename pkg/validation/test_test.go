@@ -592,7 +592,7 @@ func TestValidateTests(t *testing.T) {
 			expectedError: errors.New(`tests[0].secrets[1]: duplicate bundle reference "my-bundle"`),
 		},
 		{
-			id: "invalid duplicate collection group secrets",
+			id: "same collection/group at different paths is valid",
 			tests: []api.TestStepConfiguration{
 				{
 					As:                         "unit",
@@ -604,7 +604,6 @@ func TestValidateTests(t *testing.T) {
 					},
 				},
 			},
-			expectedError: errors.New("tests[0].secrets[1]: duplicate collection/group reference col/grp"),
 		},
 		{
 			id:       "non-literal test is invalid in fully-resolved configuration",

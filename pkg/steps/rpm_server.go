@@ -196,8 +196,8 @@ fi
 		deployment.OwnerReferences = append(deployment.OwnerReferences, *owner)
 	}
 
-	if err := s.client.Create(ctx, deployment); err != nil && !kerrors.IsAlreadyExists(err) {
-		return fmt.Errorf("could not create RPM repo server deployment: %w", err)
+	if err := s.ensureRPMRepoDeployment(ctx, deployment, ist.Image.DockerImageReference); err != nil {
+		return err
 	}
 
 	service := &coreapi.Service{
@@ -240,6 +240,29 @@ fi
 		return fmt.Errorf("could not wait for RPM repo server to deploy: %w", err)
 	}
 	return waitForRouteReachable(ctx, s.client, s.jobSpec.Namespace(), route.Name, "http")
+}
+
+func (s *rpmServerStep) ensureRPMRepoDeployment(ctx context.Context, deployment *appsapi.Deployment, desiredImage string) error {
+	existing := &appsapi.Deployment{}
+	key := ctrlruntimeclient.ObjectKey{Namespace: deployment.Namespace, Name: deployment.Name}
+	if err := s.client.Get(ctx, key, existing); err != nil {
+		if kerrors.IsNotFound(err) {
+			if err := s.client.Create(ctx, deployment); err != nil {
+				return fmt.Errorf("could not create RPM repo server deployment: %w", err)
+			}
+			return nil
+		}
+		return fmt.Errorf("could not get RPM repo server deployment: %w", err)
+	}
+
+	if existing.Spec.Template.Spec.Containers[0].Image == desiredImage {
+		return nil
+	}
+	existing.Spec.Template.Spec.Containers[0].Image = desiredImage
+	if err := s.client.Update(ctx, existing); err != nil {
+		return fmt.Errorf("could not update RPM repo server deployment: %w", err)
+	}
+	return nil
 }
 
 func waitForDeployment(ctx context.Context, client ctrlruntimeclient.Client, name string) error {

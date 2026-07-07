@@ -1,11 +1,15 @@
 package steps
 
 import (
+	"context"
 	"testing"
 
+	appsapi "k8s.io/api/apps/v1"
 	corev1 "k8s.io/api/core/v1"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/client-go/kubernetes/scheme"
+	"k8s.io/utils/ptr"
+	ctrlruntimeclient "sigs.k8s.io/controller-runtime/pkg/client"
 	fakectrlruntimeclient "sigs.k8s.io/controller-runtime/pkg/client/fake"
 	prowapi "sigs.k8s.io/prow/pkg/apis/prowjobs/v1"
 	"sigs.k8s.io/prow/pkg/pod-utils/downwardapi"
@@ -17,6 +21,233 @@ import (
 	"github.com/openshift/ci-tools/pkg/testhelper"
 	"github.com/openshift/ci-tools/pkg/util"
 )
+
+func TestEnsureRPMRepoDeployment(t *testing.T) {
+	testCases := []struct {
+		name       string
+		existing   *appsapi.Deployment
+		deployment *appsapi.Deployment
+		want       *appsapi.Deployment
+	}{
+		{
+			name: "creates when missing",
+			deployment: &appsapi.Deployment{
+				ObjectMeta: metav1.ObjectMeta{
+					Namespace: "ns",
+					Name:      RPMRepoName,
+				},
+				Spec: appsapi.DeploymentSpec{
+					Replicas: ptr.To(int32(1)),
+					Selector: &metav1.LabelSelector{
+						MatchLabels: map[string]string{AppLabel: RPMRepoName},
+					},
+					Template: corev1.PodTemplateSpec{
+						ObjectMeta: metav1.ObjectMeta{
+							Labels: map[string]string{AppLabel: RPMRepoName},
+						},
+						Spec: corev1.PodSpec{
+							Containers: []corev1.Container{{
+								Name:  RPMRepoName,
+								Image: "registry/ci-op-ns/pipeline@sha256:new",
+							}},
+						},
+					},
+				},
+			},
+			want: &appsapi.Deployment{
+				ObjectMeta: metav1.ObjectMeta{
+					Namespace: "ns",
+					Name:      RPMRepoName,
+				},
+				Spec: appsapi.DeploymentSpec{
+					Replicas: ptr.To(int32(1)),
+					Selector: &metav1.LabelSelector{
+						MatchLabels: map[string]string{AppLabel: RPMRepoName},
+					},
+					Template: corev1.PodTemplateSpec{
+						ObjectMeta: metav1.ObjectMeta{
+							Labels: map[string]string{AppLabel: RPMRepoName},
+						},
+						Spec: corev1.PodSpec{
+							Containers: []corev1.Container{{
+								Name:  RPMRepoName,
+								Image: "registry/ci-op-ns/pipeline@sha256:new",
+							}},
+						},
+					},
+				},
+			},
+		},
+		{
+			name: "unchanged when same image",
+			existing: &appsapi.Deployment{
+				ObjectMeta: metav1.ObjectMeta{
+					Namespace: "ns",
+					Name:      RPMRepoName,
+				},
+				Spec: appsapi.DeploymentSpec{
+					Replicas: ptr.To(int32(1)),
+					Selector: &metav1.LabelSelector{
+						MatchLabels: map[string]string{AppLabel: RPMRepoName},
+					},
+					Template: corev1.PodTemplateSpec{
+						ObjectMeta: metav1.ObjectMeta{
+							Labels: map[string]string{AppLabel: RPMRepoName},
+						},
+						Spec: corev1.PodSpec{
+							Containers: []corev1.Container{{
+								Name:  RPMRepoName,
+								Image: "registry/ci-op-ns/pipeline@sha256:new",
+							}},
+						},
+					},
+				},
+			},
+			deployment: &appsapi.Deployment{
+				ObjectMeta: metav1.ObjectMeta{
+					Namespace: "ns",
+					Name:      RPMRepoName,
+				},
+				Spec: appsapi.DeploymentSpec{
+					Replicas: ptr.To(int32(1)),
+					Selector: &metav1.LabelSelector{
+						MatchLabels: map[string]string{AppLabel: RPMRepoName},
+					},
+					Template: corev1.PodTemplateSpec{
+						ObjectMeta: metav1.ObjectMeta{
+							Labels: map[string]string{AppLabel: RPMRepoName},
+						},
+						Spec: corev1.PodSpec{
+							Containers: []corev1.Container{{
+								Name:  RPMRepoName,
+								Image: "registry/ci-op-ns/pipeline@sha256:new",
+							}},
+						},
+					},
+				},
+			},
+			want: &appsapi.Deployment{
+				ObjectMeta: metav1.ObjectMeta{
+					Namespace: "ns",
+					Name:      RPMRepoName,
+				},
+				Spec: appsapi.DeploymentSpec{
+					Replicas: ptr.To(int32(1)),
+					Selector: &metav1.LabelSelector{
+						MatchLabels: map[string]string{AppLabel: RPMRepoName},
+					},
+					Template: corev1.PodTemplateSpec{
+						ObjectMeta: metav1.ObjectMeta{
+							Labels: map[string]string{AppLabel: RPMRepoName},
+						},
+						Spec: corev1.PodSpec{
+							Containers: []corev1.Container{{
+								Name:  RPMRepoName,
+								Image: "registry/ci-op-ns/pipeline@sha256:new",
+							}},
+						},
+					},
+				},
+			},
+		},
+		{
+			name: "updates when image differs",
+			existing: &appsapi.Deployment{
+				ObjectMeta: metav1.ObjectMeta{
+					Namespace: "ns",
+					Name:      RPMRepoName,
+				},
+				Spec: appsapi.DeploymentSpec{
+					Replicas: ptr.To(int32(1)),
+					Selector: &metav1.LabelSelector{
+						MatchLabels: map[string]string{AppLabel: RPMRepoName},
+					},
+					Template: corev1.PodTemplateSpec{
+						ObjectMeta: metav1.ObjectMeta{
+							Labels: map[string]string{AppLabel: RPMRepoName},
+						},
+						Spec: corev1.PodSpec{
+							Containers: []corev1.Container{{
+								Name:  RPMRepoName,
+								Image: "registry/ci-op-ns/pipeline@sha256:old",
+							}},
+						},
+					},
+				},
+			},
+			deployment: &appsapi.Deployment{
+				ObjectMeta: metav1.ObjectMeta{
+					Namespace: "ns",
+					Name:      RPMRepoName,
+				},
+				Spec: appsapi.DeploymentSpec{
+					Replicas: ptr.To(int32(1)),
+					Selector: &metav1.LabelSelector{
+						MatchLabels: map[string]string{AppLabel: RPMRepoName},
+					},
+					Template: corev1.PodTemplateSpec{
+						ObjectMeta: metav1.ObjectMeta{
+							Labels: map[string]string{AppLabel: RPMRepoName},
+						},
+						Spec: corev1.PodSpec{
+							Containers: []corev1.Container{{
+								Name:  RPMRepoName,
+								Image: "registry/ci-op-ns/pipeline@sha256:new",
+							}},
+						},
+					},
+				},
+			},
+			want: &appsapi.Deployment{
+				ObjectMeta: metav1.ObjectMeta{
+					Namespace: "ns",
+					Name:      RPMRepoName,
+				},
+				Spec: appsapi.DeploymentSpec{
+					Replicas: ptr.To(int32(1)),
+					Selector: &metav1.LabelSelector{
+						MatchLabels: map[string]string{AppLabel: RPMRepoName},
+					},
+					Template: corev1.PodTemplateSpec{
+						ObjectMeta: metav1.ObjectMeta{
+							Labels: map[string]string{AppLabel: RPMRepoName},
+						},
+						Spec: corev1.PodSpec{
+							Containers: []corev1.Container{{
+								Name:  RPMRepoName,
+								Image: "registry/ci-op-ns/pipeline@sha256:new",
+							}},
+						},
+					},
+				},
+			},
+		},
+	}
+
+	for _, tc := range testCases {
+		t.Run(tc.name, func(t *testing.T) {
+			builder := fakectrlruntimeclient.NewClientBuilder()
+			if tc.existing != nil {
+				builder = builder.WithRuntimeObjects(tc.existing)
+			}
+			client := loggingclient.New(builder.Build(), nil)
+			jobSpec := &api.JobSpec{}
+			jobSpec.SetNamespace("ns")
+			step := &rpmServerStep{client: client, jobSpec: jobSpec}
+
+			desiredImage := tc.deployment.Spec.Template.Spec.Containers[0].Image
+			if err := step.ensureRPMRepoDeployment(context.Background(), tc.deployment, desiredImage); err != nil {
+				t.Fatalf("ensureRPMRepoDeployment() error = %v", err)
+			}
+
+			got := &appsapi.Deployment{}
+			if err := client.Get(context.Background(), ctrlruntimeclient.ObjectKey{Namespace: "ns", Name: RPMRepoName}, got); err != nil {
+				t.Fatalf("Get() error = %v", err)
+			}
+			testhelper.Diff(t, "deployment", got, tc.want, testhelper.RuntimeObjectIgnoreRvTypeMeta)
+		})
+	}
+}
 
 func TestRPMServerStepProvides(t *testing.T) {
 	ns := "ns"

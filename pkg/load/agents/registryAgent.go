@@ -145,7 +145,7 @@ func (a *registryAgent) GetClusterProfiles() api.ClusterProfiles {
 	return a.clusterProfiles
 }
 
-// GetClusterProfileDetails returns a struct with all details for a cluster profile
+// ResolveClusterProfile returns a struct with all details for a cluster profile
 func (a *registryAgent) ResolveClusterProfile(profileName string) (api.ClusterProfile, error) {
 	clusterProfiles := a.GetClusterProfiles()
 	profile, found := clusterProfiles.Get(profileName)

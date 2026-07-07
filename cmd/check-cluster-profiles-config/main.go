@@ -181,16 +181,16 @@ func (validator *profileValidator) checkCISecrets() error {
 			continue
 		}
 
-		profileDetails, err := server.NewResolverClient(configResolverAddress).ClusterProfile(profile.Name)
+		clusterProfile, err := server.NewResolverClient(configResolverAddress).ClusterProfile(profile.Name)
 		if err != nil {
 			errs = append(errs, fmt.Errorf("failed to retrieve details from config resolver for '%s' cluster profile: %w", profile.Name, err))
 			continue
 		}
 
 		ciSecret := &coreapi.Secret{}
-		err = validator.kubeClient.Get(context.Background(), ctrlruntimeclient.ObjectKey{Namespace: "ci", Name: profileDetails.Secret}, ciSecret)
+		err = validator.kubeClient.Get(context.Background(), ctrlruntimeclient.ObjectKey{Namespace: "ci", Name: clusterProfile.Secret}, ciSecret)
 		if err != nil {
-			errs = append(errs, fmt.Errorf("failed to get secret '%s' for cluster profile '%s': %w", profileDetails.Secret, profile.Name, err))
+			errs = append(errs, fmt.Errorf("failed to get secret '%s' for cluster profile '%s': %w", clusterProfile.Secret, profile.Name, err))
 		}
 	}
 

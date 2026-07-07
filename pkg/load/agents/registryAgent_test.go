@@ -10,7 +10,7 @@ import (
 	"github.com/openshift/ci-tools/pkg/testhelper"
 )
 
-func TestGetClusterProfileDetails(t *testing.T) {
+func TestGetClusterProfile(t *testing.T) {
 	agent := &registryAgent{
 		clusterProfiles: api.ClusterProfiles{
 			Items: []api.ClusterProfile{{

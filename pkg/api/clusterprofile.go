@@ -11,7 +11,7 @@ import (
 )
 
 func ClusterProfileFromParams(params Parameters) (*ClusterProfile, error) {
-	return GetParamTyped[*ClusterProfile](params, ClusterProfileDetailsParam)
+	return GetParamTyped[*ClusterProfile](params, ClusterProfileParam)
 }
 
 type ClusterProfileKonfluxConfig struct {

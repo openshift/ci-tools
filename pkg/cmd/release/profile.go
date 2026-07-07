@@ -28,19 +28,19 @@ func newProfileCommand(o *options) *cobra.Command {
 
 func cmdProfileList(o *options, args []string) error {
 	profilesConfigPath := path.Join(o.rootPath, clusterProfilesConfig)
-	clusterProfiles, err := load.ClusterProfilesMap(profilesConfigPath)
+	clusterProfiles, err := load.ClusterProfiles(profilesConfigPath)
 	if err != nil {
 		return fmt.Errorf("read cluster profiles %s: %w", clusterProfilesConfig, err)
 	}
 
 	profiles := make([]api.ClusterProfile, 0)
 	if len(args) == 0 {
-		for _, p := range clusterProfiles {
+		for _, p := range clusterProfiles.Items {
 			profiles = append(profiles, p)
 		}
 	} else {
 		for _, arg := range args {
-			if p, ok := clusterProfiles[arg]; !ok {
+			if p, ok := clusterProfiles.Get(arg); !ok {
 				return fmt.Errorf("invalid cluster profile: %s", arg)
 			} else {
 				profiles = append(profiles, p)

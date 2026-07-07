@@ -252,13 +252,13 @@ func (s *multiStageTestStep) Run(ctx context.Context) error {
 func (s *multiStageTestStep) run(ctx context.Context) error {
 	logrus.Infof("Running multi-stage test %s", s.name)
 
-	clusterProfileDetails, err := api.ClusterProfileFromParams(s.params)
+	clusterProfile, err := api.ClusterProfileFromParams(s.params)
 	if err != nil {
 		if !errors.Is(err, &api.ErrParamNotFound{}) {
 			return fmt.Errorf("get cluster profile from parameters: %w", err)
 		}
-	} else if clusterProfileDetails != nil {
-		s.profile = api.FromClusterProfile(clusterProfileDetails)
+	} else if clusterProfile != nil {
+		s.profile = api.FromClusterProfile(clusterProfile)
 	}
 
 	if err := s.retrieveSTSRoleARNParams(); err != nil {

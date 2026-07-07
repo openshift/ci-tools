@@ -514,7 +514,7 @@ func ResolveClusterProfile(agent agents.RegistryAgent, resolverMetrics *metrics.
 			logrus.WithError(err).Warning("failed to read query from request")
 			return
 		}
-		profileDetails, err := agent.ResolveClusterProfile(profileNameFromQuery)
+		clusterProfile, err := agent.ResolveClusterProfile(profileNameFromQuery)
 		if err != nil {
 			metrics.RecordError("cluster profile not found", resolverMetrics.ErrorRate)
 			w.WriteHeader(http.StatusNotFound)
@@ -522,7 +522,7 @@ func ResolveClusterProfile(agent agents.RegistryAgent, resolverMetrics *metrics.
 			logrus.WithError(err).Warning(fmt.Sprintf("cluster profile %s not found", profileNameFromQuery))
 			return
 		}
-		jsonContent, err := json.MarshalIndent(profileDetails, "", "  ")
+		jsonContent, err := json.MarshalIndent(clusterProfile, "", "  ")
 		if err != nil {
 			metrics.RecordError("failed to marshal cluster profile to JSON", resolverMetrics.ErrorRate)
 			w.WriteHeader(http.StatusInternalServerError)

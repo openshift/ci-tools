@@ -94,7 +94,7 @@ func (s *leaseStep) Provides() api.ParameterMap {
 	// nolint:unparam
 	parameters[api.ClusterProfileSetEnv] = func() (any, error) { return s.clusterProfileSetName, nil }
 	// nolint:unparam
-	parameters[api.ClusterProfileDetailsParam] = func() (any, error) { return s.clusterProfile, nil }
+	parameters[api.ClusterProfileParam] = func() (any, error) { return s.clusterProfile, nil }
 	// nolint:unparam
 	parameters[api.STSHomeRoleARNParam] = func() (any, error) { return s.stsHomeRoleARN, nil }
 	// nolint:unparam

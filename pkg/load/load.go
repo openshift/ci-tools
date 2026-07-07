@@ -40,13 +40,13 @@ const (
 
 // Registry takes the path to a registry config directory and returns the full set of references, chains,
 // and workflows that the registry's Resolver needs to resolve a user's MultiStageTestConfiguration
-func Registry(root string, flags RegistryFlag) (registry.ReferenceByName, registry.ChainByName, registry.WorkflowByName, api.ClusterProfilesMap, map[string]string, api.RegistryMetadata, registry.ObserverByName, error) {
+func Registry(root string, flags RegistryFlag) (registry.ReferenceByName, registry.ChainByName, registry.WorkflowByName, api.ClusterProfiles, map[string]string, api.RegistryMetadata, registry.ObserverByName, error) {
 	flat := flags&RegistryFlat != 0
 	references := registry.ReferenceByName{}
 	chains := registry.ChainByName{}
 	workflows := registry.WorkflowByName{}
 	observers := registry.ObserverByName{}
-	var profiles api.ClusterProfilesMap
+	var profiles api.ClusterProfiles
 	var clusterProfilesConfigPath string
 	var documentation map[string]string
 	var metadata api.RegistryMetadata
@@ -191,19 +191,19 @@ func Registry(root string, flags RegistryFlag) (registry.ReferenceByName, regist
 		return nil
 	})
 	if err != nil {
-		return nil, nil, nil, nil, nil, nil, nil, err
+		return nil, nil, nil, api.ClusterProfiles{}, nil, nil, nil, err
 	}
 	// create graph to verify that there are no cycles
 	if _, err = registry.NewGraph(references, chains, workflows, observers); err != nil {
-		return nil, nil, nil, nil, nil, nil, nil, err
+		return nil, nil, nil, api.ClusterProfiles{}, nil, nil, nil, err
 	}
-	profiles, err = ClusterProfilesMap(clusterProfilesConfigPath)
+	profiles, err = ClusterProfiles(clusterProfilesConfigPath)
 	if err != nil {
-		return nil, nil, nil, nil, nil, nil, nil, err
+		return nil, nil, nil, api.ClusterProfiles{}, nil, nil, nil, err
 	}
 	err = registry.Validate(references, chains, workflows, observers, profiles)
 	if err != nil {
-		return nil, nil, nil, nil, nil, nil, nil, err
+		return nil, nil, nil, api.ClusterProfiles{}, nil, nil, nil, err
 	}
 	// validate the integrity of each reference
 	v := validation.NewValidator(nil, nil)
@@ -214,7 +214,7 @@ func Registry(root string, flags RegistryFlag) (registry.ReferenceByName, regist
 		}
 	}
 	if len(validationErrors) > 0 {
-		return nil, nil, nil, nil, nil, nil, nil, utilerrors.NewAggregate(validationErrors)
+		return nil, nil, nil, api.ClusterProfiles{}, nil, nil, nil, utilerrors.NewAggregate(validationErrors)
 	}
 	return references, chains, workflows, profiles, documentation, metadata, observers, nil
 }
@@ -265,36 +265,6 @@ func ClusterProfiles(clusterProfilesPath string) (api.ClusterProfiles, error) {
 	}
 
 	return profiles, nil
-}
-
-// ClusterProfilesMap loads cluster profile information from its config in the release repository
-func ClusterProfilesMap(clusterProfilesPath string) (api.ClusterProfilesMap, error) {
-	profilesFromConfig, err := ClusterProfiles(clusterProfilesPath)
-	if err != nil {
-		return nil, fmt.Errorf("load cluster profile list: %w", err)
-	}
-
-	profilesFromConfigMap := make(api.ClusterProfilesMap)
-	for _, p := range profilesFromConfig.Items {
-		profilesFromConfigMap[p.Name] = p
-	}
-
-	return profilesFromConfigMap, nil
-}
-
-func ClusterProfileSetDetails(path string) (api.ClusterProfileSetDetails, error) {
-	cpsd := api.ClusterProfileSetDetails{}
-
-	cpsDetailsBytes, err := os.ReadFile(path)
-	if err != nil {
-		return cpsd, fmt.Errorf("read file %s: %w", path, err)
-	}
-
-	if err := json.Unmarshal(cpsDetailsBytes, &cpsd); err != nil {
-		return cpsd, fmt.Errorf("unmarshal file %s: %w", path, err)
-	}
-
-	return cpsd, nil
 }
 
 // ClusterClaimOwnersConfig loads cluster claim owners information from its config in the release repository

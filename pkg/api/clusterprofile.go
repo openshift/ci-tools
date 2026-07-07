@@ -11,7 +11,7 @@ import (
 )
 
 func ClusterProfileFromParams(params Parameters) (*ClusterProfile, error) {
-	return GetParamTyped[*ClusterProfile](params, ClusterProfileDetailsParam)
+	return GetParamTyped[*ClusterProfile](params, ClusterProfileParam)
 }
 
 type ClusterProfileKonfluxConfig struct {
@@ -23,6 +23,26 @@ type ClusterProfiles struct {
 	Items                    []ClusterProfile             `yaml:"cluster_profiles,omitempty" json:"cluster_profiles,omitempty"`
 	KonfluxConfig            *ClusterProfileKonfluxConfig `yaml:"konflux,omitempty" json:"konflux,omitempty"`
 	ClusterProfileSetsConfig *ClusterProfileSetsConfig    `yaml:"cluster_profile_sets_config,omitempty" json:"cluster_profile_sets_config,omitempty"`
+}
+
+func (cp *ClusterProfiles) Get(name string) (ClusterProfile, bool) {
+	for i := range cp.Items {
+		p := &cp.Items[i]
+		if p.Name == name {
+			return *p, true
+		}
+	}
+	return ClusterProfile{}, false
+}
+
+func (cp *ClusterProfiles) FindSetByProfile(name string) (ClusterProfile, bool) {
+	for i := range cp.Items {
+		p := &cp.Items[i]
+		if p.IsASet() && slices.Contains(p.SetMembers, name) {
+			return *p, true
+		}
+	}
+	return ClusterProfile{}, false
 }
 
 func (cp *ClusterProfiles) Resolve() error {
@@ -66,8 +86,6 @@ func (cp *ClusterProfiles) Resolve() error {
 	return aggerrs.NewAggregate(errs)
 }
 
-type ClusterProfilesMap map[string]ClusterProfile
-
 type ClusterProfile struct {
 	Name            string                 `yaml:"name,omitempty" json:"name,omitempty"`
 	Owners          []ClusterProfileOwners `yaml:"owners,omitempty" json:"owners,omitempty"`
@@ -77,6 +95,10 @@ type ClusterProfile struct {
 	Secret          string                 `yaml:"secret,omitempty" json:"secret,omitempty"`
 	ConfigMap       string                 `yaml:"config_map,omitempty" json:"config_map,omitempty"`
 	SetMembers      []string               `yaml:"set_members,omitempty" json:"set_members,omitempty"`
+}
+
+func (cp *ClusterProfile) IsASet() bool {
+	return len(cp.SetMembers) > 0
 }
 
 type ClusterProfileKonfluxOwner struct {
@@ -102,32 +124,12 @@ type ClusterProfileSetsConfig struct {
 	TestsExceptions map[utilregexp.Regexp]map[utilregexp.Regexp]map[utilregexp.Regexp][]utilregexp.Regexp `json:"tests_exceptions,omitempty"`
 }
 
-// +kubebuilder:object:generate=false
-type ClusterProfileSetDetails struct {
-	ClusterProfileSets map[string][]string `json:"cluster_profile_sets,omitempty"`
-
-	// TestsAllowlist holds a list of tests for which we do not enfoce policy
-	// regarding the cluster profile sets usage.
-	// This deeply nested type match the following pattern:
-	//  "org/repo": "branch": "variant": "test"
-	TestsAllowlist map[utilregexp.Regexp]map[utilregexp.Regexp]map[utilregexp.Regexp][]utilregexp.Regexp `json:"tests_allowlist,omitempty"`
-}
-
-func (cps ClusterProfileSetDetails) FindSetByProfile(profileName string) (string, bool) {
-	for cpsName, cpDetails := range cps.ClusterProfileSets {
-		if slices.Contains(cpDetails, profileName) {
-			return cpsName, true
-		}
-	}
-	return "", false
-}
-
-func (cps ClusterProfileSetDetails) IsTestAllowlisted(test string, metadata Metadata) bool {
-	if cps.TestsAllowlist == nil {
+func (c *ClusterProfileSetsConfig) IsTestAllowlisted(test string, metadata Metadata) bool {
+	if c.TestsExceptions == nil {
 		return false
 	}
 
-	orgRepo, ok := utilregexp.LookupByMatch(cps.TestsAllowlist, metadata.Org+"/"+metadata.Repo)
+	orgRepo, ok := utilregexp.LookupByMatch(c.TestsExceptions, metadata.Org+"/"+metadata.Repo)
 	if !ok {
 		return false
 	}

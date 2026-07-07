@@ -117,13 +117,13 @@ func (s *ipPoolStep) Run(ctx context.Context) error {
 
 // minute is provided as an argument to assist with unit testing
 func (s *ipPoolStep) run(ctx context.Context, minute time.Duration) error {
-	clusterProfileDetails, err := api.ClusterProfileFromParams(s.params)
+	clusterProfile, err := api.ClusterProfileFromParams(s.params)
 	if err != nil {
 		if !errors.Is(err, &api.ErrParamNotFound{}) {
 			return fmt.Errorf("get cluster profile from parameters: %w", err)
 		}
-	} else if clusterProfileDetails != nil {
-		s.profile = api.FromClusterProfile(clusterProfileDetails)
+	} else if clusterProfile != nil {
+		s.profile = api.FromClusterProfile(clusterProfile)
 	}
 
 	var ipPoolLeaseType string

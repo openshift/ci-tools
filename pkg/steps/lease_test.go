@@ -292,14 +292,14 @@ func TestAcquireLeases(t *testing.T) {
 				},
 			},
 			wantProvides: map[string]any{
-				api.ClusterProfileSetEnv:       "",
-				api.ClusterProfileDetailsParam: (*api.ClusterProfile)(nil),
-				api.STSHomeRoleARNParam:        "",
-				api.STSHubRoleARNParam:         "",
-				api.STSTargetRoleARNParam:      "",
-				"lease-0":                      "res-type-0",
-				"lease-1":                      "res-type-1",
-				"parameter":                    "map",
+				api.ClusterProfileSetEnv:  "",
+				api.ClusterProfileParam:   (*api.ClusterProfile)(nil),
+				api.STSHomeRoleARNParam:   "",
+				api.STSHubRoleARNParam:    "",
+				api.STSTargetRoleARNParam: "",
+				"lease-0":                 "res-type-0",
+				"lease-1":                 "res-type-1",
+				"parameter":               "map",
 			},
 			wantCalls: []string{
 				"acquireWaitWithPriority owner res-type-0 free leased random",
@@ -341,7 +341,7 @@ func TestAcquireLeases(t *testing.T) {
 			wantProvides: map[string]any{
 				"parameter":              "map",
 				api.ClusterProfileSetEnv: "",
-				api.ClusterProfileDetailsParam: &api.ClusterProfile{
+				api.ClusterProfileParam: &api.ClusterProfile{
 					Secret:    "cluster-secrets-aws",
 					LeaseType: "aws-quota-slice",
 				},
@@ -421,7 +421,7 @@ func TestAcquireLeases(t *testing.T) {
 			wantProvides: map[string]any{
 				"parameter":              "map",
 				api.ClusterProfileSetEnv: "",
-				api.ClusterProfileDetailsParam: &api.ClusterProfile{
+				api.ClusterProfileParam: &api.ClusterProfile{
 					Secret:    "cluster-secrets-aws",
 					LeaseType: "aws-quota-slice",
 				},
@@ -509,7 +509,7 @@ func TestAcquireLeases(t *testing.T) {
 			wantProvides: map[string]any{
 				"parameter":              "map",
 				api.ClusterProfileSetEnv: "",
-				api.ClusterProfileDetailsParam: &api.ClusterProfile{
+				api.ClusterProfileParam: &api.ClusterProfile{
 					Secret:    "cluster-secrets-aws",
 					LeaseType: "aws-quota-slice",
 				},
@@ -595,7 +595,7 @@ func TestAcquireLeases(t *testing.T) {
 			wantProvides: map[string]any{
 				"parameter":              "map",
 				api.ClusterProfileSetEnv: "",
-				api.ClusterProfileDetailsParam: &api.ClusterProfile{
+				api.ClusterProfileParam: &api.ClusterProfile{
 					Secret:    "cluster-secrets-aws",
 					LeaseType: "aws-quota-slice",
 				},
@@ -682,7 +682,7 @@ func TestAcquireLeases(t *testing.T) {
 			wantProvides: map[string]any{
 				"parameter":              "map",
 				api.ClusterProfileSetEnv: "",
-				api.ClusterProfileDetailsParam: &api.ClusterProfile{
+				api.ClusterProfileParam: &api.ClusterProfile{
 					Secret:    "cluster-secrets-aws",
 					LeaseType: "aws-quota-slice",
 				},
@@ -770,7 +770,7 @@ func TestAcquireLeases(t *testing.T) {
 			wantProvides: map[string]any{
 				"parameter":              "map",
 				api.ClusterProfileSetEnv: "aws-set",
-				api.ClusterProfileDetailsParam: &api.ClusterProfile{
+				api.ClusterProfileParam: &api.ClusterProfile{
 					Secret:    "cluster-secrets-aws",
 					LeaseType: "aws-quota-slice",
 				},

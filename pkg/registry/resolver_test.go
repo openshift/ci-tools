@@ -28,18 +28,20 @@ func TestResolve(t *testing.T) {
 	nodeArchitectureAMD64 := api.NodeArchitectureAMD64
 	nodeArchitectureARM64 := api.NodeArchitectureARM64
 	yes := true
-	clusterProfilesMap := api.ClusterProfilesMap{
-		"aws": api.ClusterProfile{
-			Name:        "aws",
-			ClusterType: "aws",
-			LeaseType:   "aws-quota-slice",
-			Secret:      "cluster-secrets-aws",
-		},
-		"azure4": api.ClusterProfile{
-			Name:        "azure4",
-			ClusterType: "azure4",
-			LeaseType:   "azure4-quota-slice",
-			Secret:      "cluster-secrets-azure4",
+	clusterProfilesMap := api.ClusterProfiles{
+		Items: []api.ClusterProfile{
+			{
+				Name:        "aws",
+				ClusterType: "aws",
+				LeaseType:   "aws-quota-slice",
+				Secret:      "cluster-secrets-aws",
+			},
+			{
+				Name:        "azure4",
+				ClusterType: "azure4",
+				LeaseType:   "azure4-quota-slice",
+				Secret:      "cluster-secrets-azure4",
+			},
 		},
 	}
 
@@ -1806,6 +1808,7 @@ func TestResolveParameters(t *testing.T) {
 		},
 	}
 	observers := ObserverByName{}
+	clusterProfiles := api.ClusterProfiles{}
 	for _, tc := range []struct {
 		name                 string
 		test                 api.MultiStageTestConfiguration
@@ -2013,7 +2016,7 @@ func TestResolveParameters(t *testing.T) {
 		},
 	}} {
 		t.Run(tc.name, func(t *testing.T) {
-			ret, err := NewResolver(refs, chains, workflows, observers, nil).Resolve("test", tc.test)
+			ret, err := NewResolver(refs, chains, workflows, observers, clusterProfiles).Resolve("test", tc.test)
 			var params [][]api.StepParameter
 			var deps [][]api.StepDependency
 			var dnsConfigs []*api.StepDNSConfig
@@ -2052,6 +2055,7 @@ func TestResolveLeases(t *testing.T) {
 			},
 		},
 	}
+	clusterProfiles := api.ClusterProfiles{}
 	for _, tc := range []struct {
 		name        string
 		test        api.MultiStageTestConfiguration
@@ -2113,7 +2117,7 @@ func TestResolveLeases(t *testing.T) {
 		},
 	}} {
 		t.Run(tc.name, func(t *testing.T) {
-			ret, err := NewResolver(refs, chains, workflows, ObserverByName{}, nil).Resolve("test", tc.test)
+			ret, err := NewResolver(refs, chains, workflows, ObserverByName{}, clusterProfiles).Resolve("test", tc.test)
 			if diff := cmp.Diff(tc.expectedErr, err, testhelper.EquateErrorMessage); diff != "" {
 				t.Errorf("unexpected error: %v", diff)
 			}
@@ -2126,17 +2130,18 @@ func TestResolveLeases(t *testing.T) {
 
 func TestResolveLeasesCopy(t *testing.T) {
 	ref := "ref"
+	clusterProfiles := api.ClusterProfiles{}
 	refs := ReferenceByName{
 		ref: {As: ref, Leases: []api.StepLease{{}}},
 	}
 	test := api.MultiStageTestConfiguration{
 		Test: []api.TestStep{{Reference: &ref}},
 	}
-	ret0, err := NewResolver(refs, nil, nil, nil, nil).Resolve("test", test)
+	ret0, err := NewResolver(refs, nil, nil, nil, clusterProfiles).Resolve("test", test)
 	if err != nil {
 		t.Fatal(err)
 	}
-	ret1, err := NewResolver(refs, nil, nil, nil, nil).Resolve("test", test)
+	ret1, err := NewResolver(refs, nil, nil, nil, clusterProfiles).Resolve("test", test)
 	if err != nil {
 		t.Fatal(err)
 	}

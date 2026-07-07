@@ -217,7 +217,7 @@ func (r RehearsalConfig) createResolver(candidatePath string) (registry.Resolver
 	var chains registry.ChainByName
 	var workflows registry.WorkflowByName
 	var observers registry.ObserverByName
-	var clusterProfiles api.ClusterProfilesMap
+	var clusterProfiles api.ClusterProfiles
 	if !r.NoRegistry {
 		var err error
 		registryRefs, chains, workflows, clusterProfiles, _, _, observers, err = load.Registry(filepath.Join(candidatePath, config.RegistryPath), load.RegistryFlag(0))

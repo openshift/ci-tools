@@ -480,24 +480,31 @@ func validateTestStepDependencies(config *api.ReleaseBuildConfiguration) []error
 }
 
 func (v *Validator) validateClusterProfile(fieldRoot string, profileName string, test string, metadata *api.Metadata) []error {
-	if v.validClusterProfiles != nil {
-		if _, ok := v.validClusterProfiles[profileName]; ok {
-			if err := verifyClusterProfileOwnership(v.validClusterProfiles[profileName], metadata); err != nil {
-				return []error{err}
-			}
-		} else {
-			return []error{fmt.Errorf("%s: invalid cluster profile %q", fieldRoot, profileName)}
+	if v.validClusterProfiles == nil {
+		return nil
+	}
+
+	if profile, ok := v.validClusterProfiles.Get(profileName); ok {
+		if err := verifyClusterProfileOwnership(profile, metadata); err != nil {
+			return []error{err}
 		}
+	} else {
+		return []error{fmt.Errorf("%s: invalid cluster profile %q", fieldRoot, profileName)}
+	}
+
+	// Cluster profile set validation
+	profileSet, ok := v.validClusterProfiles.FindSetByProfile(profileName)
+	if !ok {
+		return nil
 	}
 
 	if metadata == nil {
 		return []error{fmt.Errorf("can't validate cluster profile, metadata not defined")}
 	}
 
-	if !v.cpsDetails.IsTestAllowlisted(test, *metadata) {
-		if set, ok := v.cpsDetails.FindSetByProfile(profileName); ok {
-			return []error{fmt.Errorf("%s: invalid cluster profile %q, use the cluster profile set %q instead", fieldRoot, profileName, set)}
-		}
+	cpsConfig := v.validClusterProfiles.ClusterProfileSetsConfig
+	if cpsConfig == nil || !cpsConfig.IsTestAllowlisted(test, *metadata) {
+		return []error{fmt.Errorf("%s: invalid cluster profile %q, use the cluster profile set %q instead", fieldRoot, profileName, profileSet.Name)}
 	}
 
 	return nil

@@ -21,7 +21,7 @@ type RegistryAgent interface {
 	ResolveConfig(config api.ReleaseBuildConfiguration) (api.ReleaseBuildConfiguration, error)
 	GetRegistryComponents() (registry.ReferenceByName, registry.ChainByName, registry.WorkflowByName, map[string]string, api.RegistryMetadata)
 	GetGeneration() int
-	GetClusterProfiles() api.ClusterProfilesMap
+	GetClusterProfiles() api.ClusterProfiles
 	registry.Resolver
 }
 
@@ -35,7 +35,7 @@ type registryAgent struct {
 	references      registry.ReferenceByName
 	chains          registry.ChainByName
 	workflows       registry.WorkflowByName
-	clusterProfiles api.ClusterProfilesMap
+	clusterProfiles api.ClusterProfiles
 	documentation   map[string]string
 	metadata        api.RegistryMetadata
 }
@@ -141,15 +141,16 @@ func (a *registryAgent) GetRegistryComponents() (registry.ReferenceByName, regis
 }
 
 // GetClusterProfiles returns a map containing all existing cluster profiles
-func (a *registryAgent) GetClusterProfiles() api.ClusterProfilesMap {
+func (a *registryAgent) GetClusterProfiles() api.ClusterProfiles {
 	return a.clusterProfiles
 }
 
-// GetClusterProfileDetails returns a struct with all details for a cluster profile
+// ResolveClusterProfile returns a struct with all details for a cluster profile
 func (a *registryAgent) ResolveClusterProfile(profileName string) (api.ClusterProfile, error) {
-	profileDetails, found := a.GetClusterProfiles()[profileName]
+	clusterProfiles := a.GetClusterProfiles()
+	profile, found := clusterProfiles.Get(profileName)
 	if found {
-		return profileDetails, nil
+		return profile, nil
 	}
 	return api.ClusterProfile{}, fmt.Errorf("cluster profile %s not found", profileName)
 }

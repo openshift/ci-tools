@@ -2721,7 +2721,6 @@ func TestValidateClusterProfiles(t *testing.T) {
 		testName        string
 		metadata        *api.Metadata
 		clusterProfiles *api.ClusterProfiles
-		cpsDetails      api.ClusterProfileSetDetails
 		wantErrs        []error
 	}{
 		{
@@ -2738,44 +2737,63 @@ func TestValidateClusterProfiles(t *testing.T) {
 			wantErrs:        []error{errors.New(`foo: invalid cluster profile "foobar"`)},
 		},
 		{
-			name:            "Use cluster profile set",
-			metadata:        &api.Metadata{Org: "org"},
-			clusterProfile:  "azure-2",
-			clusterProfiles: &api.ClusterProfiles{Items: []api.ClusterProfile{{Name: "azure-2"}}},
-			cpsDetails: api.ClusterProfileSetDetails{
-				ClusterProfileSets: map[string][]string{
-					"openshift-org-azure": {"azure-2"},
+			name:           "Use cluster profile set",
+			metadata:       &api.Metadata{Org: "org"},
+			clusterProfile: "azure-2",
+			clusterProfiles: &api.ClusterProfiles{
+				Items: []api.ClusterProfile{
+					{
+						Name: "azure-2",
+					},
+					{
+						Name:       "openshift-org-azure",
+						SetMembers: []string{"azure-2"},
+					},
 				},
 			},
 			wantErrs: []error{errors.New(`foo: invalid cluster profile "azure-2", use the cluster profile set "openshift-org-azure" instead`)},
 		},
 		{
-			name:            "Skip allowlisted test",
-			metadata:        &api.Metadata{Org: "openshift", Repo: "ci-tools", Branch: "main"},
-			testName:        "e2e-aws-ovn",
-			clusterProfile:  "azure-2",
-			clusterProfiles: &api.ClusterProfiles{Items: []api.ClusterProfile{{Name: "azure-2"}}},
-			cpsDetails: api.ClusterProfileSetDetails{
-				ClusterProfileSets: map[string][]string{
-					"openshift-org-azure": {"azure-2"},
+			name:           "Skip allowlisted test",
+			metadata:       &api.Metadata{Org: "openshift", Repo: "ci-tools", Branch: "main"},
+			testName:       "e2e-aws-ovn",
+			clusterProfile: "azure-2",
+			clusterProfiles: &api.ClusterProfiles{
+				Items: []api.ClusterProfile{
+					{
+						Name: "azure-2",
+					},
+					{
+						Name:       "openshift-org-azure",
+						SetMembers: []string{"azure-2"},
+					},
 				},
-				TestsAllowlist: map[utilregexp.Regexp]map[utilregexp.Regexp]map[utilregexp.Regexp][]utilregexp.Regexp{
-					re("openshift/ci-tools"): {re("main"): {re(""): {re("e2e-aws-ovn")}}},
+				ClusterProfileSetsConfig: &api.ClusterProfileSetsConfig{
+					TestsExceptions: map[utilregexp.Regexp]map[utilregexp.Regexp]map[utilregexp.Regexp][]utilregexp.Regexp{
+						re("openshift/ci-tools"): {re("main"): {re(""): {re("e2e-aws-ovn")}}},
+					},
 				},
 			},
 		},
 		{
-			name:            "Skip allowlisted test that matches a pattern",
-			metadata:        &api.Metadata{Org: "openshift-priv", Repo: "openshift-tests-private", Branch: "main", Variant: "nightly"},
-			testName:        "aws-ipi-public-ipv4-pool-byo-subnet-amd-f28-destructive",
-			clusterProfile:  "azure-2",
-			clusterProfiles: &api.ClusterProfiles{Items: []api.ClusterProfile{{Name: "azure-2"}}},
-			cpsDetails: api.ClusterProfileSetDetails{
-				ClusterProfileSets: map[string][]string{
-					"openshift-org-azure": {"azure-2"},
+			name:           "Skip allowlisted test that matches a pattern",
+			metadata:       &api.Metadata{Org: "openshift-priv", Repo: "openshift-tests-private", Branch: "main", Variant: "nightly"},
+			testName:       "aws-ipi-public-ipv4-pool-byo-subnet-amd-f28-destructive",
+			clusterProfile: "azure-2",
+			clusterProfiles: &api.ClusterProfiles{
+				Items: []api.ClusterProfile{
+					{
+						Name: "azure-2",
+					},
+					{
+						Name:       "openshift-org-azure",
+						SetMembers: []string{"azure-2"},
+					},
 				},
-				TestsAllowlist: map[utilregexp.Regexp]map[utilregexp.Regexp]map[utilregexp.Regexp][]utilregexp.Regexp{
-					re("openshift(-priv)?/openshift-tests-private"): {re("main"): {re("daily|nightly"): {re(".*-ipi-public-ipv4-pool-.*")}}},
+				ClusterProfileSetsConfig: &api.ClusterProfileSetsConfig{
+					TestsExceptions: map[utilregexp.Regexp]map[utilregexp.Regexp]map[utilregexp.Regexp][]utilregexp.Regexp{
+						re("openshift(-priv)?/openshift-tests-private"): {re("main"): {re("daily|nightly"): {re(".*-ipi-public-ipv4-pool-.*")}}},
+					},
 				},
 			},
 		},
@@ -2783,7 +2801,7 @@ func TestValidateClusterProfiles(t *testing.T) {
 		t.Run(tc.name, func(t *testing.T) {
 			t.Parallel()
 
-			v := NewValidator(tc.clusterProfiles, nil, WithClusterProfileSetDetails(tc.cpsDetails))
+			v := NewValidator(tc.clusterProfiles, nil)
 			gotErrs := v.validateClusterProfile("foo", tc.clusterProfile, tc.testName, tc.metadata)
 
 			wantErrMsg := "<nil>"

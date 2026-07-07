@@ -35,6 +35,16 @@ func (cp *ClusterProfiles) Get(name string) (ClusterProfile, bool) {
 	return ClusterProfile{}, false
 }
 
+func (cp *ClusterProfiles) FindSetByProfile(name string) (ClusterProfile, bool) {
+	for i := range cp.Items {
+		p := &cp.Items[i]
+		if p.IsASet() && slices.Contains(p.SetMembers, name) {
+			return *p, true
+		}
+	}
+	return ClusterProfile{}, false
+}
+
 func (cp *ClusterProfiles) Resolve() error {
 	errs := make([]error, 0)
 
@@ -114,32 +124,12 @@ type ClusterProfileSetsConfig struct {
 	TestsExceptions map[utilregexp.Regexp]map[utilregexp.Regexp]map[utilregexp.Regexp][]utilregexp.Regexp `json:"tests_exceptions,omitempty"`
 }
 
-// +kubebuilder:object:generate=false
-type ClusterProfileSetDetails struct {
-	ClusterProfileSets map[string][]string `json:"cluster_profile_sets,omitempty"`
-
-	// TestsAllowlist holds a list of tests for which we do not enfoce policy
-	// regarding the cluster profile sets usage.
-	// This deeply nested type match the following pattern:
-	//  "org/repo": "branch": "variant": "test"
-	TestsAllowlist map[utilregexp.Regexp]map[utilregexp.Regexp]map[utilregexp.Regexp][]utilregexp.Regexp `json:"tests_allowlist,omitempty"`
-}
-
-func (cps ClusterProfileSetDetails) FindSetByProfile(profileName string) (string, bool) {
-	for cpsName, cpDetails := range cps.ClusterProfileSets {
-		if slices.Contains(cpDetails, profileName) {
-			return cpsName, true
-		}
-	}
-	return "", false
-}
-
-func (cps ClusterProfileSetDetails) IsTestAllowlisted(test string, metadata Metadata) bool {
-	if cps.TestsAllowlist == nil {
+func (c *ClusterProfileSetsConfig) IsTestAllowlisted(test string, metadata Metadata) bool {
+	if c.TestsExceptions == nil {
 		return false
 	}
 
-	orgRepo, ok := utilregexp.LookupByMatch(cps.TestsAllowlist, metadata.Org+"/"+metadata.Repo)
+	orgRepo, ok := utilregexp.LookupByMatch(c.TestsExceptions, metadata.Org+"/"+metadata.Repo)
 	if !ok {
 		return false
 	}

@@ -30,11 +30,10 @@ type promotedTag struct {
 type options struct {
 	config.Options
 
-	resolver                 registry.Resolver
-	ciOPConfigAgent          agents.ConfigAgent
-	clusterProfiles          api.ClusterProfiles
-	clusterClaimOwners       api.ClusterClaimOwnersMap
-	clusterProfileSetDetails api.ClusterProfileSetDetails
+	resolver           registry.Resolver
+	ciOPConfigAgent    agents.ConfigAgent
+	clusterProfiles    api.ClusterProfiles
+	clusterClaimOwners api.ClusterClaimOwnersMap
 }
 
 func (o *options) parse() error {
@@ -77,14 +76,6 @@ func (o *options) parse() error {
 	}
 	o.ciOPConfigAgent = ciOPConfigAgent
 
-	if clusterProfileSetDetailsPath != "" {
-		cpsd, err := load.ClusterProfileSetDetails(clusterProfileSetDetailsPath)
-		if err != nil {
-			return fmt.Errorf("load cluster profile set details: %w", err)
-		}
-		o.clusterProfileSetDetails = cpsd
-	}
-
 	if err := o.Options.Validate(); err != nil {
 		return fmt.Errorf("failed to validate config options: %w", err)
 	}
@@ -110,8 +101,7 @@ func (o *options) validate() (ret []error) {
 	outputCh := make(chan promotedTag)
 	errCh := make(chan error)
 	map_ := func() error {
-		validator := validation.NewValidator(&o.clusterProfiles, o.clusterClaimOwners,
-			validation.WithClusterProfileSetDetails(o.clusterProfileSetDetails))
+		validator := validation.NewValidator(&o.clusterProfiles, o.clusterClaimOwners)
 		for c := range inputCh {
 			if err := o.validateConfiguration(&validator, outputCh, c); err != nil {
 				errCh <- fmt.Errorf("failed to validate configuration %s: %w", c.Metadata.RelativePath(), err)

@@ -792,6 +792,16 @@ const (
 	ClusterHive      Cluster = "hosted-mgmt"
 )
 
+// DockerfileEntry specifies a Dockerfile whose build output determines
+// whether a test should run.
+type DockerfileEntry struct {
+	// Path is the path to the Dockerfile relative to the repo root.
+	Path string `json:"path"`
+	// GoBinaryTargets is an optional list of Go build targets (e.g., "./cmd/foo").
+	// When set, enables go-dependency-aware filtering for COPY-all Dockerfiles.
+	GoBinaryTargets []string `json:"go_binary_targets,omitempty"`
+}
+
 // TestStepConfiguration describes a step that runs a
 // command in one of the previously built images and then
 // gathers artifacts from that step.
@@ -892,6 +902,12 @@ type TestStepConfiguration struct {
 	// PipelineSkipIfOnlyChanged is a regex that will result in the test being skipped in second
 	// stage of the pipeline run if all changed files match that regex.
 	PipelineSkipIfOnlyChanged string `json:"pipeline_skip_if_only_changed,omitempty"`
+
+	// PipelineRunIfDockerfileChanged determines whether to run a test based on
+	// whether the container image built by the specified Dockerfile(s) would change.
+	// Instead of hand-maintained regex, it resolves which files matter by parsing
+	// Dockerfile COPY/ADD instructions.
+	PipelineRunIfDockerfileChanged []DockerfileEntry `json:"pipeline_run_if_dockerfile_changed,omitempty"`
 
 	// Timeout overrides maximum prowjob duration
 	Timeout *prowv1.Duration `json:"timeout,omitempty"`

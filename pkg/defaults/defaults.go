@@ -385,7 +385,7 @@ func stepForTest(cfg *Config, inputImages inputImageSet, c *api.TestStepConfigur
 		ret = append(ret, stepsForStepImages(cfg.kubeClient, cfg.JobSpec, inputImages, test, imageConfigs)...)
 		return ret
 	}
-	step := steps.TestStep(*c, cfg.CIConfig.Resources, cfg.podClient, cfg.JobSpec, cfg.NodeName)
+	step := steps.TestStep(*c, cfg.CIConfig.Resources, cfg.podClient, cfg.JobSpec, cfg.NodeName, cfg.EnableSecretsStoreCSIDriver, cfg.GSMConfig)
 	if c.ClusterClaim != nil {
 		step = steps.ClusterClaimStep(c.As, c.ClusterClaim, cfg.hiveClient, cfg.kubeClient, cfg.JobSpec, step, cfg.Censor)
 	}

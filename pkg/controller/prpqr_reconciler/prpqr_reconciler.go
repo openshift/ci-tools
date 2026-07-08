@@ -43,10 +43,9 @@ import (
 )
 
 const (
-	controllerName           = "prpqr_reconciler"
-	releaseJobNameLabel      = "releaseJobNameHash"
-	releaseJobNameAnnotation = "releaseJobName"
-
+	controllerName            = "prpqr_reconciler"
+	releaseJobNameLabel       = "releaseJobNameHash"
+	releaseJobNameAnnotation  = "releaseJobName"
 	conditionAllJobsTriggered = "AllJobsTriggered"
 	conditionWithErrors       = "WithErrors"
 
@@ -298,7 +297,7 @@ func (r *reconciler) triggerJobs(ctx context.Context,
 
 		if jobSpec.AggregatedCount > 0 {
 			uid := jobNameHash(req.Name + mimickedJob)
-			aggregatedProwjobs, err := r.generateAggregatedProwjobs(uid, ciopConfig, baseMetadata, req.Name, req.Namespace, &jobSpec, pullRequests, inject, jobSpec.ShardCount, jobSpec.ShardIndex)
+			aggregatedProwjobs, err := r.generateAggregatedProwjobs(uid, ciopConfig, baseMetadata, req.Name, req.Namespace, &jobSpec, pullRequests, inject, jobSpec.ShardCount, jobSpec.ShardIndex, prpqr.Spec.Private)
 			if err != nil {
 				logger.WithError(err).Error("Failed to generate the aggregated prowjobs")
 				statuses[mimickedJob] = &v1.PullRequestPayloadJobStatus{
@@ -326,6 +325,9 @@ func (r *reconciler) triggerJobs(ctx context.Context,
 				}
 				continue
 			}
+			if prpqr.Spec.Private {
+				aggregatorJob.Spec.Hidden = true
+			}
 			statuses[mimickedJob] = &v1.PullRequestPayloadJobStatus{
 				ReleaseJobName: mimickedJob,
 				ProwJob:        aggregatorJob.Name,
@@ -337,7 +339,7 @@ func (r *reconciler) triggerJobs(ctx context.Context,
 			initialPullSpecOverride := prpqr.Spec.InitialPayloadBase
 			// "base" is always treated as "latest" as that is what we are layering changes on top of, additional logic will apply if this changes in the future
 			basePullSpecOverride := prpqr.Spec.PayloadOverrides.BasePullSpec
-			prowjob, err := r.generateProwjob(ciopConfig, baseMetadata, req.Name, req.Namespace, pullRequests, mimickedJob, inject, nil, initialPullSpecOverride, basePullSpecOverride, prpqr.Spec.PayloadOverrides.ImageTagOverrides, jobSpec.ShardCount, jobSpec.ShardIndex)
+			prowjob, err := r.generateProwjob(ciopConfig, baseMetadata, req.Name, req.Namespace, pullRequests, mimickedJob, inject, nil, initialPullSpecOverride, basePullSpecOverride, prpqr.Spec.PayloadOverrides.ImageTagOverrides, jobSpec.ShardCount, jobSpec.ShardIndex, prpqr.Spec.Private)
 			if err != nil {
 				logger.WithError(err).Error("Failed to generate prowjob")
 				statuses[mimickedJob] = &v1.PullRequestPayloadJobStatus{
@@ -592,6 +594,7 @@ func (r *reconciler) generateProwjob(ciopConfig *api.ReleaseBuildConfiguration,
 	initialPayloadPullspec, latestPayloadPullspec string,
 	imageTagOverrides []v1.ImageTagOverride,
 	shardCount, shardIndex int,
+	private bool,
 ) (*prowv1.ProwJob, error) {
 
 	annotations := map[string]string{
@@ -652,6 +655,9 @@ func (r *reconciler) generateProwjob(ciopConfig *api.ReleaseBuildConfiguration,
 		if shardCount > 1 {
 			jobBaseGen.PodSpec.Add(prowgen.ShardArgs(shardCount, shardIndex))
 		}
+		if private {
+			jobBaseGen.PodSpec.Add(prowgen.GitHubToken(false))
+		}
 
 		// Avoid sharing when we run the same job multiple times.
 		// PRPQR name should be safe to use as a discriminating input, because
@@ -678,6 +684,9 @@ func (r *reconciler) generateProwjob(ciopConfig *api.ReleaseBuildConfiguration,
 			periodic.DecorationConfig = &prowv1.DecorationConfig{}
 		}
 		periodic.DecorationConfig.Timeout = &prowv1.Duration{Duration: r.defaultAggregatorJobTimeout}
+		if private {
+			periodic.Hidden = true
+		}
 		break
 	}
 	// We did not find the injected test: this is a bug
@@ -787,7 +796,7 @@ func metadataFromPullRequestsUnderTest(prs []v1.PullRequestUnderTest) *api.Metad
 	}
 }
 
-func (r *reconciler) generateAggregatedProwjobs(uid string, ciopConfig *api.ReleaseBuildConfiguration, baseCiop *api.Metadata, prpqrName, prpqrNamespace string, spec *v1.ReleaseJobSpec, prs []v1.PullRequestUnderTest, inject *api.MetadataWithTest, shardCount, shardIndex int) ([]*prowv1.ProwJob, error) {
+func (r *reconciler) generateAggregatedProwjobs(uid string, ciopConfig *api.ReleaseBuildConfiguration, baseCiop *api.Metadata, prpqrName, prpqrNamespace string, spec *v1.ReleaseJobSpec, prs []v1.PullRequestUnderTest, inject *api.MetadataWithTest, shardCount, shardIndex int, private bool) ([]*prowv1.ProwJob, error) {
 	var ret []*prowv1.ProwJob
 
 	for i := 0; i < spec.AggregatedCount; i++ {
@@ -798,7 +807,7 @@ func (r *reconciler) generateAggregatedProwjobs(uid string, ciopConfig *api.Rele
 		}
 		jobName := fmt.Sprintf("%s-%d", spec.JobName(jobconfig.PeriodicPrefix), i)
 
-		pj, err := r.generateProwjob(ciopConfig, baseCiop, prpqrName, prpqrNamespace, prs, jobName, inject, opts, "", "", nil, shardCount, shardIndex)
+		pj, err := r.generateProwjob(ciopConfig, baseCiop, prpqrName, prpqrNamespace, prs, jobName, inject, opts, "", "", nil, shardCount, shardIndex, private)
 		if err != nil {
 			return nil, fmt.Errorf("failed to create prowjob: %w", err)
 		}

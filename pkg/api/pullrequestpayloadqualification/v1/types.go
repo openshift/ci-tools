@@ -38,6 +38,9 @@ type PullRequestPayloadTestSpec struct {
 	InitialPayloadBase string `json:"initial,omitempty"`
 	// PayloadOverrides specifies overrides to the base payload.
 	PayloadOverrides PayloadOverrides `json:"payload,omitempty"`
+	// Private indicates at least one repo under test is private,
+	// requiring GitHub credentials and hidden ProwJobs.
+	Private bool `json:"private,omitempty"`
 }
 
 // PayloadOverrides allows overrides to the base payload.

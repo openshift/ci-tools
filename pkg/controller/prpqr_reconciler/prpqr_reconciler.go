@@ -686,6 +686,10 @@ func (r *reconciler) generateProwjob(ciopConfig *api.ReleaseBuildConfiguration,
 		periodic.DecorationConfig.Timeout = &prowv1.Duration{Duration: r.defaultAggregatorJobTimeout}
 		if private {
 			periodic.Hidden = true
+			periodic.DecorationConfig.OauthTokenSecret = &prowv1.OauthTokenSecret{
+				Key:  api.OauthTokenSecretKey,
+				Name: api.OauthTokenSecretName,
+			}
 		}
 		break
 	}

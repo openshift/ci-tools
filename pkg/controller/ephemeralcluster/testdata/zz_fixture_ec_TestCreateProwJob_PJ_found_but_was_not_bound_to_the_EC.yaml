@@ -1,11 +1,15 @@
 metadata:
   creationTimestamp: null
+  labels:
+    ephemeralcluster.ci.openshift.io/konflux-cluster: kcluster
+    ephemeralcluster.ci.openshift.io/konflux-tenant: ktenant
   name: ec
   namespace: ns
   resourceVersion: "1000"
 spec:
   ciOperator:
-    test: {}
+    test:
+      clusterProfile: aws
 status:
   phase: ""
   prowJobId: pj

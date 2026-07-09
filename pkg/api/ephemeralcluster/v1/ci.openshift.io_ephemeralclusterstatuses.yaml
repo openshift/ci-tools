@@ -1,0 +1,86 @@
+---
+apiVersion: apiextensions.k8s.io/v1
+kind: CustomResourceDefinition
+metadata:
+  annotations:
+    controller-gen.kubebuilder.io/version: v0.17.0
+  name: ephemeralclusterstatuses.ci.openshift.io
+spec:
+  group: ci.openshift.io
+  names:
+    kind: EphemeralClusterStatus
+    listKind: EphemeralClusterStatusList
+    plural: ephemeralclusterstatuses
+    singular: ephemeralclusterstatus
+  scope: Namespaced
+  versions:
+  - name: v1
+    schema:
+      openAPIV3Schema:
+        properties:
+          apiVersion:
+            description: |-
+              APIVersion defines the versioned schema of this representation of an object.
+              Servers should convert recognized schemas to the latest internal value, and
+              may reject unrecognized values.
+              More info: https://git.k8s.io/community/contributors/devel/sig-architecture/api-conventions.md#resources
+            type: string
+          conditions:
+            items:
+              description: EphemeralClusterCondition contains details for the current
+                condition of this EphemeralCluster.
+              properties:
+                lastTransitionTime:
+                  description: Last time the condition transitioned from one status
+                    to another.
+                  format: date-time
+                  type: string
+                message:
+                  description: Human-readable message indicating details about last
+                    transition.
+                  type: string
+                reason:
+                  description: Unique, one-word, CamelCase reason for the condition's
+                    last transition.
+                  type: string
+                status:
+                  description: Status is the status of the condition.
+                  type: string
+                type:
+                  description: Type is the type of the condition.
+                  type: string
+              required:
+              - status
+              - type
+              type: object
+            type: array
+          kind:
+            description: |-
+              Kind is a string value representing the REST resource this object represents.
+              Servers may infer this from the endpoint the client submits requests to.
+              Cannot be updated.
+              In CamelCase.
+              More info: https://git.k8s.io/community/contributors/devel/sig-architecture/api-conventions.md#types-kinds
+            type: string
+          metadata:
+            type: object
+          phase:
+            description: Phase is an high level description of where the ephemeral
+              cluster is in its lifecycle
+            type: string
+          prowJobId:
+            type: string
+          prowJobURL:
+            type: string
+          secretRef:
+            description: |-
+              SecretRef is the name of the Secret containing credentials to access the
+              ephemeral cluster. The Secret is in the same namespace as the EphemeralCluster
+              and contains a "kubeconfig" key and optionally a "kubeAdminPassword" key.
+            type: string
+        required:
+        - metadata
+        - phase
+        type: object
+    served: true
+    storage: true

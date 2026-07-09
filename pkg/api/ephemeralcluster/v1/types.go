@@ -7,16 +7,20 @@ import (
 )
 
 const (
-	CIOperatorJobsGenerateFailureReason    = "CIOperatorJobsGenerateFailure"
-	ProwJobFailureReason                   = "ProwJobFailure"
-	ProwJobCompletedReason                 = "ProwJobCompleted"
-	TooManyProwJobsBoundReason             = "TooManyProwJobsBound"
-	SecretsFetchFailureReason              = "SecretsFetchFailure"
-	CreateTestCompletedSecretFailureReason = "CreateTestCompletedSecretFailure"
+	CIOperatorJobsGenerateFailureReason     = "CIOperatorJobsGenerateFailure"
+	ProwJobFailureReason                    = "ProwJobFailure"
+	ProwJobCompletedReason                  = "ProwJobCompleted"
+	TooManyProwJobsBoundReason              = "TooManyProwJobsBound"
+	SecretsFetchFailureReason               = "SecretsFetchFailure"
+	CreateTestCompletedSecretFailureReason  = "CreateTestCompletedSecretFailure"
+	EphemeralClusterValidationFailureReason = "EphemeralClusterValidationFailure"
 
 	CIOperatorNSNotFoundMsg = "ci-operator NS not found"
 	KubeconfigNotReadyMsg   = "kubeconfig not ready"
 	HiveSecretsNotReadyMsg  = "hive secrets not ready"
+
+	KonfluxClusterLabel = "ephemeralcluster.ci.openshift.io/konflux-cluster"
+	KonfluxTenantLabel  = "ephemeralcluster.ci.openshift.io/konflux-tenant"
 )
 
 // EphemeralClusterCondition is a valid value for EphemeralClusterCondition.Type
@@ -61,6 +65,7 @@ const (
 
 // +k8s:deepcopy-gen:interfaces=k8s.io/apimachinery/pkg/runtime.Object
 // +kubebuilder:resource:shortName=ec
+// +kubebuilder:subresource:status
 type EphemeralCluster struct {
 	metav1.TypeMeta   `json:",inline"`
 	metav1.ObjectMeta `json:"metadata"`
@@ -68,6 +73,20 @@ type EphemeralCluster struct {
 	// +kubebuilder:validation:Required
 	Spec   EphemeralClusterSpec   `json:"spec"`
 	Status EphemeralClusterStatus `json:"status,omitempty"`
+}
+
+func (ec *EphemeralCluster) KonfluxCluster() string {
+	if value, ok := ec.Labels[KonfluxClusterLabel]; ok {
+		return value
+	}
+	return ""
+}
+
+func (ec *EphemeralCluster) KonfluxTenant() string {
+	if value, ok := ec.Labels[KonfluxTenantLabel]; ok {
+		return value
+	}
+	return ""
 }
 
 // +k8s:deepcopy-gen:interfaces=k8s.io/apimachinery/pkg/runtime.Object

@@ -13,7 +13,6 @@ import (
 
 	corev1 "k8s.io/api/core/v1"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
-	v1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/apimachinery/pkg/runtime"
 	"k8s.io/apimachinery/pkg/types"
 	"k8s.io/utils/ptr"
@@ -157,7 +156,24 @@ func TestCreateProwJob(t *testing.T) {
 
 	fakeRegistryAgent := fakeRegistryAgent{
 		clusterProfiles: map[string]*api.ClusterProfile{
-			"aws": {ClusterType: "aws"},
+			"aws": {
+				ClusterType: "aws",
+				Owners: []api.ClusterProfileOwners{{
+					Konflux: &api.ClusterProfileKonfluxOwner{
+						Tenant:           "ktenant",
+						ClustersResolved: []string{"kcluster"},
+					},
+				}},
+			},
+			"aws-2": {
+				ClusterType: "aws",
+				Owners: []api.ClusterProfileOwners{{
+					Konflux: &api.ClusterProfileKonfluxOwner{
+						Tenant:           "ktenant",
+						ClustersResolved: []string{"kcluster"},
+					},
+				}},
+			},
 		},
 	}
 
@@ -175,6 +191,10 @@ func TestCreateProwJob(t *testing.T) {
 			name: "An EphemeralCluster request creates a ProwJob",
 			ec: ephemeralclusterv1.EphemeralCluster{
 				ObjectMeta: metav1.ObjectMeta{
+					Labels: map[string]string{
+						ephemeralclusterv1.KonfluxClusterLabel: "kcluster",
+						ephemeralclusterv1.KonfluxTenantLabel:  "ktenant",
+					},
 					Namespace: "ns",
 					Name:      "ec",
 				},
@@ -216,32 +236,15 @@ func TestCreateProwJob(t *testing.T) {
 			name: "Invalid cluster profile",
 			ec: ephemeralclusterv1.EphemeralCluster{
 				ObjectMeta: metav1.ObjectMeta{
+					Labels: map[string]string{
+						ephemeralclusterv1.KonfluxClusterLabel: "foo",
+						ephemeralclusterv1.KonfluxTenantLabel:  "bar",
+					},
 					Namespace: "ns",
 					Name:      "ec",
 				},
 				Spec: ephemeralclusterv1.EphemeralClusterSpec{
 					CIOperator: ephemeralclusterv1.CIOperatorSpec{
-						BuildRootImage: &api.BuildRootImageConfiguration{
-							ImageStreamTagReference: &api.ImageStreamTagReference{
-								Namespace: "ocp",
-								Name:      "4.20",
-								Tag:       "cli",
-							},
-						},
-						BaseImages: map[string]api.ImageStreamTagReference{
-							"upi-installer": {
-								Namespace: "ocp",
-								Name:      "4.20",
-								Tag:       "upi-installer",
-							},
-						},
-						ExternalImages: map[string]api.ExternalImage{
-							"fedora": {Registry: "quay.io/fedora/fedora:43"},
-						},
-						Releases: map[string]api.UnresolvedRelease{
-							"initial": {Integration: &api.Integration{Name: "4.17", Namespace: "ocp"}},
-							"latest":  {Integration: &api.Integration{Name: "4.17", Namespace: "ocp"}},
-						},
 						Test: ephemeralclusterv1.TestSpec{
 							Workflow:       "test-workflow",
 							Env:            map[string]string{"foo": "bar"},
@@ -252,7 +255,31 @@ func TestCreateProwJob(t *testing.T) {
 			},
 			req:     reconcile.Request{NamespacedName: types.NamespacedName{Namespace: "ns", Name: "ec"}},
 			wantRes: reconcile.Result{},
-			wantErr: errors.New(`terminal error: generate jobs: new prowjob builder: resolve cluster profile "aws-2": cluster profile "aws-2" not found`),
+			wantErr: errors.New(`terminal error: validate ephemeral cluster: konflux cluster "foo" and tenant "bar" don't own the cluster profile "aws-2"`),
+		},
+		{
+			name: "Cluster profile is not set",
+			ec: ephemeralclusterv1.EphemeralCluster{
+				ObjectMeta: metav1.ObjectMeta{
+					Labels: map[string]string{
+						ephemeralclusterv1.KonfluxClusterLabel: "foo",
+						ephemeralclusterv1.KonfluxTenantLabel:  "bar",
+					},
+					Namespace: "ns",
+					Name:      "ec",
+				},
+				Spec: ephemeralclusterv1.EphemeralClusterSpec{
+					CIOperator: ephemeralclusterv1.CIOperatorSpec{
+						Test: ephemeralclusterv1.TestSpec{
+							Workflow: "test-workflow",
+							Env:      map[string]string{"foo": "bar"},
+						},
+					},
+				},
+			},
+			req:     reconcile.Request{NamespacedName: types.NamespacedName{Namespace: "ns", Name: "ec"}},
+			wantRes: reconcile.Result{},
+			wantErr: errors.New(`terminal error: validate ephemeral cluster: cluster profile has not been set`),
 		},
 		{
 			name: "Hive cluster request creates a ProwJob",
@@ -281,9 +308,8 @@ func TestCreateProwJob(t *testing.T) {
 							"fedora": {Registry: "quay.io/fedora/fedora:43"},
 						},
 						Test: ephemeralclusterv1.TestSpec{
-							Workflow:       "generic-claim",
-							Env:            map[string]string{"foo": "bar"},
-							ClusterProfile: "aws",
+							Workflow: "generic-claim",
+							Env:      map[string]string{"foo": "bar"},
 							ClusterClaim: &api.ClusterClaim{
 								As:           "claim",
 								Product:      "ocp",
@@ -305,6 +331,10 @@ func TestCreateProwJob(t *testing.T) {
 			name: "Handle invalid prow config",
 			ec: ephemeralclusterv1.EphemeralCluster{
 				ObjectMeta: metav1.ObjectMeta{
+					Labels: map[string]string{
+						ephemeralclusterv1.KonfluxClusterLabel: "kcluster",
+						ephemeralclusterv1.KonfluxTenantLabel:  "ktenant",
+					},
 					Namespace: "ns",
 					Name:      "ec",
 				},
@@ -315,7 +345,8 @@ func TestCreateProwJob(t *testing.T) {
 							"latest":  {Integration: &api.Integration{Name: "4.17", Namespace: "ocp"}},
 						},
 						Test: ephemeralclusterv1.TestSpec{
-							Workflow: "test-workflow",
+							Workflow:       "test-workflow",
+							ClusterProfile: "aws",
 						},
 					},
 				},
@@ -337,6 +368,10 @@ func TestCreateProwJob(t *testing.T) {
 			name: "Fail to create a ProwJob",
 			ec: ephemeralclusterv1.EphemeralCluster{
 				ObjectMeta: metav1.ObjectMeta{
+					Labels: map[string]string{
+						ephemeralclusterv1.KonfluxClusterLabel: "kcluster",
+						ephemeralclusterv1.KonfluxTenantLabel:  "ktenant",
+					},
 					Namespace: "ns",
 					Name:      "ec",
 				},
@@ -347,7 +382,8 @@ func TestCreateProwJob(t *testing.T) {
 							"latest":  {Integration: &api.Integration{Name: "4.17", Namespace: "ocp"}},
 						},
 						Test: ephemeralclusterv1.TestSpec{
-							Workflow: "test-workflow",
+							Workflow:       "test-workflow",
+							ClusterProfile: "aws",
 						},
 					},
 				},
@@ -366,13 +402,18 @@ func TestCreateProwJob(t *testing.T) {
 			name: "Invalid ci-operator configuration",
 			ec: ephemeralclusterv1.EphemeralCluster{
 				ObjectMeta: metav1.ObjectMeta{
+					Labels: map[string]string{
+						ephemeralclusterv1.KonfluxClusterLabel: "kcluster",
+						ephemeralclusterv1.KonfluxTenantLabel:  "ktenant",
+					},
 					Namespace: "ns",
 					Name:      "ec",
 				},
 				Spec: ephemeralclusterv1.EphemeralClusterSpec{
 					CIOperator: ephemeralclusterv1.CIOperatorSpec{
 						Test: ephemeralclusterv1.TestSpec{
-							Workflow: "test-workflow",
+							Workflow:       "test-workflow",
+							ClusterProfile: "aws",
 						},
 					},
 				},
@@ -385,13 +426,18 @@ func TestCreateProwJob(t *testing.T) {
 			name: "Invalid ci-operator configuration and fail to update EC",
 			ec: ephemeralclusterv1.EphemeralCluster{
 				ObjectMeta: metav1.ObjectMeta{
+					Labels: map[string]string{
+						ephemeralclusterv1.KonfluxClusterLabel: "kcluster",
+						ephemeralclusterv1.KonfluxTenantLabel:  "ktenant",
+					},
 					Namespace: "ns",
 					Name:      "ec",
 				},
 				Spec: ephemeralclusterv1.EphemeralClusterSpec{
 					CIOperator: ephemeralclusterv1.CIOperatorSpec{
 						Test: ephemeralclusterv1.TestSpec{
-							Workflow: "test-workflow",
+							Workflow:       "test-workflow",
+							ClusterProfile: "aws",
 						},
 					},
 				},
@@ -410,9 +456,18 @@ func TestCreateProwJob(t *testing.T) {
 			name: "Several PJ for the same EC raises an error",
 			ec: ephemeralclusterv1.EphemeralCluster{
 				ObjectMeta: metav1.ObjectMeta{
+					Labels: map[string]string{
+						ephemeralclusterv1.KonfluxClusterLabel: "kcluster",
+						ephemeralclusterv1.KonfluxTenantLabel:  "ktenant",
+					},
 					Namespace: "ns",
 					Name:      "ec",
 				},
+				Spec: ephemeralclusterv1.EphemeralClusterSpec{CIOperator: ephemeralclusterv1.CIOperatorSpec{
+					Test: ephemeralclusterv1.TestSpec{
+						ClusterProfile: "aws",
+					},
+				}},
 			},
 			pjs: []ctrlclient.Object{
 				&prowv1.ProwJob{ObjectMeta: metav1.ObjectMeta{
@@ -432,7 +487,19 @@ func TestCreateProwJob(t *testing.T) {
 		{
 			name: "PJ found but was not bound to the EC",
 			ec: ephemeralclusterv1.EphemeralCluster{
-				ObjectMeta: metav1.ObjectMeta{Namespace: "ns", Name: "ec"},
+				ObjectMeta: metav1.ObjectMeta{
+					Labels: map[string]string{
+						ephemeralclusterv1.KonfluxClusterLabel: "kcluster",
+						ephemeralclusterv1.KonfluxTenantLabel:  "ktenant",
+					},
+					Namespace: "ns",
+					Name:      "ec",
+				},
+				Spec: ephemeralclusterv1.EphemeralClusterSpec{CIOperator: ephemeralclusterv1.CIOperatorSpec{
+					Test: ephemeralclusterv1.TestSpec{
+						ClusterProfile: "aws",
+					},
+				}},
 			},
 			pjs: []ctrlclient.Object{&prowv1.ProwJob{ObjectMeta: metav1.ObjectMeta{
 				Labels:    map[string]string{EphemeralClusterLabel: "ec"},
@@ -452,6 +519,7 @@ func TestCreateProwJob(t *testing.T) {
 
 			client := clientBldr.
 				WithObjects(&tc.ec).
+				WithStatusSubresource(&tc.ec).
 				WithScheme(scheme).
 				WithInterceptorFuncs(tc.interceptors).
 				Build()
@@ -1388,6 +1456,7 @@ func TestReconcile(t *testing.T) {
 
 			client := fake.NewClientBuilder().
 				WithObjects(tc.ec).
+				WithStatusSubresource(tc.ec).
 				WithObjects(tc.objs...).
 				WithScheme(scheme).
 				Build()
@@ -1442,7 +1511,7 @@ func TestReconcile(t *testing.T) {
 				if diff := cmp.Diff(tc.wantSecret.Data, gotSecret.Data); diff != "" {
 					t.Errorf("unexpected credentials secret data: %s", diff)
 				}
-				if !v1.IsControlledBy(&gotSecret, tc.ec) {
+				if !metav1.IsControlledBy(&gotSecret, tc.ec) {
 					t.Errorf("credentials secret %s/%s is not controlled by ephemeralcluster %s",
 						gotSecret.Namespace, gotSecret.Name, tc.ec.Name)
 				}
@@ -1555,6 +1624,7 @@ func TestDeleteProwJob(t *testing.T) {
 
 			bldr := fake.NewClientBuilder().
 				WithObjects(tc.ec).
+				WithStatusSubresource(tc.ec).
 				WithScheme(scheme)
 
 			if tc.pj != nil {

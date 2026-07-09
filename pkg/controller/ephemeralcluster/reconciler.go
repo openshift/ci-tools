@@ -19,7 +19,6 @@ import (
 	corev1 "k8s.io/api/core/v1"
 	apierrors "k8s.io/apimachinery/pkg/api/errors"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
-	v1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/apimachinery/pkg/runtime"
 	"k8s.io/apimachinery/pkg/types"
 	utilerrors "k8s.io/apimachinery/pkg/util/errors"
@@ -172,7 +171,10 @@ func AddToManager(log *logrus.Entry, mgr manager.Manager, allManagers map[string
 
 	if err := ctrlbldr.ControllerManagedBy(mgr).
 		WithOptions(controller.Options{MaxConcurrentReconciles: 1}).
-		WithEventFilter(predicate.NewPredicateFuncs(ECPredicateFilter)).
+		WithEventFilter(predicate.And(
+			predicate.GenerationChangedPredicate{},
+			predicate.NewPredicateFuncs(ECPredicateFilter),
+		)).
 		For(&ephemeralclusterv1.EphemeralCluster{}).
 		Complete(&r); err != nil {
 		return fmt.Errorf("build controller: %w", err)
@@ -239,8 +241,8 @@ func (r *reconciler) Reconcile(ctx context.Context, req reconcile.Request) (reco
 	}
 
 	var requeueAfter time.Duration
+	// This is a stop-polling condition: if the PJ is in a final state there is nothing to do.
 	if isFinalState := r.reportProwJobFinalState(&pj, &observedStatus); !isFinalState {
-		// This is a stop-polling condition: if the PJ is in a final state there is nothing to do.
 		requeueAfter = r.polling()
 	}
 
@@ -345,7 +347,55 @@ func (r *reconciler) injectCLIIntoBaseImages(baseImages map[string]api.ImageStre
 	return longestName
 }
 
+func (r *reconciler) validateEphemeralCluster(log *logrus.Entry, ec *ephemeralclusterv1.EphemeralCluster) error {
+	log.Info("Validating the Ephemeral Cluster")
+
+	// When the cluser claim is set, there is no need to validate the cluster profile.
+	if ec.Spec.CIOperator.Test.ClusterClaim != nil {
+		return nil
+	}
+
+	clusterProfileName := ec.Spec.CIOperator.Test.ClusterProfile
+	if clusterProfileName == "" {
+		log.Error("Cluster profile has not been set")
+		return errors.New("cluster profile has not been set")
+	}
+
+	log = log.WithField("cluster_profile", clusterProfileName)
+
+	clusterProfile, err := r.clusterProfileResolver(clusterProfileName)
+	if err != nil {
+		log.WithError(err).Error("Failed to resolve cluster profile")
+		return fmt.Errorf("resolve cluster profile %s: %w", clusterProfileName, err)
+	}
+
+	cluster, tenant := ec.KonfluxCluster(), ec.KonfluxTenant()
+	for _, owner := range clusterProfile.Owners {
+		if k := owner.Konflux; k != nil {
+			if tenant == k.Tenant && slices.Contains(k.ClustersResolved, cluster) {
+				log.WithField("cluster", cluster).WithField("tenant", tenant).Info("Cluster profile is valid")
+				return nil
+			}
+		}
+	}
+
+	log.WithError(err).Errorf("Konflux cluster %q and tenant %q don't own the cluster profile", cluster, tenant)
+	return fmt.Errorf("konflux cluster %q and tenant %q don't own the cluster profile %q", cluster, tenant, clusterProfileName)
+}
+
 func (r *reconciler) handleCreateProwJob(ctx context.Context, log *logrus.Entry, ec *ephemeralclusterv1.EphemeralCluster, observedStatus *ephemeralclusterv1.EphemeralClusterStatus) (reconcile.Result, error) {
+	log.Info("Starting the procedure to create a ProwJob")
+
+	if err := r.validateEphemeralCluster(log, ec); err != nil {
+		upsertCondition(observedStatus, ephemeralclusterv1.ProwJobCreating, ephemeralclusterv1.ConditionFalse, r.now(), ephemeralclusterv1.EphemeralClusterValidationFailureReason, err.Error())
+		observedStatus.Phase = ephemeralclusterv1.EphemeralClusterFailed
+		if updateErr := r.updateEphemeralClusterStatus(ctx, ec, observedStatus); updateErr != nil {
+			msg := utilerrors.NewAggregate([]error{updateErr, err}).Error()
+			return reconcile.Result{}, errors.New(msg)
+		}
+		return reconcile.Result{}, reconcile.TerminalError(fmt.Errorf("validate ephemeral cluster: %w", err))
+	}
+
 	pjsForEC := prowv1.ProwJobList{}
 	listOpts := []ctrlruntimeclient.ListOption{
 		ctrlruntimeclient.MatchingLabels{EphemeralClusterLabel: ec.Name},
@@ -362,7 +412,12 @@ func (r *reconciler) handleCreateProwJob(ctx context.Context, log *logrus.Entry,
 		log.Error(TooManyPJsBoundErrMsg)
 		upsertCondition(observedStatus, ephemeralclusterv1.ProwJobCreating, ephemeralclusterv1.ConditionFalse, r.now(), ephemeralclusterv1.TooManyProwJobsBoundReason, TooManyPJsBoundErrMsg)
 		observedStatus.Phase = ephemeralclusterv1.EphemeralClusterFailed
-		return reconcile.Result{}, reconcile.TerminalError(errors.New("too many ProwJobs associated"))
+		err := errors.New("too many ProwJobs associated")
+		if updateErr := r.updateEphemeralClusterStatus(ctx, ec, observedStatus); updateErr != nil {
+			msg := utilerrors.NewAggregate([]error{updateErr, err}).Error()
+			return reconcile.Result{}, errors.New(msg)
+		}
+		return reconcile.Result{}, reconcile.TerminalError(err)
 	}
 
 	// This is another case that should be very unlikely to happen. We expect this controller
@@ -378,7 +433,7 @@ func (r *reconciler) handleCreateProwJob(ctx context.Context, log *logrus.Entry,
 
 	log.Info("ProwJob doesn't exist, creating")
 	err := r.createProwJob(ctx, log, ec)
-	if updateErr := r.updateEphemeralCluster(ctx, ec); updateErr != nil {
+	if updateErr := r.updateEphemeralClusterWithStatus(ctx, ec); updateErr != nil {
 		msg := utilerrors.NewAggregate([]error{updateErr, err}).Error()
 		return reconcile.Result{}, errors.New(msg)
 	}
@@ -623,7 +678,9 @@ func (r *reconciler) updateEphemeralClusterStatus(ctx context.Context, ec *ephem
 
 	if !cmp.Equal(&ec.Status, observedStatus, cmpECStatusOpts...) {
 		ec.Status = *observedStatus
-		return r.updateEphemeralCluster(ctx, ec)
+		if err := r.masterClient.Status().Update(ctx, ec); err != nil {
+			return fmt.Errorf("update ephemeral cluster status: %w", err)
+		}
 	}
 	return nil
 }
@@ -632,6 +689,23 @@ func (r *reconciler) updateEphemeralCluster(ctx context.Context, ec *ephemeralcl
 	if err := r.masterClient.Update(ctx, ec); err != nil {
 		return fmt.Errorf("update ephemeral cluster: %w", err)
 	}
+	return nil
+}
+
+func (r *reconciler) updateEphemeralClusterWithStatus(ctx context.Context, ec *ephemeralclusterv1.EphemeralCluster) error {
+	// Save the status since the ec resource has the `status` subresource. The apiserver will
+	// persist only the `.spec` stanza and return object with the old status. This means
+	// we lose our status, therefore a deep copy here is needed.
+	ecStatus := ec.Status.DeepCopy()
+	if err := r.masterClient.Update(ctx, ec); err != nil {
+		return fmt.Errorf("update ephemeral cluster: %w", err)
+	}
+
+	ec.Status = *ecStatus
+	if err := r.masterClient.Status().Update(ctx, ec); err != nil {
+		return fmt.Errorf("update ephemeral cluster and status: %w", err)
+	}
+
 	return nil
 }
 
@@ -653,7 +727,7 @@ func (r *reconciler) createCredentialsSecret(
 		return fmt.Errorf("check credentials secret: %w", err)
 	}
 	if err == nil {
-		if !v1.IsControlledBy(&existing, ec) {
+		if !metav1.IsControlledBy(&existing, ec) {
 			return fmt.Errorf("credentials secret %s/%s exists but is not owned by ephemeralcluster %s (uid=%s)",
 				ec.Namespace, secretName, ec.Name, ec.UID)
 		}
@@ -661,7 +735,7 @@ func (r *reconciler) createCredentialsSecret(
 	}
 
 	secret := &corev1.Secret{
-		ObjectMeta: v1.ObjectMeta{
+		ObjectMeta: metav1.ObjectMeta{
 			Name:      secretName,
 			Namespace: ec.Namespace,
 		},

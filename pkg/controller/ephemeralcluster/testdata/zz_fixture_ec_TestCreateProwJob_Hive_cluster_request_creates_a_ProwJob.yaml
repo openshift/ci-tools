@@ -4,7 +4,7 @@ metadata:
   - ephemeralcluster.ci.openshift.io/dependent-prowjob
   name: ec
   namespace: ns
-  resourceVersion: "1000"
+  resourceVersion: "1001"
 spec:
   ciOperator:
     baseImages:
@@ -38,7 +38,6 @@ spec:
         product: ocp
         timeout: 0s
         version: "4.22"
-      clusterProfile: aws
       env:
         foo: bar
       workflow: generic-claim

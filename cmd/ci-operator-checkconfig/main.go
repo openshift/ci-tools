@@ -40,14 +40,11 @@ func (o *options) parse() error {
 	var registryDir string
 	var profilesConfigPath string
 	var clusterClaimConfigPath string
-	var clusterProfileSetDetailsPath string
 
 	fs := flag.NewFlagSet("", flag.ExitOnError)
-
 	fs.StringVar(&registryDir, "registry", "", "Path to the step registry directory")
 	fs.StringVar(&profilesConfigPath, "cluster-profiles-config", "", "Path to the cluster profile config file")
 	fs.StringVar(&clusterClaimConfigPath, "cluster-claim-owners-config", "", "Path to the cluster claim owners config file")
-	fs.StringVar(&clusterProfileSetDetailsPath, "cluster-profile-set-details", "", "Path to the cluster profile set details file")
 	o.Options.Bind(fs)
 
 	if err := fs.Parse(os.Args[1:]); err != nil {

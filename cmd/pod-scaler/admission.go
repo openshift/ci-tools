@@ -969,6 +969,13 @@ func applyAuthoritativeLimitDecrease(recommended, configured *corev1.ResourceReq
 				}).Infof("authoritative %s decrease dry-run", target.resourceType)
 				continue
 			}
+			fieldLogger.WithFields(logrus.Fields{
+				"event":            "authoritative_decrease_applied",
+				"workloadClass":    workloadClass,
+				"set_to":           determined.String(),
+				"reduction_pct":    (1.0 - determined.AsApproximateFloat64()/configuredFloat) * 100,
+				"reduction_capped": reductionCapped,
+			}).Infof("authoritative %s decrease applied", target.resourceType)
 			(*target.configuredList)[field] = determined
 		}
 	}

@@ -115,6 +115,17 @@ func main() {
 }
 
 func writeConfig(configPath string, profiles api.ClusterProfiles) error {
+	// Resolved clusters are computed at runtime and they should not be marshaled.
+	for i := range profiles.Items {
+		profile := &profiles.Items[i]
+		for j := range profile.Owners {
+			owner := &profile.Owners[j]
+			if owner.Konflux != nil {
+				owner.Konflux.ClustersResolved = nil
+			}
+		}
+	}
+
 	bytes, err := yaml.Marshal(&profiles)
 	if err != nil {
 		return fmt.Errorf("marshal profiles: %w", err)

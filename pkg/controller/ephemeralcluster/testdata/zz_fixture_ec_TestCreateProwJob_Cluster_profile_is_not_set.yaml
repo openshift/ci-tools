@@ -9,15 +9,13 @@ metadata:
 spec:
   ciOperator:
     test:
-      clusterProfile: aws-2
       env:
         foo: bar
       workflow: test-workflow
 status:
   conditions:
   - lastTransitionTime: "2025-04-02T12:12:12Z"
-    message: konflux cluster "foo" and tenant "bar" don't own the cluster profile
-      "aws-2"
+    message: cluster profile has not been set
     reason: EphemeralClusterValidationFailure
     status: "False"
     type: ProwJobCreating

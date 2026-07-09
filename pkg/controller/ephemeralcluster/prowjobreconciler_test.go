@@ -76,6 +76,15 @@ func TestReconcileProwJob(t *testing.T) {
 		}
 		return bldr
 	}
+	addStatusSubresourceObjs := func(bldr *fake.ClientBuilder, objs ...ctrlclient.Object) *fake.ClientBuilder {
+		for _, obj := range objs {
+			if !reflect.ValueOf(obj).IsNil() {
+				bldr = bldr.WithStatusSubresource(obj)
+			}
+		}
+		return bldr
+	}
+
 	fakeNow := fakeNow(t)
 	scheme := fakeScheme(t)
 
@@ -249,7 +258,8 @@ func TestReconcileProwJob(t *testing.T) {
 			bldr := fake.NewClientBuilder().
 				WithInterceptorFuncs(tc.interceptors).
 				WithScheme(scheme)
-			client := addObjs(bldr, tc.pj, tc.ec).Build()
+			bldr = addObjs(bldr, tc.pj, tc.ec)
+			client := addStatusSubresourceObjs(bldr, tc.ec).Build()
 
 			clients := make(map[string]ctrlclient.Client)
 			if tc.buildClients != nil {

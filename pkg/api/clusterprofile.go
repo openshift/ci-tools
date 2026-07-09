@@ -105,7 +105,7 @@ type ClusterProfileKonfluxOwner struct {
 	Tenant           string   `yaml:"tenant,omitempty" json:"tenant,omitempty"`
 	Clusters         []string `yaml:"clusters,omitempty" json:"clusters,omitempty"`
 	ClusterGroups    []string `yaml:"cluster_groups,omitempty" json:"cluster_groups,omitempty"`
-	ClustersResolved []string `yaml:"-" json:"-"`
+	ClustersResolved []string `yaml:"clusters_resolved,omitempty" json:"clusters_resolved,omitempty"`
 }
 
 type ClusterProfileOwners struct {

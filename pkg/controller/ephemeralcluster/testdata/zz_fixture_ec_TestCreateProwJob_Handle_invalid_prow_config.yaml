@@ -1,8 +1,11 @@
 metadata:
   creationTimestamp: null
+  labels:
+    ephemeralcluster.ci.openshift.io/konflux-cluster: kcluster
+    ephemeralcluster.ci.openshift.io/konflux-tenant: ktenant
   name: ec
   namespace: ns
-  resourceVersion: "1000"
+  resourceVersion: "1001"
 spec:
   ciOperator:
     releases:
@@ -15,6 +18,7 @@ spec:
           name: "4.17"
           namespace: ocp
     test:
+      clusterProfile: aws
       workflow: test-workflow
 status:
   conditions:

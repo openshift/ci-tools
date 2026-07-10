@@ -92,6 +92,7 @@ type consumerOptions struct {
 	authoritativeCPULimitMaxReductionPercent      float64
 	authoritativeMemoryRequestMaxReductionPercent float64
 	authoritativeMemoryLimitMaxReductionPercent   float64
+	authoritativeDecreaseUsageBasis               string
 }
 
 func (o *consumerOptions) authoritativeConfig() authoritativeConfig {
@@ -152,6 +153,7 @@ func bindOptions(fs *flag.FlagSet) *options {
 	fs.Float64Var(&o.authoritativeMemoryRequestMaxReductionPercent, "authoritative-memory-request-max-reduction-percent", 1.0, "Maximum memory request reduction per admission in authoritative mode, as a fraction (0.25 = 25%, 1.0 = no cap).")
 	fs.Float64Var(&o.authoritativeMemoryLimitMaxReductionPercent, "authoritative-memory-limit-max-reduction-percent", 1.0, "Maximum memory limit reduction per admission in authoritative mode, as a fraction (0.25 = 25%, 1.0 = no cap).")
 	fs.Float64Var(&o.authoritativeMemoryLimitMaxReductionPercent, "authoritative-memory-max-reduction-percent", 1.0, "Deprecated: use --authoritative-memory-limit-max-reduction-percent.")
+	fs.StringVar(&o.authoritativeDecreaseUsageBasis, "pod-scaler-authoritative-decrease-usage-basis", "p80", "Usage basis for authoritative decreases before the 1.2x multiplier: p80 (default) or peak (histogram max/burst).")
 	fs.Float64Var(&o.failureEscalationFactor, "failure-escalation-factor", 1.5, "Multiplier applied per escalation level after OOM or CPU throttle (1.5 = 50% increase per level).")
 	fs.IntVar(&o.failureEscalationMaxLevel, "failure-escalation-max-level", 10, "Maximum escalation level tracked for a workload.")
 	fs.Float64Var(&o.cpuThrottleThreshold, "cpu-throttle-threshold", 0.25, "Minimum throttled/total CPU CFS period ratio to count as CPU deprived.")
@@ -205,6 +207,9 @@ func (o *options) validate() error {
 		}
 		if o.authoritativeMemoryLimitMaxReductionPercent < 0 || o.authoritativeMemoryLimitMaxReductionPercent > 1 {
 			return errors.New("--authoritative-memory-limit-max-reduction-percent must be between 0 and 1")
+		}
+		if _, err := parseAuthoritativeDecreaseUsageBasis(o.authoritativeDecreaseUsageBasis); err != nil {
+			return err
 		}
 		if err := o.resultsOptions.Validate(); err != nil {
 			return err
@@ -367,7 +372,12 @@ func mainAdmission(opts *options, cache Cache) {
 
 	escalations := newEscalationServer(cache, opts.failureEscalationFactor)
 
-	go admit(opts.port, opts.instrumentationOptions.HealthPort, opts.certDir, client, kubeClient, loaders(cache), opts.mutateResourceLimits, opts.cpuCap, opts.memoryCap, opts.cpuPriorityScheduling, opts.percentageMeasured, opts.measuredPodCPUIncrease, opts.systemReservedCPU, opts.authoritativeConfig(), escalations, reporter)
+	usageBasis, err := parseAuthoritativeDecreaseUsageBasis(opts.authoritativeDecreaseUsageBasis)
+	if err != nil {
+		logrus.WithError(err).Fatal("Failed to parse authoritative decrease usage basis.")
+	}
+
+	go admit(opts.port, opts.instrumentationOptions.HealthPort, opts.certDir, client, kubeClient, loaders(cache), opts.mutateResourceLimits, opts.cpuCap, opts.memoryCap, opts.cpuPriorityScheduling, opts.percentageMeasured, opts.measuredPodCPUIncrease, opts.systemReservedCPU, opts.authoritativeConfig(), usageBasis, escalations, reporter)
 }
 
 func loaders(cache Cache) map[string][]*cacheReloader {

@@ -67,6 +67,36 @@ func quantileValueUsable(v float64) bool {
 	return !math.IsNaN(v) && !math.IsInf(v, 0) && v >= 0
 }
 
+const maxUsableUsageValue = float64(1 << 63)
+
+// recommendationPeakValue returns the histogram max (burst/spike usage).
+func recommendationPeakValue(hist *circonusllhist.Histogram) *float64 {
+	if hist.Count() == 0 {
+		return nil
+	}
+	v := hist.Max()
+	if !quantileValueUsable(v) || v >= maxUsableUsageValue {
+		return nil
+	}
+	return &v
+}
+
+func cpuPeakQuantityFromHistogram(hist *circonusllhist.Histogram) *resource.Quantity {
+	usage := recommendationPeakValue(hist)
+	if usage == nil {
+		return nil
+	}
+	return cpuQuantityFromCores(*usage)
+}
+
+func memoryPeakQuantityFromHistogram(hist *circonusllhist.Histogram) *resource.Quantity {
+	usage := recommendationPeakValue(hist)
+	if usage == nil {
+		return nil
+	}
+	return memoryQuantityFromBytes(*usage)
+}
+
 // recommendationValue returns usage in histogram-native units (cores for CPU, bytes for memory).
 // nil means there is no usable recommendation.
 func recommendationValue(hist *circonusllhist.Histogram, quantile float64) *float64 {
@@ -101,7 +131,7 @@ func memoryQuantityFromBytes(bytes float64) *resource.Quantity {
 	if !quantileValueUsable(bytes) {
 		return nil
 	}
-	if bytes > float64(math.MaxInt64) {
+	if bytes >= maxUsableUsageValue {
 		return nil
 	}
 	return resource.NewQuantity(int64(bytes), resource.BinarySI)
@@ -167,6 +197,16 @@ func (s *resourceServer) digestRecommendations(
 			}
 		}
 		s.byMetaData[meta].Requests[resource] = requests[resource]
+		switch resource {
+		case corev1.ResourceCPU:
+			if peak := cpuPeakQuantityFromHistogram(overall); peak != nil {
+				s.byMetaData[meta].Limits[resource] = *peak
+			}
+		case corev1.ResourceMemory:
+			if peak := memoryPeakQuantityFromHistogram(overall); peak != nil {
+				s.byMetaData[meta].Limits[resource] = *peak
+			}
+		}
 		metaLogger.Trace("unlocking for meta")
 		s.lock.Unlock()
 	}

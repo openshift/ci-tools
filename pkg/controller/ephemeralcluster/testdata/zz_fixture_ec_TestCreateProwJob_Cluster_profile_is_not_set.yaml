@@ -1,8 +1,8 @@
 metadata:
-  creationTimestamp: null
-  labels:
+  annotations:
     ephemeralcluster.ci.openshift.io/konflux-cluster: foo
     ephemeralcluster.ci.openshift.io/konflux-tenant: bar
+  creationTimestamp: null
   name: ec
   namespace: ns
   resourceVersion: "1000"

@@ -19,8 +19,8 @@ const (
 	KubeconfigNotReadyMsg   = "kubeconfig not ready"
 	HiveSecretsNotReadyMsg  = "hive secrets not ready"
 
-	KonfluxClusterLabel = "ephemeralcluster.ci.openshift.io/konflux-cluster"
-	KonfluxTenantLabel  = "ephemeralcluster.ci.openshift.io/konflux-tenant"
+	KonfluxClusterAnnotation = "ephemeralcluster.ci.openshift.io/konflux-cluster"
+	KonfluxTenantAnnotation  = "ephemeralcluster.ci.openshift.io/konflux-tenant"
 )
 
 // EphemeralClusterCondition is a valid value for EphemeralClusterCondition.Type
@@ -76,14 +76,14 @@ type EphemeralCluster struct {
 }
 
 func (ec *EphemeralCluster) KonfluxCluster() string {
-	if value, ok := ec.Labels[KonfluxClusterLabel]; ok {
+	if value, ok := ec.Annotations[KonfluxClusterAnnotation]; ok {
 		return value
 	}
 	return ""
 }
 
 func (ec *EphemeralCluster) KonfluxTenant() string {
-	if value, ok := ec.Labels[KonfluxTenantLabel]; ok {
+	if value, ok := ec.Annotations[KonfluxTenantAnnotation]; ok {
 		return value
 	}
 	return ""

@@ -191,9 +191,9 @@ func TestCreateProwJob(t *testing.T) {
 			name: "An EphemeralCluster request creates a ProwJob",
 			ec: ephemeralclusterv1.EphemeralCluster{
 				ObjectMeta: metav1.ObjectMeta{
-					Labels: map[string]string{
-						ephemeralclusterv1.KonfluxClusterLabel: "kcluster",
-						ephemeralclusterv1.KonfluxTenantLabel:  "ktenant",
+					Annotations: map[string]string{
+						ephemeralclusterv1.KonfluxClusterAnnotation: "kcluster",
+						ephemeralclusterv1.KonfluxTenantAnnotation:  "ktenant",
 					},
 					Namespace: "ns",
 					Name:      "ec",
@@ -236,9 +236,9 @@ func TestCreateProwJob(t *testing.T) {
 			name: "Invalid cluster profile",
 			ec: ephemeralclusterv1.EphemeralCluster{
 				ObjectMeta: metav1.ObjectMeta{
-					Labels: map[string]string{
-						ephemeralclusterv1.KonfluxClusterLabel: "foo",
-						ephemeralclusterv1.KonfluxTenantLabel:  "bar",
+					Annotations: map[string]string{
+						ephemeralclusterv1.KonfluxClusterAnnotation: "foo",
+						ephemeralclusterv1.KonfluxTenantAnnotation:  "bar",
 					},
 					Namespace: "ns",
 					Name:      "ec",
@@ -261,9 +261,9 @@ func TestCreateProwJob(t *testing.T) {
 			name: "Cluster profile is not set",
 			ec: ephemeralclusterv1.EphemeralCluster{
 				ObjectMeta: metav1.ObjectMeta{
-					Labels: map[string]string{
-						ephemeralclusterv1.KonfluxClusterLabel: "foo",
-						ephemeralclusterv1.KonfluxTenantLabel:  "bar",
+					Annotations: map[string]string{
+						ephemeralclusterv1.KonfluxClusterAnnotation: "foo",
+						ephemeralclusterv1.KonfluxTenantAnnotation:  "bar",
 					},
 					Namespace: "ns",
 					Name:      "ec",
@@ -331,9 +331,9 @@ func TestCreateProwJob(t *testing.T) {
 			name: "Handle invalid prow config",
 			ec: ephemeralclusterv1.EphemeralCluster{
 				ObjectMeta: metav1.ObjectMeta{
-					Labels: map[string]string{
-						ephemeralclusterv1.KonfluxClusterLabel: "kcluster",
-						ephemeralclusterv1.KonfluxTenantLabel:  "ktenant",
+					Annotations: map[string]string{
+						ephemeralclusterv1.KonfluxClusterAnnotation: "kcluster",
+						ephemeralclusterv1.KonfluxTenantAnnotation:  "ktenant",
 					},
 					Namespace: "ns",
 					Name:      "ec",
@@ -368,9 +368,9 @@ func TestCreateProwJob(t *testing.T) {
 			name: "Fail to create a ProwJob",
 			ec: ephemeralclusterv1.EphemeralCluster{
 				ObjectMeta: metav1.ObjectMeta{
-					Labels: map[string]string{
-						ephemeralclusterv1.KonfluxClusterLabel: "kcluster",
-						ephemeralclusterv1.KonfluxTenantLabel:  "ktenant",
+					Annotations: map[string]string{
+						ephemeralclusterv1.KonfluxClusterAnnotation: "kcluster",
+						ephemeralclusterv1.KonfluxTenantAnnotation:  "ktenant",
 					},
 					Namespace: "ns",
 					Name:      "ec",
@@ -402,9 +402,9 @@ func TestCreateProwJob(t *testing.T) {
 			name: "Invalid ci-operator configuration",
 			ec: ephemeralclusterv1.EphemeralCluster{
 				ObjectMeta: metav1.ObjectMeta{
-					Labels: map[string]string{
-						ephemeralclusterv1.KonfluxClusterLabel: "kcluster",
-						ephemeralclusterv1.KonfluxTenantLabel:  "ktenant",
+					Annotations: map[string]string{
+						ephemeralclusterv1.KonfluxClusterAnnotation: "kcluster",
+						ephemeralclusterv1.KonfluxTenantAnnotation:  "ktenant",
 					},
 					Namespace: "ns",
 					Name:      "ec",
@@ -426,9 +426,9 @@ func TestCreateProwJob(t *testing.T) {
 			name: "Invalid ci-operator configuration and fail to update EC",
 			ec: ephemeralclusterv1.EphemeralCluster{
 				ObjectMeta: metav1.ObjectMeta{
-					Labels: map[string]string{
-						ephemeralclusterv1.KonfluxClusterLabel: "kcluster",
-						ephemeralclusterv1.KonfluxTenantLabel:  "ktenant",
+					Annotations: map[string]string{
+						ephemeralclusterv1.KonfluxClusterAnnotation: "kcluster",
+						ephemeralclusterv1.KonfluxTenantAnnotation:  "ktenant",
 					},
 					Namespace: "ns",
 					Name:      "ec",
@@ -456,9 +456,9 @@ func TestCreateProwJob(t *testing.T) {
 			name: "Several PJ for the same EC raises an error",
 			ec: ephemeralclusterv1.EphemeralCluster{
 				ObjectMeta: metav1.ObjectMeta{
-					Labels: map[string]string{
-						ephemeralclusterv1.KonfluxClusterLabel: "kcluster",
-						ephemeralclusterv1.KonfluxTenantLabel:  "ktenant",
+					Annotations: map[string]string{
+						ephemeralclusterv1.KonfluxClusterAnnotation: "kcluster",
+						ephemeralclusterv1.KonfluxTenantAnnotation:  "ktenant",
 					},
 					Namespace: "ns",
 					Name:      "ec",
@@ -488,9 +488,9 @@ func TestCreateProwJob(t *testing.T) {
 			name: "PJ found but was not bound to the EC",
 			ec: ephemeralclusterv1.EphemeralCluster{
 				ObjectMeta: metav1.ObjectMeta{
-					Labels: map[string]string{
-						ephemeralclusterv1.KonfluxClusterLabel: "kcluster",
-						ephemeralclusterv1.KonfluxTenantLabel:  "ktenant",
+					Annotations: map[string]string{
+						ephemeralclusterv1.KonfluxClusterAnnotation: "kcluster",
+						ephemeralclusterv1.KonfluxTenantAnnotation:  "ktenant",
 					},
 					Namespace: "ns",
 					Name:      "ec",

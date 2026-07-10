@@ -117,9 +117,10 @@ type serviceAccountSecretRefresherOptions struct {
 }
 
 type ephemeralClusterProvisionerOptions struct {
-	pollingRaw  string
-	polling     time.Duration
-	cliISTagRef string
+	pollingRaw        string
+	polling           time.Duration
+	cliISTagRef       string
+	privilegedTenants flagutil.Strings
 }
 
 func newOpts() (*options, error) {
@@ -150,6 +151,7 @@ func newOpts() (*options, error) {
 	fs.StringVar(&opts.promotionReconcilerOptions.sinceRaw, "promotionReconcilerOptions.since", "360h", "The image stream tags to reconcile if it is younger than a relative duration like 5s, 2m, or 3h. Defaults to 360h, i.e., 15 days")
 	fs.StringVar(&opts.ephemeralClusterProvisinerOptions.pollingRaw, "ephemeralClusterProvisionerOptions.polling", "1m", "Set how often the reconciler checks for the ephemeral cluster before it gets provisioned.")
 	fs.StringVar(&opts.ephemeralClusterProvisinerOptions.cliISTagRef, "ephemeralClusterProvisionerOptions.cliISTagRef", "ocp/4.21:cli", "Set the cli image into the ci-operator base images in the form of `<namespace>/<name>:<tag>`. Defaults to `ocp/4.21:cli`.")
+	fs.Var(&opts.ephemeralClusterProvisinerOptions.privilegedTenants, "ephemeralClusterProvisionerOptions.privilegedTenants", "Konflux tenants that are allowed to use any cluster profile. Can be passed multiple times.")
 	fs.BoolVar(&opts.dryRun, "dry-run", true, "Whether to run the controller-manager with dry-run")
 	fs.StringVar(&opts.releaseRepoGitSyncPath, "release-repo-git-sync-path", "", "Path to release repository dir")
 	if err := fs.Parse(os.Args[1:]); err != nil {
@@ -552,7 +554,8 @@ func main() {
 		log := logrus.NewEntry(logrus.StandardLogger())
 		if err := ephemeralcluster.AddToManager(log, mgr, allManagers, configAgent, registryAgent,
 			ephemeralcluster.WithPolling(opts.ephemeralClusterProvisinerOptions.polling),
-			ephemeralcluster.WithCLIISTagRef(opts.ephemeralClusterProvisinerOptions.cliISTagRef)); err != nil {
+			ephemeralcluster.WithCLIISTagRef(opts.ephemeralClusterProvisinerOptions.cliISTagRef),
+			ephemeralcluster.WithPrivilegedTenants(opts.ephemeralClusterProvisinerOptions.privilegedTenants.Strings())); err != nil {
 			logrus.WithError(err).Fatalf("Failed to construct the %s controller", ephemeralcluster.ControllerName)
 		}
 	}

@@ -22,6 +22,7 @@ import (
 	"k8s.io/apimachinery/pkg/runtime"
 	"k8s.io/apimachinery/pkg/types"
 	utilerrors "k8s.io/apimachinery/pkg/util/errors"
+	"k8s.io/apimachinery/pkg/util/sets"
 	"k8s.io/utils/ptr"
 	ctrlbldr "sigs.k8s.io/controller-runtime/pkg/builder"
 	ctrlruntimeclient "sigs.k8s.io/controller-runtime/pkg/client"
@@ -73,7 +74,8 @@ var (
 	}
 
 	defaultReconcilerOpts = reconcilerOptions{
-		polling: 3 * time.Second,
+		polling:           3 * time.Second,
+		privilegedTenants: sets.New[string](),
 	}
 
 	isTagRegexp = regexp.MustCompile(`(?P<Namespace>.+)/(?P<Name>.+)\:(?P<Tag>.+)`)
@@ -90,8 +92,9 @@ func (bc buildClients) forCluster(cluster string) (ctrlruntimeclient.Client, err
 }
 
 type reconcilerOptions struct {
-	polling     time.Duration
-	cliISTagRef string
+	polling           time.Duration
+	cliISTagRef       string
+	privilegedTenants sets.Set[string]
 }
 
 type ReconcilerOption func(*reconcilerOptions)
@@ -102,10 +105,17 @@ func WithPolling(polling time.Duration) ReconcilerOption {
 	}
 }
 
-// Set the image stream tag reference for the `cli` image in the form of `ocp/4.22:cli`.
+// WithCLIISTagRef sets the image stream tag reference for the `cli` image in the form of `ocp/4.22:cli`.
 func WithCLIISTagRef(isTagRef string) ReconcilerOption {
 	return func(o *reconcilerOptions) {
 		o.cliISTagRef = isTagRef
+	}
+}
+
+// WithPrivilegedTenants sets a list of tenants that are allowed to use any cluster profile.
+func WithPrivilegedTenants(tenants []string) ReconcilerOption {
+	return func(o *reconcilerOptions) {
+		o.privilegedTenants.Insert(tenants...)
 	}
 }
 
@@ -129,11 +139,12 @@ type reconciler struct {
 	prowConfigAgent        *prowconfig.Agent
 	clusterProfileResolver prowgen.ClusterProfileResolver
 	scheme                 *runtime.Scheme
+	cliISTagRef            api.ImageStreamTagReference
+	privilegedTenants      sets.Set[string]
 
 	// Mock for testing
-	now         func() time.Time
-	polling     func() time.Duration
-	cliISTagRef api.ImageStreamTagReference
+	now     func() time.Time
+	polling func() time.Duration
 }
 
 func ECPredicateFilter(object ctrlruntimeclient.Object) bool {
@@ -167,6 +178,7 @@ func AddToManager(log *logrus.Entry, mgr manager.Manager, allManagers map[string
 		now:                    time.Now,
 		polling:                func() time.Duration { return defaultReconcilerOpts.polling },
 		cliISTagRef:            cliISTagRef,
+		privilegedTenants:      defaultReconcilerOpts.privilegedTenants,
 	}
 
 	if err := ctrlbldr.ControllerManagedBy(mgr).
@@ -370,16 +382,23 @@ func (r *reconciler) validateEphemeralCluster(log *logrus.Entry, ec *ephemeralcl
 	}
 
 	cluster, tenant := ec.KonfluxCluster(), ec.KonfluxTenant()
+	log = log.WithField("cluster", cluster).WithField("tenant", tenant)
+
+	if r.privilegedTenants.Has(tenant) {
+		log.Warn("Cluster profile is valid and owned by a privileged tenant")
+		return nil
+	}
+
 	for _, owner := range clusterProfile.Owners {
 		if k := owner.Konflux; k != nil {
 			if tenant == k.Tenant && slices.Contains(k.ClustersResolved, cluster) {
-				log.WithField("cluster", cluster).WithField("tenant", tenant).Info("Cluster profile is valid")
+				log.Info("Cluster profile is valid")
 				return nil
 			}
 		}
 	}
 
-	log.WithError(err).Errorf("Konflux cluster %q and tenant %q don't own the cluster profile", cluster, tenant)
+	log.Error("Konflux cluster and tenant don't own this cluster profile")
 	return fmt.Errorf("konflux cluster %q and tenant %q don't own the cluster profile %q", cluster, tenant, clusterProfileName)
 }
 

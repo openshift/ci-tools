@@ -15,6 +15,7 @@ import (
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/apimachinery/pkg/runtime"
 	"k8s.io/apimachinery/pkg/types"
+	"k8s.io/apimachinery/pkg/util/sets"
 	"k8s.io/utils/ptr"
 	ctrlclient "sigs.k8s.io/controller-runtime/pkg/client"
 	"sigs.k8s.io/controller-runtime/pkg/client/fake"
@@ -194,6 +195,50 @@ func TestCreateProwJob(t *testing.T) {
 					Annotations: map[string]string{
 						ephemeralclusterv1.KonfluxClusterAnnotation: "kcluster",
 						ephemeralclusterv1.KonfluxTenantAnnotation:  "ktenant",
+					},
+					Namespace: "ns",
+					Name:      "ec",
+				},
+				Spec: ephemeralclusterv1.EphemeralClusterSpec{
+					CIOperator: ephemeralclusterv1.CIOperatorSpec{
+						BuildRootImage: &api.BuildRootImageConfiguration{
+							ImageStreamTagReference: &api.ImageStreamTagReference{
+								Namespace: "ocp",
+								Name:      "4.20",
+								Tag:       "cli",
+							},
+						},
+						BaseImages: map[string]api.ImageStreamTagReference{
+							"upi-installer": {
+								Namespace: "ocp",
+								Name:      "4.20",
+								Tag:       "upi-installer",
+							},
+						},
+						ExternalImages: map[string]api.ExternalImage{
+							"fedora": {Registry: "quay.io/fedora/fedora:43"},
+						},
+						Releases: map[string]api.UnresolvedRelease{
+							"initial": {Integration: &api.Integration{Name: "4.17", Namespace: "ocp"}},
+							"latest":  {Integration: &api.Integration{Name: "4.17", Namespace: "ocp"}},
+						},
+						Test: ephemeralclusterv1.TestSpec{
+							Workflow:       "test-workflow",
+							Env:            map[string]string{"foo": "bar"},
+							ClusterProfile: "aws",
+						},
+					},
+				},
+			},
+			req:     reconcile.Request{NamespacedName: types.NamespacedName{Namespace: "ns", Name: "ec"}},
+			wantRes: reconcile.Result{RequeueAfter: pollingTime},
+		},
+		{
+			name: "Privileged tenant",
+			ec: ephemeralclusterv1.EphemeralCluster{
+				ObjectMeta: metav1.ObjectMeta{
+					Annotations: map[string]string{
+						ephemeralclusterv1.KonfluxTenantAnnotation: "ktenant-privileged",
 					},
 					Namespace: "ns",
 					Name:      "ec",
@@ -538,6 +583,7 @@ func TestCreateProwJob(t *testing.T) {
 				newProwJob:             newProwJobFaker("foobar", fakeNow),
 				prowConfigAgent:        prowConfigAgent(pc),
 				clusterProfileResolver: clusterProfileResolverAdapter(&fakeRegistryAgent),
+				privilegedTenants:      sets.New("ktenant-privileged"),
 			}
 
 			gotRes, gotErr := r.Reconcile(context.TODO(), reconcile.Request{NamespacedName: types.NamespacedName{Name: tc.ec.Name, Namespace: tc.ec.Namespace}})

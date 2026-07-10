@@ -10,6 +10,7 @@ import (
 	"net/http"
 	"sort"
 	"strconv"
+	"strings"
 	"sync"
 	"time"
 
@@ -64,7 +65,38 @@ func (c authoritativeConfig) anyDryRun() bool {
 	return c.cpuRequest.dryRun || c.cpuLimit.dryRun || c.memoryRequest.dryRun || c.memoryLimit.dryRun
 }
 
-func admit(port, healthPort int, certDir string, client buildclientv1.BuildV1Interface, kubeClient kubernetes.Interface, loaders map[string][]*cacheReloader, mutateResourceLimits bool, cpuCap int64, memoryCap string, cpuPriorityScheduling int64, percentageMeasured float64, measuredPodCPUIncrease float64, systemReservedCPU int64, authoritative authoritativeConfig, escalations *escalationServer, reporter results.PodScalerReporter) {
+type authoritativeDecreaseUsageBasis string
+
+const (
+	authoritativeDecreaseUsageP80  authoritativeDecreaseUsageBasis = "p80"
+	authoritativeDecreaseUsagePeak authoritativeDecreaseUsageBasis = "peak"
+)
+
+func parseAuthoritativeDecreaseUsageBasis(raw string) (authoritativeDecreaseUsageBasis, error) {
+	switch strings.ToLower(strings.TrimSpace(raw)) {
+	case "", "p80":
+		return authoritativeDecreaseUsageP80, nil
+	case "peak", "max":
+		return authoritativeDecreaseUsagePeak, nil
+	default:
+		return "", fmt.Errorf("unknown authoritative decrease usage basis %q", raw)
+	}
+}
+
+func usageForAuthoritativeDecrease(recommended corev1.ResourceRequirements, field corev1.ResourceName, basis authoritativeDecreaseUsageBasis) (resource.Quantity, bool) {
+	if basis == authoritativeDecreaseUsagePeak {
+		if peak, ok := recommended.Limits[field]; ok && !peak.IsZero() {
+			return peak, true
+		}
+	}
+	request, ok := recommended.Requests[field]
+	if !ok || request.IsZero() {
+		return resource.Quantity{}, false
+	}
+	return request, true
+}
+
+func admit(port, healthPort int, certDir string, client buildclientv1.BuildV1Interface, kubeClient kubernetes.Interface, loaders map[string][]*cacheReloader, mutateResourceLimits bool, cpuCap int64, memoryCap string, cpuPriorityScheduling int64, percentageMeasured float64, measuredPodCPUIncrease float64, systemReservedCPU int64, authoritative authoritativeConfig, authoritativeDecreaseUsage authoritativeDecreaseUsageBasis, escalations *escalationServer, reporter results.PodScalerReporter) {
 	logger := logrus.WithField("component", "pod-scaler admission")
 	logger.Infof("Initializing admission webhook server with %d loaders.", len(loaders))
 	if authoritative.anyDryRun() {
@@ -86,7 +118,7 @@ func admit(port, healthPort int, certDir string, client buildclientv1.BuildV1Int
 		Port:    port,
 		CertDir: certDir,
 	})
-	server.Register("/pods", &webhook.Admission{Handler: &podMutator{logger: logger, client: client, decoder: decoder, resources: resources, mutateResourceLimits: mutateResourceLimits, cpuCap: cpuCap, memoryCap: memoryCap, cpuPriorityScheduling: cpuPriorityScheduling, percentageMeasured: percentageMeasured, measuredPodCPUIncrease: measuredPodCPUIncrease, nodeCache: nodeCache, authoritative: authoritative, escalations: escalations, reporter: reporter}})
+	server.Register("/pods", &webhook.Admission{Handler: &podMutator{logger: logger, client: client, decoder: decoder, resources: resources, mutateResourceLimits: mutateResourceLimits, cpuCap: cpuCap, memoryCap: memoryCap, cpuPriorityScheduling: cpuPriorityScheduling, percentageMeasured: percentageMeasured, measuredPodCPUIncrease: measuredPodCPUIncrease, nodeCache: nodeCache, authoritative: authoritative, authoritativeDecreaseUsage: authoritativeDecreaseUsage, escalations: escalations, reporter: reporter}})
 	logger.Info("Serving admission webhooks.")
 	if err := server.Start(interrupts.Context()); err != nil {
 		logrus.WithError(err).Fatal("Failed to serve webhooks.")
@@ -94,20 +126,21 @@ func admit(port, healthPort int, certDir string, client buildclientv1.BuildV1Int
 }
 
 type podMutator struct {
-	logger                 *logrus.Entry
-	client                 buildclientv1.BuildV1Interface
-	resources              *resourceServer
-	mutateResourceLimits   bool
-	decoder                admission.Decoder
-	cpuCap                 int64
-	memoryCap              string
-	cpuPriorityScheduling  int64
-	percentageMeasured     float64
-	measuredPodCPUIncrease float64
-	nodeCache              *nodeAllocatableCache
-	authoritative          authoritativeConfig
-	escalations            *escalationServer
-	reporter               results.PodScalerReporter
+	logger                     *logrus.Entry
+	client                     buildclientv1.BuildV1Interface
+	resources                  *resourceServer
+	mutateResourceLimits       bool
+	decoder                    admission.Decoder
+	cpuCap                     int64
+	memoryCap                  string
+	cpuPriorityScheduling      int64
+	percentageMeasured         float64
+	measuredPodCPUIncrease     float64
+	nodeCache                  *nodeAllocatableCache
+	authoritative              authoritativeConfig
+	authoritativeDecreaseUsage authoritativeDecreaseUsageBasis
+	escalations                *escalationServer
+	reporter                   results.PodScalerReporter
 }
 
 func (m *podMutator) Handle(ctx context.Context, req admission.Request) admission.Response {
@@ -156,7 +189,7 @@ func (m *podMutator) Handle(ctx context.Context, req admission.Request) admissio
 		m.setMeasuredLabel(pod, false, logger)
 	}
 
-	mutatePodResources(pod, m.resources, m.mutateResourceLimits, m.cpuCap, m.memoryCap, isMeasured, m.nodeCache, m.measuredPodCPUIncrease, m.authoritative, m.escalations, m.reporter, logger)
+	mutatePodResources(pod, m.resources, m.mutateResourceLimits, m.cpuCap, m.memoryCap, isMeasured, m.nodeCache, m.measuredPodCPUIncrease, m.authoritative, m.authoritativeDecreaseUsage, m.escalations, m.reporter, logger)
 	m.addPriorityClass(pod)
 
 	marshaledPod, err := json.Marshal(pod)
@@ -364,7 +397,7 @@ func preventUnschedulableWithCaps(resources *corev1.ResourceRequirements, cpuCap
 	}
 }
 
-func mutatePodResources(pod *corev1.Pod, server *resourceServer, mutateResourceLimits bool, cpuCap int64, memoryCap string, isMeasured bool, nodeCache *nodeAllocatableCache, measuredPodCPUIncrease float64, authoritative authoritativeConfig, escalations *escalationServer, reporter results.PodScalerReporter, logger *logrus.Entry) {
+func mutatePodResources(pod *corev1.Pod, server *resourceServer, mutateResourceLimits bool, cpuCap int64, memoryCap string, isMeasured bool, nodeCache *nodeAllocatableCache, measuredPodCPUIncrease float64, authoritative authoritativeConfig, authoritativeDecreaseUsage authoritativeDecreaseUsageBasis, escalations *escalationServer, reporter results.PodScalerReporter, logger *logrus.Entry) {
 	workloadClass := pod.Labels[ciWorkloadLabel]
 
 	mutateResources := func(containers []corev1.Container) {
@@ -391,7 +424,7 @@ func mutatePodResources(pod *corev1.Pod, server *resourceServer, mutateResourceL
 					Limits:   corev1.ResourceList{},
 				}
 
-				// Take maximum CPU and memory from both
+				// Take maximum CPU and memory from both measured and unmeasured runs.
 				for _, resourceName := range []corev1.ResourceName{corev1.ResourceCPU, corev1.ResourceMemory} {
 					var maxRequest *resource.Quantity
 					if measuredExists && measuredResources.Requests != nil {
@@ -409,6 +442,23 @@ func mutatePodResources(pod *corev1.Pod, server *resourceServer, mutateResourceL
 					if maxRequest != nil {
 						resources.Requests[resourceName] = *maxRequest
 					}
+
+					var maxLimit *resource.Quantity
+					if measuredExists && measuredResources.Limits != nil {
+						if q, ok := measuredResources.Limits[resourceName]; ok {
+							maxLimit = &q
+						}
+					}
+					if unmeasuredExists && unmeasuredResources.Limits != nil {
+						if q, ok := unmeasuredResources.Limits[resourceName]; ok {
+							if maxLimit == nil || q.Cmp(*maxLimit) > 0 {
+								maxLimit = &q
+							}
+						}
+					}
+					if maxLimit != nil {
+						resources.Limits[resourceName] = *maxLimit
+					}
 				}
 			}
 
@@ -421,7 +471,7 @@ func mutatePodResources(pod *corev1.Pod, server *resourceServer, mutateResourceL
 					reconcileLimits(&containers[i].Resources)
 				}
 				applyFailureEscalation(&containers[i].Resources, workloadType, workloadName, escalations, logger)
-				applyAuthoritativeLimitDecrease(&resources, &containers[i].Resources, workloadName, workloadType, isMeasured, workloadClass, authoritative, escalations, logger)
+				applyAuthoritativeLimitDecrease(&resources, &containers[i].Resources, workloadName, workloadType, isMeasured, workloadClass, authoritative, authoritativeDecreaseUsage, escalations, logger)
 				if mutateResourceLimits && !authoritative.cpuLimit.apply {
 					if containers[i].Resources.Limits != nil {
 						delete(containers[i].Resources.Limits, corev1.ResourceCPU)
@@ -881,7 +931,7 @@ func storeEscalationIndex(cache Cache, index podscaler.EscalationIndex) error {
 	return context.DeadlineExceeded
 }
 
-func applyAuthoritativeLimitDecrease(recommended, configured *corev1.ResourceRequirements, workloadName, workloadType string, isMeasured bool, workloadClass string, authoritative authoritativeConfig, escalations *escalationServer, logger *logrus.Entry) {
+func applyAuthoritativeLimitDecrease(recommended, configured *corev1.ResourceRequirements, workloadName, workloadType string, isMeasured bool, workloadClass string, authoritative authoritativeConfig, authoritativeDecreaseUsage authoritativeDecreaseUsageBasis, escalations *escalationServer, logger *logrus.Entry) {
 	if isMeasured {
 		return
 	}
@@ -906,8 +956,8 @@ func applyAuthoritativeLimitDecrease(recommended, configured *corev1.ResourceReq
 			if field == corev1.ResourceMemory && memoryLevel > 0 {
 				continue
 			}
-			determined := recommended.Requests[field]
-			if determined.IsZero() {
+			determined, ok := usageForAuthoritativeDecrease(*recommended, field, authoritativeDecreaseUsage)
+			if !ok {
 				continue
 			}
 			if field == corev1.ResourceCPU {

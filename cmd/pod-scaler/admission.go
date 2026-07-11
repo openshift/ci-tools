@@ -290,6 +290,12 @@ func mutatePodLabels(pod *corev1.Pod, build *buildv1.Build) {
 
 var authoritativeMinCPURequest = resource.MustParse("10m")
 
+// authoritativeMinMemoryLimit is the minimum memory value that can be written
+// to the cgroup v2 memory.max file.  The Linux kernel rejects any value below
+// 512 KiB, which causes CRI-O / kubelet to fail container creation.  We use
+// this as a floor when decreasing memory requests or limits.
+var authoritativeMinMemoryLimit = resource.MustParse("512Ki")
+
 // useOursIfLarger updates fields in theirs when ours are larger.
 func useOursIfLarger(allOfOurs, allOfTheirs *corev1.ResourceRequirements, workloadName, workloadType string, isMeasured bool, workloadClass string, reporter results.PodScalerReporter, logger *logrus.Entry) {
 	for _, item := range []*corev1.ResourceRequirements{allOfOurs, allOfTheirs} {
@@ -1008,23 +1014,35 @@ func applyAuthoritativeLimitDecrease(recommended, configured *corev1.ResourceReq
 					continue
 				}
 			}
+			memoryFloorApplied := false
+			if field == corev1.ResourceMemory {
+				if determined.Cmp(authoritativeMinMemoryLimit) < 0 {
+					determined = authoritativeMinMemoryLimit.DeepCopy()
+					memoryFloorApplied = true
+				}
+				if determined.Cmp(configuredValue) >= 0 {
+					continue
+				}
+			}
 			if mode.dryRun {
 				fieldLogger.WithFields(logrus.Fields{
-					"event":            "authoritative_decrease_dry_run",
-					"workloadClass":    workloadClass,
-					"would_set":        determined.String(),
-					"authoritative":    mode.apply,
-					"reduction_pct":    (1.0 - determined.AsApproximateFloat64()/configuredFloat) * 100,
-					"reduction_capped": reductionCapped,
+					"event":                "authoritative_decrease_dry_run",
+					"workloadClass":        workloadClass,
+					"would_set":            determined.String(),
+					"authoritative":        mode.apply,
+					"reduction_pct":        (1.0 - determined.AsApproximateFloat64()/configuredFloat) * 100,
+					"reduction_capped":     reductionCapped,
+					"memory_floor_applied": memoryFloorApplied,
 				}).Infof("authoritative %s decrease dry-run", target.resourceType)
 				continue
 			}
 			fieldLogger.WithFields(logrus.Fields{
-				"event":            "authoritative_decrease_applied",
-				"workloadClass":    workloadClass,
-				"set_to":           determined.String(),
-				"reduction_pct":    (1.0 - determined.AsApproximateFloat64()/configuredFloat) * 100,
-				"reduction_capped": reductionCapped,
+				"event":                "authoritative_decrease_applied",
+				"workloadClass":        workloadClass,
+				"set_to":               determined.String(),
+				"reduction_pct":        (1.0 - determined.AsApproximateFloat64()/configuredFloat) * 100,
+				"reduction_capped":     reductionCapped,
+				"memory_floor_applied": memoryFloorApplied,
 			}).Infof("authoritative %s decrease applied", target.resourceType)
 			(*target.configuredList)[field] = determined
 		}

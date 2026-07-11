@@ -1089,6 +1089,104 @@ func TestApplyAuthoritativeLimitDecrease(t *testing.T) {
 				},
 			},
 		},
+		{
+			name:          "memory limit decrease never below cgroup v2 minimum",
+			authoritative: authLegacyMemory(1.0),
+			ours: corev1.ResourceRequirements{
+				Requests: corev1.ResourceList{
+					corev1.ResourceMemory: *resource.NewQuantity(100, resource.BinarySI),
+				},
+			},
+			theirs: corev1.ResourceRequirements{
+				Limits: corev1.ResourceList{
+					corev1.ResourceMemory: *resource.NewQuantity(1e6, resource.BinarySI),
+				},
+			},
+			expected: corev1.ResourceRequirements{
+				Limits: corev1.ResourceList{
+					corev1.ResourceMemory: authoritativeMinMemoryLimit.DeepCopy(),
+				},
+			},
+		},
+		{
+			name:          "memory request decrease never below cgroup v2 minimum",
+			authoritative: authLegacyMemory(1.0),
+			ours: corev1.ResourceRequirements{
+				Requests: corev1.ResourceList{
+					corev1.ResourceMemory: *resource.NewQuantity(100, resource.BinarySI),
+				},
+			},
+			theirs: corev1.ResourceRequirements{
+				Requests: corev1.ResourceList{
+					corev1.ResourceMemory: *resource.NewQuantity(1e6, resource.BinarySI),
+				},
+			},
+			expected: corev1.ResourceRequirements{
+				Requests: corev1.ResourceList{
+					corev1.ResourceMemory: authoritativeMinMemoryLimit.DeepCopy(),
+				},
+			},
+		},
+		{
+			name:          "memory limit exactly at cgroup v2 minimum stays unchanged",
+			authoritative: authLegacyMemory(1.0),
+			ours: corev1.ResourceRequirements{
+				Requests: corev1.ResourceList{
+					corev1.ResourceMemory: *resource.NewQuantity(100, resource.BinarySI),
+				},
+			},
+			theirs: corev1.ResourceRequirements{
+				Limits: corev1.ResourceList{
+					corev1.ResourceMemory: authoritativeMinMemoryLimit.DeepCopy(),
+				},
+			},
+			expected: corev1.ResourceRequirements{
+				Limits: corev1.ResourceList{
+					corev1.ResourceMemory: authoritativeMinMemoryLimit.DeepCopy(),
+				},
+			},
+		},
+		{
+			name:          "normal memory limit decrease is unaffected by cgroup v2 floor",
+			authoritative: authLegacyCPUAndMemory(0.25, 0.25),
+			ours: corev1.ResourceRequirements{
+				Requests: corev1.ResourceList{
+					corev1.ResourceCPU:    *resource.NewQuantity(10, resource.DecimalSI),
+					corev1.ResourceMemory: *resource.NewQuantity(128e6, resource.BinarySI),
+				},
+			},
+			theirs: corev1.ResourceRequirements{
+				Limits: corev1.ResourceList{
+					corev1.ResourceCPU:    *resource.NewQuantity(100, resource.DecimalSI),
+					corev1.ResourceMemory: *resource.NewQuantity(256e6, resource.BinarySI),
+				},
+			},
+			expected: corev1.ResourceRequirements{
+				Limits: corev1.ResourceList{
+					corev1.ResourceCPU:    *resource.NewQuantity(75, resource.DecimalSI),
+					corev1.ResourceMemory: *resource.NewQuantity(192e6, resource.BinarySI),
+				},
+			},
+		},
+		{
+			name:          "cpu decrease unchanged by memory cgroup v2 floor",
+			authoritative: authLegacyCPU(0.25),
+			ours: corev1.ResourceRequirements{
+				Requests: corev1.ResourceList{
+					corev1.ResourceCPU: *resource.NewQuantity(10, resource.DecimalSI),
+				},
+			},
+			theirs: corev1.ResourceRequirements{
+				Limits: corev1.ResourceList{
+					corev1.ResourceCPU: *resource.NewQuantity(100, resource.DecimalSI),
+				},
+			},
+			expected: corev1.ResourceRequirements{
+				Limits: corev1.ResourceList{
+					corev1.ResourceCPU: *resource.NewQuantity(75, resource.DecimalSI),
+				},
+			},
+		},
 	}
 	for _, tc := range testCases {
 		t.Run(tc.name, func(t *testing.T) {
@@ -1120,7 +1218,7 @@ func TestApplyAuthoritativeLimitDecrease_uncappedMemory(t *testing.T) {
 	expected := corev1.ResourceRequirements{
 		Limits: corev1.ResourceList{
 			corev1.ResourceCPU:    *resource.NewQuantity(75, resource.DecimalSI),
-			corev1.ResourceMemory: *resource.NewQuantity(12, resource.BinarySI),
+			corev1.ResourceMemory: authoritativeMinMemoryLimit.DeepCopy(),
 		},
 	}
 

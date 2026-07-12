@@ -3,13 +3,17 @@ package main
 import (
 	"math"
 	"testing"
+	"time"
 
 	"github.com/google/go-cmp/cmp"
 	"github.com/openhistogram/circonusllhist"
+	"github.com/prometheus/common/model"
 	"github.com/sirupsen/logrus"
 
 	corev1 "k8s.io/api/core/v1"
 	"k8s.io/apimachinery/pkg/api/resource"
+
+	podscaler "github.com/openshift/ci-tools/pkg/pod-scaler"
 )
 
 func TestQuantileValueUsable(t *testing.T) {
@@ -256,17 +260,13 @@ func TestCPUPeakQuantityFromHistogram(t *testing.T) {
 	if err := hist.RecordValue(50); err != nil {
 		t.Fatalf("RecordValue spike: %v", err)
 	}
-	got := cpuPeakQuantityFromHistogram(hist)
-	want := cpuQuantityFromCores(*recommendationPeakValue(hist))
-	if diff := cmp.Diff(want, got); diff != "" {
-		t.Fatalf("cpuPeakQuantityFromHistogram differs from expected, diff:\n%s", diff)
+	request := resource.MustParse("500m")
+	got := peakLimitQuantity(corev1.ResourceCPU, hist, &request, cpuCap, resource.Quantity{})
+	if got == nil {
+		t.Fatal("expected capped peak limit")
 	}
-	if got.Cmp(cpuCap) <= 0 {
-		t.Fatalf("peak quantity should exceed request cap %v, got %v", cpuCap, got)
-	}
-	capped := cpuRequestQuantityFromHistogram(hist, 0.8, cpuCap, logrus.WithField("test", t.Name()))
-	if capped != nil && capped.Cpu().Cmp(cpuCap) > 0 {
-		t.Fatalf("request helper should cap at %v, got %v", cpuCap, capped.Cpu())
+	if got.Cmp(*resource.NewMilliQuantity(5000, resource.DecimalSI)) != 0 {
+		t.Fatalf("peak limit = %v, want 5 cores", got)
 	}
 }
 
@@ -282,13 +282,14 @@ func TestMemoryPeakQuantityFromHistogram(t *testing.T) {
 	if err := hist.RecordValue(spikeBytes); err != nil {
 		t.Fatalf("RecordValue spike: %v", err)
 	}
-	got := memoryPeakQuantityFromHistogram(hist)
-	want := memoryQuantityFromBytes(*recommendationPeakValue(hist))
-	if diff := cmp.Diff(want, got); diff != "" {
-		t.Fatalf("memoryPeakQuantityFromHistogram differs from expected, diff:\n%s", diff)
+	request := resource.MustParse("100Mi")
+	got := peakLimitQuantity(corev1.ResourceMemory, hist, &request, resource.Quantity{}, memoryCap)
+	if got == nil {
+		t.Fatal("expected capped peak limit")
 	}
-	if got.Cmp(memoryCap) <= 0 {
-		t.Fatalf("peak quantity should exceed request cap %v, got %v", memoryCap, got)
+	wantPeak := resource.MustParse("1000Mi")
+	if got.Cmp(wantPeak) != 0 {
+		t.Fatalf("peak limit = %v, want %v", got, wantPeak)
 	}
 	capped := memoryRequestQuantityFromHistogram(hist, 0.8, memoryCap, logrus.WithField("test", t.Name()))
 	if capped != nil && capped.Memory().Cmp(memoryCap) > 0 {
@@ -298,4 +299,104 @@ func TestMemoryPeakQuantityFromHistogram(t *testing.T) {
 
 func ptr(v float64) *float64 {
 	return &v
+}
+
+func TestCPURequestQuantityFromHistogram_rejectsBelowMinimum(t *testing.T) {
+	hist := circonusllhist.New()
+	if err := hist.RecordValue(0.001); err != nil {
+		t.Fatalf("RecordValue: %v", err)
+	}
+	got := cpuRequestQuantityFromHistogram(hist, 0.8, *resource.NewQuantity(10, resource.DecimalSI), logrus.WithField("test", t.Name()))
+	if got != nil {
+		t.Fatalf("expected nil recommendation below CPU minimum, got %v", got)
+	}
+}
+
+func TestMemoryRequestQuantityFromHistogram_rejectsBelowCgroupMinimum(t *testing.T) {
+	hist := circonusllhist.New()
+	if err := hist.RecordValue(200000); err != nil {
+		t.Fatalf("RecordValue: %v", err)
+	}
+	got := memoryRequestQuantityFromHistogram(hist, 0.8, resource.MustParse("20Gi"), logrus.WithField("test", t.Name()))
+	if got != nil {
+		t.Fatalf("expected nil recommendation below cgroup minimum, got %v", got)
+	}
+}
+
+func TestMergeHistogramsForMeta(t *testing.T) {
+	meta := podscaler.FullMetadata{Container: "test"}
+	fp := model.Fingerprint(42)
+	inner := circonusllhist.New(circonusllhist.NoLookup())
+	if err := inner.RecordValue(1e8); err != nil {
+		t.Fatalf("RecordValue: %v", err)
+	}
+	hist := circonusllhist.NewHistogramWithoutLookups(inner)
+
+	t.Run("orphan refs only", func(t *testing.T) {
+		data := &podscaler.CachedQuery{
+			Data:           map[model.Fingerprint]*circonusllhist.HistogramWithoutLookups{},
+			DataByMetaData: map[podscaler.FullMetadata][]podscaler.FingerprintTime{meta: {{Fingerprint: fp}}},
+		}
+		merged := mergeHistogramsForMeta(data, data.DataByMetaData[meta])
+		if merged != nil {
+			t.Fatalf("expected no merge for orphan refs, got histogram")
+		}
+	})
+
+	t.Run("resolvable histogram", func(t *testing.T) {
+		data := &podscaler.CachedQuery{
+			Data: map[model.Fingerprint]*circonusllhist.HistogramWithoutLookups{
+				fp: hist,
+			},
+			DataByMetaData: map[podscaler.FullMetadata][]podscaler.FingerprintTime{meta: {{Fingerprint: fp}}},
+		}
+		merged := mergeHistogramsForMeta(data, data.DataByMetaData[meta])
+		if merged == nil {
+			t.Fatalf("expected merged histogram")
+		}
+	})
+}
+
+func TestDigestRecommendations_replacesPerResourceSnapshot(t *testing.T) {
+	meta := podscaler.FullMetadata{Container: "test"}
+	fp := model.Fingerprint(7)
+	inner := circonusllhist.New(circonusllhist.NoLookup())
+	for i := 0; i < 20; i++ {
+		if err := inner.RecordValue(1e8); err != nil {
+			t.Fatalf("RecordValue: %v", err)
+		}
+	}
+	hist := circonusllhist.NewHistogramWithoutLookups(inner)
+
+	server := &resourceServer{
+		logger:           logrus.WithField("test", t.Name()),
+		byMetaData:       map[podscaler.FullMetadata]corev1.ResourceRequirements{},
+		memoryRequestCap: resource.MustParse("20Gi"),
+	}
+	staleMeta := podscaler.FullMetadata{Container: "stale"}
+	server.byMetaData[staleMeta] = corev1.ResourceRequirements{
+		Requests: corev1.ResourceList{
+			corev1.ResourceMemory: *resource.NewQuantity(324000, resource.BinarySI),
+		},
+	}
+
+	data := &podscaler.CachedQuery{
+		Data: map[model.Fingerprint]*circonusllhist.HistogramWithoutLookups{
+			fp: hist,
+		},
+		DataByMetaData: map[podscaler.FullMetadata][]podscaler.FingerprintTime{
+			meta: {{Fingerprint: fp, Added: time.Now()}},
+		},
+	}
+	server.digestRecommendations(data, corev1.ResourceMemory, memRequestQuantile, func(h *circonusllhist.Histogram, quantile float64) corev1.ResourceList {
+		return memoryRequestQuantityFromHistogram(h, quantile, server.memoryRequestCap, server.logger)
+	})
+
+	if _, ok := server.byMetaData[staleMeta]; ok {
+		t.Fatalf("expected stale memory recommendation to be cleared on reload")
+	}
+	got, ok := server.recommendedRequestFor(meta)
+	if !ok || got.Requests.Memory().IsZero() {
+		t.Fatalf("expected fresh memory recommendation for %v, got ok=%v reqs=%v", meta, ok, got.Requests)
+	}
 }

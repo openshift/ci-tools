@@ -13,6 +13,8 @@ import (
 	podscaler "github.com/openshift/ci-tools/pkg/pod-scaler"
 )
 
+const initialCacheLoadAttempts = 3
+
 func newReloader(name string, cache Cache) *cacheReloader {
 	reloader := &cacheReloader{
 		name:  name,
@@ -34,54 +36,139 @@ type cacheReloader struct {
 
 	lock        *sync.RWMutex
 	lastUpdated time.Time
+	pending     *podscaler.CachedQuery
 	subscribers []chan<- *podscaler.CachedQuery
 }
 
 func (c *cacheReloader) subscribe(out chan<- *podscaler.CachedQuery) {
 	c.lock.Lock()
+	defer c.lock.Unlock()
 	c.subscribers = append(c.subscribers, out)
 	c.logger.Debugf("new subscriber, subscriber count now: %d", len(c.subscribers))
-	c.lock.Unlock()
+	if c.pending != nil {
+		out <- c.pending
+		c.pending = nil
+	}
+}
+
+func emptyCachedQuery() *podscaler.CachedQuery {
+	return &podscaler.CachedQuery{}
+}
+
+func cachedQueryEmpty(q *podscaler.CachedQuery) bool {
+	if q == nil {
+		return true
+	}
+	return len(q.Data) == 0 && len(q.DataByMetaData) == 0
+}
+
+func loadCacheWithRetries(cache Cache, name string, logger *logrus.Entry, attempts int) (*podscaler.CachedQuery, error) {
+	var lastErr error
+	for attempt := 0; attempt < attempts; attempt++ {
+		if attempt > 0 {
+			time.Sleep(time.Duration(attempt) * time.Second)
+			logger.WithField("attempt", attempt+1).Debug("Retrying initial cache load.")
+		}
+		data, err := LoadCache(cache, name, logger)
+		if err == nil {
+			return data, nil
+		}
+		lastErr = err
+	}
+	return nil, lastErr
 }
 
 func (c *cacheReloader) reload() {
 	// technically this can race as we read the attribute and data from the handle at
 	// different times, but there doesn't seem to be an atomic call to GCS for that anyway
-	lastUpdated, err := LastUpdated(c.cache, c.name)
-	if err != nil {
-		c.logger.WithError(err).Warn("Failed to query for last cache update time, won't reload this tick.")
-		return
-	}
+	lastUpdated, lastUpdatedErr := LastUpdated(c.cache, c.name)
 	c.lock.RLock()
 	lastSeen := c.lastUpdated
 	c.lock.RUnlock()
 	logger := c.logger.WithFields(logrus.Fields{
 		"last_update_seen": lastSeen.Format(time.RFC3339),
-		"last_update":      lastUpdated.Format(time.RFC3339),
 	})
-
-	if lastUpdated == lastSeen {
-		logger.Debug("Last updated time on cloud artifacts matches our last load, won't reload this tick.")
-		return
-	}
-	logger.Debug("Newer update available in cloud storage, reloading data.")
-
-	data, err := LoadCache(c.cache, c.name, c.logger)
-	if err != nil {
-		logger.WithError(err).Warn("Failed to read cached data, won't reload this tick.")
-		return
-	}
-	c.lock.Lock()
-	if len(c.subscribers) > 0 {
-		c.lastUpdated = lastUpdated
-		for _, subscriber := range c.subscribers {
-			subscriber <- data
+	if lastUpdatedErr != nil {
+		logger.WithError(lastUpdatedErr).Warn("Failed to query for last cache update time.")
+		if !lastSeen.IsZero() {
+			logger.Warn("Skipping reload because freshness is unknown and cache was loaded previously.")
+			return
 		}
+		logger.Warn("Attempting initial cache load without last-updated metadata.")
 	} else {
-		logger.Warn("no subscribers yet, won't mark as loaded")
+		logger = logger.WithField("last_update", lastUpdated.Format(time.RFC3339))
+		if !lastSeen.IsZero() && lastUpdated == lastSeen {
+			logger.Debug("Last updated time on cloud artifacts matches our last load, won't reload this tick.")
+			return
+		}
+		logger.Debug("Newer update available in cloud storage, reloading data.")
 	}
-	c.lock.Unlock()
-	logger.Debug("Newer update loaded.")
+
+	var (
+		data    *podscaler.CachedQuery
+		loadErr error
+	)
+	if lastSeen.IsZero() {
+		data, loadErr = loadCacheWithRetries(c.cache, c.name, c.logger, initialCacheLoadAttempts)
+	} else {
+		data, loadErr = LoadCache(c.cache, c.name, c.logger)
+	}
+	if loadErr != nil {
+		logger.WithError(loadErr).Warn("Failed to read cached data.")
+		if !lastSeen.IsZero() {
+			logger.Warn("Keeping previously loaded cache.")
+			return
+		}
+		logger.Warn("Serving with empty cache after failed initial load.")
+		data = emptyCachedQuery()
+	}
+	c.deliverLoadedCache(logger, lastSeen, lastUpdated, lastUpdatedErr, loadErr, data)
+}
+
+func (c *cacheReloader) deliverLoadedCache(logger *logrus.Entry, lastSeen, lastUpdated time.Time, lastUpdatedErr, loadErr error, data *podscaler.CachedQuery) {
+	if loadErr == nil && !lastSeen.IsZero() && cachedQueryEmpty(data) {
+		logger.Warn("Ignoring empty cache reload; keeping previously loaded cache.")
+		return
+	}
+	if lastUpdatedErr == nil && loadErr == nil {
+		afterLoad, err := LastUpdated(c.cache, c.name)
+		if err == nil && !afterLoad.Equal(lastUpdated) {
+			logger.WithField("last_update_after_load", afterLoad.Format(time.RFC3339)).Warn("Cache object changed during load; keeping previous cache.")
+			if !lastSeen.IsZero() {
+				return
+			}
+		}
+	}
+
+	updatedAt := lastUpdated
+	if lastUpdatedErr != nil {
+		updatedAt = time.Now()
+	}
+
+	c.lock.Lock()
+	defer c.lock.Unlock()
+	initialLoadFailed := loadErr != nil && lastSeen.IsZero()
+	if !initialLoadFailed {
+		c.lastUpdated = updatedAt
+	}
+	if len(c.subscribers) == 0 {
+		logger.Warn("no subscribers yet, deferring cache delivery until subscription")
+		c.pending = data
+		if lastUpdatedErr != nil && loadErr != nil {
+			logger.Debug("Initial empty cache deferred.")
+		} else {
+			logger.Debug("Newer update deferred.")
+		}
+		return
+	}
+	for _, subscriber := range c.subscribers {
+		subscriber <- data
+	}
+	if lastUpdatedErr != nil && loadErr != nil {
+		logger.Debug("Initial empty cache loaded.")
+	} else {
+		logger.Debug("Newer update loaded.")
+	}
 }
 
 func digestAll(data map[string][]*cacheReloader, digesters map[string]digester, health *pjutil.Health, logger *logrus.Entry) {

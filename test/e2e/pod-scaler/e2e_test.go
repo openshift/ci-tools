@@ -406,8 +406,7 @@ func TestAdmissionAuthoritativeDryRun(t *testing.T) {
 		ctx, cancel := context.WithCancel(interrupts.Context())
 		defer cancel()
 		admissionHost, transport := run.Admission(T, dataDir, kubeconfigFile, ctx, false,
-			"--authoritative-cpu=true",
-			"--authoritative-cpu-dry-run=true",
+			"--authoritative-cpu-request=false",
 			fmt.Sprintf("--cpu-cap=%d", cpuCap),
 		)
 		got := cpuRequestAfterAdmission(t, &basePod, admissionHost, transport)

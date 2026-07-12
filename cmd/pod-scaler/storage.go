@@ -119,6 +119,18 @@ func (e notExist) Unwrap() error {
 	return e.wrapped
 }
 
+func logRepairStats(logger *logrus.Entry, stats podscaler.RepairStats, action string) {
+	if stats.RemovedMetaKeys+stats.RemovedOrphanRefs+stats.RemovedHistograms+stats.RemovedCorruptValues == 0 {
+		return
+	}
+	logger.WithFields(logrus.Fields{
+		"removed_meta_keys":      stats.RemovedMetaKeys,
+		"removed_orphan_refs":    stats.RemovedOrphanRefs,
+		"removed_histograms":     stats.RemovedHistograms,
+		"removed_corrupt_values": stats.RemovedCorruptValues,
+	}).Warn("Repaired corrupt or orphan cache data " + action)
+}
+
 // LoadCache loads cached query data from the given storage loader.
 func LoadCache(loader loader, metricName string, logger *logrus.Entry) (*podscaler.CachedQuery, error) {
 	readStart := time.Now()
@@ -143,6 +155,8 @@ func LoadCache(loader loader, metricName string, logger *logrus.Entry) (*podscal
 		return nil, fmt.Errorf("could not unmarshal cached data: %w", err)
 	}
 	logger.Infof("Loaded %d distributions for %d identifiers after %s.", len(cache.Data), len(cache.DataByMetaData), time.Since(readStart).Round(time.Second))
+	repairStats := cache.Repair(metricName, podscaler.DefaultSanitizeOptions())
+	logRepairStats(logger, repairStats, "after load.")
 	return &cache, nil
 }
 
@@ -166,6 +180,9 @@ func storeCache(storer storer, metricName string, data *podscaler.CachedQuery, m
 	logger.Debug("Pruning cached Prometheus data.")
 	data.PruneWithMaxAge(maxDataAge)
 	logger.Debugf("Pruned cached Prometheus data after %s.", time.Since(pruneStart).Round(time.Second))
+
+	repairStats := data.Repair(metricName, podscaler.DefaultSanitizeOptions())
+	logRepairStats(logger, repairStats, "before storing.")
 
 	flushStart := time.Now()
 	logger.Info("Flushing Prometheus data to Cache.")

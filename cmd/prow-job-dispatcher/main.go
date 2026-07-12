@@ -269,19 +269,6 @@ func (cv *clusterVolume) findClusterForJobConfig(cloudProvider string, jc *prowc
 	return cluster, utilerrors.NewAggregate(errs)
 }
 
-func extractCapabilities(labels map[string]string) []string {
-	var capabilities []string
-	prefix := "capability/"
-
-	for key, value := range labels {
-		if strings.HasPrefix(key, prefix) {
-			capabilities = append(capabilities, value)
-		}
-	}
-
-	return capabilities
-}
-
 func isBlockedClusterRelocationException(jobName string) bool {
 	for _, re := range blockedClusterRelocationJobExceptions {
 		if re.MatchString(jobName) {
@@ -312,7 +299,7 @@ func findClusterAssigmentsForJobs(jc *prowconfig.JobConfig, path string, config 
 
 		blockedForJob := blockedClustersForJob(jobBase.Name, string(determinedCluster), blocked)
 		c := dispatcher.DetermineTargetCluster(cluster, string(determinedCluster), string(config.Default), canBeRelocated, blockedForJob)
-		pjs[jobBase.Name] = dispatcher.ProwJobData{Cluster: c, Capabilities: extractCapabilities(jobBase.Labels)}
+		pjs[jobBase.Name] = dispatcher.ProwJobData{Cluster: c, Capabilities: dispatcher.ExtractCapabilities(jobBase.Labels)}
 		logrus.WithField("job", jobBase.Name).WithField("cluster", c).Info("found cluster for job")
 		return nil
 	}
@@ -320,7 +307,7 @@ func findClusterAssigmentsForJobs(jc *prowconfig.JobConfig, path string, config 
 	var errs []error
 	for k := range jc.PresubmitsStatic {
 		for _, job := range jc.PresubmitsStatic[k] {
-			if _, ok := pjs[job.Name]; !ok || !slices.Equal(pjs[job.Name].Capabilities, extractCapabilities(job.Labels)) {
+			if _, ok := pjs[job.Name]; !ok || !slices.Equal(pjs[job.Name].Capabilities, dispatcher.ExtractCapabilities(job.Labels)) {
 				if err := getClusterForMissingJob(mostUsedCluster, job.JobBase, pjs); err != nil {
 					errs = append(errs, err)
 				}
@@ -330,7 +317,7 @@ func findClusterAssigmentsForJobs(jc *prowconfig.JobConfig, path string, config 
 
 	for k := range jc.PostsubmitsStatic {
 		for _, job := range jc.PostsubmitsStatic[k] {
-			if _, ok := pjs[job.Name]; !ok || !slices.Equal(pjs[job.Name].Capabilities, extractCapabilities(job.Labels)) {
+			if _, ok := pjs[job.Name]; !ok || !slices.Equal(pjs[job.Name].Capabilities, dispatcher.ExtractCapabilities(job.Labels)) {
 				if err := getClusterForMissingJob(mostUsedCluster, job.JobBase, pjs); err != nil {
 					errs = append(errs, err)
 				}
@@ -338,7 +325,7 @@ func findClusterAssigmentsForJobs(jc *prowconfig.JobConfig, path string, config 
 		}
 	}
 	for _, job := range jc.Periodics {
-		if _, ok := pjs[job.Name]; !ok || !slices.Equal(pjs[job.Name].Capabilities, extractCapabilities(job.Labels)) {
+		if _, ok := pjs[job.Name]; !ok || !slices.Equal(pjs[job.Name].Capabilities, dispatcher.ExtractCapabilities(job.Labels)) {
 			if err := getClusterForMissingJob(mostUsedCluster, job.JobBase, pjs); err != nil {
 				errs = append(errs, err)
 			}
@@ -357,7 +344,7 @@ func (cv *clusterVolume) addToVolume(cluster string, jobBase prowconfig.JobBase,
 
 	blockedForJob := blockedClustersForJob(jobBase.Name, string(determinedCluster), cv.blocked)
 	c := dispatcher.DetermineTargetCluster(cluster, string(determinedCluster), string(config.Default), canBeRelocated, blockedForJob)
-	cv.pjs[jobBase.Name] = dispatcher.ProwJobData{Cluster: c, Capabilities: extractCapabilities(jobBase.Labels)}
+	cv.pjs[jobBase.Name] = dispatcher.ProwJobData{Cluster: c, Capabilities: dispatcher.ExtractCapabilities(jobBase.Labels)}
 	if determinedCloudProvider := config.IsInBuildFarm(api.Cluster(c)); determinedCloudProvider != "" {
 		cv.clusterVolumeMap[string(determinedCloudProvider)][c] = cv.clusterVolumeMap[string(determinedCloudProvider)][c] + jobVolumes[jobBase.Name]
 		return nil
@@ -757,6 +744,9 @@ func main() {
 				return
 			}
 			prowjobs.Regenerate(pjs)
+			if err := dispatcher.WriteGob(o.jobsStoragePath, pjs); err != nil {
+				logrus.WithError(err).Error("continuing on cache memory, error writing Gob file after delta dispatch")
+			}
 		}
 
 		dispatchWrapper = func(forceDispatch bool) {
@@ -789,7 +779,8 @@ func main() {
 
 			jobVolumes, err := promVolumes.GetJobVolumes()
 			if err != nil {
-				logrus.WithError(err).Fatal("failed to get job volumes")
+				logrus.WithError(err).Error("failed to get job volumes")
+				return
 			}
 
 			addEnabledClusters(config, enabled,
@@ -803,6 +794,10 @@ func main() {
 			pjs, err := dispatchJobs(o.prowJobConfigDir, config, jobVolumes, blocked, promVolumes.CalculateVolumeDistribution(configClusterMap), configClusterMap)
 			if err != nil {
 				logrus.WithError(err).Error("failed to dispatch")
+				return
+			}
+			if pjs == nil {
+				logrus.Warn("no build farm clusters configured, skipping regeneration")
 				return
 			}
 			prowjobs.Regenerate(pjs)

@@ -147,6 +147,10 @@ func cpuRequestQuantityFromHistogram(hist *circonusllhist.Histogram, quantile fl
 	if q == nil {
 		return nil
 	}
+	if !recommendationQuantityUsable(corev1.ResourceCPU, *q) {
+		logger.WithField("recommendation", q.String()).Debug("skipping CPU recommendation below minimum")
+		return nil
+	}
 	reqs := &corev1.ResourceRequirements{Requests: corev1.ResourceList{corev1.ResourceCPU: *q}}
 	capDigestRequests(reqs, cpuCap, resource.Quantity{}, logger)
 	return reqs.Requests
@@ -162,9 +166,79 @@ func memoryRequestQuantityFromHistogram(hist *circonusllhist.Histogram, quantile
 	if q == nil {
 		return nil
 	}
+	if !recommendationQuantityUsable(corev1.ResourceMemory, *q) {
+		logger.WithField("recommendation", q.String()).Debug("skipping memory recommendation below cgroup v2 minimum")
+		return nil
+	}
 	reqs := &corev1.ResourceRequirements{Requests: corev1.ResourceList{corev1.ResourceMemory: *q}}
 	capDigestRequests(reqs, resource.Quantity{}, memoryCap, logger)
 	return reqs.Requests
+}
+
+func mergeHistogramsForMeta(data *podscaler.CachedQuery, fingerprintTimes []podscaler.FingerprintTime) *circonusllhist.Histogram {
+	overall := circonusllhist.New()
+	merged := 0
+	for _, fingerprintTime := range fingerprintTimes {
+		histData := data.Data[fingerprintTime.Fingerprint]
+		if histData == nil {
+			continue
+		}
+		overall.Merge(histData.Histogram())
+		merged++
+	}
+	if merged == 0 || overall.Count() == 0 {
+		return nil
+	}
+	return overall
+}
+
+func peakLimitQuantity(resourceName corev1.ResourceName, hist *circonusllhist.Histogram, request *resource.Quantity, cpuCap, memoryCap resource.Quantity) *resource.Quantity {
+	var q *resource.Quantity
+	switch resourceName {
+	case corev1.ResourceCPU:
+		q = cpuPeakQuantityFromHistogram(hist)
+	case corev1.ResourceMemory:
+		q = memoryPeakQuantityFromHistogram(hist)
+	}
+	if q == nil || !recommendationQuantityUsable(resourceName, *q) {
+		return nil
+	}
+	if request != nil && !request.IsZero() && increaseExceedsConfiguredThreshold(resourceName, *q, *request) {
+		capped := cappedIncreaseQuantity(resourceName, *request, cpuCap, memoryCap)
+		q = &capped
+	} else {
+		capped := capQuantityToClusterMaximum(resourceName, *q, cpuCap, memoryCap)
+		q = &capped
+	}
+	return q
+}
+
+func (s *resourceServer) applyDigestUpdates(resource corev1.ResourceName, updates map[podscaler.FullMetadata]corev1.ResourceRequirements) {
+	s.lock.Lock()
+	defer s.lock.Unlock()
+	for meta, existing := range s.byMetaData {
+		delete(existing.Requests, resource)
+		delete(existing.Limits, resource)
+		if len(existing.Requests) == 0 && len(existing.Limits) == 0 {
+			delete(s.byMetaData, meta)
+		}
+	}
+	for meta, reqs := range updates {
+		entry, exists := s.byMetaData[meta]
+		if !exists {
+			entry = corev1.ResourceRequirements{
+				Requests: corev1.ResourceList{},
+				Limits:   corev1.ResourceList{},
+			}
+		}
+		if q, ok := reqs.Requests[resource]; ok {
+			entry.Requests[resource] = q
+		}
+		if q, ok := reqs.Limits[resource]; ok {
+			entry.Limits[resource] = q
+		}
+		s.byMetaData[meta] = entry
+	}
 }
 
 func (s *resourceServer) digestRecommendations(
@@ -175,41 +249,30 @@ func (s *resourceServer) digestRecommendations(
 ) {
 	logger := s.logger.WithField("resource", resource)
 	logger.Debugf("Digesting %d identifiers.", len(data.DataByMetaData))
+	updates := map[podscaler.FullMetadata]corev1.ResourceRequirements{}
 	for meta, fingerprintTimes := range data.DataByMetaData {
-		overall := circonusllhist.New()
 		metaLogger := logger.WithField("meta", meta)
 		metaLogger.Tracef("digesting %d fingerprints", len(fingerprintTimes))
-		for _, fingerprintTime := range fingerprintTimes {
-			overall.Merge(data.Data[fingerprintTime.Fingerprint].Histogram())
+		overall := mergeHistogramsForMeta(data, fingerprintTimes)
+		if overall == nil {
+			metaLogger.Debug("skipping recommendation with no resolvable histogram data")
+			continue
 		}
-		metaLogger.Trace("merged all fingerprints")
 		requests := recommend(overall, quantile)
 		if len(requests) == 0 {
 			metaLogger.Debug("skipping recommendation with no usable histogram data")
 			continue
 		}
-		metaLogger.Trace("locking for value update")
-		s.lock.Lock()
-		if _, exists := s.byMetaData[meta]; !exists {
-			s.byMetaData[meta] = corev1.ResourceRequirements{
-				Requests: corev1.ResourceList{},
-				Limits:   corev1.ResourceList{},
-			}
+		entry := corev1.ResourceRequirements{
+			Requests: corev1.ResourceList{resource: requests[resource]},
 		}
-		s.byMetaData[meta].Requests[resource] = requests[resource]
-		switch resource {
-		case corev1.ResourceCPU:
-			if peak := cpuPeakQuantityFromHistogram(overall); peak != nil {
-				s.byMetaData[meta].Limits[resource] = *peak
-			}
-		case corev1.ResourceMemory:
-			if peak := memoryPeakQuantityFromHistogram(overall); peak != nil {
-				s.byMetaData[meta].Limits[resource] = *peak
-			}
+		requestQty := requests[resource]
+		if peak := peakLimitQuantity(resource, overall, &requestQty, s.cpuRequestCap, s.memoryRequestCap); peak != nil {
+			entry.Limits = corev1.ResourceList{resource: *peak}
 		}
-		metaLogger.Trace("unlocking for meta")
-		s.lock.Unlock()
+		updates[meta] = entry
 	}
+	s.applyDigestUpdates(resource, updates)
 	logger.Debug("Finished digesting new data.")
 }
 

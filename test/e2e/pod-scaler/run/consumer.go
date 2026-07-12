@@ -20,8 +20,8 @@ import (
 	"github.com/openshift/ci-tools/pkg/testhelper"
 )
 
-// Admission sets up the pod-scaler admission server and returns a transport for talking to it.
-// extraFlags are appended to the pod-scaler admission invocation (e.g. authoritative dry-run flags).
+// Admission starts pod-scaler admission and returns its HTTPS endpoint and transport.
+// extraFlags are appended to the invocation, for example authoritative apply flags.
 func Admission(t testhelper.TestingTInterface, dataDir, kubeconfig string, parent context.Context, stream bool, extraFlags ...string) (string, *http.Transport) {
 	authDir := t.TempDir()
 	caCertFile := path.Join(authDir, "ca.crt")

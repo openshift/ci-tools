@@ -16,6 +16,7 @@ import (
 	"k8s.io/apimachinery/pkg/api/resource"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/apimachinery/pkg/runtime"
+	"k8s.io/apimachinery/pkg/util/sets"
 	"k8s.io/client-go/kubernetes/scheme"
 	"sigs.k8s.io/controller-runtime/pkg/webhook/admission"
 	"sigs.k8s.io/prow/pkg/kube"
@@ -30,31 +31,31 @@ import (
 	"github.com/openshift/ci-tools/pkg/testhelper"
 )
 
-func authPair(apply, dryRun bool, maxReduction float64) authoritativePair {
-	return authoritativePair{apply: apply, dryRun: dryRun, maxReduction: maxReduction}
+func authPair(apply bool, maxReduction float64) authoritativePair {
+	return authoritativePair{apply: apply, maxReduction: maxReduction}
 }
 
 func authLegacyCPU(maxReduction float64) authoritativeConfig {
-	p := authPair(true, false, maxReduction)
+	p := authPair(true, maxReduction)
 	return authoritativeConfig{cpuRequest: p, cpuLimit: p}
 }
 
 func authLegacyCPUAndMemory(maxCPU, maxMemory float64) authoritativeConfig {
 	return authoritativeConfig{
-		cpuRequest:    authPair(true, false, maxCPU),
-		cpuLimit:      authPair(true, false, maxCPU),
-		memoryRequest: authPair(true, false, maxMemory),
-		memoryLimit:   authPair(true, false, maxMemory),
+		cpuRequest:    authPair(true, maxCPU),
+		cpuLimit:      authPair(true, maxCPU),
+		memoryRequest: authPair(true, maxMemory),
+		memoryLimit:   authPair(true, maxMemory),
 	}
 }
 
 func authLegacyCPUDryRun(maxReduction float64) authoritativeConfig {
-	p := authPair(false, true, maxReduction)
+	p := authPair(false, maxReduction)
 	return authoritativeConfig{cpuRequest: p, cpuLimit: p}
 }
 
 func authLegacyMemory(maxReduction float64) authoritativeConfig {
-	p := authPair(true, false, maxReduction)
+	p := authPair(true, maxReduction)
 	return authoritativeConfig{memoryRequest: p, memoryLimit: p}
 }
 
@@ -68,6 +69,11 @@ func (r *mockReporter) ReportResourceConfigurationWarning(string, string, string
 }
 
 var defaultReporter = mockReporter{client: &http.Client{}}
+
+var (
+	testClusterCPUCap    = *resource.NewQuantity(10, resource.DecimalSI)
+	testClusterMemoryCap = resource.MustParse("20Gi")
+)
 
 func TestMutatePods(t *testing.T) {
 	client := fakebuildv1client.NewSimpleClientset(
@@ -582,7 +588,7 @@ func TestMutatePodResources(t *testing.T) {
 	for _, testCase := range testCases {
 		t.Run(testCase.name, func(t *testing.T) {
 			original := testCase.pod.DeepCopy()
-			mutatePodResources(testCase.pod, testCase.server, testCase.mutateResourceLimits, 10, "20Gi", false, nil, 50.0, authoritativeConfig{}, authoritativeDecreaseUsageP80, nil, &defaultReporter, logrus.WithField("test", testCase.name))
+			mutatePodResources(testCase.pod, testCase.server, testCase.mutateResourceLimits, 10, "20Gi", false, nil, 50.0, authoritativeConfig{}, authoritativeDecreaseUsageP80, authoritativeSkipConfig{}, nil, &defaultReporter, logrus.WithField("test", testCase.name))
 			diff := cmp.Diff(original, testCase.pod)
 			// In some cases, cmp.Diff decides to use non-breaking spaces, and it's not
 			// particularly deterministic about this. We don't care.
@@ -647,10 +653,10 @@ func TestMutatePodResources_ciWorkloadLabelDoesNotBreakCacheLookup(t *testing.T)
 		},
 	}
 
-	mutatePodResources(pod, server, false, 10, "20Gi", false, nil, 50.0, authoritativeConfig{}, authoritativeDecreaseUsageP80, nil, &defaultReporter, logger)
+	mutatePodResources(pod, server, false, 10, "20Gi", false, nil, 50.0, authoritativeConfig{}, authoritativeDecreaseUsageP80, authoritativeSkipConfig{}, nil, &defaultReporter, logger)
 
 	got := pod.Spec.Containers[0].Resources.Requests.Cpu().MilliValue()
-	const want = 6000 // 5000m recommendation inflated by 1.2 in useOursIfLarger
+	const want = 1000 // 10x cap from 100m configured; raw 5000m*1.2 would exceed threshold
 	if got != want {
 		t.Fatalf("CPU request = %dm, want %dm", got, want)
 	}
@@ -681,14 +687,8 @@ func TestUseOursIfLarger(t *testing.T) {
 				},
 			},
 			expected: corev1.ResourceRequirements{
-				Limits: corev1.ResourceList{
-					corev1.ResourceCPU:    *resource.NewQuantity(240, resource.DecimalSI),
-					corev1.ResourceMemory: *resource.NewQuantity(36e9, resource.BinarySI),
-				},
-				Requests: corev1.ResourceList{
-					corev1.ResourceCPU:    *resource.NewQuantity(120, resource.DecimalSI),
-					corev1.ResourceMemory: *resource.NewQuantity(24e9, resource.BinarySI),
-				},
+				Requests: corev1.ResourceList{},
+				Limits:   corev1.ResourceList{},
 			},
 		},
 		{
@@ -715,36 +715,93 @@ func TestUseOursIfLarger(t *testing.T) {
 			},
 		},
 		{
-			name: "nothing in theirs is larger",
+			name: "modest increase applied when below threshold",
 			ours: corev1.ResourceRequirements{
 				Limits: corev1.ResourceList{
 					corev1.ResourceCPU:    *resource.NewQuantity(200, resource.DecimalSI),
-					corev1.ResourceMemory: *resource.NewQuantity(3e10, resource.BinarySI),
+					corev1.ResourceMemory: *resource.NewQuantity(3e9, resource.BinarySI),
 				},
 				Requests: corev1.ResourceList{
 					corev1.ResourceCPU:    *resource.NewQuantity(100, resource.DecimalSI),
-					corev1.ResourceMemory: *resource.NewQuantity(2e10, resource.BinarySI),
+					corev1.ResourceMemory: *resource.NewQuantity(2e9, resource.BinarySI),
 				},
 			},
 			theirs: corev1.ResourceRequirements{
 				Limits: corev1.ResourceList{
-					corev1.ResourceCPU:    *resource.NewQuantity(10, resource.DecimalSI),
-					corev1.ResourceMemory: *resource.NewQuantity(1e1, resource.BinarySI),
+					corev1.ResourceCPU:    *resource.NewQuantity(180, resource.DecimalSI),
+					corev1.ResourceMemory: *resource.NewQuantity(25e8, resource.BinarySI),
 				},
 				Requests: corev1.ResourceList{
-					corev1.ResourceCPU:    *resource.NewQuantity(10, resource.DecimalSI),
-					corev1.ResourceMemory: *resource.NewQuantity(1e1, resource.BinarySI),
+					corev1.ResourceCPU:    *resource.NewQuantity(90, resource.DecimalSI),
+					corev1.ResourceMemory: *resource.NewQuantity(15e8, resource.BinarySI),
 				},
 			},
 			expected: corev1.ResourceRequirements{
 				Limits: corev1.ResourceList{
 					corev1.ResourceCPU:    *resource.NewQuantity(240, resource.DecimalSI),
-					corev1.ResourceMemory: *resource.NewQuantity(36e9, resource.BinarySI),
+					corev1.ResourceMemory: *resource.NewQuantity(36e8, resource.BinarySI),
 				},
 				Requests: corev1.ResourceList{
 					corev1.ResourceCPU:    *resource.NewQuantity(120, resource.DecimalSI),
-					corev1.ResourceMemory: *resource.NewQuantity(24e9, resource.BinarySI),
+					corev1.ResourceMemory: *resource.NewQuantity(24e8, resource.BinarySI),
 				},
+			},
+		},
+		{
+			name: "excessive increase capped",
+			ours: corev1.ResourceRequirements{
+				Requests: corev1.ResourceList{
+					corev1.ResourceMemory: *resource.NewQuantity(2e10, resource.BinarySI),
+				},
+			},
+			theirs: corev1.ResourceRequirements{
+				Requests: corev1.ResourceList{
+					corev1.ResourceMemory: *resource.NewQuantity(1e1, resource.BinarySI),
+				},
+			},
+			expected: corev1.ResourceRequirements{
+				Requests: corev1.ResourceList{
+					corev1.ResourceMemory: *resource.NewQuantity(1e2, resource.BinarySI),
+				},
+				Limits: corev1.ResourceList{},
+			},
+		},
+		{
+			name: "corrupt spike capped at cluster maximum",
+			ours: corev1.ResourceRequirements{
+				Requests: corev1.ResourceList{
+					corev1.ResourceMemory: *resource.NewQuantity(500*1024*1024*1024, resource.BinarySI),
+				},
+			},
+			theirs: corev1.ResourceRequirements{
+				Requests: corev1.ResourceList{
+					corev1.ResourceMemory: resource.MustParse("3Gi"),
+				},
+			},
+			expected: corev1.ResourceRequirements{
+				Requests: corev1.ResourceList{
+					corev1.ResourceMemory: testClusterMemoryCap,
+				},
+				Limits: corev1.ResourceList{},
+			},
+		},
+		{
+			name: "increase below cgroup minimum skipped",
+			ours: corev1.ResourceRequirements{
+				Requests: corev1.ResourceList{
+					corev1.ResourceMemory: *resource.NewQuantity(200000, resource.BinarySI),
+				},
+			},
+			theirs: corev1.ResourceRequirements{
+				Requests: corev1.ResourceList{
+					corev1.ResourceMemory: *resource.NewQuantity(1e6, resource.BinarySI),
+				},
+			},
+			expected: corev1.ResourceRequirements{
+				Requests: corev1.ResourceList{
+					corev1.ResourceMemory: *resource.NewQuantity(1e6, resource.BinarySI),
+				},
+				Limits: corev1.ResourceList{},
 			},
 		},
 		{
@@ -808,15 +865,34 @@ func TestUseOursIfLarger(t *testing.T) {
 					corev1.ResourceMemory: *resource.NewQuantity(3e10, resource.BinarySI),
 				},
 				Requests: corev1.ResourceList{
-					corev1.ResourceCPU:    *resource.NewQuantity(1200, resource.DecimalSI),
+					corev1.ResourceCPU:    *resource.NewQuantity(100, resource.DecimalSI),
 					corev1.ResourceMemory: *resource.NewQuantity(48e9, resource.BinarySI),
 				},
+			},
+		},
+		{
+			name: "unset configured resources are not mutated",
+			ours: corev1.ResourceRequirements{
+				Requests: corev1.ResourceList{
+					corev1.ResourceMemory: *resource.NewQuantity(270000, resource.BinarySI),
+				},
+				Limits: corev1.ResourceList{
+					corev1.ResourceMemory: *resource.NewQuantity(270000, resource.BinarySI),
+				},
+			},
+			theirs: corev1.ResourceRequirements{
+				Requests: corev1.ResourceList{},
+				Limits:   corev1.ResourceList{},
+			},
+			expected: corev1.ResourceRequirements{
+				Requests: corev1.ResourceList{},
+				Limits:   corev1.ResourceList{},
 			},
 		},
 	}
 	for _, testCase := range testCases {
 		t.Run(testCase.name, func(t *testing.T) {
-			useOursIfLarger(&testCase.ours, &testCase.theirs, "test", "build", false, "", &defaultReporter, logrus.WithField("test", testCase.name))
+			useOursIfLarger(&testCase.ours, &testCase.theirs, "test", "build", false, "", testClusterCPUCap, testClusterMemoryCap, &defaultReporter, logrus.WithField("test", testCase.name))
 			if diff := cmp.Diff(testCase.theirs, testCase.expected); diff != "" {
 				t.Errorf("%s: got incorrect resources after mutation: %v", testCase.name, diff)
 			}
@@ -935,7 +1011,7 @@ func TestUseOursIfLarger_authoritative(t *testing.T) {
 	}
 	for _, tc := range testCases {
 		t.Run(tc.name, func(t *testing.T) {
-			useOursIfLarger(&tc.ours, &tc.theirs, "test", "build", tc.isMeasured, "", &defaultReporter, logrus.WithField("test", tc.name))
+			useOursIfLarger(&tc.ours, &tc.theirs, "test", "build", tc.isMeasured, "", testClusterCPUCap, testClusterMemoryCap, &defaultReporter, logrus.WithField("test", tc.name))
 			if diff := cmp.Diff(tc.theirs, tc.expected); diff != "" {
 				t.Errorf("unexpected resources: %s", diff)
 			}
@@ -1090,7 +1166,7 @@ func TestApplyAuthoritativeLimitDecrease(t *testing.T) {
 			},
 		},
 		{
-			name:          "memory limit decrease never below cgroup v2 minimum",
+			name:          "memory limit decrease never below usable minimum",
 			authoritative: authLegacyMemory(1.0),
 			ours: corev1.ResourceRequirements{
 				Requests: corev1.ResourceList{
@@ -1099,7 +1175,7 @@ func TestApplyAuthoritativeLimitDecrease(t *testing.T) {
 			},
 			theirs: corev1.ResourceRequirements{
 				Limits: corev1.ResourceList{
-					corev1.ResourceMemory: *resource.NewQuantity(1e6, resource.BinarySI),
+					corev1.ResourceMemory: resource.MustParse("2Mi"),
 				},
 			},
 			expected: corev1.ResourceRequirements{
@@ -1109,7 +1185,7 @@ func TestApplyAuthoritativeLimitDecrease(t *testing.T) {
 			},
 		},
 		{
-			name:          "memory request decrease never below cgroup v2 minimum",
+			name:          "memory request decrease never below usable minimum",
 			authoritative: authLegacyMemory(1.0),
 			ours: corev1.ResourceRequirements{
 				Requests: corev1.ResourceList{
@@ -1118,7 +1194,7 @@ func TestApplyAuthoritativeLimitDecrease(t *testing.T) {
 			},
 			theirs: corev1.ResourceRequirements{
 				Requests: corev1.ResourceList{
-					corev1.ResourceMemory: *resource.NewQuantity(1e6, resource.BinarySI),
+					corev1.ResourceMemory: resource.MustParse("2Mi"),
 				},
 			},
 			expected: corev1.ResourceRequirements{
@@ -1128,7 +1204,7 @@ func TestApplyAuthoritativeLimitDecrease(t *testing.T) {
 			},
 		},
 		{
-			name:          "memory limit exactly at cgroup v2 minimum stays unchanged",
+			name:          "memory limit exactly at usable minimum stays unchanged",
 			authoritative: authLegacyMemory(1.0),
 			ours: corev1.ResourceRequirements{
 				Requests: corev1.ResourceList{
@@ -1147,7 +1223,7 @@ func TestApplyAuthoritativeLimitDecrease(t *testing.T) {
 			},
 		},
 		{
-			name:          "normal memory limit decrease is unaffected by cgroup v2 floor",
+			name:          "normal memory limit decrease is unaffected by usable memory floor",
 			authoritative: authLegacyCPUAndMemory(0.25, 0.25),
 			ours: corev1.ResourceRequirements{
 				Requests: corev1.ResourceList{
@@ -1169,7 +1245,7 @@ func TestApplyAuthoritativeLimitDecrease(t *testing.T) {
 			},
 		},
 		{
-			name:          "cpu decrease unchanged by memory cgroup v2 floor",
+			name:          "cpu decrease unchanged by usable memory floor",
 			authoritative: authLegacyCPU(0.25),
 			ours: corev1.ResourceRequirements{
 				Requests: corev1.ResourceList{
@@ -1194,7 +1270,7 @@ func TestApplyAuthoritativeLimitDecrease(t *testing.T) {
 			if usageBasis == "" {
 				usageBasis = authoritativeDecreaseUsageP80
 			}
-			applyAuthoritativeLimitDecrease(&tc.ours, &tc.theirs, "test", "build", tc.isMeasured, "", tc.authoritative, usageBasis, nil, logrus.WithField("test", tc.name))
+			applyAuthoritativeLimitDecrease(&tc.ours, &tc.theirs, "test", WorkloadTypeProwjob, tc.isMeasured, "", tc.authoritative, usageBasis, authoritativeSkipConfig{}, nil, logrus.WithField("test", tc.name))
 			if diff := cmp.Diff(tc.theirs, tc.expected); diff != "" {
 				t.Errorf("unexpected resources: %s", diff)
 			}
@@ -1222,7 +1298,7 @@ func TestApplyAuthoritativeLimitDecrease_uncappedMemory(t *testing.T) {
 		},
 	}
 
-	applyAuthoritativeLimitDecrease(&ours, &theirs, "test", "build", false, "", authLegacyCPUAndMemory(0.25, 1.0), authoritativeDecreaseUsageP80, nil, logrus.WithField("test", t.Name()))
+	applyAuthoritativeLimitDecrease(&ours, &theirs, "test", WorkloadTypeProwjob, false, "", authLegacyCPUAndMemory(0.25, 1.0), authoritativeDecreaseUsageP80, authoritativeSkipConfig{}, nil, logrus.WithField("test", t.Name()))
 	if diff := cmp.Diff(theirs, expected); diff != "" {
 		t.Errorf("unexpected resources: %s", diff)
 	}
@@ -1251,7 +1327,7 @@ func TestApplyAuthoritativeLimitDecrease_dryRun(t *testing.T) {
 		},
 	}
 
-	applyAuthoritativeLimitDecrease(&ours, &theirs, "test", "build", false, "", authLegacyCPUDryRun(0.25), authoritativeDecreaseUsageP80, nil, logrus.WithField("test", t.Name()))
+	applyAuthoritativeLimitDecrease(&ours, &theirs, "test", WorkloadTypeProwjob, false, "", authLegacyCPUDryRun(0.25), authoritativeDecreaseUsageP80, authoritativeSkipConfig{}, nil, logrus.WithField("test", t.Name()))
 	if diff := cmp.Diff(theirs, expected); diff != "" {
 		t.Errorf("dry-run should not mutate resources: %s", diff)
 	}
@@ -1280,10 +1356,10 @@ func TestApplyAuthoritativeLimitDecrease_separateRequestLimitCaps(t *testing.T) 
 		},
 	}
 
-	applyAuthoritativeLimitDecrease(&ours, &theirs, "test", "build", false, "", authoritativeConfig{
-		cpuRequest: authPair(true, false, 0.25),
-		cpuLimit:   authPair(true, false, 1.0),
-	}, authoritativeDecreaseUsageP80, nil, logrus.WithField("test", t.Name()))
+	applyAuthoritativeLimitDecrease(&ours, &theirs, "test", WorkloadTypeProwjob, false, "", authoritativeConfig{
+		cpuRequest: authPair(true, 0.25),
+		cpuLimit:   authPair(true, 1.0),
+	}, authoritativeDecreaseUsageP80, authoritativeSkipConfig{}, nil, logrus.WithField("test", t.Name()))
 	if diff := cmp.Diff(theirs, expected); diff != "" {
 		t.Errorf("unexpected resources: %s", diff)
 	}
@@ -1313,6 +1389,207 @@ func TestClampRequestsToLimits(t *testing.T) {
 	clampRequestsToLimits(&resources)
 	if diff := cmp.Diff(resources, expected); diff != "" {
 		t.Errorf("unexpected resources: %s", diff)
+	}
+}
+
+func TestUsageForAuthoritativeDecrease(t *testing.T) {
+	testCases := []struct {
+		name     string
+		basis    authoritativeDecreaseUsageBasis
+		resource corev1.ResourceName
+		request  string
+		peak     string
+		want     string
+		wantOK   bool
+	}{
+		{
+			name:     "peak basis uses request when peak is stale low",
+			basis:    authoritativeDecreaseUsagePeak,
+			resource: corev1.ResourceMemory,
+			request:  "2Gi",
+			peak:     "100Mi",
+			want:     "2Gi",
+			wantOK:   true,
+		},
+		{
+			name:     "peak basis uses peak when higher",
+			basis:    authoritativeDecreaseUsagePeak,
+			resource: corev1.ResourceMemory,
+			request:  "1Gi",
+			peak:     "3Gi",
+			want:     "3Gi",
+			wantOK:   true,
+		},
+		{
+			name:     "p80 basis uses request",
+			basis:    authoritativeDecreaseUsageP80,
+			resource: corev1.ResourceMemory,
+			request:  "1500Mi",
+			peak:     "3Gi",
+			want:     "1500Mi",
+			wantOK:   true,
+		},
+		{
+			name:     "cpu peak basis uses request when peak is stale low",
+			basis:    authoritativeDecreaseUsagePeak,
+			resource: corev1.ResourceCPU,
+			request:  "2",
+			peak:     "500m",
+			want:     "2",
+			wantOK:   true,
+		},
+		{
+			name:   "missing usage",
+			basis:  authoritativeDecreaseUsageP80,
+			wantOK: false,
+		},
+	}
+	for _, tc := range testCases {
+		t.Run(tc.name, func(t *testing.T) {
+			recommended := corev1.ResourceRequirements{
+				Requests: corev1.ResourceList{},
+				Limits:   corev1.ResourceList{},
+			}
+			if tc.request != "" {
+				recommended.Requests[tc.resource] = resource.MustParse(tc.request)
+			}
+			if tc.peak != "" {
+				recommended.Limits[tc.resource] = resource.MustParse(tc.peak)
+			}
+			got, ok := usageForAuthoritativeDecrease(recommended, tc.resource, tc.basis)
+			if ok != tc.wantOK {
+				t.Fatalf("ok = %v, want %v", ok, tc.wantOK)
+			}
+			if !tc.wantOK {
+				return
+			}
+			want := resource.MustParse(tc.want)
+			if got.Cmp(want) != 0 {
+				t.Fatalf("usageForAuthoritativeDecrease() = %s, want %s", got.String(), want.String())
+			}
+		})
+	}
+}
+
+func TestSanitizeCorruptConfiguredResources(t *testing.T) {
+	authoritativeApply := authLegacyCPUAndMemory(1.0, 1.0)
+	authoritativeDryRun := authoritativeConfig{
+		cpuRequest:    authPair(false, 1.0),
+		cpuLimit:      authPair(false, 1.0),
+		memoryRequest: authPair(false, 1.0),
+		memoryLimit:   authPair(false, 1.0),
+	}
+	testCases := []struct {
+		name                              string
+		authoritative                     authoritativeConfig
+		configured, recommended, expected corev1.ResourceRequirements
+	}{
+		{
+			name:          "sub-minimum memory request raised",
+			authoritative: authoritativeApply,
+			configured: corev1.ResourceRequirements{
+				Requests: corev1.ResourceList{
+					corev1.ResourceMemory: resource.MustParse("260Ki"),
+				},
+				Limits: corev1.ResourceList{
+					corev1.ResourceMemory: resource.MustParse("512Ki"),
+				},
+			},
+			expected: corev1.ResourceRequirements{
+				Requests: corev1.ResourceList{
+					corev1.ResourceMemory: authoritativeMinMemoryLimit,
+				},
+				Limits: corev1.ResourceList{
+					corev1.ResourceMemory: authoritativeMinMemoryLimit,
+				},
+			},
+		},
+		{
+			name:          "10x recommendation clamp",
+			authoritative: authoritativeApply,
+			configured: corev1.ResourceRequirements{
+				Requests: corev1.ResourceList{
+					corev1.ResourceMemory: resource.MustParse("200Gi"),
+				},
+			},
+			recommended: corev1.ResourceRequirements{
+				Requests: corev1.ResourceList{
+					corev1.ResourceMemory: resource.MustParse("1Gi"),
+				},
+			},
+			expected: corev1.ResourceRequirements{
+				Requests: corev1.ResourceList{
+					corev1.ResourceMemory: resource.MustParse("10Gi"),
+				},
+			},
+		},
+		{
+			name:          "cluster memory cap clamp",
+			authoritative: authoritativeApply,
+			configured: corev1.ResourceRequirements{
+				Requests: corev1.ResourceList{
+					corev1.ResourceMemory: resource.MustParse("25Gi"),
+				},
+			},
+			recommended: corev1.ResourceRequirements{
+				Requests: corev1.ResourceList{
+					corev1.ResourceMemory: resource.MustParse("2Gi"),
+				},
+			},
+			expected: corev1.ResourceRequirements{
+				Requests: corev1.ResourceList{
+					corev1.ResourceMemory: testClusterMemoryCap,
+				},
+			},
+		},
+		{
+			name:          "cluster cpu cap clamp",
+			authoritative: authoritativeApply,
+			configured: corev1.ResourceRequirements{
+				Limits: corev1.ResourceList{
+					corev1.ResourceCPU: resource.MustParse("100"),
+				},
+			},
+			recommended: corev1.ResourceRequirements{
+				Limits: corev1.ResourceList{
+					corev1.ResourceCPU: resource.MustParse("2"),
+				},
+			},
+			expected: corev1.ResourceRequirements{
+				Limits: corev1.ResourceList{
+					corev1.ResourceCPU: testClusterCPUCap,
+				},
+			},
+		},
+		{
+			name:          "dry-run skips downscale from tiny recommendation",
+			authoritative: authoritativeDryRun,
+			configured: corev1.ResourceRequirements{
+				Requests: corev1.ResourceList{
+					corev1.ResourceMemory: resource.MustParse("4Gi"),
+				},
+			},
+			recommended: corev1.ResourceRequirements{
+				Requests: corev1.ResourceList{
+					corev1.ResourceMemory: resource.MustParse("1Mi"),
+				},
+			},
+			expected: corev1.ResourceRequirements{
+				Requests: corev1.ResourceList{
+					corev1.ResourceMemory: resource.MustParse("4Gi"),
+				},
+			},
+		},
+	}
+	for _, tc := range testCases {
+		t.Run(tc.name, func(t *testing.T) {
+			configured := tc.configured
+			recommended := tc.recommended
+			sanitizeCorruptConfiguredResources(&configured, &recommended, testClusterCPUCap, testClusterMemoryCap, tc.authoritative, logrus.WithField("test", tc.name))
+			if diff := cmp.Diff(tc.expected, configured); diff != "" {
+				t.Fatalf("sanitizeCorruptConfiguredResources differs from expected, diff:\n%s", diff)
+			}
+		})
 	}
 }
 
@@ -1348,6 +1625,226 @@ func TestParseAuthoritativeDecreaseUsageBasis(t *testing.T) {
 	}
 }
 
+func TestApplyAuthoritativeLimitDecrease_skipsBuildLimits(t *testing.T) {
+	ours := corev1.ResourceRequirements{
+		Requests: corev1.ResourceList{
+			corev1.ResourceMemory: *resource.NewQuantity(1e1, resource.BinarySI),
+		},
+	}
+	theirs := corev1.ResourceRequirements{
+		Limits: corev1.ResourceList{
+			corev1.ResourceMemory: *resource.NewQuantity(2e10, resource.BinarySI),
+		},
+		Requests: corev1.ResourceList{
+			corev1.ResourceMemory: *resource.NewQuantity(2e10, resource.BinarySI),
+		},
+	}
+	expected := corev1.ResourceRequirements{
+		Limits: corev1.ResourceList{
+			corev1.ResourceMemory: *resource.NewQuantity(2e10, resource.BinarySI),
+		},
+		Requests: corev1.ResourceList{
+			corev1.ResourceMemory: *resource.NewQuantity(15e9, resource.BinarySI),
+		},
+	}
+
+	applyAuthoritativeLimitDecrease(&ours, &theirs, "test-build-docker-build", WorkloadTypeBuild, false, "builds", authLegacyMemory(0.25), authoritativeDecreaseUsageP80, parseAuthoritativeSkipConfig("build", "", "", ""), nil, logrus.WithField("test", t.Name()))
+	if diff := cmp.Diff(theirs, expected); diff != "" {
+		t.Errorf("expected build limits unchanged with request decrease: %s", diff)
+	}
+}
+
+func TestApplyAuthoritativeLimitDecrease_skipsBuildRequests(t *testing.T) {
+	ours := corev1.ResourceRequirements{
+		Requests: corev1.ResourceList{
+			corev1.ResourceMemory: *resource.NewQuantity(1e1, resource.BinarySI),
+		},
+	}
+	theirs := corev1.ResourceRequirements{
+		Limits: corev1.ResourceList{
+			corev1.ResourceMemory: *resource.NewQuantity(2e10, resource.BinarySI),
+		},
+		Requests: corev1.ResourceList{
+			corev1.ResourceMemory: *resource.NewQuantity(2e10, resource.BinarySI),
+		},
+	}
+	expected := corev1.ResourceRequirements{
+		Limits: corev1.ResourceList{
+			corev1.ResourceMemory: *resource.NewQuantity(15e9, resource.BinarySI),
+		},
+		Requests: corev1.ResourceList{
+			corev1.ResourceMemory: *resource.NewQuantity(2e10, resource.BinarySI),
+		},
+	}
+
+	applyAuthoritativeLimitDecrease(&ours, &theirs, "test-build-docker-build", WorkloadTypeBuild, false, "builds", authLegacyMemory(0.25), authoritativeDecreaseUsageP80, parseAuthoritativeSkipConfig("", "", "build", ""), nil, logrus.WithField("test", t.Name()))
+	if diff := cmp.Diff(theirs, expected); diff != "" {
+		t.Errorf("expected build requests unchanged with limit decrease: %s", diff)
+	}
+}
+
+func TestApplyAuthoritativeLimitDecrease_skipsBuildLimitsByClass(t *testing.T) {
+	ours := corev1.ResourceRequirements{
+		Requests: corev1.ResourceList{
+			corev1.ResourceMemory: *resource.NewQuantity(1e1, resource.BinarySI),
+		},
+	}
+	theirs := corev1.ResourceRequirements{
+		Limits: corev1.ResourceList{
+			corev1.ResourceMemory: *resource.NewQuantity(2e10, resource.BinarySI),
+		},
+		Requests: corev1.ResourceList{
+			corev1.ResourceMemory: *resource.NewQuantity(2e10, resource.BinarySI),
+		},
+	}
+	expected := corev1.ResourceRequirements{
+		Limits: corev1.ResourceList{
+			corev1.ResourceMemory: *resource.NewQuantity(2e10, resource.BinarySI),
+		},
+		Requests: corev1.ResourceList{
+			corev1.ResourceMemory: *resource.NewQuantity(15e9, resource.BinarySI),
+		},
+	}
+
+	applyAuthoritativeLimitDecrease(&ours, &theirs, "test", WorkloadTypeProwjob, false, "builds", authLegacyMemory(0.25), authoritativeDecreaseUsageP80, parseAuthoritativeSkipConfig("", "builds", "", ""), nil, logrus.WithField("test", t.Name()))
+	if diff := cmp.Diff(theirs, expected); diff != "" {
+		t.Errorf("expected limits unchanged when workload class is skipped: %s", diff)
+	}
+}
+
+func TestParseAuthoritativeSkipConfig(t *testing.T) {
+	testCases := []struct {
+		name           string
+		limitTypes     string
+		limitClasses   string
+		requestTypes   string
+		requestClasses string
+		wantLimitTypes []string
+		wantLimitClass []string
+		wantReqTypes   []string
+		wantReqClass   []string
+	}{
+		{
+			name:           "parses trimmed comma-separated values",
+			limitTypes:     " build,prowjob ",
+			limitClasses:   "builds",
+			requestTypes:   "build",
+			requestClasses: " tests ",
+			wantLimitTypes: []string{"build", "prowjob"},
+			wantLimitClass: []string{"builds"},
+			wantReqTypes:   []string{"build"},
+			wantReqClass:   []string{"tests"},
+		},
+		{
+			name:           "empty input yields empty sets",
+			wantLimitTypes: nil,
+			wantLimitClass: nil,
+			wantReqTypes:   nil,
+			wantReqClass:   nil,
+		},
+	}
+	for _, tc := range testCases {
+		t.Run(tc.name, func(t *testing.T) {
+			got := parseAuthoritativeSkipConfig(tc.limitTypes, tc.limitClasses, tc.requestTypes, tc.requestClasses)
+			assertSetEqual(t, "limit workload types", got.limitDecreaseWorkloadTypes, tc.wantLimitTypes)
+			assertSetEqual(t, "limit workload classes", got.limitDecreaseWorkloadClasses, tc.wantLimitClass)
+			assertSetEqual(t, "request workload types", got.requestDecreaseWorkloadTypes, tc.wantReqTypes)
+			assertSetEqual(t, "request workload classes", got.requestDecreaseWorkloadClasses, tc.wantReqClass)
+		})
+	}
+}
+
+func assertSetEqual(t *testing.T, label string, got sets.Set[string], want []string) {
+	t.Helper()
+	if len(want) == 0 {
+		if len(got) != 0 {
+			t.Fatalf("unexpected %s: %v", label, sets.List(got))
+		}
+		return
+	}
+	for _, item := range want {
+		if !got.Has(item) {
+			t.Fatalf("missing %s %q in %v", label, item, sets.List(got))
+		}
+	}
+	if len(got) != len(want) {
+		t.Fatalf("%s count = %d, want %d (%v)", label, len(got), len(want), sets.List(got))
+	}
+}
+
+func TestCappedIncreaseQuantity(t *testing.T) {
+	testCases := []struct {
+		name       string
+		field      corev1.ResourceName
+		configured string
+		want       string
+	}{
+		{name: "memory cap", field: corev1.ResourceMemory, configured: "100Mi", want: "1000Mi"},
+		{name: "memory cluster cap", field: corev1.ResourceMemory, configured: "5Gi", want: "20Gi"},
+		{name: "cpu cap", field: corev1.ResourceCPU, configured: "500m", want: "5"},
+		{name: "cpu cluster cap", field: corev1.ResourceCPU, configured: "2", want: "10"},
+	}
+	for _, tc := range testCases {
+		t.Run(tc.name, func(t *testing.T) {
+			configured := resource.MustParse(tc.configured)
+			got := cappedIncreaseQuantity(tc.field, configured, testClusterCPUCap, testClusterMemoryCap)
+			want := resource.MustParse(tc.want)
+			if got.Cmp(want) != 0 {
+				t.Fatalf("cappedIncreaseQuantity() = %s, want %s", got.String(), want.String())
+			}
+		})
+	}
+}
+
+func TestIncreaseExceedsConfiguredThreshold(t *testing.T) {
+	testCases := []struct {
+		name       string
+		field      corev1.ResourceName
+		determined string
+		configured string
+		want       bool
+	}{
+		{name: "below threshold", field: corev1.ResourceMemory, determined: "200Mi", configured: "100Mi", want: false},
+		{name: "above threshold", field: corev1.ResourceMemory, determined: "2Gi", configured: "100Mi", want: true},
+		{name: "zero configured", field: corev1.ResourceMemory, determined: "1Gi", configured: "0", want: false},
+		{name: "cpu uses millicores", field: corev1.ResourceCPU, determined: "2600m", configured: "250m", want: true},
+		{name: "cpu below threshold in millicores", field: corev1.ResourceCPU, determined: "1500m", configured: "2", want: false},
+	}
+	for _, tc := range testCases {
+		t.Run(tc.name, func(t *testing.T) {
+			determined := resource.MustParse(tc.determined)
+			configured := resource.MustParse(tc.configured)
+			if got := increaseExceedsConfiguredThreshold(tc.field, determined, configured); got != tc.want {
+				t.Fatalf("increaseExceedsConfiguredThreshold() = %v, want %v", got, tc.want)
+			}
+		})
+	}
+}
+
+func TestRecommendationQuantityUsable(t *testing.T) {
+	testCases := []struct {
+		name  string
+		field corev1.ResourceName
+		value string
+		want  bool
+	}{
+		{name: "cpu at minimum", field: corev1.ResourceCPU, value: "10m", want: true},
+		{name: "cpu below minimum", field: corev1.ResourceCPU, value: "1m", want: false},
+		{name: "memory at minimum", field: corev1.ResourceMemory, value: "1Mi", want: true},
+		{name: "memory below minimum", field: corev1.ResourceMemory, value: "512Ki", want: false},
+		{name: "memory corrupt idle stamp", field: corev1.ResourceMemory, value: "260Ki", want: false},
+		{name: "zero memory", field: corev1.ResourceMemory, value: "0", want: false},
+	}
+	for _, tc := range testCases {
+		t.Run(tc.name, func(t *testing.T) {
+			q := resource.MustParse(tc.value)
+			if got := recommendationQuantityUsable(tc.field, q); got != tc.want {
+				t.Fatalf("recommendationQuantityUsable() = %v, want %v", got, tc.want)
+			}
+		})
+	}
+}
+
 func TestApplyAuthoritativeLimitDecrease_skipsDuringEscalation(t *testing.T) {
 	ours := corev1.ResourceRequirements{
 		Requests: corev1.ResourceList{
@@ -1368,7 +1865,7 @@ func TestApplyAuthoritativeLimitDecrease_skipsDuringEscalation(t *testing.T) {
 		},
 	}
 
-	applyAuthoritativeLimitDecrease(&ours, &theirs, "test", "build", false, "", authLegacyMemory(0.25), authoritativeDecreaseUsageP80, server, logrus.WithField("test", t.Name()))
+	applyAuthoritativeLimitDecrease(&ours, &theirs, "test", WorkloadTypeBuild, false, "", authLegacyMemory(0.25), authoritativeDecreaseUsageP80, authoritativeSkipConfig{}, server, logrus.WithField("test", t.Name()))
 	want := *resource.NewQuantity(2e10, resource.BinarySI)
 	if diff := cmp.Diff(theirs, corev1.ResourceRequirements{
 		Limits:   corev1.ResourceList{corev1.ResourceMemory: want},
@@ -1461,7 +1958,7 @@ func TestUseOursIfLarger_authoritativeDryRun(t *testing.T) {
 		},
 	}
 
-	useOursIfLarger(&ours, &theirs, "test", "build", false, "", &defaultReporter, logrus.WithField("test", t.Name()))
+	useOursIfLarger(&ours, &theirs, "test", "build", false, "", testClusterCPUCap, testClusterMemoryCap, &defaultReporter, logrus.WithField("test", t.Name()))
 	if diff := cmp.Diff(theirs, expected); diff != "" {
 		t.Errorf("dry-run should not mutate resources: %s", diff)
 	}
@@ -1544,10 +2041,19 @@ func TestUseOursIsLarger_ReporterReports(t *testing.T) {
 
 	for _, tc := range testCases {
 		t.Run(tc.name, func(t *testing.T) {
-			useOursIfLarger(&tc.ours, &tc.theirs, "test", "build", false, "", &tc.reporter, logrus.WithField("test", tc.name))
+			theirs := copyResourceRequirements(tc.theirs)
+			useOursIfLarger(&tc.ours, &theirs, "test", "build", false, "", testClusterCPUCap, testClusterMemoryCap, &tc.reporter, logrus.WithField("test", tc.name))
 
 			if diff := cmp.Diff(tc.reporter.called, tc.expected); diff != "" {
 				t.Errorf("actual and expected reporter states don't match, : %v", diff)
+			}
+			if tc.name == "ours is 10 times larger than theirs" {
+				want := copyResourceRequirements(tc.theirs)
+				want.Requests[corev1.ResourceMemory] = *resource.NewQuantity(1e1, resource.BinarySI)
+				want.Limits[corev1.ResourceMemory] = *resource.NewQuantity(1e2, resource.BinarySI)
+				if diff := cmp.Diff(theirs, want); diff != "" {
+					t.Errorf("expected excessive increase to cap resources: %s", diff)
+				}
 			}
 		})
 	}
@@ -1740,10 +2246,36 @@ func TestPreventUnschedulable(t *testing.T) {
 			resources: &corev1.ResourceRequirements{},
 			expected:  &corev1.ResourceRequirements{},
 		},
+		{
+			name: "too much memory limit",
+			resources: &corev1.ResourceRequirements{
+				Limits: corev1.ResourceList{
+					corev1.ResourceMemory: resource.MustParse("25Gi"),
+				},
+			},
+			expected: &corev1.ResourceRequirements{
+				Limits: corev1.ResourceList{
+					corev1.ResourceMemory: resource.MustParse(memoryCap),
+				},
+			},
+		},
+		{
+			name: "too much cpu limit",
+			resources: &corev1.ResourceRequirements{
+				Limits: corev1.ResourceList{
+					corev1.ResourceCPU: *resource.NewQuantity(100, resource.DecimalSI),
+				},
+			},
+			expected: &corev1.ResourceRequirements{
+				Limits: corev1.ResourceList{
+					corev1.ResourceCPU: *resource.NewQuantity(cpuCap, resource.DecimalSI),
+				},
+			},
+		},
 	}
 	for _, tc := range testCases {
 		t.Run(tc.name, func(t *testing.T) {
-			capDigestRequests(tc.resources, *resource.NewQuantity(cpuCap, resource.DecimalSI), resource.MustParse(memoryCap), logrus.WithField("test", tc.name))
+			preventUnschedulableWithCaps(tc.resources, *resource.NewQuantity(cpuCap, resource.DecimalSI), resource.MustParse(memoryCap), logrus.WithField("test", tc.name))
 			if diff := cmp.Diff(tc.expected, tc.resources); diff != "" {
 				t.Fatalf("result doesn't match expected, diff: %s", diff)
 			}

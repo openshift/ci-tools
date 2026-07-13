@@ -9,6 +9,7 @@ import (
 	"os"
 	"os/exec"
 	"reflect"
+	"sort"
 	"strings"
 
 	secretmanager "cloud.google.com/go/secretmanager/apiv1"
@@ -279,10 +280,41 @@ type FieldUpdateInfo struct {
 	Payload   []byte
 }
 
+func configManagedIndexEntries(config secretgenerator.Config, disabledClusters sets.Set[string]) sets.Set[string] {
+	managed := sets.New[string]()
+	for _, item := range config {
+		for _, field := range item.Fields {
+			if disabledClusters.Has(field.Cluster) {
+				continue
+			}
+			normalizedGroup := gsmvalidation.NormalizeName(item.ItemName)
+			normalizedField := gsmvalidation.NormalizeName(field.Name)
+			managed.Insert(fmt.Sprintf("%s%s%s", normalizedGroup, gsmvalidation.CollectionSecretDelimiter, normalizedField))
+		}
+	}
+	return managed
+}
+
+func mergeIndexEntries(managedFromConfig []string, previousIndexEntries, configManaged sets.Set[string]) []string {
+	indexEntries := sets.New(managedFromConfig...)
+	for entry := range previousIndexEntries {
+		if !configManaged.Has(entry) {
+			indexEntries.Insert(entry)
+		}
+	}
+	result := indexEntries.UnsortedList()
+	sort.Strings(result)
+	if len(result) == 0 {
+		return nil
+	}
+	return result
+}
+
 func buildSecretsToUpdate(config secretgenerator.Config, disabledClusters sets.Set[string], previousIndexEntries sets.Set[string]) ([]ItemUpdateInfo, []string, error) {
 	var errs []error
 	var newIndexEntries []string
 	var secretsToUpdate []ItemUpdateInfo
+	configManaged := configManagedIndexEntries(config, disabledClusters)
 
 	for _, item := range config {
 		logger := logrus.WithField("item", item.ItemName)
@@ -328,7 +360,9 @@ func buildSecretsToUpdate(config secretgenerator.Config, disabledClusters sets.S
 		secretsToUpdate = append(secretsToUpdate, itemStruct)
 	}
 
-	return secretsToUpdate, newIndexEntries, utilerrors.NewAggregate(errs)
+	// we need to preserve secrets in our collection that do not come from the generator config file
+	updatedIndexEntries := mergeIndexEntries(newIndexEntries, previousIndexEntries, configManaged)
+	return secretsToUpdate, updatedIndexEntries, utilerrors.NewAggregate(errs)
 }
 
 func main() {

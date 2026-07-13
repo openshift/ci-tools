@@ -307,6 +307,12 @@ func addSecretWrapper(pod *coreapi.Pod, vpnConf *vpnConf, skipKubeconfig bool, g
 		Args:                     []string{"/bin/entrypoint-wrapper", bin},
 		VolumeMounts:             []coreapi.VolumeMount{mount},
 		TerminationMessagePolicy: coreapi.TerminationMessageFallbackToLogsOnError,
+		Resources: coreapi.ResourceRequirements{
+			Requests: coreapi.ResourceList{
+				coreapi.ResourceCPU:    resource.MustParse("10m"),
+				coreapi.ResourceMemory: resource.MustParse("32Mi"),
+			},
+		},
 	})
 	container := &pod.Spec.Containers[0]
 	args := container.Args

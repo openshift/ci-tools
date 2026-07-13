@@ -763,6 +763,80 @@ func TestCachedQuery_Record(t *testing.T) {
 	}
 }
 
+func TestCachedQuery_Record_MemoryFloor(t *testing.T) {
+	metric := model.Metric{
+		model.LabelName("label_ci_openshift_io_metadata_org"):  "org",
+		model.LabelName("label_ci_openshift_io_metadata_repo"): "repo",
+		model.LabelName("pod"):                                 "pod",
+		model.LabelName("container"):                           "container",
+	}
+	logger := logrus.WithField("test", "TestCachedQuery_Record_MemoryFloor")
+
+	t.Run("memory query skips sub-1Mi samples", func(t *testing.T) {
+		q := CachedQuery{
+			Query:           "container_memory_working_set_bytes",
+			RangesByCluster: map[string][]TimeRange{"cluster": {}},
+			Data:            map[model.Fingerprint]*circonusllhist.HistogramWithoutLookups{},
+			DataByMetaData:  map[FullMetadata][]FingerprintTime{},
+		}
+		q.Record("cluster", TimeRange{Start: year(1), End: year(2)}, model.Matrix{{
+			Metric: metric,
+			Values: []model.SamplePair{
+				{Value: 100, Timestamp: 1},      // below 1Mi, should be skipped
+				{Value: 500000, Timestamp: 2},   // below 1Mi, should be skipped
+				{Value: 2000000, Timestamp: 3},  // above 1Mi, should be recorded
+				{Value: 10000000, Timestamp: 4}, // above 1Mi, should be recorded
+			},
+		}}, logger)
+
+		fp := metric.Fingerprint()
+		hist, ok := q.Data[fp]
+		if !ok {
+			t.Fatal("expected histogram to be created")
+		}
+		expected := circonusllhist.New()
+		for _, v := range []float64{2000000, 10000000} {
+			if err := expected.RecordValue(v); err != nil {
+				t.Fatalf("unexpected error: %v", err)
+			}
+		}
+		if !hist.Histogram().Equals(expected) {
+			t.Errorf("histogram should only contain values >= 1Mi, got %v", hist.Histogram())
+		}
+	})
+
+	t.Run("non-memory query records all positive samples", func(t *testing.T) {
+		q := CachedQuery{
+			Query:           "container_cpu_usage_seconds_total",
+			RangesByCluster: map[string][]TimeRange{"cluster": {}},
+			Data:            map[model.Fingerprint]*circonusllhist.HistogramWithoutLookups{},
+			DataByMetaData:  map[FullMetadata][]FingerprintTime{},
+		}
+		q.Record("cluster", TimeRange{Start: year(1), End: year(2)}, model.Matrix{{
+			Metric: metric,
+			Values: []model.SamplePair{
+				{Value: 100, Timestamp: 1},
+				{Value: 500000, Timestamp: 2},
+			},
+		}}, logger)
+
+		fp := metric.Fingerprint()
+		hist, ok := q.Data[fp]
+		if !ok {
+			t.Fatal("expected histogram to be created")
+		}
+		expected := circonusllhist.New()
+		for _, v := range []float64{100, 500000} {
+			if err := expected.RecordValue(v); err != nil {
+				t.Fatalf("unexpected error: %v", err)
+			}
+		}
+		if !hist.Histogram().Equals(expected) {
+			t.Errorf("non-memory query should record all positive values, got %v", hist.Histogram())
+		}
+	})
+}
+
 var dataComparer = cmp.Comparer(func(a, b *circonusllhist.HistogramWithoutLookups) bool {
 	return a.Histogram().Equals(b.Histogram())
 })

@@ -24,6 +24,13 @@ import (
 )
 
 const (
+	// MinMemoryRecordValue is the minimum memory sample value (in bytes) worth
+	// recording.  Samples below 1 MiB are almost certainly idle/init noise and
+	// would pull the histogram – and therefore recommendations – down.
+	MinMemoryRecordValue float64 = 1048576 // 1 MiB
+)
+
+const (
 	ProwLabelNameCreated model.LabelName = "label_created_by_prow"
 	ProwLabelNameContext model.LabelName = "label_prow_k8s_io_context"
 	ProwLabelNameJob     model.LabelName = "label_prow_k8s_io_job"
@@ -102,9 +109,13 @@ func (q *CachedQuery) Record(clusterName string, r TimeRange, matrix model.Matri
 		} else {
 			hist = circonusllhist.New(circonusllhist.NoLookup())
 		}
+		isMemory := strings.Contains(q.Query, "container_memory_working_set_bytes")
 		for _, value := range stream.Values {
 			v := float64(value.Value)
 			if math.IsNaN(v) || math.IsInf(v, 0) || v < 0 {
+				continue
+			}
+			if isMemory && v < MinMemoryRecordValue {
 				continue
 			}
 			err := hist.RecordValue(v)

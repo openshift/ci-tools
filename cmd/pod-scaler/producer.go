@@ -398,6 +398,13 @@ func (q *querier) executeOverRange(ctx context.Context, c *clusterMetadata, r pr
 		return
 	}
 
+	// Filter out sub-1Mi memory samples to prevent garbage idle-noise
+	// measurements (e.g. 324Ki entrypoint-wrapper stamps) from entering
+	// the GCS cache where they would produce invalid recommendations.
+	if strings.Contains(query, MetricNameMemoryWorkingSet) {
+		filterMemoryFloor(matrix, logger)
+	}
+
 	saveStart := time.Now()
 	logger.Debug("Saving response from Prometheus data.")
 	q.lock.Lock()
@@ -532,4 +539,23 @@ func queryInstantVector(logger *logrus.Entry, client prometheusapi.API, query st
 		apply(sample.Metric, sample.Value)
 	}
 	return nil
+}
+
+// filterMemoryFloor removes memory sample values below authoritativeMinMemoryLimit
+// from the matrix in-place. This prevents garbage sub-1Mi measurements from
+// entering the GCS cache where they could later produce invalid recommendations.
+func filterMemoryFloor(matrix model.Matrix, logger *logrus.Entry) {
+	minValue := model.SampleValue(authoritativeMinMemoryLimit.AsApproximateFloat64())
+	for _, stream := range matrix {
+		filtered := stream.Values[:0]
+		for _, v := range stream.Values {
+			if v.Value >= minValue {
+				filtered = append(filtered, v)
+			}
+		}
+		if dropped := len(stream.Values) - len(filtered); dropped > 0 {
+			logger.WithField("dropped", dropped).Debug("Dropped sub-1Mi memory samples.")
+		}
+		stream.Values = filtered
+	}
 }

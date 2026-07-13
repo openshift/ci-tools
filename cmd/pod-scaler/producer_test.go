@@ -6,6 +6,8 @@ import (
 
 	"github.com/google/go-cmp/cmp"
 	prometheusapi "github.com/prometheus/client_golang/api/prometheus/v1"
+	"github.com/prometheus/common/model"
+	"github.com/sirupsen/logrus"
 
 	podscaler "github.com/openshift/ci-tools/pkg/pod-scaler"
 )
@@ -350,6 +352,98 @@ func TestDivideRange(t *testing.T) {
 					t.Errorf("%s: divided[%d].end: overlaps with a boundary of another range", testCase.name, i)
 				}
 				seen[item.End] = nil
+			}
+		})
+	}
+}
+
+func TestFilterMemoryFloor(t *testing.T) {
+	logger := logrus.NewEntry(logrus.StandardLogger())
+
+	// authoritativeMinMemoryLimit is 1Mi = 1048576 bytes
+	minValue := model.SampleValue(authoritativeMinMemoryLimit.AsApproximateFloat64())
+
+	tests := []struct {
+		name     string
+		input    model.Matrix
+		expected []int // expected number of values per stream after filtering
+	}{
+		{
+			name: "sub-1Mi samples are skipped",
+			input: model.Matrix{
+				{
+					Metric: model.Metric{"__name__": "container_memory_working_set_bytes"},
+					Values: []model.SamplePair{
+						{Timestamp: model.TimeFromUnix(1), Value: 324 * 1024},        // 324Ki - below floor
+						{Timestamp: model.TimeFromUnix(2), Value: 512 * 1024},        // 512Ki - below floor
+						{Timestamp: model.TimeFromUnix(3), Value: minValue},          // exactly 1Mi - kept
+						{Timestamp: model.TimeFromUnix(4), Value: 2 * 1024 * 1024},   // 2Mi - kept
+						{Timestamp: model.TimeFromUnix(5), Value: 100 * 1024 * 1024}, // 100Mi - kept
+					},
+				},
+			},
+			expected: []int{3},
+		},
+		{
+			name: "all samples above floor are kept",
+			input: model.Matrix{
+				{
+					Metric: model.Metric{"__name__": "container_memory_working_set_bytes"},
+					Values: []model.SamplePair{
+						{Timestamp: model.TimeFromUnix(1), Value: minValue},
+						{Timestamp: model.TimeFromUnix(2), Value: minValue + 1},
+						{Timestamp: model.TimeFromUnix(3), Value: 50 * 1024 * 1024},
+					},
+				},
+			},
+			expected: []int{3},
+		},
+		{
+			name: "all samples below floor are removed",
+			input: model.Matrix{
+				{
+					Metric: model.Metric{"__name__": "container_memory_working_set_bytes"},
+					Values: []model.SamplePair{
+						{Timestamp: model.TimeFromUnix(1), Value: 100},
+						{Timestamp: model.TimeFromUnix(2), Value: 500 * 1024},
+					},
+				},
+			},
+			expected: []int{0},
+		},
+		{
+			name:     "empty matrix is handled",
+			input:    model.Matrix{},
+			expected: []int{},
+		},
+		{
+			name: "multiple streams are filtered independently",
+			input: model.Matrix{
+				{
+					Metric: model.Metric{"container": "a"},
+					Values: []model.SamplePair{
+						{Timestamp: model.TimeFromUnix(1), Value: 100},             // below floor
+						{Timestamp: model.TimeFromUnix(2), Value: 2 * 1024 * 1024}, // above floor
+					},
+				},
+				{
+					Metric: model.Metric{"container": "b"},
+					Values: []model.SamplePair{
+						{Timestamp: model.TimeFromUnix(1), Value: 3 * 1024 * 1024}, // above floor
+					},
+				},
+			},
+			expected: []int{1, 1},
+		},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			filterMemoryFloor(tt.input, logger)
+			for i, stream := range tt.input {
+				if len(stream.Values) != tt.expected[i] {
+					t.Errorf("stream %d: expected %d values after filtering, got %d", i, tt.expected[i], len(stream.Values))
+				}
 			}
 		})
 	}

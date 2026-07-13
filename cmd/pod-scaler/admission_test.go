@@ -588,7 +588,7 @@ func TestMutatePodResources(t *testing.T) {
 	for _, testCase := range testCases {
 		t.Run(testCase.name, func(t *testing.T) {
 			original := testCase.pod.DeepCopy()
-			mutatePodResources(testCase.pod, testCase.server, testCase.mutateResourceLimits, 10, "20Gi", false, nil, 50.0, authoritativeConfig{}, authoritativeDecreaseUsageP80, authoritativeSkipConfig{}, nil, &defaultReporter, logrus.WithField("test", testCase.name))
+			mutatePodResources(testCase.pod, testCase.server, testCase.mutateResourceLimits, 10, "20Gi", false, nil, 50.0, authoritativeConfig{}, authoritativeDecreaseUsageP80, authoritativeSkipConfig{}, nil, &defaultReporter, 20, logrus.WithField("test", testCase.name))
 			diff := cmp.Diff(original, testCase.pod)
 			// In some cases, cmp.Diff decides to use non-breaking spaces, and it's not
 			// particularly deterministic about this. We don't care.
@@ -653,7 +653,7 @@ func TestMutatePodResources_ciWorkloadLabelDoesNotBreakCacheLookup(t *testing.T)
 		},
 	}
 
-	mutatePodResources(pod, server, false, 10, "20Gi", false, nil, 50.0, authoritativeConfig{}, authoritativeDecreaseUsageP80, authoritativeSkipConfig{}, nil, &defaultReporter, logger)
+	mutatePodResources(pod, server, false, 10, "20Gi", false, nil, 50.0, authoritativeConfig{}, authoritativeDecreaseUsageP80, authoritativeSkipConfig{}, nil, &defaultReporter, 20, logger)
 
 	got := pod.Spec.Containers[0].Resources.Requests.Cpu().MilliValue()
 	const want = 1000 // 10x cap from 100m configured; raw 5000m*1.2 would exceed threshold
@@ -748,7 +748,7 @@ func TestUseOursIfLarger(t *testing.T) {
 			},
 		},
 		{
-			name: "excessive increase capped",
+			name: "excessive increase capped then raised to memory floor",
 			ours: corev1.ResourceRequirements{
 				Requests: corev1.ResourceList{
 					corev1.ResourceMemory: *resource.NewQuantity(2e10, resource.BinarySI),
@@ -761,7 +761,8 @@ func TestUseOursIfLarger(t *testing.T) {
 			},
 			expected: corev1.ResourceRequirements{
 				Requests: corev1.ResourceList{
-					corev1.ResourceMemory: *resource.NewQuantity(1e2, resource.BinarySI),
+					// capped to 100 bytes (10 * maxIncreaseRatio), then raised to 1Mi floor
+					corev1.ResourceMemory: resource.MustParse("1Mi"),
 				},
 				Limits: corev1.ResourceList{},
 			},
@@ -871,6 +872,89 @@ func TestUseOursIfLarger(t *testing.T) {
 			},
 		},
 		{
+			name: "memory recommendation at exactly minimum is unchanged",
+			ours: corev1.ResourceRequirements{
+				Requests: corev1.ResourceList{
+					corev1.ResourceMemory: resource.MustParse("1Mi"),
+				},
+			},
+			theirs: corev1.ResourceRequirements{
+				Requests: corev1.ResourceList{
+					corev1.ResourceMemory: *resource.NewQuantity(500000, resource.BinarySI),
+				},
+			},
+			expected: corev1.ResourceRequirements{
+				Requests: corev1.ResourceList{
+					// 1Mi buffered: AsApproximateFloat64()*1.2 → Set(1258291)
+					corev1.ResourceMemory: *resource.NewQuantity(1258291, resource.BinarySI),
+				},
+				Limits: corev1.ResourceList{},
+			},
+		},
+		{
+			name: "normal memory recommendation is unchanged by floor",
+			ours: corev1.ResourceRequirements{
+				Requests: corev1.ResourceList{
+					corev1.ResourceMemory: *resource.NewQuantity(50e6, resource.BinarySI),
+				},
+			},
+			theirs: corev1.ResourceRequirements{
+				Requests: corev1.ResourceList{
+					corev1.ResourceMemory: *resource.NewQuantity(10e6, resource.BinarySI),
+				},
+			},
+			expected: corev1.ResourceRequirements{
+				Requests: corev1.ResourceList{
+					// 50e6 * 1.2 = 60e6, well above 1Mi floor, stamped directly
+					corev1.ResourceMemory: *resource.NewQuantity(int64(50e6*1.2), resource.BinarySI),
+				},
+				Limits: corev1.ResourceList{},
+			},
+		},
+		{
+			name: "cpu is unaffected by memory floor",
+			ours: corev1.ResourceRequirements{
+				Requests: corev1.ResourceList{
+					corev1.ResourceCPU: *resource.NewMilliQuantity(5, resource.DecimalSI),
+				},
+			},
+			theirs: corev1.ResourceRequirements{
+				Requests: corev1.ResourceList{
+					corev1.ResourceCPU: *resource.NewMilliQuantity(100, resource.DecimalSI),
+				},
+			},
+			expected: corev1.ResourceRequirements{
+				Requests: corev1.ResourceList{
+					// 5m * 1.2 = 6m; below authoritativeMinCPURequest (10m) so skipped by recommendationQuantityUsable
+					corev1.ResourceCPU: *resource.NewMilliQuantity(100, resource.DecimalSI),
+				},
+				Limits: corev1.ResourceList{},
+			},
+		},
+		{
+			name: "memory floor with 1.2x buffer interaction",
+			ours: corev1.ResourceRequirements{
+				Requests: corev1.ResourceList{
+					// 900Ki is below 1Mi; after 1.2x buffer: 900*1024*1.2 ≈ 1105920 ≈ 1080Ki > 1Mi
+					// The buffered value exceeds the floor so the floor does not activate,
+					// and since 1080Ki > configured (500Ki), the buffered value is stamped.
+					corev1.ResourceMemory: resource.MustParse("900Ki"),
+				},
+			},
+			theirs: corev1.ResourceRequirements{
+				Requests: corev1.ResourceList{
+					corev1.ResourceMemory: resource.MustParse("500Ki"),
+				},
+			},
+			expected: corev1.ResourceRequirements{
+				Requests: corev1.ResourceList{
+					// 900Ki buffered: AsApproximateFloat64()*1.2 → Set(1105920)
+					corev1.ResourceMemory: *resource.NewQuantity(1105920, resource.BinarySI),
+				},
+				Limits: corev1.ResourceList{},
+			},
+		},
+		{
 			name: "unset configured resources are not mutated",
 			ours: corev1.ResourceRequirements{
 				Requests: corev1.ResourceList{
@@ -892,7 +976,7 @@ func TestUseOursIfLarger(t *testing.T) {
 	}
 	for _, testCase := range testCases {
 		t.Run(testCase.name, func(t *testing.T) {
-			useOursIfLarger(&testCase.ours, &testCase.theirs, "test", "build", false, "", testClusterCPUCap, testClusterMemoryCap, &defaultReporter, logrus.WithField("test", testCase.name))
+			useOursIfLarger(&testCase.ours, &testCase.theirs, "test", "build", false, "", testClusterCPUCap, testClusterMemoryCap, 20, &defaultReporter, logrus.WithField("test", testCase.name))
 			if diff := cmp.Diff(testCase.theirs, testCase.expected); diff != "" {
 				t.Errorf("%s: got incorrect resources after mutation: %v", testCase.name, diff)
 			}
@@ -1011,7 +1095,7 @@ func TestUseOursIfLarger_authoritative(t *testing.T) {
 	}
 	for _, tc := range testCases {
 		t.Run(tc.name, func(t *testing.T) {
-			useOursIfLarger(&tc.ours, &tc.theirs, "test", "build", tc.isMeasured, "", testClusterCPUCap, testClusterMemoryCap, &defaultReporter, logrus.WithField("test", tc.name))
+			useOursIfLarger(&tc.ours, &tc.theirs, "test", "build", tc.isMeasured, "", testClusterCPUCap, testClusterMemoryCap, 20, &defaultReporter, logrus.WithField("test", tc.name))
 			if diff := cmp.Diff(tc.theirs, tc.expected); diff != "" {
 				t.Errorf("unexpected resources: %s", diff)
 			}
@@ -1958,7 +2042,7 @@ func TestUseOursIfLarger_authoritativeDryRun(t *testing.T) {
 		},
 	}
 
-	useOursIfLarger(&ours, &theirs, "test", "build", false, "", testClusterCPUCap, testClusterMemoryCap, &defaultReporter, logrus.WithField("test", t.Name()))
+	useOursIfLarger(&ours, &theirs, "test", "build", false, "", testClusterCPUCap, testClusterMemoryCap, 20, &defaultReporter, logrus.WithField("test", t.Name()))
 	if diff := cmp.Diff(theirs, expected); diff != "" {
 		t.Errorf("dry-run should not mutate resources: %s", diff)
 	}
@@ -2042,18 +2126,99 @@ func TestUseOursIsLarger_ReporterReports(t *testing.T) {
 	for _, tc := range testCases {
 		t.Run(tc.name, func(t *testing.T) {
 			theirs := copyResourceRequirements(tc.theirs)
-			useOursIfLarger(&tc.ours, &theirs, "test", "build", false, "", testClusterCPUCap, testClusterMemoryCap, &tc.reporter, logrus.WithField("test", tc.name))
+			useOursIfLarger(&tc.ours, &theirs, "test", "build", false, "", testClusterCPUCap, testClusterMemoryCap, 20, &tc.reporter, logrus.WithField("test", tc.name))
 
 			if diff := cmp.Diff(tc.reporter.called, tc.expected); diff != "" {
 				t.Errorf("actual and expected reporter states don't match, : %v", diff)
 			}
 			if tc.name == "ours is 10 times larger than theirs" {
 				want := copyResourceRequirements(tc.theirs)
-				want.Requests[corev1.ResourceMemory] = *resource.NewQuantity(1e1, resource.BinarySI)
-				want.Limits[corev1.ResourceMemory] = *resource.NewQuantity(1e2, resource.BinarySI)
+				// capped to configured * maxIncreaseRatio, then raised to 1Mi memory floor
+				want.Requests[corev1.ResourceMemory] = resource.MustParse("1Mi")
+				want.Limits[corev1.ResourceMemory] = resource.MustParse("1Mi")
 				if diff := cmp.Diff(theirs, want); diff != "" {
 					t.Errorf("expected excessive increase to cap resources: %s", diff)
 				}
+			}
+		})
+	}
+}
+
+func TestUseOursIfLarger_BufferPercent(t *testing.T) {
+	testCases := []struct {
+		name                        string
+		recommendationBufferPercent int
+		ours, theirs, expected      corev1.ResourceRequirements
+	}{
+		{
+			name:                        "50% buffer on CPU request",
+			recommendationBufferPercent: 50,
+			ours: corev1.ResourceRequirements{
+				Requests: corev1.ResourceList{
+					corev1.ResourceCPU: *resource.NewMilliQuantity(1000, resource.DecimalSI),
+				},
+			},
+			theirs: corev1.ResourceRequirements{
+				Requests: corev1.ResourceList{
+					corev1.ResourceCPU: *resource.NewMilliQuantity(200, resource.DecimalSI),
+				},
+			},
+			expected: corev1.ResourceRequirements{
+				Limits: corev1.ResourceList{},
+				Requests: corev1.ResourceList{
+					// 1000m * 1.5 = 1500m
+					corev1.ResourceCPU: *resource.NewMilliQuantity(1500, resource.DecimalSI),
+				},
+			},
+		},
+		{
+			name:                        "0% buffer (no increase)",
+			recommendationBufferPercent: 0,
+			ours: corev1.ResourceRequirements{
+				Requests: corev1.ResourceList{
+					corev1.ResourceCPU: *resource.NewMilliQuantity(1000, resource.DecimalSI),
+				},
+			},
+			theirs: corev1.ResourceRequirements{
+				Requests: corev1.ResourceList{
+					corev1.ResourceCPU: *resource.NewMilliQuantity(200, resource.DecimalSI),
+				},
+			},
+			expected: corev1.ResourceRequirements{
+				Limits: corev1.ResourceList{},
+				Requests: corev1.ResourceList{
+					// 1000m * 1.0 = 1000m
+					corev1.ResourceCPU: *resource.NewMilliQuantity(1000, resource.DecimalSI),
+				},
+			},
+		},
+		{
+			name:                        "50% buffer on memory request",
+			recommendationBufferPercent: 50,
+			ours: corev1.ResourceRequirements{
+				Requests: corev1.ResourceList{
+					corev1.ResourceMemory: *resource.NewQuantity(1e9, resource.BinarySI),
+				},
+			},
+			theirs: corev1.ResourceRequirements{
+				Requests: corev1.ResourceList{
+					corev1.ResourceMemory: *resource.NewQuantity(2e8, resource.BinarySI),
+				},
+			},
+			expected: corev1.ResourceRequirements{
+				Limits: corev1.ResourceList{},
+				Requests: corev1.ResourceList{
+					// 1e9 * 1.5 = 1.5e9
+					corev1.ResourceMemory: *resource.NewQuantity(int64(1e9*1.5), resource.BinarySI),
+				},
+			},
+		},
+	}
+	for _, tc := range testCases {
+		t.Run(tc.name, func(t *testing.T) {
+			useOursIfLarger(&tc.ours, &tc.theirs, "test", "build", false, "", testClusterCPUCap, testClusterMemoryCap, tc.recommendationBufferPercent, &defaultReporter, logrus.WithField("test", tc.name))
+			if diff := cmp.Diff(tc.theirs, tc.expected); diff != "" {
+				t.Errorf("unexpected resources: %s", diff)
 			}
 		})
 	}

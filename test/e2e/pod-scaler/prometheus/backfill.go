@@ -196,9 +196,23 @@ func metricGenerators() []metricGenerator {
 		{
 			metricName: "container_cpu_usage_seconds_total",
 			metricType: prometheus_client.MetricType_COUNTER,
-			addValue: func(metric *prometheus_client.Metric, f, j float64) {
-				metric.Counter = &prometheus_client.Counter{Value: pointer.Float64Ptr(f*j + 1)} // we're interested in measuring the rate
-			},
+			addValue: func() func(*prometheus_client.Metric, float64, float64) {
+				// Use a running accumulator so the counter is strictly
+				// monotonic (no resets) and rate(…[3m]) stays within
+				// DefaultMaxCPUCores.  Bound increments to keep the
+				// per-second rate under 10 CPU cores (increment/60s < 10
+				// → increment < 600).  Reset the accumulator when j==0
+				// (start of a new series).
+				var accum float64
+				return func(metric *prometheus_client.Metric, f, j float64) {
+					if j == 0 {
+						accum = 0
+					}
+					increment := math.Mod(math.Abs(f), 500) + 1 // [1, 501) per minute → rate ∈ [0.02, 8.35]
+					accum += increment
+					metric.Counter = &prometheus_client.Counter{Value: pointer.Float64Ptr(accum)}
+				}
+			}(),
 			getValue: func(metric *prometheus_client.Metric) float64 {
 				return *metric.Counter.Value
 			},
@@ -207,6 +221,12 @@ func metricGenerators() []metricGenerator {
 			metricName: "container_memory_working_set_bytes",
 			metricType: prometheus_client.MetricType_GAUGE,
 			addValue: func(metric *prometheus_client.Metric, f, _ float64) {
+				// Clamp to the producer's MinMemoryRecordValue floor so that
+				// synthetic samples are not discarded by the memory-floor
+				// filter in CachedQuery.Record / filterMemoryFloor.
+				if f < podscaler.MinMemoryRecordValue {
+					f = podscaler.MinMemoryRecordValue
+				}
 				metric.Gauge = &prometheus_client.Gauge{Value: pointer.Float64Ptr(f)}
 			},
 			getValue: func(metric *prometheus_client.Metric) float64 {

@@ -139,7 +139,10 @@
       - cp
       image: quay-proxy.ci.openshift.org/openshift/ci:ci_entrypoint-wrapper_latest
       name: cp-entrypoint-wrapper
-      resources: {}
+      resources:
+        requests:
+          cpu: 10m
+          memory: 32Mi
       terminationMessagePolicy: FallbackToLogsOnError
       volumeMounts:
       - mountPath: /tmp/entrypoint-wrapper
@@ -308,7 +311,10 @@
       - cp
       image: quay-proxy.ci.openshift.org/openshift/ci:ci_entrypoint-wrapper_latest
       name: cp-entrypoint-wrapper
-      resources: {}
+      resources:
+        requests:
+          cpu: 10m
+          memory: 32Mi
       terminationMessagePolicy: FallbackToLogsOnError
       volumeMounts:
       - mountPath: /tmp/entrypoint-wrapper

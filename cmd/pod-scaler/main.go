@@ -91,6 +91,7 @@ type consumerOptions struct {
 	skipWorkloadTypeLimitDecrease                 string
 	skipWorkloadClassRequestDecrease              string
 	skipWorkloadClassLimitDecrease                string
+	recommendationBufferPercent                   int
 }
 
 func (o *consumerOptions) authoritativeConfig() authoritativeConfig {
@@ -158,6 +159,7 @@ func bindOptions(fs *flag.FlagSet) *options {
 	fs.Float64Var(&o.failureEscalationFactor, "failure-escalation-factor", 1.5, "Multiplier applied per escalation level after OOM or CPU throttle (1.5 = 50% increase per level).")
 	fs.IntVar(&o.failureEscalationMaxLevel, "failure-escalation-max-level", 10, "Maximum escalation level tracked for a workload.")
 	fs.Float64Var(&o.cpuThrottleThreshold, "cpu-throttle-threshold", 0.25, "Minimum throttled/total CPU CFS period ratio to count as CPU deprived.")
+	fs.IntVar(&o.recommendationBufferPercent, "recommendation-buffer-percent", 20, "Percentage buffer added on top of measured recommendations to reduce OOMKilled and CPU-throttle events (default 20 = 1.2x multiplier).")
 	o.resultsOptions.Bind(fs)
 	return &o
 }
@@ -190,6 +192,9 @@ func (o *options) validate() error {
 		}
 		if memoryCap := resource.MustParse(o.memoryCap); memoryCap.Sign() <= 0 {
 			return errors.New("--memory-cap must be greater than 0")
+		}
+		if o.recommendationBufferPercent < 0 {
+			return errors.New("--recommendation-buffer-percent must be >= 0")
 		}
 		if o.percentageMeasured < 0 || o.percentageMeasured > 100 {
 			return errors.New("--percentage-measured must be between 0 and 100")
@@ -378,7 +383,8 @@ func mainAdmission(opts *options, cache Cache) {
 		logrus.WithError(err).Fatal("Failed to parse authoritative decrease usage basis.")
 	}
 
-	go admit(opts.port, opts.instrumentationOptions.HealthPort, opts.certDir, client, kubeClient, loaders(cache), opts.mutateResourceLimits, opts.cpuCap, opts.memoryCap, opts.cpuPriorityScheduling, opts.percentageMeasured, opts.measuredPodCPUIncrease, opts.systemReservedCPU, opts.authoritativeConfig(), usageBasis, opts.authoritativeSkipConfig(), escalations, reporter)
+	logrus.WithField("recommendation_buffer_percent", opts.recommendationBufferPercent).Info("Recommendation buffer configured.")
+	go admit(opts.port, opts.instrumentationOptions.HealthPort, opts.certDir, client, kubeClient, loaders(cache), opts.mutateResourceLimits, opts.cpuCap, opts.memoryCap, opts.cpuPriorityScheduling, opts.percentageMeasured, opts.measuredPodCPUIncrease, opts.systemReservedCPU, opts.authoritativeConfig(), usageBasis, opts.authoritativeSkipConfig(), escalations, reporter, opts.recommendationBufferPercent)
 }
 
 func loaders(cache Cache) map[string][]*cacheReloader {

@@ -376,11 +376,13 @@ func TestAdmissionAuthoritativeDryRun(t *testing.T) {
 	}
 	// Producer fixture histograms store counter-scale values; replace with low CPU rates so
 	// admission can exercise authoritative decrease (see TestAdmission for unmodified increase path).
+	// coresAtQuantile must be <= DefaultMaxCPUCores (10) to avoid cache-repair corruption removal.
+	// configuredMilli must be <= recommendation*maxIncreaseRatio(10) to avoid the corrupt-configured
+	// clamping in sanitizeCorruptConfiguredResources (recommendation ≈ 7080m, so ≤ 70800).
 	seedLowCPURecommendationCache(T, dataDir, podscaler.MetadataFor(podLabels, "pod", "container"), 7)
 
-	// Same Prometheus fixture as TestAdmission "pod for which we have data" (~10 CPU recommendation).
-	const configuredMilli = 100_000                     // 100 CPU
-	wantMilli := int64(float64(configuredMilli) * 0.75) // 25% authoritative cap
+	const configuredMilli = 50_000                      // 50 CPU (within 10× of ~7080m recommendation)
+	wantMilli := int64(float64(configuredMilli) * 0.75) // 25% authoritative cap → 37500m
 	cpuCap := int64(200)
 
 	highCPU := *resource.NewMilliQuantity(configuredMilli, resource.DecimalSI)

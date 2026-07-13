@@ -656,7 +656,7 @@ func (r *reconciler) generateProwjob(ciopConfig *api.ReleaseBuildConfiguration,
 			jobBaseGen.PodSpec.Add(prowgen.ShardArgs(shardCount, shardIndex))
 		}
 		if private {
-			jobBaseGen.PodSpec.Add(prowgen.GitHubToken(false))
+			jobBaseGen.PodSpec.Add(prowgen.GitHubToken(true))
 		}
 
 		// Avoid sharing when we run the same job multiple times.
@@ -686,6 +686,10 @@ func (r *reconciler) generateProwjob(ciopConfig *api.ReleaseBuildConfiguration,
 		periodic.DecorationConfig.Timeout = &prowv1.Duration{Duration: r.defaultAggregatorJobTimeout}
 		if private {
 			periodic.Hidden = true
+			periodic.DecorationConfig.OauthTokenSecret = &prowv1.OauthTokenSecret{
+				Key:  api.OauthTokenSecretKey,
+				Name: api.OauthTokenSecretName,
+			}
 		}
 		break
 	}

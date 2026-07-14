@@ -91,6 +91,7 @@ type consumerOptions struct {
 	skipWorkloadTypeLimitDecrease                 string
 	skipWorkloadClassRequestDecrease              string
 	skipWorkloadClassLimitDecrease                string
+	authoritativeGuaranteedQoS                    bool
 	recommendationBufferPercent                   int
 }
 
@@ -156,6 +157,7 @@ func bindOptions(fs *flag.FlagSet) *options {
 	fs.StringVar(&o.skipWorkloadClassLimitDecrease, "pod-scaler-skip-workload-class-limit-decrease", "", "Comma-separated ci-workload classes that skip authoritative limit decreases (e.g. builds,tests).")
 	fs.StringVar(&o.skipWorkloadTypeRequestDecrease, "pod-scaler-skip-workload-type-request-decrease", "", "Comma-separated workload types that skip authoritative request decreases.")
 	fs.StringVar(&o.skipWorkloadClassRequestDecrease, "pod-scaler-skip-workload-class-request-decrease", "", "Comma-separated ci-workload classes that skip authoritative request decreases.")
+	fs.BoolVar(&o.authoritativeGuaranteedQoS, "authoritative-guaranteed-qos", false, "When true, after authoritative decreases set CPU and memory requests equal to their limits so pods run with Guaranteed QoS.")
 	fs.Float64Var(&o.failureEscalationFactor, "failure-escalation-factor", 1.5, "Multiplier applied per escalation level after OOM or CPU throttle (1.5 = 50% increase per level).")
 	fs.IntVar(&o.failureEscalationMaxLevel, "failure-escalation-max-level", 10, "Maximum escalation level tracked for a workload.")
 	fs.Float64Var(&o.cpuThrottleThreshold, "cpu-throttle-threshold", 0.25, "Minimum throttled/total CPU CFS period ratio to count as CPU deprived.")
@@ -384,7 +386,7 @@ func mainAdmission(opts *options, cache Cache) {
 	}
 
 	logrus.WithField("recommendation_buffer_percent", opts.recommendationBufferPercent).Info("Recommendation buffer configured.")
-	go admit(opts.port, opts.instrumentationOptions.HealthPort, opts.certDir, client, kubeClient, loaders(cache), opts.mutateResourceLimits, opts.cpuCap, opts.memoryCap, opts.cpuPriorityScheduling, opts.percentageMeasured, opts.measuredPodCPUIncrease, opts.systemReservedCPU, opts.authoritativeConfig(), usageBasis, opts.authoritativeSkipConfig(), escalations, reporter, opts.recommendationBufferPercent)
+	go admit(opts.port, opts.instrumentationOptions.HealthPort, opts.certDir, client, kubeClient, loaders(cache), opts.mutateResourceLimits, opts.cpuCap, opts.memoryCap, opts.cpuPriorityScheduling, opts.percentageMeasured, opts.measuredPodCPUIncrease, opts.systemReservedCPU, opts.authoritativeConfig(), usageBasis, opts.authoritativeSkipConfig(), escalations, reporter, opts.recommendationBufferPercent, opts.authoritativeGuaranteedQoS)
 }
 
 func loaders(cache Cache) map[string][]*cacheReloader {

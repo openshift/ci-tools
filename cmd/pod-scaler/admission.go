@@ -147,9 +147,12 @@ func (c authoritativeSkipConfig) skipsRequestDecrease(workloadType, workloadClas
 	return workloadClass != "" && c.requestDecreaseWorkloadClasses.Has(workloadClass)
 }
 
-func admit(port, healthPort int, certDir string, client buildclientv1.BuildV1Interface, kubeClient kubernetes.Interface, loaders map[string][]*cacheReloader, mutateResourceLimits bool, cpuCap int64, memoryCap string, cpuPriorityScheduling int64, percentageMeasured float64, measuredPodCPUIncrease float64, systemReservedCPU int64, authoritative authoritativeConfig, authoritativeDecreaseUsage authoritativeDecreaseUsageBasis, authoritativeSkip authoritativeSkipConfig, escalations *escalationServer, reporter results.PodScalerReporter, recommendationBufferPercent int) {
+func admit(port, healthPort int, certDir string, client buildclientv1.BuildV1Interface, kubeClient kubernetes.Interface, loaders map[string][]*cacheReloader, mutateResourceLimits bool, cpuCap int64, memoryCap string, cpuPriorityScheduling int64, percentageMeasured float64, measuredPodCPUIncrease float64, systemReservedCPU int64, authoritative authoritativeConfig, authoritativeDecreaseUsage authoritativeDecreaseUsageBasis, authoritativeSkip authoritativeSkipConfig, escalations *escalationServer, reporter results.PodScalerReporter, recommendationBufferPercent int, authoritativeGuaranteedQoS bool) {
 	logger := logrus.WithField("component", "pod-scaler admission")
 	logger.Infof("Initializing admission webhook server with %d loaders.", len(loaders))
+	if authoritativeGuaranteedQoS {
+		logger.Info("authoritative guaranteed QoS enabled: requests will be set equal to limits after authoritative decreases")
+	}
 	if authoritative.anyDryRun() {
 		logger.WithFields(logrus.Fields{
 			"authoritative_cpu_request_apply":    authoritative.cpuRequest.apply,
@@ -169,7 +172,7 @@ func admit(port, healthPort int, certDir string, client buildclientv1.BuildV1Int
 		Port:    port,
 		CertDir: certDir,
 	})
-	server.Register("/pods", &webhook.Admission{Handler: &podMutator{logger: logger, client: client, decoder: decoder, resources: resources, mutateResourceLimits: mutateResourceLimits, cpuCap: cpuCap, memoryCap: memoryCap, cpuPriorityScheduling: cpuPriorityScheduling, percentageMeasured: percentageMeasured, measuredPodCPUIncrease: measuredPodCPUIncrease, nodeCache: nodeCache, authoritative: authoritative, authoritativeDecreaseUsage: authoritativeDecreaseUsage, authoritativeSkip: authoritativeSkip, escalations: escalations, reporter: reporter, recommendationBufferPercent: recommendationBufferPercent}})
+	server.Register("/pods", &webhook.Admission{Handler: &podMutator{logger: logger, client: client, decoder: decoder, resources: resources, mutateResourceLimits: mutateResourceLimits, cpuCap: cpuCap, memoryCap: memoryCap, cpuPriorityScheduling: cpuPriorityScheduling, percentageMeasured: percentageMeasured, measuredPodCPUIncrease: measuredPodCPUIncrease, nodeCache: nodeCache, authoritative: authoritative, authoritativeDecreaseUsage: authoritativeDecreaseUsage, authoritativeSkip: authoritativeSkip, authoritativeGuaranteedQoS: authoritativeGuaranteedQoS, escalations: escalations, reporter: reporter, recommendationBufferPercent: recommendationBufferPercent}})
 	logger.Info("Serving admission webhooks.")
 	if err := server.Start(interrupts.Context()); err != nil {
 		logrus.WithError(err).Fatal("Failed to serve webhooks.")
@@ -191,6 +194,7 @@ type podMutator struct {
 	authoritative               authoritativeConfig
 	authoritativeDecreaseUsage  authoritativeDecreaseUsageBasis
 	authoritativeSkip           authoritativeSkipConfig
+	authoritativeGuaranteedQoS  bool
 	escalations                 *escalationServer
 	reporter                    results.PodScalerReporter
 	recommendationBufferPercent int
@@ -242,7 +246,7 @@ func (m *podMutator) Handle(ctx context.Context, req admission.Request) admissio
 		m.setMeasuredLabel(pod, false, logger)
 	}
 
-	mutatePodResources(pod, m.resources, m.mutateResourceLimits, m.cpuCap, m.memoryCap, isMeasured, m.nodeCache, m.measuredPodCPUIncrease, m.authoritative, m.authoritativeDecreaseUsage, m.authoritativeSkip, m.escalations, m.reporter, m.recommendationBufferPercent, logger)
+	mutatePodResources(pod, m.resources, m.mutateResourceLimits, m.cpuCap, m.memoryCap, isMeasured, m.nodeCache, m.measuredPodCPUIncrease, m.authoritative, m.authoritativeDecreaseUsage, m.authoritativeSkip, m.escalations, m.reporter, m.recommendationBufferPercent, m.authoritativeGuaranteedQoS, logger)
 	m.addPriorityClass(pod)
 
 	marshaledPod, err := json.Marshal(pod)
@@ -653,7 +657,7 @@ func capResourceList(list corev1.ResourceList, cpuCap, memoryCap resource.Quanti
 	}
 }
 
-func mutatePodResources(pod *corev1.Pod, server *resourceServer, mutateResourceLimits bool, cpuCap int64, memoryCap string, isMeasured bool, nodeCache *nodeAllocatableCache, measuredPodCPUIncrease float64, authoritative authoritativeConfig, authoritativeDecreaseUsage authoritativeDecreaseUsageBasis, authoritativeSkip authoritativeSkipConfig, escalations *escalationServer, reporter results.PodScalerReporter, recommendationBufferPercent int, logger *logrus.Entry) {
+func mutatePodResources(pod *corev1.Pod, server *resourceServer, mutateResourceLimits bool, cpuCap int64, memoryCap string, isMeasured bool, nodeCache *nodeAllocatableCache, measuredPodCPUIncrease float64, authoritative authoritativeConfig, authoritativeDecreaseUsage authoritativeDecreaseUsageBasis, authoritativeSkip authoritativeSkipConfig, escalations *escalationServer, reporter results.PodScalerReporter, recommendationBufferPercent int, authoritativeGuaranteedQoS bool, logger *logrus.Entry) {
 	workloadClass := pod.Labels[ciWorkloadLabel]
 
 	mutateResources := func(containers []corev1.Container) {
@@ -726,17 +730,21 @@ func mutatePodResources(pod *corev1.Pod, server *resourceServer, mutateResourceL
 				memoryCapQty := resource.MustParse(memoryCap)
 				sanitizeCorruptConfiguredResources(&containers[i].Resources, &resources, cpuCapQty, memoryCapQty, authoritative, logger)
 				useOursIfLarger(&resources, &containers[i].Resources, workloadName, workloadType, isMeasured, workloadClass, cpuCapQty, memoryCapQty, recommendationBufferPercent, reporter, logger)
-				if mutateResourceLimits {
+				if mutateResourceLimits && !authoritativeGuaranteedQoS {
 					reconcileLimits(&containers[i].Resources)
 				}
 				applyFailureEscalation(&containers[i].Resources, workloadType, workloadName, escalations, logger)
 				applyAuthoritativeLimitDecrease(&resources, &containers[i].Resources, workloadName, workloadType, isMeasured, workloadClass, authoritative, authoritativeDecreaseUsage, authoritativeSkip, escalations, logger)
-				if mutateResourceLimits && !authoritative.cpuLimit.apply {
+				if mutateResourceLimits && !authoritative.cpuLimit.apply && !authoritativeGuaranteedQoS {
 					if containers[i].Resources.Limits != nil {
 						delete(containers[i].Resources.Limits, corev1.ResourceCPU)
 					}
 				}
-				clampRequestsToLimits(&containers[i].Resources)
+				if authoritativeGuaranteedQoS {
+					applyAuthoritativeGuaranteedQoS(&containers[i].Resources)
+				} else {
+					clampRequestsToLimits(&containers[i].Resources)
+				}
 			}
 			enforceMinimumMemoryResources(&containers[i].Resources, logger)
 			preventUnschedulable(&containers[i].Resources, cpuCap, memoryCap, logger)
@@ -1321,5 +1329,23 @@ func clampRequestsToLimits(resources *corev1.ResourceRequirements) {
 		if request.Cmp(limit) > 0 {
 			resources.Requests[field] = limit.DeepCopy()
 		}
+	}
+}
+
+// applyAuthoritativeGuaranteedQoS sets requests equal to limits for CPU and memory
+// so admitted pods run with Guaranteed QoS after authoritative decreases.
+func applyAuthoritativeGuaranteedQoS(resources *corev1.ResourceRequirements) {
+	if resources == nil || resources.Limits == nil {
+		return
+	}
+	for _, field := range []corev1.ResourceName{corev1.ResourceCPU, corev1.ResourceMemory} {
+		limit, ok := resources.Limits[field]
+		if !ok || limit.IsZero() {
+			continue
+		}
+		if resources.Requests == nil {
+			resources.Requests = corev1.ResourceList{}
+		}
+		resources.Requests[field] = limit.DeepCopy()
 	}
 }

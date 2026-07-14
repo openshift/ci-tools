@@ -588,7 +588,7 @@ func TestMutatePodResources(t *testing.T) {
 	for _, testCase := range testCases {
 		t.Run(testCase.name, func(t *testing.T) {
 			original := testCase.pod.DeepCopy()
-			mutatePodResources(testCase.pod, testCase.server, testCase.mutateResourceLimits, 10, "20Gi", false, nil, 50.0, authoritativeConfig{}, authoritativeDecreaseUsageP80, authoritativeSkipConfig{}, nil, &defaultReporter, 20, logrus.WithField("test", testCase.name))
+			mutatePodResources(testCase.pod, testCase.server, testCase.mutateResourceLimits, 10, "20Gi", false, nil, 50.0, authoritativeConfig{}, authoritativeDecreaseUsageP80, authoritativeSkipConfig{}, nil, &defaultReporter, 20, false, logrus.WithField("test", testCase.name))
 			diff := cmp.Diff(original, testCase.pod)
 			// In some cases, cmp.Diff decides to use non-breaking spaces, and it's not
 			// particularly deterministic about this. We don't care.
@@ -653,7 +653,7 @@ func TestMutatePodResources_ciWorkloadLabelDoesNotBreakCacheLookup(t *testing.T)
 		},
 	}
 
-	mutatePodResources(pod, server, false, 10, "20Gi", false, nil, 50.0, authoritativeConfig{}, authoritativeDecreaseUsageP80, authoritativeSkipConfig{}, nil, &defaultReporter, 20, logger)
+	mutatePodResources(pod, server, false, 10, "20Gi", false, nil, 50.0, authoritativeConfig{}, authoritativeDecreaseUsageP80, authoritativeSkipConfig{}, nil, &defaultReporter, 20, false, logger)
 
 	got := pod.Spec.Containers[0].Resources.Requests.Cpu().MilliValue()
 	const want = 1000 // 10x cap from 100m configured; raw 5000m*1.2 would exceed threshold
@@ -1473,6 +1473,98 @@ func TestClampRequestsToLimits(t *testing.T) {
 	clampRequestsToLimits(&resources)
 	if diff := cmp.Diff(resources, expected); diff != "" {
 		t.Errorf("unexpected resources: %s", diff)
+	}
+}
+
+func TestApplyAuthoritativeGuaranteedQoS(t *testing.T) {
+	testCases := []struct {
+		name     string
+		input    corev1.ResourceRequirements
+		expected corev1.ResourceRequirements
+	}{
+		{
+			name: "raises requests to match limits",
+			input: corev1.ResourceRequirements{
+				Requests: corev1.ResourceList{
+					corev1.ResourceCPU:    resource.MustParse("500m"),
+					corev1.ResourceMemory: resource.MustParse("1Gi"),
+				},
+				Limits: corev1.ResourceList{
+					corev1.ResourceCPU:    resource.MustParse("2"),
+					corev1.ResourceMemory: resource.MustParse("4Gi"),
+				},
+			},
+			expected: corev1.ResourceRequirements{
+				Requests: corev1.ResourceList{
+					corev1.ResourceCPU:    resource.MustParse("2"),
+					corev1.ResourceMemory: resource.MustParse("4Gi"),
+				},
+				Limits: corev1.ResourceList{
+					corev1.ResourceCPU:    resource.MustParse("2"),
+					corev1.ResourceMemory: resource.MustParse("4Gi"),
+				},
+			},
+		},
+		{
+			name: "only syncs resources with limits",
+			input: corev1.ResourceRequirements{
+				Requests: corev1.ResourceList{
+					corev1.ResourceCPU: resource.MustParse("500m"),
+				},
+				Limits: corev1.ResourceList{
+					corev1.ResourceMemory: resource.MustParse("2Gi"),
+				},
+			},
+			expected: corev1.ResourceRequirements{
+				Requests: corev1.ResourceList{
+					corev1.ResourceCPU:    resource.MustParse("500m"),
+					corev1.ResourceMemory: resource.MustParse("2Gi"),
+				},
+				Limits: corev1.ResourceList{
+					corev1.ResourceMemory: resource.MustParse("2Gi"),
+				},
+			},
+		},
+	}
+	for _, tc := range testCases {
+		t.Run(tc.name, func(t *testing.T) {
+			resources := tc.input
+			applyAuthoritativeGuaranteedQoS(&resources)
+			if diff := cmp.Diff(tc.expected, resources); diff != "" {
+				t.Errorf("unexpected resources: %s", diff)
+			}
+		})
+	}
+}
+
+func TestApplyAuthoritativeLimitDecrease_guaranteedQoS(t *testing.T) {
+	ours := corev1.ResourceRequirements{
+		Requests: corev1.ResourceList{
+			corev1.ResourceCPU:    resource.MustParse("100m"),
+			corev1.ResourceMemory: resource.MustParse("128Mi"),
+		},
+	}
+	theirs := corev1.ResourceRequirements{
+		Requests: corev1.ResourceList{
+			corev1.ResourceCPU:    resource.MustParse("4"),
+			corev1.ResourceMemory: resource.MustParse("8Gi"),
+		},
+		Limits: corev1.ResourceList{
+			corev1.ResourceCPU:    resource.MustParse("4"),
+			corev1.ResourceMemory: resource.MustParse("8Gi"),
+		},
+	}
+	applyAuthoritativeLimitDecrease(&ours, &theirs, "test", WorkloadTypeProwjob, false, "", authLegacyCPUAndMemory(1.0, 1.0), authoritativeDecreaseUsageP80, authoritativeSkipConfig{}, nil, logrus.WithField("test", t.Name()))
+	expected := theirs
+	expected.Requests = corev1.ResourceList{}
+	expected.Limits = corev1.ResourceList{}
+	for field, limit := range theirs.Limits {
+		expected.Requests[field] = limit.DeepCopy()
+		expected.Limits[field] = limit.DeepCopy()
+	}
+	applyAuthoritativeGuaranteedQoS(&theirs)
+	if diff := cmp.Diff(expected, theirs); diff != "" {
+		t.Errorf("unexpected resources after guaranteed QoS: %s", diff)
 	}
 }
 

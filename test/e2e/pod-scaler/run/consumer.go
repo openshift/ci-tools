@@ -62,6 +62,7 @@ func Admission(t testhelper.TestingTInterface, dataDir, kubeconfig string, paren
 		"--mutate-resource-limits",
 		"--serving-cert-dir=" + authDir,
 		"--metrics-port=9092",
+		"--pprof-port=0",
 		"--report-credentials-file=" + credFile,
 	}
 	podScalerFlags = append(podScalerFlags, extraFlags...)

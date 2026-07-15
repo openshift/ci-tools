@@ -54,6 +54,7 @@ import (
 	"k8s.io/client-go/util/retry"
 	"k8s.io/klog/v2"
 	utilpointer "k8s.io/utils/pointer"
+	"k8s.io/utils/ptr"
 	controllerruntime "sigs.k8s.io/controller-runtime"
 	ctrlruntimeclient "sigs.k8s.io/controller-runtime/pkg/client"
 	crcontrollerutil "sigs.k8s.io/controller-runtime/pkg/controller/controllerutil"
@@ -1770,6 +1771,7 @@ func pdb(labelKey, namespace string) (*policyv1.PodDisruptionBudget, crcontrolle
 				Operator: metav1.LabelSelectorOpExists,
 			}},
 		}
+		pdb.Spec.UnhealthyPodEvictionPolicy = ptr.To(policyv1.AlwaysAllow)
 		return nil
 	}
 }

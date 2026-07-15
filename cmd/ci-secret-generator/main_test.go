@@ -629,6 +629,29 @@ func TestBuildSecretsToUpdate(t *testing.T) {
 			expectedIndexFields: []string{"cluster-test__field1", "cluster-test__field3"},
 		},
 		{
+			name: "disabled cluster field preserved when already in index",
+			config: secretgenerator.Config{{
+				ItemName: "cluster-test",
+				Fields: []secretgenerator.FieldGenerator{
+					{Name: "field1", Cmd: "printf 'value1'", Cluster: "enabled-cluster"},
+					{Name: "field2", Cmd: "printf 'value2'", Cluster: "disabled-cluster"},
+					{Name: "field3", Cmd: "printf 'value3'", Cluster: "enabled-cluster"},
+				},
+			}},
+			disabledClusters:    sets.New[string]("disabled-cluster"),
+			existingIndexValues: []string{"cluster-test__field2", "non-generated__secret"},
+			expectedItems: map[string]ItemUpdateInfo{
+				"cluster-test": {
+					ItemName: "cluster-test",
+					Fields: []FieldUpdateInfo{
+						{FieldName: "field1", Payload: []byte("value1")},
+						{FieldName: "field3", Payload: []byte("value3")},
+					},
+				},
+			},
+			expectedIndexFields: []string{"cluster-test__field1", "cluster-test__field2", "cluster-test__field3", "non-generated__secret"},
+		},
+		{
 			name: "GSM sync enabled - names with forbidden characters are normalized in index",
 			config: secretgenerator.Config{{
 				ItemName: "aws.config",
@@ -646,7 +669,7 @@ func TestBuildSecretsToUpdate(t *testing.T) {
 					},
 				},
 			},
-			expectedIndexFields: []string{"aws--dot--config__config--dot--json", "aws--dot--config__auth_token"},
+			expectedIndexFields: []string{"aws--dot--config__auth_token", "aws--dot--config__config--dot--json"},
 		},
 		{
 			name: "GSM sync enabled - item with notes",
@@ -722,7 +745,7 @@ func TestBuildSecretsToUpdate(t *testing.T) {
 			expectError:         true,
 		},
 		{
-			name: "secret removed from config is removed from index",
+			name: "secret not in config is preserved in index",
 			config: secretgenerator.Config{{
 				ItemName: "item1",
 				Fields: []secretgenerator.FieldGenerator{
@@ -738,7 +761,26 @@ func TestBuildSecretsToUpdate(t *testing.T) {
 					},
 				},
 			},
-			expectedIndexFields: []string{"item1__field1"},
+			expectedIndexFields: []string{"item1__field1", "item2__field2"},
+		},
+		{
+			name: "manually created secret is preserved across generator run",
+			config: secretgenerator.Config{{
+				ItemName: "build_farm",
+				Fields: []secretgenerator.FieldGenerator{
+					{Name: "field1", Cmd: "printf 'value1'"},
+				},
+			}},
+			existingIndexValues: []string{"build_farm__field1", "cherrypick-signing-key__id_ed25519"},
+			expectedItems: map[string]ItemUpdateInfo{
+				"build_farm": {
+					ItemName: "build_farm",
+					Fields: []FieldUpdateInfo{
+						{FieldName: "field1", Payload: []byte("value1")},
+					},
+				},
+			},
+			expectedIndexFields: []string{"build_farm__field1", "cherrypick-signing-key__id_ed25519"},
 		},
 		{
 			name: "mixed: existing succeeds, existing fails, new succeeds, new fails",
@@ -761,7 +803,7 @@ func TestBuildSecretsToUpdate(t *testing.T) {
 					},
 				},
 			},
-			expectedIndexFields: []string{"test__existing-success", "test__existing-fail", "test__new-success"},
+			expectedIndexFields: []string{"test__existing-fail", "test__existing-success", "test__new-success"},
 			expectError:         true,
 		},
 	}

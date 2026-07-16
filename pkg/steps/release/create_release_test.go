@@ -10,6 +10,36 @@ import (
 	"github.com/openshift/ci-tools/pkg/api"
 )
 
+func TestAssembleReleaseVersionPrefix(t *testing.T) {
+	tests := []struct {
+		name   string
+		config *api.ReleaseTagConfiguration
+		want   string
+	}{
+		{name: "nil config", want: "0.0.1-0"},
+		{name: "unparseable", config: &api.ReleaseTagConfiguration{Name: "not-a-version"}, want: "0.0.1-0"},
+		{name: "4.19 stream", config: &api.ReleaseTagConfiguration{Name: "4.19"}, want: "4.19.0-0"},
+		{name: "5.0 stream", config: &api.ReleaseTagConfiguration{Name: "5.0"}, want: "5.0.0-0"},
+		{name: "5.0-priv stream", config: &api.ReleaseTagConfiguration{Name: "5.0-priv"}, want: "5.0.0-0"},
+		{name: "4.19-priv stream", config: &api.ReleaseTagConfiguration{Name: "4.19-priv"}, want: "4.19.0-0"},
+		{name: "5.0-private ignored", config: &api.ReleaseTagConfiguration{Name: "5.0-private"}, want: "0.0.1-0"},
+		{name: "extra component", config: &api.ReleaseTagConfiguration{Name: "4.19.1"}, want: "0.0.1-0"},
+		{name: "suffix", config: &api.ReleaseTagConfiguration{Name: "4.19-suffix"}, want: "0.0.1-0"},
+		{name: "trailing letters", config: &api.ReleaseTagConfiguration{Name: "4.19x"}, want: "0.0.1-0"},
+		{name: "signed major", config: &api.ReleaseTagConfiguration{Name: "-1.2"}, want: "0.0.1-0"},
+		{name: "signed minor", config: &api.ReleaseTagConfiguration{Name: "4.-19"}, want: "0.0.1-0"},
+		{name: "leading whitespace", config: &api.ReleaseTagConfiguration{Name: " 4.19"}, want: "0.0.1-0"},
+		{name: "trailing whitespace", config: &api.ReleaseTagConfiguration{Name: "4.19 "}, want: "0.0.1-0"},
+	}
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			if diff := cmp.Diff(tt.want, assembleReleaseVersionPrefix(tt.config)); diff != "" {
+				t.Fatal(diff)
+			}
+		})
+	}
+}
+
 func TestBuildOcAdmReleaseNewCommand(t *testing.T) {
 	sourceTagReference := imagev1.SourceTagReferencePolicy
 

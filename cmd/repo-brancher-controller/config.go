@@ -38,6 +38,9 @@ func loadDesiredState(configDir string, forwardingConfig *forwardingConfig) (map
 		}
 
 		for _, forwarding := range forwardingConfig.ReleaseBranches {
+			if !api.PromotesOfficialImage(configuration, api.WithoutOKD, forwarding.Source) {
+				continue
+			}
 			for _, forward := range forwarding.forwardBlocks() {
 				if err := addTargets(forwarding.Source, forward, false); err != nil {
 					return err

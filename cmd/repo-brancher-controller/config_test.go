@@ -14,6 +14,10 @@ func writeConfig(t *testing.T, root, org, repo, branch string) {
 }
 
 func writeConfigWithPromotion(t *testing.T, root, org, repo, branch string, disabled bool) {
+	writeConfigFull(t, root, org, repo, branch, "ocp", disabled)
+}
+
+func writeConfigFull(t *testing.T, root, org, repo, branch, namespace string, disabled bool) {
 	t.Helper()
 	dir := filepath.Join(root, org, repo)
 	if err := os.MkdirAll(dir, 0755); err != nil {
@@ -27,7 +31,7 @@ func writeConfigWithPromotion(t *testing.T, root, org, repo, branch string, disa
   to:
   - name: %q
 %s
-    namespace: ocp
+    namespace: %s
 resources:
   '*':
     requests:
@@ -41,7 +45,7 @@ zz_generated_metadata:
   branch: %s
   org: %s
   repo: %s
-`, "5.0", disabledLine, branch, org, repo))
+`, "5.0", disabledLine, namespace, branch, org, repo))
 	path := filepath.Join(dir, fmt.Sprintf("%s-%s-%s.yaml", org, repo, branch))
 	if err := os.WriteFile(path, raw, 0600); err != nil {
 		t.Fatal(err)
@@ -58,6 +62,7 @@ func TestLoadDesiredStateUsesBranchCategoriesAndScopedIgnores(t *testing.T) {
 	writeConfig(t, configDir, "org", "ignored-release", "release-5.0")
 	writeConfigWithPromotion(t, configDir, "org", "disabled-default", "main", true)
 	writeConfigWithPromotion(t, configDir, "org", "disabled-release", "release-5.0", true)
+	writeConfigFull(t, configDir, "org", "okd-release", "release-5.0", "origin", false)
 
 	rules := &forwardingConfig{
 		DefaultBranch: &defaultBranchForwarding{
@@ -88,7 +93,6 @@ func TestLoadDesiredStateUsesBranchCategoriesAndScopedIgnores(t *testing.T) {
 		{org: "org", repo: "default", source: "main"}:                    sets.New("release-5.0", "release-5.1"),
 		{org: "org", repo: "release", source: "release-5.0"}:             sets.New("release-4.23"),
 		{org: "org", repo: "openshift-release", source: "openshift-5.0"}: sets.New("openshift-4.23"),
-		{org: "org", repo: "disabled-release", source: "release-5.0"}:    sets.New("release-4.23"),
 	}
 	if len(state) != len(want) {
 		t.Fatalf("unexpected desired state: want %v, got %v", want, state)

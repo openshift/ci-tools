@@ -43,6 +43,7 @@ items:
         - --report-credentials-file=/etc/report/credentials
         - --secret-dir=/secrets/ci-pull-credentials
         - --target=cluster-provisioning
+        - --input-hash=ec
         command:
         - ci-operator
         env:

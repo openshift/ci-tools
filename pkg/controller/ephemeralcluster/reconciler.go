@@ -553,6 +553,11 @@ func (r *reconciler) makeProwJob(ciOperatorConfig *api.ReleaseBuildConfiguration
 		Value: string(ciOperatorConfigYaml),
 	})
 
+	// This make sure that Ephemeral cluster requests never share a ci-operator's namespace.
+	// If this wasn't the case then two different requests would race at provisioning a cluster
+	// and the result is undefined.
+	ciOperatorContainer.Args = append(ciOperatorContainer.Args, "--input-hash="+ec.Name)
+
 	return &pj, nil
 }
 
@@ -573,6 +578,8 @@ func (r *reconciler) fetchSecrets(ctx context.Context, log *logrus.Entry, ec *ep
 		}
 		return nil
 	}
+
+	log = log.WithField("namespace", ns)
 
 	if ec.Spec.CIOperator.Test.ClusterClaim != nil {
 		r.fetchHiveSecrets(ctx, log, ec, buildClient, ns, oldStatus, ecStatus)
@@ -870,9 +877,8 @@ func (r *reconciler) notifyTestComplete(ctx context.Context, log *logrus.Entry, 
 		return nil
 	}
 
-	log = log.WithField("namespace", ns)
+	log = log.WithField("namespace", ns).WithField("secret", api.EphemeralClusterTestDoneSignalSecretName)
 
-	log = log.WithField("secret", api.EphemeralClusterTestDoneSignalSecretName)
 	if err := buildClient.Create(ctx, &corev1.Secret{ObjectMeta: metav1.ObjectMeta{
 		Name:      api.EphemeralClusterTestDoneSignalSecretName,
 		Namespace: ns,

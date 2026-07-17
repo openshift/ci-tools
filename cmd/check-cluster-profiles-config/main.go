@@ -20,12 +20,7 @@ import (
 
 	"github.com/openshift/ci-tools/pkg/api"
 	"github.com/openshift/ci-tools/pkg/load"
-	"github.com/openshift/ci-tools/pkg/registry/server"
 	"github.com/openshift/ci-tools/pkg/util"
-)
-
-var (
-	configResolverAddress = api.URLForService(api.ServiceConfig)
 )
 
 type options struct {
@@ -192,16 +187,9 @@ func (validator *profileValidator) checkCISecrets() error {
 			continue
 		}
 
-		clusterProfile, err := server.NewResolverClient(configResolverAddress).ClusterProfile(profile.Name)
-		if err != nil {
-			errs = append(errs, fmt.Errorf("failed to retrieve details from config resolver for '%s' cluster profile: %w", profile.Name, err))
-			continue
-		}
-
 		ciSecret := &coreapi.Secret{}
-		err = validator.kubeClient.Get(context.Background(), ctrlruntimeclient.ObjectKey{Namespace: "ci", Name: clusterProfile.Secret}, ciSecret)
-		if err != nil {
-			errs = append(errs, fmt.Errorf("failed to get secret '%s' for cluster profile '%s': %w", clusterProfile.Secret, profile.Name, err))
+		if err := validator.kubeClient.Get(context.Background(), ctrlruntimeclient.ObjectKey{Namespace: "ci", Name: profile.Secret}, ciSecret); err != nil {
+			errs = append(errs, fmt.Errorf("failed to get secret '%s' for cluster profile '%s': %w", profile.Secret, profile.Name, err))
 		}
 	}
 

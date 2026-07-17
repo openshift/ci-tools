@@ -3,7 +3,6 @@ package release
 import (
 	"context"
 	"fmt"
-	"strconv"
 	"strings"
 	"time"
 
@@ -156,10 +155,9 @@ func (s *assembleReleaseStep) run(ctx context.Context) error {
 		return fmt.Errorf("failed to resolve for importing imagestreamtags on %s/%s:%s: %w", s.jobSpec.Namespace(), streamName, "cluster-version-operator", err)
 	}
 
-	// Prefer release-controller config when present; otherwise derive major.minor
-	// from the stream name (tag_specification / integration) so ClusterVersion
-	// stays in sync for presubmit-assembled payloads without an RC annotation.
-	prefix := assembleReleaseVersionPrefix(s.config)
+	// we want to expose the release payload as a CI version that looks just like
+	// the release versions for nightlies and CI release candidates
+	prefix := "0.0.1-0"
 	if raw, ok := stable.ObjectMeta.Annotations[api.ReleaseConfigAnnotation]; ok {
 		configName, err := configresolver.ReleaseControllerAnnotationValueToConfigName(raw)
 		if err != nil {
@@ -300,27 +298,6 @@ func AssembleReleaseStep(name, nodeName string, config *api.ReleaseTagConfigurat
 		jobSpec:   jobSpec,
 		secret:    pullSecret,
 	}
-}
-
-func assembleReleaseVersionPrefix(config *api.ReleaseTagConfiguration) string {
-	if config == nil {
-		return "0.0.1-0"
-	}
-	// ocp-private streams are named like "5.0-priv"; strip that suffix before parsing.
-	name := strings.TrimSuffix(config.Name, "-priv")
-	parts := strings.Split(name, ".")
-	if len(parts) != 2 {
-		return "0.0.1-0"
-	}
-	major, err := strconv.ParseUint(parts[0], 10, 64)
-	if err != nil {
-		return "0.0.1-0"
-	}
-	minor, err := strconv.ParseUint(parts[1], 10, 64)
-	if err != nil {
-		return "0.0.1-0"
-	}
-	return fmt.Sprintf("%d.%d.0-0", major, minor)
 }
 
 func hasMinimumVersion(config *api.ReleaseTagConfiguration, majorVersion, minorVersion int) bool {

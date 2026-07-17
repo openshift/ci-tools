@@ -1895,6 +1895,49 @@ func TestValidateDependencies(t *testing.T) {
 				errors.New("root.dependencies[3].name must take the `tag` or `stream:tag` form, not \"src:lol:oops\""),
 			},
 		},
+		{
+			name: "valid dependencies with mount_path",
+			input: []api.StepDependency{
+				{Name: "src", Env: "SOURCE", MountPath: "/var/run/images/src"},
+				{Name: "installer", Env: "INSTALLER", MountPath: "/var/run/images/installer"},
+			},
+		},
+		{
+			name: "dependency without mount_path is valid",
+			input: []api.StepDependency{
+				{Name: "src", Env: "SOURCE"},
+				{Name: "installer", Env: "INSTALLER", MountPath: "/var/run/images/installer"},
+			},
+		},
+		{
+			name: "relative mount_path is invalid",
+			input: []api.StepDependency{
+				{Name: "src", Env: "SOURCE", MountPath: "relative/path"},
+			},
+			output: []error{
+				errors.New("root.dependencies[0].mount_path is not absolute: relative/path"),
+			},
+		},
+		{
+			name: "duplicate mount_path is invalid",
+			input: []api.StepDependency{
+				{Name: "src", Env: "SOURCE", MountPath: "/var/run/images/src"},
+				{Name: "installer", Env: "INSTALLER", MountPath: "/var/run/images/src"},
+			},
+			output: []error{
+				errors.New("root.dependencies[0] and dependencies[1] mount to the same location (/var/run/images/src)"),
+			},
+		},
+		{
+			name: "nested mount_paths are invalid",
+			input: []api.StepDependency{
+				{Name: "src", Env: "SOURCE", MountPath: "/var/run/images"},
+				{Name: "installer", Env: "INSTALLER", MountPath: "/var/run/images/installer"},
+			},
+			output: []error{
+				errors.New("root.dependencies[1] mounts at /var/run/images/installer, which is under dependencies[0] (/var/run/images)"),
+			},
+		},
 	}
 
 	for _, testCase := range testCases {

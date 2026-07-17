@@ -203,12 +203,14 @@ func (s *multiStageTestStep) generatePods(
 		}...)
 		container.Env = append(container.Env, env...)
 		container.Env = append(container.Env, s.generateParams(step.Environment)...)
-		depEnv, depErrs := s.envForDependencies(step)
+		depEnv, depVolumes, depMounts, depErrs := s.envForDependencies(step)
 		if len(depErrs) != 0 {
 			errs = append(errs, depErrs...)
 			continue
 		}
 		container.Env = append(container.Env, depEnv...)
+		pod.Spec.Volumes = append(pod.Spec.Volumes, depVolumes...)
+		container.VolumeMounts = append(container.VolumeMounts, depMounts...)
 		if owner := s.jobSpec.Owner(); owner != nil {
 			pod.OwnerReferences = append(pod.OwnerReferences, *owner)
 		}
@@ -418,8 +420,10 @@ func (s *multiStageTestStep) generateParams(env []api.StepParameter) []coreapi.E
 	return ret
 }
 
-func (s *multiStageTestStep) envForDependencies(step api.LiteralTestStep) ([]coreapi.EnvVar, []error) {
+func (s *multiStageTestStep) envForDependencies(step api.LiteralTestStep) ([]coreapi.EnvVar, []coreapi.Volume, []coreapi.VolumeMount, []error) {
 	var env []coreapi.EnvVar
+	var volumes []coreapi.Volume
+	var mounts []coreapi.VolumeMount
 	var errs []error
 	var claimRelease *api.ClaimRelease
 	if s.clusterClaim != nil {
@@ -443,8 +447,34 @@ func (s *multiStageTestStep) envForDependencies(step api.LiteralTestStep) ([]cor
 		env = append(env, coreapi.EnvVar{
 			Name: dependency.Env, Value: ref,
 		})
+		if dependency.MountPath != "" {
+			volName := dependencyVolumeName(dependency.Name)
+			volumes = append(volumes, coreapi.Volume{
+				Name: volName,
+				VolumeSource: coreapi.VolumeSource{
+					Image: &coreapi.ImageVolumeSource{
+						Reference: ref,
+						PullPolicy: coreapi.PullIfNotPresent,
+					},
+				},
+			})
+			mounts = append(mounts, coreapi.VolumeMount{
+				Name:      volName,
+				MountPath: dependency.MountPath,
+				ReadOnly:  true,
+			})
+		}
 	}
-	return env, errs
+	return env, volumes, mounts, errs
+}
+
+func dependencyVolumeName(name string) string {
+	sanitized := strings.NewReplacer(":", "-", ".", "-").Replace(name)
+	volName := fmt.Sprintf("dep-%s", sanitized)
+	if len(volName) > 63 {
+		volName = volName[:63]
+	}
+	return volName
 }
 
 func getClusterClaimPodParams(secretVolumeMounts []coreapi.VolumeMount, testName string) ([]coreapi.EnvVar, []coreapi.VolumeMount, error) {

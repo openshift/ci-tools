@@ -849,7 +849,28 @@ func TestValidateTests(t *testing.T) {
 				SkipIfOnlyChanged:          "^OTHER_README.md$",
 				ContainerTestConfiguration: &api.ContainerTestConfiguration{From: "ignored"},
 			}},
-			expectedError: errors.New("tests[0]: `run_if_changed`, `skip_if_only_changed`, `pipeline_run_if_changed`, and `pipeline_skip_if_only_changed` are mutually exclusive"),
+			expectedError: errors.New("tests[0]: `run_if_changed`, `skip_if_only_changed`, `pipeline_run_if_changed`, `pipeline_skip_if_only_changed`, and `pipeline_run_if_dockerfile_changed` are mutually exclusive"),
+		},
+		{
+			id: "pipeline_run_if_dockerfile_changed with run_if_changed are mutually exclusive",
+			tests: []api.TestStepConfiguration{{
+				As:                             "unit",
+				Commands:                       "commands",
+				RunIfChanged:                   "^README.md$",
+				PipelineRunIfDockerfileChanged: []api.DockerfileEntry{{Path: "Dockerfile"}},
+				ContainerTestConfiguration:     &api.ContainerTestConfiguration{From: "ignored"},
+			}},
+			expectedError: errors.New("tests[0]: `run_if_changed`, `skip_if_only_changed`, `pipeline_run_if_changed`, `pipeline_skip_if_only_changed`, and `pipeline_run_if_dockerfile_changed` are mutually exclusive"),
+		},
+		{
+			id: "pipeline_run_if_dockerfile_changed with empty path",
+			tests: []api.TestStepConfiguration{{
+				As:                             "unit",
+				Commands:                       "commands",
+				PipelineRunIfDockerfileChanged: []api.DockerfileEntry{{Path: ""}},
+				ContainerTestConfiguration:     &api.ContainerTestConfiguration{From: "ignored"},
+			}},
+			expectedError: errors.New("tests[0]: `pipeline_run_if_dockerfile_changed[0].path` must be set"),
 		},
 		{
 			id: "secrets used on multi-stage tests",

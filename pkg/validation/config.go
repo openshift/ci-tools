@@ -303,22 +303,30 @@ func validateBuildRootImageStreamTag(ctx *configContext, buildRoot api.ImageStre
 	return validationErrors
 }
 
-func validateRunIfChangedExclusivity(runIfChanged, skipIfOnlyChanged, pipelineRunIfChanged, pipelineSkipIfOnlyChanged string) error {
+func validateRunIfChangedExclusivity(runIfChanged, skipIfOnlyChanged, pipelineRunIfChanged, pipelineSkipIfOnlyChanged string, pipelineRunIfDockerfileChanged []api.DockerfileEntry) error {
 	set := 0
 	for _, f := range []string{runIfChanged, skipIfOnlyChanged, pipelineRunIfChanged, pipelineSkipIfOnlyChanged} {
 		if f != "" {
 			set++
 		}
 	}
+	if len(pipelineRunIfDockerfileChanged) > 0 {
+		set++
+	}
 	if set > 1 {
-		return fmt.Errorf("`run_if_changed`, `skip_if_only_changed`, `pipeline_run_if_changed`, and `pipeline_skip_if_only_changed` are mutually exclusive")
+		return fmt.Errorf("`run_if_changed`, `skip_if_only_changed`, `pipeline_run_if_changed`, `pipeline_skip_if_only_changed`, and `pipeline_run_if_dockerfile_changed` are mutually exclusive")
+	}
+	for i, entry := range pipelineRunIfDockerfileChanged {
+		if entry.Path == "" {
+			return fmt.Errorf("`pipeline_run_if_dockerfile_changed[%d].path` must be set", i)
+		}
 	}
 	return nil
 }
 
 func validateImageConfiguration(ctx *configContext, images api.ImageConfiguration) []error {
 	var validationErrors []error
-	if err := validateRunIfChangedExclusivity(images.RunIfChanged, images.SkipIfOnlyChanged, images.PipelineRunIfChanged, images.PipelineSkipIfOnlyChanged); err != nil {
+	if err := validateRunIfChangedExclusivity(images.RunIfChanged, images.SkipIfOnlyChanged, images.PipelineRunIfChanged, images.PipelineSkipIfOnlyChanged, nil); err != nil {
 		validationErrors = append(validationErrors, ctx.errorf("%s", err))
 	}
 	validationErrors = append(validationErrors, ValidateImages(ctx, images.Items)...)

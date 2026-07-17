@@ -211,6 +211,28 @@ func TestGeneratePresubmitForTest(t *testing.T) {
 			},
 		},
 		{
+			description: "presubmit with always_run=false and pipeline_run_if_dockerfile_changed",
+			test:        ciop.TestStepConfiguration{As: "testname"},
+			repoInfo:    &ciop.Metadata{Org: "org", Repo: "repo", Branch: "branch"},
+			generateOption: func(options *generatePresubmitOptions) {
+				options.defaultDisable = false
+				options.pipelineRunIfDockerfileChanged = []ciop.DockerfileEntry{
+					{Path: "Dockerfile"},
+				}
+			},
+		},
+		{
+			description: "presubmit with always_run but pipeline_run_if_dockerfile_changed set",
+			test:        ciop.TestStepConfiguration{As: "testname"},
+			repoInfo:    &ciop.Metadata{Org: "org", Repo: "repo", Branch: "branch"},
+			generateOption: func(options *generatePresubmitOptions) {
+				options.defaultDisable = true
+				options.pipelineRunIfDockerfileChanged = []ciop.DockerfileEntry{
+					{Path: "Dockerfile", GoBinaryTargets: []string{"./cmd/server"}},
+				}
+			},
+		},
+		{
 			description: "presubmit with always_run but optional true",
 			test:        ciop.TestStepConfiguration{As: "testname"},
 			repoInfo:    &ciop.Metadata{Org: "org", Repo: "repo", Branch: "branch"},

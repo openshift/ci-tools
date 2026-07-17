@@ -104,7 +104,10 @@ func main() {
 	if prConfig.CiOperator == nil || masterConfig.CiOperator == nil {
 		logger.WithError(err).Fatal("could not load ci-operator configs from base or tested revision of release repo")
 	}
-	changedCiopConfigs, _, _ := diffs.GetChangedCiopConfigs(masterConfig.CiOperator, prConfig.CiOperator, logger)
+	changedCiopConfigs, _, _, err := diffs.GetChangedCiopConfigs(masterConfig.CiOperator, prConfig.CiOperator, logger)
+	if err != nil {
+		logger.WithError(err).Fatal("could not compute changed ci-operator configs")
+	}
 	changedImagesPostsubmits := diffs.GetImagesPostsubmitsForCiopConfigs(prConfig.Prow, changedCiopConfigs)
 
 	namespace := prConfig.Prow.ProwJobNamespace

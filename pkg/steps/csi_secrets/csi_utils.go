@@ -3,7 +3,6 @@ package csi_secrets
 import (
 	"crypto/sha256"
 	"fmt"
-	"regexp"
 	"sort"
 	"strings"
 
@@ -81,16 +80,7 @@ func RestoreForbiddenSymbolsInSecretName(s string) (string, error) {
 	// Because all credentials with these forbidden symbols in their names or keys have been renamed,
 	// e.g. '.awscreds' to '--dot--awscreds', to preserve backwards compatibility,
 	// we now need to mount the secret as the original '.awscreds' file to the Pod that will be created by ci-operator.
-
-	replacedName := gsmvalidation.DenormalizeName(s)
-
-	re := regexp.MustCompile(`[^a-zA-Z0-9\-._/]`)
-	invalidCharacters := re.FindAllString(replacedName, -1)
-	if invalidCharacters != nil {
-		return "", fmt.Errorf("secret name '%s' decodes to '%s' which contains forbidden characters (%s); decoded names must only contain letters, numbers, dashes (-), dots (.), underscores (_), and slashes (/)", s, replacedName, strings.Join(invalidCharacters, ", "))
-	} else {
-		return replacedName, nil
-	}
+	return gsmvalidation.DecodeMountFileName(s)
 }
 
 // GetSPCName generates a unique SPC name for a set of credentials that share

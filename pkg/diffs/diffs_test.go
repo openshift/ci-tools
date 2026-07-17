@@ -228,7 +228,10 @@ func TestGetChangedCiopConfigs(t *testing.T) {
 	for _, tc := range testCases {
 		t.Run(tc.name, func(t *testing.T) {
 			before, after := tc.configGenerator(t)
-			actual, affectedJobs, disabledDueToNetworkAccessToggle := GetChangedCiopConfigs(before, after, logrus.NewEntry(logrus.New()))
+			actual, affectedJobs, disabledDueToNetworkAccessToggle, err := GetChangedCiopConfigs(before, after, logrus.NewEntry(logrus.New()))
+			if err != nil {
+				t.Fatal(err)
+			}
 			expected := tc.expected()
 
 			if diff := cmp.Diff(expected, actual,

@@ -33,7 +33,14 @@ const (
 
 // GetChangedCiopConfigs identifies CI Operator configurations that are new or have changed and
 // determines for each which jobs are impacted if job-specific changes were made
-func GetChangedCiopConfigs(masterConfig, prConfig config.DataByFilename, logger *logrus.Entry) (configs config.DataByFilename, affectedJobs map[string]sets.Set[string], restrictNetworkAccessFalseJobs []string) {
+func GetChangedCiopConfigs(masterConfig, prConfig config.DataByFilename, logger *logrus.Entry) (configs config.DataByFilename, affectedJobs map[string]sets.Set[string], restrictNetworkAccessFalseJobs []string, err error) {
+	equalities := equality.Semantic.Copy()
+	if err = equalities.AddFunc(func(a, b prowconfig.Retry) bool {
+		return a.RunAll == b.RunAll && a.Interval == b.Interval && a.Attempts == b.Attempts
+	}); err != nil {
+		return nil, nil, nil, fmt.Errorf("add compare func: %w", err)
+	}
+
 	configs = config.DataByFilename{}
 	affectedJobs = map[string]sets.Set[string]{}
 
@@ -72,7 +79,7 @@ func GetChangedCiopConfigs(masterConfig, prConfig config.DataByFilename, logger 
 
 		for as, test := range newTests {
 			oldTest := oldTests[as]
-			if !equality.Semantic.DeepEqual(oldTest, test) {
+			if !equalities.DeepEqual(oldTest, test) {
 				testLogger := logger.WithField(logCiopConfig, filename)
 				testLogger.Info(changedCiopConfigMsg)
 				configs[filename] = newConfig

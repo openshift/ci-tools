@@ -138,7 +138,10 @@ func (r RehearsalConfig) DetermineAffectedJobs(candidate RehearsalCandidate, can
 	if masterConfig.CiOperator != nil && prConfig.CiOperator != nil {
 		var changedCiopConfigData config.DataByFilename
 		var affectedJobs map[string]sets.Set[string]
-		changedCiopConfigData, affectedJobs, restrictNetworkAccessFalseJobs = diffs.GetChangedCiopConfigs(masterConfig.CiOperator, prConfig.CiOperator, logger)
+		changedCiopConfigData, affectedJobs, restrictNetworkAccessFalseJobs, err = diffs.GetChangedCiopConfigs(masterConfig.CiOperator, prConfig.CiOperator, logger)
+		if err != nil {
+			return nil, nil, nil, nil, fmt.Errorf("could not load compute changed ci-operator configurations: %w", err)
+		}
 		// If we allow network access rehearsals, we can just ignore the returned jobs that set it to 'false'
 		if networkAccessRehearsalsAllowed {
 			restrictNetworkAccessFalseJobs = []string{}

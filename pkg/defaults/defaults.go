@@ -60,7 +60,7 @@ func FromConfig(ctx context.Context, cfg *Config) ([]api.Step, []api.Step, error
 	if err != nil {
 		return nil, nil, fmt.Errorf("could not get build client for cluster config: %w", err)
 	}
-	buildClient := steps.NewBuildClient(client, buildGetter.RESTClient(), cfg.NodeArchitectures, cfg.ManifestToolDockerCfg, cfg.LocalRegistryDNS, cfg.MetricsAgent)
+	buildClient := steps.NewBuildClient(client, api.BuildTypeOpenshift, buildGetter.RESTClient(), cfg.NodeArchitectures, cfg.ManifestToolDockerCfg, cfg.LocalRegistryDNS, cfg.MetricsAgent)
 
 	coreGetter, err := coreclientset.NewForConfig(cfg.ClusterConfig)
 	if err != nil {

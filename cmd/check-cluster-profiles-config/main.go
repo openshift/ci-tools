@@ -20,12 +20,7 @@ import (
 
 	"github.com/openshift/ci-tools/pkg/api"
 	"github.com/openshift/ci-tools/pkg/load"
-	"github.com/openshift/ci-tools/pkg/registry/server"
 	"github.com/openshift/ci-tools/pkg/util"
-)
-
-var (
-	configResolverAddress = api.URLForService(api.ServiceConfig)
 )
 
 type options struct {
@@ -183,7 +178,7 @@ func (validator *profileValidator) Validate(profiles api.ClusterProfiles) error 
 	return nil
 }
 
-// checkCISecrets verifies that the secret for each cluster profile exists in the ci namespace
+// checkCISecrets verifies that the secret for each cluster profile exists in the ci namespace.
 func (validator *profileValidator) checkCISecrets() error {
 	errs := make([]error, 0)
 
@@ -192,16 +187,15 @@ func (validator *profileValidator) checkCISecrets() error {
 			continue
 		}
 
-		clusterProfile, err := server.NewResolverClient(configResolverAddress).ClusterProfile(profile.Name)
-		if err != nil {
-			errs = append(errs, fmt.Errorf("failed to retrieve details from config resolver for '%s' cluster profile: %w", profile.Name, err))
+		if profile.Secret == "" {
+			errs = append(errs, fmt.Errorf("cluster profile '%s' is missing a secret", profile.Name))
 			continue
 		}
 
 		ciSecret := &coreapi.Secret{}
-		err = validator.kubeClient.Get(context.Background(), ctrlruntimeclient.ObjectKey{Namespace: "ci", Name: clusterProfile.Secret}, ciSecret)
+		err := validator.kubeClient.Get(context.Background(), ctrlruntimeclient.ObjectKey{Namespace: "ci", Name: profile.Secret}, ciSecret)
 		if err != nil {
-			errs = append(errs, fmt.Errorf("failed to get secret '%s' for cluster profile '%s': %w", clusterProfile.Secret, profile.Name, err))
+			errs = append(errs, fmt.Errorf("failed to get secret '%s' for cluster profile '%s': %w", profile.Secret, profile.Name, err))
 		}
 	}
 

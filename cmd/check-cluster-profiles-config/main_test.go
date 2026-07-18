@@ -6,6 +6,9 @@ import (
 
 	"github.com/google/go-cmp/cmp"
 
+	coreapi "k8s.io/api/core/v1"
+	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
+	"k8s.io/apimachinery/pkg/runtime"
 	fakectrlruntimeclient "sigs.k8s.io/controller-runtime/pkg/client/fake"
 
 	"github.com/openshift/ci-tools/pkg/api"
@@ -103,6 +106,84 @@ func TestValidate(t *testing.T) {
 		t.Run(tc.name, func(t *testing.T) {
 			validator := newValidator(fakectrlruntimeclient.NewFakeClient())
 			err := validator.Validate(tc.profiles)
+			if diff := cmp.Diff(tc.expected, err, testhelper.EquateErrorMessage); diff != "" {
+				t.Errorf("error differs from expected:\n%v", diff)
+			}
+		})
+	}
+}
+
+func TestCheckCISecrets(t *testing.T) {
+	t.Parallel()
+
+	testCases := []struct {
+		name     string
+		profiles api.ClusterProfiles
+		secrets  []coreapi.Secret
+		expected error
+	}{
+		{
+			name: "existing secret for profile",
+			profiles: api.ClusterProfiles{
+				Items: []api.ClusterProfile{{
+					Name:   "aws",
+					Secret: "cluster-secrets-aws",
+				}},
+			},
+			secrets: []coreapi.Secret{{
+				ObjectMeta: metav1.ObjectMeta{
+					Namespace: "ci",
+					Name:      "cluster-secrets-aws",
+				},
+			}},
+		},
+		{
+			name: "profile set is skipped",
+			profiles: api.ClusterProfiles{
+				Items: []api.ClusterProfile{{
+					Name:       "openshift-org-aws",
+					SetMembers: []string{"aws", "aws-2"},
+				}},
+			},
+		},
+		{
+			name: "missing secret in cluster",
+			profiles: api.ClusterProfiles{
+				Items: []api.ClusterProfile{{
+					Name:   "aws",
+					Secret: "cluster-secrets-aws",
+				}},
+			},
+			expected: fmt.Errorf(`failed to get secret 'cluster-secrets-aws' for cluster profile 'aws': secrets "cluster-secrets-aws" not found`),
+		},
+		{
+			name: "profile without secret field",
+			profiles: api.ClusterProfiles{
+				Items: []api.ClusterProfile{{
+					Name: "aws",
+				}},
+			},
+			expected: fmt.Errorf(`cluster profile 'aws' is missing a secret`),
+		},
+	}
+
+	for _, tc := range testCases {
+		t.Run(tc.name, func(t *testing.T) {
+			t.Parallel()
+
+			objects := make([]runtime.Object, 0, len(tc.secrets))
+			for i := range tc.secrets {
+				objects = append(objects, &tc.secrets[i])
+			}
+
+			client := fakectrlruntimeclient.NewClientBuilder().WithRuntimeObjects(objects...).Build()
+			validator := newValidator(client)
+
+			if err := validator.Validate(tc.profiles); err != nil {
+				t.Fatalf("unexpected validation error: %v", err)
+			}
+
+			err := validator.checkCISecrets()
 			if diff := cmp.Diff(tc.expected, err, testhelper.EquateErrorMessage); diff != "" {
 				t.Errorf("error differs from expected:\n%v", diff)
 			}

@@ -504,6 +504,23 @@ func (r *reconciler) createProwJob(ctx context.Context, log *logrus.Entry, ec *e
 	return nil
 }
 
+func (r *reconciler) prowJobName(periodic *prowconfig.Periodic, ec *ephemeralclusterv1.EphemeralCluster) (string, error) {
+	if pipelineRunName := ec.PipelineRunName(); pipelineRunName != "" {
+		return ProwJobNamePrefix + "-ci-" + pipelineRunName, nil
+	}
+
+	if taskRunName := ec.TaskRunName(); taskRunName != "" {
+		return ProwJobNamePrefix + "-ci-" + taskRunName, nil
+	}
+
+	jobNameWithoutPrefix, prefixCut := strings.CutPrefix(periodic.JobBase.Name, jobconfig.PeriodicPrefix)
+	if !prefixCut {
+		return "", fmt.Errorf("failed to strip %s prefix from %s", jobconfig.PeriodicPrefix, periodic.JobBase.Name)
+	}
+
+	return ProwJobNamePrefix + jobNameWithoutPrefix, nil
+}
+
 func (r *reconciler) makeProwJob(ciOperatorConfig *api.ReleaseBuildConfiguration, ec *ephemeralclusterv1.EphemeralCluster) (*prowv1.ProwJob, error) {
 	jobConfig, err := prowgen.GenerateJobs(ciOperatorConfig, &api.Metadata{
 		Org:    "org",
@@ -523,11 +540,12 @@ func (r *reconciler) makeProwJob(ciOperatorConfig *api.ReleaseBuildConfiguration
 		return nil, fmt.Errorf("default periodic: %w", err)
 	}
 
-	jobNameWithoutPrefix, prefixCut := strings.CutPrefix(periodic.JobBase.Name, jobconfig.PeriodicPrefix)
-	if !prefixCut {
-		return nil, fmt.Errorf("failed to strip %s prefix from %s", jobconfig.PeriodicPrefix, periodic.JobBase.Name)
+	pjName, err := r.prowJobName(periodic, ec)
+	if err != nil {
+		return nil, fmt.Errorf("generate prowjob name: %w", err)
 	}
-	periodic.JobBase.Name = ProwJobNamePrefix + jobNameWithoutPrefix
+
+	periodic.JobBase.Name = pjName
 	periodic.UtilityConfig.ExtraRefs = []prowv1.Refs{}
 
 	labels := make(map[string]string)

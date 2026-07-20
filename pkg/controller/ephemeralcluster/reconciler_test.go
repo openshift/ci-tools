@@ -193,8 +193,9 @@ func TestCreateProwJob(t *testing.T) {
 			ec: ephemeralclusterv1.EphemeralCluster{
 				ObjectMeta: metav1.ObjectMeta{
 					Annotations: map[string]string{
-						ephemeralclusterv1.KonfluxClusterAnnotation: "kcluster",
-						ephemeralclusterv1.KonfluxTenantAnnotation:  "ktenant",
+						ephemeralclusterv1.KonfluxClusterAnnotation:  "kcluster",
+						ephemeralclusterv1.KonfluxTenantAnnotation:   "ktenant",
+						ephemeralclusterv1.PipelineRunNameAnnotation: "pipeline-run-name",
 					},
 					Namespace: "ns",
 					Name:      "ec",
@@ -330,6 +331,9 @@ func TestCreateProwJob(t *testing.T) {
 			name: "Hive cluster request creates a ProwJob",
 			ec: ephemeralclusterv1.EphemeralCluster{
 				ObjectMeta: metav1.ObjectMeta{
+					Annotations: map[string]string{
+						ephemeralclusterv1.TaskRunNameAnnotation: "task-run-name",
+					},
 					Namespace: "ns",
 					Name:      "ec",
 				},

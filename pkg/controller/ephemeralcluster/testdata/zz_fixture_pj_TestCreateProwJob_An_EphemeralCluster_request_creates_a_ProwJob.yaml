@@ -4,7 +4,7 @@ items:
   metadata:
     annotations:
       prow.k8s.io/context: ""
-      prow.k8s.io/job: ephemeralcluster-ci-org-repo-branch-cluster-provisioning
+      prow.k8s.io/job: ephemeralcluster-ci-pipeline-run-name
     creationTimestamp: null
     labels:
       ci-operator.openshift.io/cloud: aws
@@ -13,7 +13,7 @@ items:
       created-by-prow: "true"
       pj-rehearse.openshift.io/can-be-rehearsed: "true"
       prow.k8s.io/context: ""
-      prow.k8s.io/job: ephemeralcluster-ci-org-repo-branch-cluster-provisioning
+      prow.k8s.io/job: ephemeralcluster-ci-pipeline-run-name
       prow.k8s.io/type: periodic
     name: foobar
     namespace: ci
@@ -32,7 +32,7 @@ items:
         entrypoint: entrypoint
         initupload: initupload
         sidecar: sidecar
-    job: ephemeralcluster-ci-org-repo-branch-cluster-provisioning
+    job: ephemeralcluster-ci-pipeline-run-name
     namespace: ci
     pod_spec:
       containers:

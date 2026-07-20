@@ -1,4 +1,6 @@
 metadata:
+  annotations:
+    ephemeralcluster.ci.openshift.io/task-run-name: task-run-name
   creationTimestamp: null
   finalizers:
   - ephemeralcluster.ci.openshift.io/dependent-prowjob

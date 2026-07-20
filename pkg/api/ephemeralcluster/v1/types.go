@@ -19,8 +19,10 @@ const (
 	KubeconfigNotReadyMsg   = "kubeconfig not ready"
 	HiveSecretsNotReadyMsg  = "hive secrets not ready"
 
-	KonfluxClusterAnnotation = "ephemeralcluster.ci.openshift.io/konflux-cluster"
-	KonfluxTenantAnnotation  = "ephemeralcluster.ci.openshift.io/konflux-tenant"
+	KonfluxClusterAnnotation  = "ephemeralcluster.ci.openshift.io/konflux-cluster"
+	KonfluxTenantAnnotation   = "ephemeralcluster.ci.openshift.io/konflux-tenant"
+	PipelineRunNameAnnotation = "ephemeralcluster.ci.openshift.io/pipeline-run-name"
+	TaskRunNameAnnotation     = "ephemeralcluster.ci.openshift.io/task-run-name"
 )
 
 // EphemeralClusterCondition is a valid value for EphemeralClusterCondition.Type
@@ -84,6 +86,20 @@ func (ec *EphemeralCluster) KonfluxCluster() string {
 
 func (ec *EphemeralCluster) KonfluxTenant() string {
 	if value, ok := ec.Annotations[KonfluxTenantAnnotation]; ok {
+		return value
+	}
+	return ""
+}
+
+func (ec *EphemeralCluster) PipelineRunName() string {
+	if value, ok := ec.Annotations[PipelineRunNameAnnotation]; ok {
+		return value
+	}
+	return ""
+}
+
+func (ec *EphemeralCluster) TaskRunName() string {
+	if value, ok := ec.Annotations[TaskRunNameAnnotation]; ok {
 		return value
 	}
 	return ""

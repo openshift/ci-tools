@@ -79,6 +79,45 @@ func TestEndpoint(t *testing.T) {
 	}
 }
 
+func TestEndpointWithServiceURL(t *testing.T) {
+	var testCases = []struct {
+		name       string
+		input      api.Prerelease
+		serviceURL string
+		output     string
+	}{
+		{
+			name: "override replaces default host",
+			input: api.Prerelease{
+				ReleaseDescriptor: api.ReleaseDescriptor{
+					Product:      api.ReleaseProductOCP,
+					Architecture: api.ReleaseArchitectureMULTI,
+				},
+			},
+			serviceURL: "http://127.0.0.1:9090/api/v1/releasestream",
+			output:     "http://127.0.0.1:9090/api/v1/releasestream/4-stable-multi/latest",
+		},
+		{
+			name: "empty override uses default host",
+			input: api.Prerelease{
+				ReleaseDescriptor: api.ReleaseDescriptor{
+					Product:      api.ReleaseProductOCP,
+					Architecture: api.ReleaseArchitectureAMD64,
+				},
+			},
+			serviceURL: "",
+			output:     "https://amd64.ocp.releases.ci.openshift.org/api/v1/releasestream/4-stable/latest",
+		},
+	}
+	for _, tc := range testCases {
+		t.Run(tc.name, func(t *testing.T) {
+			if actual := endpointWithServiceURL(tc.input, tc.serviceURL); actual != tc.output {
+				t.Errorf("got incorrect endpoint: %v", cmp.Diff(actual, tc.output))
+			}
+		})
+	}
+}
+
 func TestDefaultFields(t *testing.T) {
 	var testCases = []struct {
 		name   string

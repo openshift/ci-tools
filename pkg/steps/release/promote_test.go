@@ -1093,10 +1093,10 @@ func TestGetImageMirror(t *testing.T) {
 				imageMirror[target] = proxyTarget
 			},
 			targetNameFunc: func(registry string, config api.PromotionTarget) string {
-				return fmt.Sprintf("%s/%s/%s-quay:${component}", registry, config.Namespace, config.Name)
+				return fmt.Sprintf("%s/%s/%s:${component}", registry, config.Namespace, config.Name)
 			},
 			expected: map[string]string{
-				"registry.ci.openshift.org/ocp/4.22-quay:vertical-pod-autoscaler": "quay-proxy.ci.openshift.org/openshift/ci:ocp_4.22_vertical-pod-autoscaler",
+				"registry.ci.openshift.org/ocp/4.22:vertical-pod-autoscaler": "quay-proxy.ci.openshift.org/openshift/ci:ocp_4.22_vertical-pod-autoscaler",
 			},
 		},
 		{
@@ -1258,7 +1258,7 @@ func TestGetQuayPromotionShell(t *testing.T) {
 func TestGetResolveAndTagRetryShell(t *testing.T) {
 	regcfg := "/etc/push-secret/.dockerconfigjson"
 	proxyTag := "quay-proxy.ci.openshift.org/openshift/ci:ocp_4.21_ovn-kubernetes"
-	isTag := "ocp/4.21-quay:ovn-kubernetes"
+	isTag := "ocp/4.21:ovn-kubernetes"
 	got := getResolveAndTagRetryShell(regcfg, proxyTag, isTag, 2, "linux/amd64")
 
 	quayIOTag := "quay.io/openshift/ci:ocp_4.21_ovn-kubernetes"
@@ -1266,8 +1266,8 @@ func TestGetResolveAndTagRetryShell(t *testing.T) {
 		"for r in {1..5}",
 		"oc image info --registry-config=" + regcfg + " --filter-by-os=linux/amd64 " + quayIOTag,
 		"oc tag --source=docker --loglevel=2 --reference-policy='source' --import-mode='PreserveOriginal' --reference quay-proxy.ci.openshift.org/openshift/ci@${_digest} " + isTag,
-		"promotion-quay: digest-tag failed for " + isTag,
-		"promotion-quay: retrying digest-tag for " + isTag,
+		"promotion: digest-tag failed for " + isTag,
+		"promotion: retrying digest-tag for " + isTag,
 		`[ "${r}" -eq 5 ]`,
 		"exit 1",
 		"$(($RANDOM % 120))",
@@ -1335,21 +1335,28 @@ func TestQuayProxyTagFromISKey(t *testing.T) {
 			wantOK:   false,
 		},
 		{
-			name:     "consolidated ocp stream",
+			name:     "ocp stream",
 			isTagKey: "ocp/4.13:secondary-scheduler-operator",
 			wantTag:  "quay-proxy.ci.openshift.org/openshift/ci:ocp_4.13_secondary-scheduler-operator",
 			wantOK:   true,
 		},
 		{
-			name:     "consolidated 4.21 stream",
+			name:     "ocp 4.21 stream",
 			isTagKey: "ocp/4.21:ovn-kubernetes",
 			wantTag:  "quay-proxy.ci.openshift.org/openshift/ci:ocp_4.21_ovn-kubernetes",
 			wantOK:   true,
 		},
 		{
-			name:     "non-consolidated stream without -quay",
+			name:     "ocp 4.23 stream",
 			isTagKey: "ocp/4.23:ovn-kubernetes",
-			wantOK:   false,
+			wantTag:  "quay-proxy.ci.openshift.org/openshift/ci:ocp_4.23_ovn-kubernetes",
+			wantOK:   true,
+		},
+		{
+			name:     "ocp 5.0 stream",
+			isTagKey: "ocp/5.0:ansible",
+			wantTag:  "quay-proxy.ci.openshift.org/openshift/ci:ocp_5.0_ansible",
+			wantOK:   true,
 		},
 	}
 	for _, tt := range tests {

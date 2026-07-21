@@ -53,5 +53,8 @@ func main() {
 	signalCh := make(chan os.Signal, 1)
 	signal.Notify(signalCh, syscall.SIGINT, syscall.SIGTERM)
 	<-signalCh
-	_ = server.Shutdown(context.Background())
+	if err := server.Shutdown(context.Background()); err != nil {
+		fmt.Fprintf(os.Stderr, "shutdown mock release server: %v\n", err)
+		os.Exit(1)
+	}
 }

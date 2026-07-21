@@ -14,13 +14,13 @@ trap "cleanup" EXIT
 suite_dir="${OS_ROOT}/test/integration/clusterimageset-updater/"
 workdir="${BASETMPDIR}/clusterimageset-updater"
 mkdir -p "${workdir}"
-cp -a "${suite_dir}"/* "${workdir}"
+cp -a "${suite_dir}/input" "${suite_dir}/output" "${workdir}/"
 inputs="${workdir}/input"
 expected="${workdir}/output"
 mock_pullspec="quay.io/openshift-release-dev/ocp-release:4.21.25-multi"
 
-mock_binary="${workdir}/mock-release-server"
-go build -o "${mock_binary}" "${suite_dir}/mock-release-server"
+mock_binary="${workdir}/mock-release-server-bin"
+os::cmd::expect_success "go build -o ${mock_binary} ${suite_dir}/mock-release-server"
 release_service_url_file="${workdir}/release-service-url"
 "${mock_binary}" --pullspec "${mock_pullspec}" > "${release_service_url_file}" &
 mock_pid=$!

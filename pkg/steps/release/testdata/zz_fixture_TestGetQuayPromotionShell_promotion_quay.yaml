@@ -15,7 +15,7 @@ data:
     mirror 5 2 /etc/push-secret/.dockerconfigjson registry.build02.ci.openshift.org/ci-op-y2n8rsh3/pipeline@sha256:bbb=quay.io/openshift/ci:ci_a_latest_incoming
     mirror 5 2 /etc/push-secret/.dockerconfigjson registry.build02.ci.openshift.org/ci-op-y2n8rsh3/pipeline@sha256:ddd=quay.io/openshift/ci:ci_c_latest_incoming
     _OLD_EXISTS=false
-    if oc image info --registry-config=/etc/push-secret/.dockerconfigjson quay.io/openshift/ci:ci_a_latest >/dev/null 2>&1; then _OLD_EXISTS=true; fi
+    if oc image info --registry-config=/etc/push-secret/.dockerconfigjson --filter-by-os=linux/amd64 quay.io/openshift/ci:ci_a_latest >/dev/null 2>&1; then _OLD_EXISTS=true; fi
     if [ "${_OLD_EXISTS}" = "true" ]; then
       mirror 5 2 /etc/push-secret/.dockerconfigjson quay.io/openshift/ci:ci_a_latest=quay.io/openshift/ci:20240603235401_prune_ci_a_latest
       mirror 5 2 /etc/push-secret/.dockerconfigjson quay.io/openshift/ci:ci_a_latest=quay.io/openshift/ci:ci_a_latest__pre
@@ -25,7 +25,7 @@ data:
       mirror 5 2 /etc/push-secret/.dockerconfigjson quay.io/openshift/ci:ci_a_latest=quay.io/openshift/ci:ci_a_latest__post1
     fi
     _OLD_EXISTS=false
-    if oc image info --registry-config=/etc/push-secret/.dockerconfigjson quay.io/openshift/ci:ci_c_latest >/dev/null 2>&1; then _OLD_EXISTS=true; fi
+    if oc image info --registry-config=/etc/push-secret/.dockerconfigjson --filter-by-os=linux/amd64 quay.io/openshift/ci:ci_c_latest >/dev/null 2>&1; then _OLD_EXISTS=true; fi
     if [ "${_OLD_EXISTS}" = "true" ]; then
       mirror 5 2 /etc/push-secret/.dockerconfigjson quay.io/openshift/ci:ci_c_latest=quay.io/openshift/ci:20240603235401_prune_ci_c_latest
       mirror 5 2 /etc/push-secret/.dockerconfigjson quay.io/openshift/ci:ci_c_latest=quay.io/openshift/ci:ci_c_latest__pre

@@ -462,7 +462,7 @@ func getQuayPromotionShell(imageMirrorTarget map[string]string, timeStr string, 
 	}
 	sort.Strings(floatTags)
 	for _, floatTag := range floatTags {
-		script = append(script, getStagedQuayFloatPromotionShell(registryConfig, floatTag, pruneTagForFloat[floatTag]))
+		script = append(script, getStagedQuayFloatPromotionShell(registryConfig, floatTag, pruneTagForFloat[floatTag], filterOS))
 	}
 	for _, pair := range resolveAndTagPairs {
 		script = append(script, getResolveAndTagRetryShell(registryConfig, pair[0], pair[1], 2, filterOS))
@@ -498,9 +498,11 @@ done
 		isTag, n, n, isTag, n, 120)
 }
 
-func getStagedQuayFloatPromotionShell(registryConfig, floatTag, pruneTag string) string {
+func getStagedQuayFloatPromotionShell(registryConfig, floatTag, pruneTag, filterByOS string) string {
+	// Must use --filter-by-os: oc image info exits non-zero on multi-arch floats without it,
+	// which skipped _prune_ backups and let Quay GC prior digests under active payload jobs.
 	checkOld := fmt.Sprintf(`_OLD_EXISTS=false
-if oc image info --registry-config=%s %s >/dev/null 2>&1; then _OLD_EXISTS=true; fi`, registryConfig, floatTag)
+if oc image info --registry-config=%s --filter-by-os=%s %s >/dev/null 2>&1; then _OLD_EXISTS=true; fi`, registryConfig, filterByOS, floatTag)
 
 	var backupPairs []string
 	if pruneTag != "" {

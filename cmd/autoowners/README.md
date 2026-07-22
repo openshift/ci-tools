@@ -1,7 +1,58 @@
-# Populating `OWNERS` and `OWNERS_ALIASES`
+# autoowners
 
-This utility updates the `OWNERS` files from remote OpenShift repositories.
+## What
+Batch job that syncs OWNERS files from upstream source repositories into the openshift/release repository. For every org/repo that has CI configuration in openshift/release (under `ci-operator/jobs`, `ci-operator/config`, or `ci-operator/templates`), autoowners fetches the root-level `OWNERS` and `OWNERS_ALIASES` files from the upstream repo on GitHub, resolves aliases, filters out users who are not members of the downstream GitHub organization, and writes the resolved OWNERS files into the corresponding directories in openshift/release. It then commits and opens (or updates) a pull request with the changes.
 
+This ensures that the people who own code upstream also control CI job approvals downstream, without manual synchronization.
+
+## How it works -- full flow
+
+1. **Discover repos**: Walk the `ci-operator/{jobs,config,templates}` subdirectories (and any `--extra-config-dir` paths) under `--target-dir` to build a list of org/repo pairs that have CI configuration. Skip the target repo itself (openshift/release) and any repos or orgs on the blocklist (`--ignore-repo`, `--ignore-org`). Each org/repo maps to one or more directories where an OWNERS file should be written.
+
+2. **Fetch upstream OWNERS**: For each discovered org/repo, use the GitHub API (`GetFile`) to fetch the root `OWNERS` file and `OWNERS_ALIASES` file. If no OWNERS file exists upstream, log a warning and skip the repo. Strip `@` prefixes from usernames (common in upstream OWNERS files). Quote purely numeric GitHub usernames with double quotes so YAML parsers treat them as strings instead of integers.
+
+3. **Resolve aliases**: If an `OWNERS_ALIASES` file was found, expand all alias references in the OWNERS file to their constituent usernames. The plugin supports both simple OWNERS format (flat approvers/reviewers lists) and full OWNERS format (filter-based with path patterns).
+
+4. **Filter to org members**: Query the downstream GitHub org (default: `openshift`) for its complete member list via `ListOrgMembers(org, "all")`. Remove any user from the resolved OWNERS who is not a member of the downstream org. All comparisons are case-insensitive.
+
+5. **Set reviewers fallback**: If the resolved OWNERS has approvers but an empty reviewers list, copy the approvers into reviewers. This matches the behavior Prow expects.
+
+6. **Write OWNERS files**: For each directory associated with the org/repo, delete the existing OWNERS file and write the resolved content. Prepend a header comment with five lines: the "DO NOT EDIT" warning, the source URL, a note about alias expansion, a note about org member filtering, and a link to the OWNERS docs.
+
+7. **Detect changes**: Run `git status --porcelain` to find modified OWNERS files. Verify that only OWNERS files were modified (error out if anything else changed). If nothing changed, exit cleanly.
+
+8. **Commit and push**: Use `bumper.GitCommitSignoffAndPush` to commit changes and push to a remote branch (`autoowners`) on the bot's fork. The commit message includes the PR title with a timestamp.
+
+9. **Create or update PR**: Call `bumper.UpdatePullRequestWithLabels` to open or update a pull request against the target repo's base branch. The PR body lists all directories that had OWNERS changes and `/cc`s the assignee. The `rehearsals-ack` label is always added (to skip pj-rehearse). If `--self-approve` is set, `approved` and `lgtm` labels are also added for auto-merge. The PR body is truncated to 65535 characters if it exceeds GitHub's limit.
+
+## Flags
+
+| Flag | Default | What it controls |
+|---|---|---|
+| `--dry-run` | `true` | When true, do not actually create the PR |
+| `--github-login` | `openshift-bot` | GitHub username for push and PR creation |
+| `--org` | `openshift` | Downstream GitHub org name (used for member filtering) |
+| `--repo` | `release` | Downstream GitHub repository name |
+| `--git-name` | (system default) | Git author name for commits |
+| `--git-email` | (system default) | Git author email for commits |
+| `--git-signoff` | `false` | Whether to add `Signed-off-by` to commits |
+| `--assign` | `openshift/test-platform` | GitHub user or team to `/cc` on the PR |
+| `--target-dir` | (required) | Path to the local clone of the target repo |
+| `--target-subdir` | `ci-operator` | Subdirectory under target-dir where configs live |
+| `--config-subdir` | `jobs,config,templates` | Subdirectories to scan for org/repo dirs (repeatable) |
+| `--extra-config-dir` | (none) | Additional directories to scan (repeatable) |
+| `--ignore-repo` | (none) | Repos to skip, in `org/repo` format (repeatable) |
+| `--ignore-org` | (none) | Entire orgs to skip (repeatable) |
+| `--debug-mode` | `false` | Enable DEBUG-level logging |
+| `--self-approve` | `false` | Add `approved` and `lgtm` labels to the PR |
+| `--pr-base-branch` | `master` | Base branch for the PR |
+| `--plugin-config` | (none) | Path to Prow plugin config (for custom OWNERS filenames per repo) |
+
+## Key files
+- `cmd/autoowners/main.go` -- entire implementation: repo discovery, OWNERS fetching, alias resolution, member filtering, PR creation
+
+## Deployment
+Runs as a periodic Prow job ([recent runs](https://prow.ci.openshift.org/?job=periodic-prow-auto-owners)), not a long-lived service. Typically scheduled to run on a regular cadence (e.g., daily) against a checkout of openshift/release.
 ```console
 $ autoowners -h
 Usage of autoowners:
@@ -53,7 +104,7 @@ Usage of autoowners:
     	The base branch to use for the pull request. (default "master")
   -repo string
     	The downstream GitHub repository name. (default "release")
-  -self-approve approved
+  -self-approve
     	Self-approve the PR by adding the approved and `lgtm` labels. Requires write permissions on the repo.
   -supplemental-plugin-config-dir value
     	An additional directory from which to load plugin configs. Can be used for config sharding but only supports a subset of the config. The flag can be passed multiple times.

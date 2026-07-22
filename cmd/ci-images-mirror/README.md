@@ -30,12 +30,12 @@ $ curl -s http://localhost:8090/api/v1/mirrors\?action\=show\&limit\=1 | jq
   "mirrors": [
     {
       "source_tag_ref": {
-        "namespace": "ocp-private",
-        "name": "4.9-priv",
+        "namespace": "ocp-priv",
+        "name": "4.9",
         "tag": "telemeter"
       },
-      "source": "registry.ci.openshift.org/ocp-private/4.9-priv@sha256:censored_digest",
-      "destination": "quay.io/openshift/ci:ocp-private_4.9-priv_telemeter",
+      "source": "registry.ci.openshift.org/ocp-priv/4.9@sha256:censored_digest",
+      "destination": "quay.io/openshift/ci:ocp-priv_4.9_telemeter",
       "current_quay_digest": "",
       "created_at": "2023-10-11T10:15:13.179246-04:00",
       "stale": true
@@ -58,11 +58,11 @@ $ curl -s http://localhost:28090/api/v1/mirrors\?action\=show\&limit\=1  | jq
   "mirrors": [
     {
       "source_tag_ref": {
-        "namespace": "ocp-private",
-        "name": "4.9-priv",
+        "namespace": "ocp-priv",
+        "name": "4.9",
         "tag": "node-problem-detector"
       },
-      "source": "registry.ci.openshift.org/ocp-private/4.9-priv@sha256:censored_digest",
+      "source": "registry.ci.openshift.org/ocp-priv/4.9@sha256:censored_digest",
       "destination": "quay.io/openshift/ci:20231011_sha256_censored_digest",
       "current_quay_digest": "",
       "created_at": "2023-10-11T14:46:23.426063734Z",

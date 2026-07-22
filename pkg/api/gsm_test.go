@@ -1034,6 +1034,19 @@ func TestGSMConfigValidate(t *testing.T) {
 			errorContains: "component my-component[0].secrets[0] has invalid name",
 		},
 		{
+			name: "error: component GSMSecretRef with invalid as alias",
+			config: GSMConfig{
+				Components: map[string][]GSMSecretRef{
+					"my-component": {
+						{Collection: "valid-collection", Group: "group1", Fields: []FieldEntry{{Name: "token", As: "foo/../bar"}}},
+					},
+				},
+				Bundles: []GSMBundle{},
+			},
+			expectError:   true,
+			errorContains: "component my-component[0].secrets[0].as is invalid",
+		},
+		{
 			name: "error: component with neither fields nor group",
 			config: GSMConfig{
 				Components: map[string][]GSMSecretRef{
@@ -1280,6 +1293,25 @@ func TestGSMConfigValidate(t *testing.T) {
 			},
 			expectError:   true,
 			errorContains: "bundle test-bundle gsm_secrets[0].secrets[0] has invalid name",
+		},
+		{
+			name: "error: bundle GSMSecretRef with invalid as alias",
+			config: GSMConfig{
+				Bundles: []GSMBundle{
+					{
+						Name: "test-bundle",
+						GSMSecrets: []GSMSecretRef{
+							{Collection: "test-secrets", Group: "group1", Fields: []FieldEntry{{Name: "token", As: "/etc/passwd"}}},
+						},
+						SyncToCluster: true,
+						Targets: []TargetSpec{
+							{Cluster: "build01", Namespace: "ci"},
+						},
+					},
+				},
+			},
+			expectError:   true,
+			errorContains: "bundle test-bundle gsm_secrets[0].fields[0].as is invalid",
 		},
 		{
 			name: "valid config - dockerconfig with empty 'as' field defaults to .dockerconfigjson",

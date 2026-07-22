@@ -332,6 +332,11 @@ func (c *GSMConfig) Validate() error {
 				if !gsmvalidation.ValidateSecretName(secret.Name) {
 					errs = append(errs, fmt.Errorf("component %s[%d].secrets[%d] has invalid name", componentName, j, k))
 				}
+				if secret.As != "" {
+					if err := gsmvalidation.ValidateMountFileName(secret.As); err != nil {
+						errs = append(errs, fmt.Errorf("component %s[%d].secrets[%d].as is invalid: %w", componentName, j, k, err))
+					}
+				}
 			}
 		}
 	}
@@ -426,6 +431,11 @@ func validateBundle(bundle *GSMBundle, idx int) error {
 			if !gsmvalidation.ValidateSecretName(field.Name) {
 				errs = append(errs, fmt.Errorf("bundle %s gsm_secrets[%d].secrets[%d] has invalid name", bundle.Name, j, k))
 			}
+			if field.As != "" {
+				if err := gsmvalidation.ValidateMountFileName(field.As); err != nil {
+					errs = append(errs, fmt.Errorf("bundle %s gsm_secrets[%d].fields[%d].as is invalid: %w", bundle.Name, j, k, err))
+				}
+			}
 		}
 	}
 
@@ -447,6 +457,12 @@ func validateBundle(bundle *GSMBundle, idx int) error {
 
 func validateDockerConfig(dc *DockerConfigSpec, bundleIdx int, bundleName string) error {
 	var errs []error
+
+	if dc.As != "" {
+		if err := gsmvalidation.ValidateMountFileName(dc.As); err != nil {
+			errs = append(errs, fmt.Errorf("bundle[%d] %s dockerconfig.as is invalid: %w", bundleIdx, bundleName, err))
+		}
+	}
 
 	if len(dc.Registries) == 0 {
 		errs = append(errs, fmt.Errorf("bundle[%d] %s dockerconfig has no registries", bundleIdx, bundleName))

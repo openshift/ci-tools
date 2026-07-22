@@ -462,7 +462,7 @@ func getQuayPromotionShell(imageMirrorTarget map[string]string, timeStr string, 
 	}
 	sort.Strings(floatTags)
 	for _, floatTag := range floatTags {
-		script = append(script, getStagedQuayFloatPromotionShell(registryConfig, floatTag, pruneTagForFloat[floatTag]))
+		script = append(script, getStagedQuayFloatPromotionShell(registryConfig, floatTag, pruneTagForFloat[floatTag], filterOS))
 	}
 	for _, pair := range resolveAndTagPairs {
 		script = append(script, getResolveAndTagRetryShell(registryConfig, pair[0], pair[1], 2, filterOS))
@@ -481,8 +481,14 @@ func getResolveAndTagRetryShell(registryConfig, quayProxyTag, isTag string, logl
 	repo := quayProxyTag[:colon]
 	quayIOTag := strings.Replace(quayProxyTag, api.QCIAPPCIDomain, "quay.io", 1)
 	n := quayPromotionDigestTagAttempts
+	// Prefer Manifest List dig so ocp IS references the multi-arch index (children stay
+	// reachable while a Quay tag holds that list). Fall back to Digest for single-arch.
 	return fmt.Sprintf(`for r in {1..%d}; do
-  _digest=$(oc image info --registry-config=%s --filter-by-os=%s %s | sed -n '/^Digest:[[:space:]]/s/^Digest:[[:space:]]*//p' | head -n1)
+  _info=$(oc image info --registry-config=%s --filter-by-os=%s %s)
+  _digest=$(echo "${_info}" | sed -n '/^Manifest List:[[:space:]]/s/^Manifest List:[[:space:]]*//p' | head -n1)
+  if [ -z "${_digest}" ]; then
+    _digest=$(echo "${_info}" | sed -n '/^Digest:[[:space:]]/s/^Digest:[[:space:]]*//p' | head -n1)
+  fi
   if [ -n "${_digest}" ] && oc tag --source=docker --loglevel=%d --reference-policy='source' --import-mode='PreserveOriginal' --reference %s@${_digest} %s; then
     break
   fi
@@ -498,9 +504,11 @@ done
 		isTag, n, n, isTag, n, 120)
 }
 
-func getStagedQuayFloatPromotionShell(registryConfig, floatTag, pruneTag string) string {
+func getStagedQuayFloatPromotionShell(registryConfig, floatTag, pruneTag, filterByOS string) string {
+	// Must use --filter-by-os: oc image info exits non-zero on multi-arch floats without it,
+	// which skipped _prune_ backups and let Quay GC prior digests under active payload jobs.
 	checkOld := fmt.Sprintf(`_OLD_EXISTS=false
-if oc image info --registry-config=%s %s >/dev/null 2>&1; then _OLD_EXISTS=true; fi`, registryConfig, floatTag)
+if oc image info --registry-config=%s --filter-by-os=%s %s >/dev/null 2>&1; then _OLD_EXISTS=true; fi`, registryConfig, filterByOS, floatTag)
 
 	var backupPairs []string
 	if pruneTag != "" {

@@ -481,8 +481,14 @@ func getResolveAndTagRetryShell(registryConfig, quayProxyTag, isTag string, logl
 	repo := quayProxyTag[:colon]
 	quayIOTag := strings.Replace(quayProxyTag, api.QCIAPPCIDomain, "quay.io", 1)
 	n := quayPromotionDigestTagAttempts
+	// Prefer Manifest List dig so ocp IS references the multi-arch index (children stay
+	// reachable while a Quay tag holds that list). Fall back to Digest for single-arch.
 	return fmt.Sprintf(`for r in {1..%d}; do
-  _digest=$(oc image info --registry-config=%s --filter-by-os=%s %s | sed -n '/^Digest:[[:space:]]/s/^Digest:[[:space:]]*//p' | head -n1)
+  _info=$(oc image info --registry-config=%s --filter-by-os=%s %s)
+  _digest=$(echo "${_info}" | sed -n '/^Manifest List:[[:space:]]/s/^Manifest List:[[:space:]]*//p' | head -n1)
+  if [ -z "${_digest}" ]; then
+    _digest=$(echo "${_info}" | sed -n '/^Digest:[[:space:]]/s/^Digest:[[:space:]]*//p' | head -n1)
+  fi
   if [ -n "${_digest}" ] && oc tag --source=docker --loglevel=%d --reference-policy='source' --import-mode='PreserveOriginal' --reference %s@${_digest} %s; then
     break
   fi

@@ -1265,6 +1265,8 @@ func TestGetResolveAndTagRetryShell(t *testing.T) {
 	for _, sub := range []string{
 		"for r in {1..5}",
 		"oc image info --registry-config=" + regcfg + " --filter-by-os=linux/amd64 " + quayIOTag,
+		`sed -n '/^Manifest List:[[:space:]]/s/^Manifest List:[[:space:]]*//p'`,
+		`sed -n '/^Digest:[[:space:]]/s/^Digest:[[:space:]]*//p'`,
 		"oc tag --source=docker --loglevel=2 --reference-policy='source' --import-mode='PreserveOriginal' --reference quay-proxy.ci.openshift.org/openshift/ci@${_digest} " + isTag,
 		"promotion: digest-tag failed for " + isTag,
 		"promotion: retrying digest-tag for " + isTag,

@@ -33,7 +33,11 @@ data:
       mirror 5 2 /etc/push-secret/.dockerconfigjson quay.io/openshift/ci:ocp_4.21_ovn-kubernetes=quay.io/openshift/ci:ocp_4.21_ovn-kubernetes__post1
     fi
     for r in {1..5}; do
-      _digest=$(oc image info --registry-config=/etc/push-secret/.dockerconfigjson --filter-by-os=linux/amd64 quay.io/openshift/ci:ocp_4.21_ovn-kubernetes | sed -n '/^Digest:[[:space:]]/s/^Digest:[[:space:]]*//p' | head -n1)
+      _info=$(oc image info --registry-config=/etc/push-secret/.dockerconfigjson --filter-by-os=linux/amd64 quay.io/openshift/ci:ocp_4.21_ovn-kubernetes)
+      _digest=$(echo "${_info}" | sed -n '/^Manifest List:[[:space:]]/s/^Manifest List:[[:space:]]*//p' | head -n1)
+      if [ -z "${_digest}" ]; then
+        _digest=$(echo "${_info}" | sed -n '/^Digest:[[:space:]]/s/^Digest:[[:space:]]*//p' | head -n1)
+      fi
       if [ -n "${_digest}" ] && oc tag --source=docker --loglevel=2 --reference-policy='source' --import-mode='PreserveOriginal' --reference quay-proxy.ci.openshift.org/openshift/ci@${_digest} ocp/4.21:ovn-kubernetes; then
         break
       fi

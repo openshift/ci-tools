@@ -227,7 +227,7 @@ var validStreams = []*regexp.Regexp{
 	regexp.MustCompile(`^ocp/(4\.(1[2-9]|2\d)|5\.\d+)`),
 	regexp.MustCompile(`^origin/(4\.(1[2-9]|2\d)|5\.\d+)`),
 	regexp.MustCompile(`^origin/scos-(4\.(1[2-9]|2\d)|5\.\d+)`),
-	regexp.MustCompile(`^ocp-private/(4\.(1[2-9]|2\d)|5\.\d+)`),
+	regexp.MustCompile(`^ocp-priv/(4\.(1[2-9]|2\d)|5\.\d+)`),
 	regexp.MustCompile(`^origin/sriov-(4\.(1[2-9]|2\d)|5\.\d+)`),
 	regexp.MustCompile(`^origin/metallb-(4\.(1[2-9]|2\d)|5\.\d+)`),
 	regexp.MustCompile(`^origin/ptp-(4\.(1[2-9]|2\d)|5\.\d+)`),

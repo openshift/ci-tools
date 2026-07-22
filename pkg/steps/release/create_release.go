@@ -306,7 +306,7 @@ func assembleReleaseVersionPrefix(config *api.ReleaseTagConfiguration) string {
 	if config == nil {
 		return "0.0.1-0"
 	}
-	// ocp-private streams are named like "5.0-priv"; strip that suffix before parsing.
+	// Legacy ocp-private streams were named like "5.0-priv"; ocp-priv streams use "5.0".
 	name := strings.TrimSuffix(config.Name, "-priv")
 	parts := strings.Split(name, ".")
 	if len(parts) != 2 {

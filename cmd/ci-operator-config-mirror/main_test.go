@@ -39,8 +39,8 @@ func TestPrivateReleaseTagConfiguration(t *testing.T) {
 				Namespace: "ocp",
 			},
 			expected: &api.ReleaseTagConfiguration{
-				Name:      "origin-v4-priv",
-				Namespace: "ocp-private",
+				Name:      "origin-v4",
+				Namespace: "ocp-priv",
 			},
 		},
 	}
@@ -79,8 +79,8 @@ func TestPrivateIntegrationRelease(t *testing.T) {
 				Namespace: "ocp",
 			},
 			expected: &api.Integration{
-				Name:      "origin-v4-priv",
-				Namespace: "ocp-private",
+				Name:      "origin-v4",
+				Namespace: "ocp-priv",
 			},
 		},
 	}
@@ -126,8 +126,8 @@ func TestPrivateBuildRoot(t *testing.T) {
 			},
 			expected: &api.BuildRootImageConfiguration{
 				ImageStreamTagReference: &api.ImageStreamTagReference{
-					Name:      "origin-v4-priv",
-					Namespace: "ocp-private",
+					Name:      "origin-v4",
+					Namespace: "ocp-priv",
 				},
 			},
 		},
@@ -171,7 +171,7 @@ func TestPrivateBaseImages(t *testing.T) {
 			expected: map[string]api.ImageStreamTagReference{
 				"base": {Name: "origin-v4", Namespace: "openshift"},
 				"os":   {Name: "centos", Namespace: "ocp"},
-				"test": {Name: "4.3-priv", Namespace: "ocp-private"},
+				"test": {Name: "4.3", Namespace: "ocp-priv"},
 			},
 		},
 
@@ -182,8 +182,8 @@ func TestPrivateBaseImages(t *testing.T) {
 				"os":   {Name: "4.3", Namespace: "ocp"},
 			},
 			expected: map[string]api.ImageStreamTagReference{
-				"base": {Name: "4.2-priv", Namespace: "ocp-private"},
-				"os":   {Name: "4.3-priv", Namespace: "ocp-private"},
+				"base": {Name: "4.2", Namespace: "ocp-priv"},
+				"os":   {Name: "4.3", Namespace: "ocp-priv"},
 			},
 		},
 	}
@@ -207,17 +207,17 @@ func TestPrivatePromotionConfiguration(t *testing.T) {
 		{
 			id:        "promoted by name",
 			promotion: &api.PromotionConfiguration{Targets: []api.PromotionTarget{{Name: "4.x", Namespace: "ocp"}}},
-			expected:  &api.PromotionConfiguration{Targets: []api.PromotionTarget{{Name: "4.x-priv", Namespace: "ocp-private"}}},
+			expected:  &api.PromotionConfiguration{Targets: []api.PromotionTarget{{Name: "4.x", Namespace: "ocp-priv"}}},
 		},
 		{
 			id:        "promoted by tag",
 			promotion: &api.PromotionConfiguration{Targets: []api.PromotionTarget{{Tag: "4.x", Namespace: "ocp"}}},
-			expected:  &api.PromotionConfiguration{Targets: []api.PromotionTarget{{Tag: "4.x-priv", Namespace: "ocp-private"}}},
+			expected:  &api.PromotionConfiguration{Targets: []api.PromotionTarget{{Tag: "4.x", Namespace: "ocp-priv"}}},
 		},
 		{
 			id:        "promoted by tag, includes tag_by_commit",
 			promotion: &api.PromotionConfiguration{Targets: []api.PromotionTarget{{Tag: "4.x", Namespace: "ocp", TagByCommit: true}}},
-			expected:  &api.PromotionConfiguration{Targets: []api.PromotionTarget{{Tag: "4.x-priv", Namespace: "ocp-private"}}},
+			expected:  &api.PromotionConfiguration{Targets: []api.PromotionTarget{{Tag: "4.x", Namespace: "ocp-priv"}}},
 		},
 		{
 			id: "disable non ocp targets",
@@ -226,7 +226,7 @@ func TestPrivatePromotionConfiguration(t *testing.T) {
 				{Tag: "4.x", Namespace: "hypershift"},
 			}},
 			expected: &api.PromotionConfiguration{Targets: []api.PromotionTarget{
-				{Tag: "4.x-priv", Namespace: "ocp-private"},
+				{Tag: "4.x", Namespace: "ocp-priv"},
 				{Tag: "4.x", Namespace: "hypershift", Disabled: true},
 			}},
 		},

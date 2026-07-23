@@ -447,8 +447,12 @@ func (r *reconciler) reconcileCreateProwJob(ctx context.Context, log *logrus.Ent
 	// to bind the PJ to an EC as soon as the former gets created.
 	if len(pjsForEC.Items) == 1 {
 		log.Info("ProwJob found but was not bound to the EC, binding now")
+		ec.Finalizers, _ = cislices.UniqueAdd(ec.Finalizers, DependentProwJobFinalizer)
+		upsertCondition(&ec.Status, ephemeralclusterv1.ProwJobCreating, ephemeralclusterv1.ConditionTrue, r.now(), "", "")
 		observedStatus.ProwJobID = pjsForEC.Items[0].Name
-		if err := r.updateEphemeralClusterStatus(ctx, ec, observedStatus); err != nil {
+		observedStatus.Phase = ephemeralclusterv1.EphemeralClusterProvisioning
+		ec.Status = *observedStatus
+		if err := r.updateEphemeralClusterWithStatus(ctx, ec); err != nil {
 			return reconcile.Result{}, err
 		}
 		return reconcile.Result{RequeueAfter: r.polling()}, nil

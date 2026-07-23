@@ -1061,6 +1061,62 @@ func TestReconcile(t *testing.T) {
 			wantRes: reconcile.Result{},
 		},
 		{
+			name: "ProwJob succeeded remove the finalizer",
+			ec: &ephemeralclusterv1.EphemeralCluster{
+				ObjectMeta: metav1.ObjectMeta{
+					Name:       "foo",
+					Namespace:  "bar",
+					UID:        types.UID("test-ec-uid"),
+					Finalizers: []string{DependentProwJobFinalizer},
+				},
+				Status: ephemeralclusterv1.EphemeralClusterStatus{
+					ProwJobID: "pj-123",
+				},
+			},
+			objs: []ctrlclient.Object{
+				&prowv1.ProwJob{
+					ObjectMeta: metav1.ObjectMeta{Name: "pj-123", Namespace: prowJobNamespace},
+					Spec:       prowv1.ProwJobSpec{Cluster: "build01"},
+					Status:     prowv1.ProwJobStatus{State: prowv1.SuccessState},
+				},
+			},
+			buildClients: func() map[string]*ctrlruntimetest.FakeClient {
+				c := fake.NewClientBuilder().WithScheme(scheme).Build()
+				return map[string]*ctrlruntimetest.FakeClient{
+					"build01": ctrlruntimetest.NewFakeClient(c, scheme),
+				}
+			},
+			wantEC: &ephemeralclusterv1.EphemeralCluster{
+				ObjectMeta: metav1.ObjectMeta{
+					Name:      "foo",
+					Namespace: "bar",
+				},
+				Status: ephemeralclusterv1.EphemeralClusterStatus{
+					ProwJobID: "pj-123",
+					Phase:     ephemeralclusterv1.EphemeralClusterDeprovisioned,
+					Conditions: []ephemeralclusterv1.EphemeralClusterCondition{{
+						Type:               ephemeralclusterv1.ProwJobCreating,
+						Status:             ephemeralclusterv1.ConditionFalse,
+						Reason:             ProwJobCreatingDoneReason,
+						LastTransitionTime: metav1.NewTime(fakeNow),
+					}, {
+						Type:               ephemeralclusterv1.ClusterReady,
+						Status:             ephemeralclusterv1.ConditionFalse,
+						Reason:             ephemeralclusterv1.SecretsFetchFailureReason,
+						Message:            ephemeralclusterv1.CIOperatorNSNotFoundMsg,
+						LastTransitionTime: metav1.NewTime(fakeNow),
+					}, {
+						Type:               ephemeralclusterv1.ProwJobCompleted,
+						Status:             ephemeralclusterv1.ConditionTrue,
+						Reason:             ephemeralclusterv1.ProwJobCompletedReason,
+						Message:            "prowjob state: " + string(prowv1.SuccessState),
+						LastTransitionTime: metav1.NewTime(fakeNow),
+					}},
+				},
+			},
+			wantRes: reconcile.Result{},
+		},
+		{
 			name: "Test completed, create secret",
 			ec: &ephemeralclusterv1.EphemeralCluster{
 				ObjectMeta: metav1.ObjectMeta{

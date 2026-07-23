@@ -251,7 +251,14 @@ func (r *reconciler) Reconcile(ctx context.Context, req reconcile.Request) (reco
 
 	var requeueAfter time.Duration
 	// This is a stop-polling condition: if the PJ is in a final state there is nothing to do.
-	if isFinalState := r.reportProwJobFinalState(&pj, &observedStatus); !isFinalState {
+	if isFinalState := r.reportProwJobFinalState(&pj, &observedStatus); isFinalState {
+		if finalizers, removed := cislices.Delete(ec.Finalizers, DependentProwJobFinalizer); removed {
+			log.Info("ProwJob in a definitive state, finalizer removed")
+			ec.Finalizers = finalizers
+			ec.Status = observedStatus
+			return reconcile.Result{}, r.updateEphemeralClusterWithStatus(ctx, ec)
+		}
+	} else {
 		requeueAfter = r.polling()
 	}
 

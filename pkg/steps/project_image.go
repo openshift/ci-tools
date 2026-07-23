@@ -71,7 +71,10 @@ func (s *projectDirectoryImageBuildStep) run(ctx context.Context) error {
 	)
 
 	// Bundle images are non multi-arch by design. No manifest list is needed. Here we spawn a single build.
+	// The build must still run on a node whose architecture can resolve its manifest-listed inputs —
+	// see pinBuildToSingleArchNode.
 	if s.config.IsBundleImage() {
+		pinBuildToSingleArchNode(build)
 		return handleBuild(ctx, s.client, s.podClient, *build)
 	}
 

@@ -126,7 +126,7 @@ func TestEphemeralClusterFilter(t *testing.T) {
 	}
 }
 
-func TestCreateProwJob(t *testing.T) {
+func TestReconcileCreateProwJob(t *testing.T) {
 	fakeNow := fakeNow(t)
 	scheme := fakeScheme(t)
 	const pollingTime = 5
@@ -1581,22 +1581,24 @@ func TestReconcile(t *testing.T) {
 	}
 }
 
-func TestDeleteProwJob(t *testing.T) {
+func TestReconcileDeleteEphemeralCluster(t *testing.T) {
 	scheme := fakeScheme(t)
 	fakeNow := fakeNow(t)
 	const pollingTime = 5
 
 	for _, tc := range []struct {
-		name    string
-		ec      *ephemeralclusterv1.EphemeralCluster
-		pj      *prowv1.ProwJob
-		wantEC  *ephemeralclusterv1.EphemeralCluster
-		wantPJ  *prowv1.ProwJob
-		wantRes reconcile.Result
-		wantErr error
+		name         string
+		ec           *ephemeralclusterv1.EphemeralCluster
+		pj           *prowv1.ProwJob
+		buildClients func() map[string]*ctrlruntimetest.FakeClient
+		wantEC       *ephemeralclusterv1.EphemeralCluster
+		wantPJ       *prowv1.ProwJob
+		wantSecret   *corev1.Secret
+		wantRes      reconcile.Result
+		wantErr      error
 	}{
 		{
-			name: "Delete EC: abort the ProwJob",
+			name: "Delete EC: start deprovision procedure",
 			ec: &ephemeralclusterv1.EphemeralCluster{
 				ObjectMeta: metav1.ObjectMeta{
 					Name:              "foo",
@@ -1610,6 +1612,21 @@ func TestDeleteProwJob(t *testing.T) {
 			},
 			pj: &prowv1.ProwJob{
 				ObjectMeta: metav1.ObjectMeta{Name: "pj-123", Namespace: prowJobNamespace},
+				Spec:       prowv1.ProwJobSpec{Cluster: "build01"},
+			},
+			buildClients: func() map[string]*ctrlruntimetest.FakeClient {
+				objs := []ctrlclient.Object{
+					&corev1.Namespace{
+						ObjectMeta: metav1.ObjectMeta{
+							Labels: map[string]string{steps.LabelJobID: "pj-123"},
+							Name:   "ci-op-1234",
+						},
+					},
+				}
+				c := fake.NewClientBuilder().WithObjects(objs...).WithScheme(scheme).Build()
+				return map[string]*ctrlruntimetest.FakeClient{
+					"build01": ctrlruntimetest.NewFakeClient(c, scheme, ctrlruntimetest.WithInitObjects(objs...)),
+				}
 			},
 			wantEC: &ephemeralclusterv1.EphemeralCluster{
 				ObjectMeta: metav1.ObjectMeta{
@@ -1620,14 +1637,22 @@ func TestDeleteProwJob(t *testing.T) {
 				},
 				Status: ephemeralclusterv1.EphemeralClusterStatus{
 					ProwJobID: "pj-123",
+					Phase:     ephemeralclusterv1.EphemeralClusterDeprovisioning,
+					Conditions: []ephemeralclusterv1.EphemeralClusterCondition{{
+						Type:               ephemeralclusterv1.TestCompleted,
+						Status:             ephemeralclusterv1.ConditionTrue,
+						LastTransitionTime: metav1.NewTime(fakeNow),
+					}},
 				},
 			},
 			wantPJ: &prowv1.ProwJob{
 				ObjectMeta: metav1.ObjectMeta{Name: "pj-123", Namespace: prowJobNamespace},
-				Status: prowv1.ProwJobStatus{
-					State:          prowv1.AbortedState,
-					Description:    AbortProwJobDeleteEC,
-					CompletionTime: ptr.To(metav1.NewTime(fakeNow)),
+				Spec:       prowv1.ProwJobSpec{Cluster: "build01"},
+			},
+			wantSecret: &corev1.Secret{
+				ObjectMeta: metav1.ObjectMeta{
+					Name:      api.EphemeralClusterTestDoneSignalSecretName,
+					Namespace: "ci-op-1234",
 				},
 			},
 			wantRes: reconcile.Result{RequeueAfter: pollingTime},
@@ -1683,10 +1708,18 @@ func TestDeleteProwJob(t *testing.T) {
 
 			client := bldr.Build()
 
+			buildClients := make(map[string]ctrlclient.Client)
+			if tc.buildClients != nil {
+				fakeClients := tc.buildClients()
+				for cluster, c := range fakeClients {
+					buildClients[cluster] = c.WithWatch
+				}
+			}
+
 			r := reconciler{
 				logger:       logrus.NewEntry(logrus.StandardLogger()),
 				masterClient: client,
-				buildClients: map[string]ctrlclient.Client{},
+				buildClients: buildClients,
 				now:          func() time.Time { return fakeNow },
 				polling:      func() time.Duration { return pollingTime },
 				prowConfigAgent: prowConfigAgent(&prowconfig.Config{
@@ -1742,6 +1775,20 @@ func TestDeleteProwJob(t *testing.T) {
 
 				if len(pjList.Items) > 0 {
 					t.Error("prowjob has not been deleted")
+				}
+			}
+
+			if tc.wantSecret != nil {
+				buildClient := buildClients[tc.pj.Spec.Cluster]
+				gotSecret := corev1.Secret{}
+				if err := buildClient.Get(context.TODO(), types.NamespacedName{
+					Name:      tc.wantSecret.Name,
+					Namespace: tc.wantSecret.Namespace,
+				}, &gotSecret); err != nil {
+					t.Fatalf("get credentials secret: %s", err)
+				}
+				if diff := cmp.Diff(tc.wantSecret.Data, gotSecret.Data); diff != "" {
+					t.Errorf("unexpected credentials secret data: %s", diff)
 				}
 			}
 		})

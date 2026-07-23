@@ -52,7 +52,6 @@ const (
 	EphemeralClusterTestName  = "cluster-provisioning"
 	EphemeralClusterLabel     = "ci.openshift.io/ephemeral-cluster"
 	EphemeralClusterNamespace = "ephemeral-cluster"
-	AbortProwJobDeleteEC      = "Ephemeral Cluster deleted"
 	DependentProwJobFinalizer = "ephemeralcluster.ci.openshift.io/dependent-prowjob"
 	UnresolvedConfigVar       = "UNRESOLVED_CONFIG"
 	ProwJobCreatingDoneReason = "ProwJob has been properly created"
@@ -210,12 +209,12 @@ func (r *reconciler) Reconcile(ctx context.Context, req reconcile.Request) (reco
 		return reconcile.Result{}, reconcile.TerminalError(fmt.Errorf("get ephemeral cluster: %w", err))
 	}
 
+	if !ec.DeletionTimestamp.IsZero() {
+		return r.reconcileDeleteEphemeralCluster(ctx, log, ec)
+	}
+
 	oldStatus := ec.Status
 	observedStatus := ephemeralclusterv1.EphemeralClusterStatus{ProwJobID: ec.Status.ProwJobID}
-
-	if !ec.DeletionTimestamp.IsZero() {
-		return r.deleteEphemeralCluster(ctx, log, ec)
-	}
 
 	pjId, pj := ec.Status.ProwJobID, prowv1.ProwJob{}
 	log = log.WithField("prowjob", pjId)
@@ -225,15 +224,14 @@ func (r *reconciler) Reconcile(ctx context.Context, req reconcile.Request) (reco
 			return r.handleGetProwJobError(ctx, log, ec, err)
 		}
 	} else {
-		return r.handleCreateProwJob(ctx, log, ec, &observedStatus)
+		return r.reconcileCreateProwJob(ctx, log, ec, &observedStatus)
 	}
 
 	upsertCondition(&observedStatus, ephemeralclusterv1.ProwJobCreating, ephemeralclusterv1.ConditionFalse, r.now(), ProwJobCreatingDoneReason, "")
 	observedStatus.Phase = ephemeralclusterv1.EphemeralClusterProvisioning
 	observedStatus.ProwJobURL = pj.Status.URL
 
-	err := r.fetchSecrets(ctx, log, ec, &oldStatus, &observedStatus, &pj)
-	if err != nil {
+	if err := r.fetchSecrets(ctx, log, ec, &oldStatus, &observedStatus, &pj); err != nil {
 		if updateErr := r.updateEphemeralClusterStatus(ctx, ec, &observedStatus); updateErr != nil {
 			msg := utilerrors.NewAggregate([]error{updateErr, err}).Error()
 			return reconcile.Result{}, errors.New(msg)
@@ -242,8 +240,7 @@ func (r *reconciler) Reconcile(ctx context.Context, req reconcile.Request) (reco
 	}
 
 	if ec.Spec.TearDownCluster {
-		err := r.notifyTestComplete(ctx, log, &oldStatus, &observedStatus, &pj)
-		if err != nil {
+		if err := r.notifyTestComplete(ctx, log, &oldStatus, &observedStatus, &pj); err != nil {
 			if updateErr := r.updateEphemeralClusterStatus(ctx, ec, &observedStatus); updateErr != nil {
 				msg := utilerrors.NewAggregate([]error{updateErr, err}).Error()
 				return reconcile.Result{}, errors.New(msg)
@@ -402,7 +399,7 @@ func (r *reconciler) validateEphemeralCluster(log *logrus.Entry, ec *ephemeralcl
 	return fmt.Errorf("konflux cluster %q and tenant %q don't own the cluster profile %q", cluster, tenant, clusterProfileName)
 }
 
-func (r *reconciler) handleCreateProwJob(ctx context.Context, log *logrus.Entry, ec *ephemeralclusterv1.EphemeralCluster, observedStatus *ephemeralclusterv1.EphemeralClusterStatus) (reconcile.Result, error) {
+func (r *reconciler) reconcileCreateProwJob(ctx context.Context, log *logrus.Entry, ec *ephemeralclusterv1.EphemeralCluster, observedStatus *ephemeralclusterv1.EphemeralClusterStatus) (reconcile.Result, error) {
 	log.Info("Starting the procedure to create a ProwJob")
 
 	if err := r.validateEphemeralCluster(log, ec); err != nil {
@@ -821,20 +818,22 @@ func (r *reconciler) reportProwJobFinalState(pj *prowv1.ProwJob, observedStatus 
 	return false
 }
 
-func (r *reconciler) deleteEphemeralCluster(ctx context.Context, log *logrus.Entry, ec *ephemeralclusterv1.EphemeralCluster) (reconcile.Result, error) {
-	removeFinalizer := func() (reconcile.Result, error) {
+func (r *reconciler) reconcileDeleteEphemeralCluster(ctx context.Context, log *logrus.Entry, ec *ephemeralclusterv1.EphemeralCluster) (reconcile.Result, error) {
+	removeFinalizer := func() bool {
 		finalizers, removed := cislices.Delete(ec.Finalizers, DependentProwJobFinalizer)
 		if removed {
 			ec.Finalizers = finalizers
-			return reconcile.Result{}, r.updateEphemeralCluster(ctx, ec)
 		}
-		return reconcile.Result{RequeueAfter: r.polling()}, nil
+		return removed
 	}
 
 	pjId := ec.Status.ProwJobID
 	if pjId == "" {
 		log.Info("ProwJob ID is empty, removing the finalizer")
-		return removeFinalizer()
+		if removeFinalizer() {
+			return reconcile.Result{}, r.updateEphemeralCluster(ctx, ec)
+		}
+		return reconcile.Result{}, nil
 	}
 
 	pj := prowv1.ProwJob{}
@@ -842,37 +841,37 @@ func (r *reconciler) deleteEphemeralCluster(ctx context.Context, log *logrus.Ent
 	if err := r.masterClient.Get(ctx, nn, &pj); err != nil {
 		if apierrors.IsNotFound(err) {
 			log.Info("ProwJob not found, removing the finalizer")
-			return removeFinalizer()
-		} else {
-			return reconcile.Result{}, fmt.Errorf("get prowjob: %w", err)
+			if removeFinalizer() {
+				return reconcile.Result{}, r.updateEphemeralCluster(ctx, ec)
+			}
+			return reconcile.Result{}, nil
 		}
+		return reconcile.Result{}, fmt.Errorf("get prowjob: %w", err)
 	}
 
+	oldStatus := ec.Status
+	observedStatus := ec.Status.DeepCopy()
 	log = log.WithField("prowjob_name", pj.Name)
-	switch pj.Status.State {
-	case prowv1.AbortedState, prowv1.ErrorState, prowv1.FailureState, prowv1.SuccessState:
+
+	if isFinalState := r.reportProwJobFinalState(&pj, observedStatus); isFinalState {
 		log.Info("ProwJob in a definitive state already, removing the finalizer")
-		return removeFinalizer()
+		if removeFinalizer() {
+			return reconcile.Result{}, r.updateEphemeralCluster(ctx, ec)
+		}
+		return reconcile.Result{}, r.updateEphemeralClusterStatus(ctx, ec, observedStatus)
 	}
 
-	log.Info("Ephemeral Cluster is being deleted, aborting the ProwJob")
-	return r.abortProwJob(ctx, log, &pj, AbortProwJobDeleteEC)
-}
-
-func (r *reconciler) abortProwJob(ctx context.Context, log *logrus.Entry, pj *prowv1.ProwJob, reason string) (reconcile.Result, error) {
-	if pj.Status.State == prowv1.AbortedState {
-		log.Info("ProwJob aborted already, skipping")
-		return reconcile.Result{}, nil
+	if err := r.notifyTestComplete(ctx, log, &oldStatus, observedStatus, &pj); err != nil {
+		if updateErr := r.updateEphemeralClusterStatus(ctx, ec, observedStatus); updateErr != nil {
+			msg := utilerrors.NewAggregate([]error{updateErr, err}).Error()
+			return reconcile.Result{}, errors.New(msg)
+		}
+		return reconcile.Result{}, err
 	}
 
-	pj.Status.State = prowv1.AbortedState
-	pj.Status.Description = reason
-	pj.Status.CompletionTime = ptr.To(metav1.NewTime(r.now()))
-
-	if err := r.masterClient.Update(ctx, pj); err != nil {
-		return reconcile.Result{}, fmt.Errorf("abort prowjob: %w", err)
+	if err := r.updateEphemeralClusterStatus(ctx, ec, observedStatus); err != nil {
+		return reconcile.Result{}, err
 	}
-	log.Info("ProwJob aborted")
 
 	return reconcile.Result{RequeueAfter: r.polling()}, nil
 }

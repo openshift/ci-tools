@@ -39,7 +39,15 @@ func architecture(architecture api.ReleaseArchitecture) string {
 }
 
 func Endpoint(d api.ReleaseDescriptor, version, stream, suffix string) string {
-	return fmt.Sprintf("%s/%s%s%s%s", ServiceHost(d), version, stream, architecture(d.Architecture), suffix)
+	return EndpointWithServiceURL(d, version, stream, suffix, "")
+}
+
+func EndpointWithServiceURL(d api.ReleaseDescriptor, version, stream, suffix, serviceURL string) string {
+	host := ServiceHost(d)
+	if serviceURL != "" {
+		host = serviceURL
+	}
+	return fmt.Sprintf("%s/%s%s%s%s", host, version, stream, architecture(d.Architecture), suffix)
 }
 
 // endpoint determines the API endpoint to use for a candidate release

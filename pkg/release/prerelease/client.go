@@ -11,12 +11,16 @@ import (
 	"github.com/openshift/ci-tools/pkg/release/candidate"
 )
 
-func endpoint(prerelease api.Prerelease) string {
+func endpointWithServiceURL(prerelease api.Prerelease, serviceURL string) string {
 	stream := prerelease.VersionBounds.Stream
 	if stream == "" {
 		stream = deriveStreamFromBounds(prerelease.VersionBounds)
 	}
-	return candidate.Endpoint(prerelease.ReleaseDescriptor, "", stream, "/latest")
+	return candidate.EndpointWithServiceURL(prerelease.ReleaseDescriptor, "", stream, "/latest", serviceURL)
+}
+
+func endpoint(prerelease api.Prerelease) string {
+	return endpointWithServiceURL(prerelease, "")
 }
 
 func deriveStreamFromBounds(bounds api.VersionBounds) string {
@@ -41,7 +45,12 @@ func defaultFields(prerelease api.Prerelease) api.Prerelease {
 
 // ResolvePullSpec determines the pull spec for the candidate release
 func ResolvePullSpec(client release.HTTPClient, prerelease api.Prerelease) (string, error) {
-	return resolvePullSpec(client, endpoint(defaultFields(prerelease)), prerelease.VersionBounds, prerelease.Relative)
+	return ResolvePullSpecWithServiceURL(client, prerelease, "")
+}
+
+// ResolvePullSpecWithServiceURL resolves a pull spec, optionally overriding the release service URL.
+func ResolvePullSpecWithServiceURL(client release.HTTPClient, prerelease api.Prerelease, serviceURL string) (string, error) {
+	return resolvePullSpec(client, endpointWithServiceURL(defaultFields(prerelease), serviceURL), prerelease.VersionBounds, prerelease.Relative)
 }
 
 func resolvePullSpec(client release.HTTPClient, endpoint string, bounds api.VersionBounds, relative int) (string, error) {

@@ -33,8 +33,9 @@ const (
 )
 
 type options struct {
-	poolDir   string
-	outputDir string
+	poolDir           string
+	outputDir         string
+	releaseServiceURL string
 }
 
 func gatherOptions() (options, error) {
@@ -43,6 +44,7 @@ func gatherOptions() (options, error) {
 
 	fs.StringVar(&o.poolDir, "pools", "", "Path to directory containing cluster pool specs (*_clusterpool.yaml files)")
 	fs.StringVar(&o.outputDir, "imagesets", "", "Path to directory containing clusterimagesets  (*_clusterimageset.yaml files)")
+	fs.StringVar(&o.releaseServiceURL, "release-service-url", "", "Optional override for the OCP release service base URL (e.g. http://127.0.0.1:8080/api/v1/releasestream)")
 
 	if err := fs.Parse(os.Args[1:]); err != nil {
 		return o, fmt.Errorf("failed to parse flags: %w", err)
@@ -139,7 +141,7 @@ func main() {
 			},
 			VersionBounds: versionBounds,
 		}
-		pullSpec, err := prerelease.ResolvePullSpec(&http.Client{}, release)
+		pullSpec, err := prerelease.ResolvePullSpecWithServiceURL(&http.Client{}, release, o.releaseServiceURL)
 		if err != nil {
 			logrus.WithError(err).Fatalf("Failed to get pullspec for version range `%s`", versionBounds.Query())
 		}

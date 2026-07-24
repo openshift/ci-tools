@@ -80,8 +80,9 @@ func (s *bundleSourceStep) run(ctx context.Context) error {
 	)
 
 	// Bundle images are not multi-arch by design. Here we build it without creating a manifest-listed image.
-	// Note that we are not configuring a node selector here, so the build will be scheduled on any available
-	// node no matter the architecture.
+	// The build must still run on a node whose architecture can resolve its manifest-listed inputs
+	// (e.g. pipeline:src) — see pinBuildToSingleArchNode.
+	pinBuildToSingleArchNode(build)
 	return handleBuild(ctx, s.client, s.podClient, *build)
 }
 

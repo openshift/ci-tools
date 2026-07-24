@@ -9,9 +9,12 @@ import (
 	"strings"
 	"testing"
 
+	coreapi "k8s.io/api/core/v1"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
+	"k8s.io/apimachinery/pkg/util/sets"
 	fakectrlruntimeclient "sigs.k8s.io/controller-runtime/pkg/client/fake"
 
+	buildapi "github.com/openshift/api/build/v1"
 	imagev1 "github.com/openshift/api/image/v1"
 
 	"github.com/openshift/ci-tools/pkg/api"
@@ -162,4 +165,69 @@ RUN find . -type f -regex ".*\.\(yaml\|yml\)" -exec sed -i s?quay.io/openshift/o
 	if expectedDockerfile != generatedDockerfile {
 		t.Errorf("Generated bundle source dockerfile does not equal expected; generated dockerfile: %s", generatedDockerfile)
 	}
+}
+
+// TestSingleArchBuildPinMatchesPipelineArchGuarantees guards the cross-file invariant behind
+// pinBuildToSingleArchNode (used for bundle builds here and in project_image.go): pinning bundle
+// builds to one architecture is only safe while every pipeline manifest list is guaranteed to
+// contain that architecture. If any assertion below fails, that guarantee changed — update
+// pinBuildToSingleArchNode together with the change that broke it.
+func TestSingleArchBuildPinMatchesPipelineArchGuarantees(t *testing.T) {
+	pinned := &buildapi.Build{}
+	pinBuildToSingleArchNode(pinned)
+	pinnedArch, ok := pinned.Spec.NodeSelector[coreapi.LabelArchStable]
+	if !ok {
+		t.Fatalf("pinBuildToSingleArchNode did not set a %s node selector", coreapi.LabelArchStable)
+	}
+
+	t.Run("default pipeline build is the pinned architecture", func(t *testing.T) {
+		builds := constructMultiArchBuilds(buildapi.Build{}, nil)
+		if len(builds) != 1 {
+			t.Fatalf("expected exactly one default build, got %d", len(builds))
+		}
+		if got := builds[0].Spec.NodeSelector[coreapi.LabelArchStable]; got != pinnedArch {
+			t.Errorf("default pipeline build targets %q, but bundle builds pin to %q", got, pinnedArch)
+		}
+	})
+
+	t.Run("image steps resolve the pinned architecture unconditionally", func(t *testing.T) {
+		step := &projectDirectoryImageBuildStep{
+			config: api.ProjectDirectoryImageBuildStepConfiguration{
+				AdditionalArchitectures: []string{"arm64"},
+			},
+			architectures: sets.New[string](),
+		}
+		if resolved := step.ResolveMultiArch(); !resolved.Has(pinnedArch) {
+			t.Errorf("ResolveMultiArch() = %v does not contain %q, so a pipeline manifest list without a %q entry is now possible", sets.List(resolved), pinnedArch, pinnedArch)
+		}
+	})
+
+	t.Run("multi-arch pipelines still build the pinned architecture", func(t *testing.T) {
+		step := &projectDirectoryImageBuildStep{
+			config: api.ProjectDirectoryImageBuildStepConfiguration{
+				AdditionalArchitectures: []string{"arm64", "ppc64le"},
+			},
+			architectures: sets.New[string](),
+		}
+		found := false
+		for _, b := range constructMultiArchBuilds(buildapi.Build{}, sets.List(step.ResolveMultiArch())) {
+			if b.Spec.NodeSelector[coreapi.LabelArchStable] == pinnedArch {
+				found = true
+			}
+		}
+		if !found {
+			t.Errorf("no %q build produced for a multi-arch pipeline, so its manifest list would lack the entry bundle builds pin to", pinnedArch)
+		}
+	})
+
+	t.Run("pinning merges into an existing node selector", func(t *testing.T) {
+		build := &buildapi.Build{Spec: buildapi.BuildSpec{CommonSpec: buildapi.CommonSpec{NodeSelector: map[string]string{"foo": "bar"}}}}
+		pinBuildToSingleArchNode(build)
+		if build.Spec.NodeSelector["foo"] != "bar" {
+			t.Error("pinBuildToSingleArchNode replaced the pre-existing node selector instead of merging into it")
+		}
+		if build.Spec.NodeSelector[coreapi.LabelArchStable] != pinnedArch {
+			t.Errorf("pinBuildToSingleArchNode did not set %s=%s", coreapi.LabelArchStable, pinnedArch)
+		}
+	})
 }

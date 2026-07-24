@@ -271,16 +271,14 @@ func (r *reconciler) Reconcile(ctx context.Context, req reconcile.Request) (reco
 
 func (r *reconciler) handleGetProwJobError(ctx context.Context, log *logrus.Entry, ec *ephemeralclusterv1.EphemeralCluster, err error) (reconcile.Result, error) {
 	if apierrors.IsNotFound(err) {
-		finalizers, removed := cislices.Delete(ec.Finalizers, DependentProwJobFinalizer)
-		if removed {
+		if finalizers, removed := cislices.Delete(ec.Finalizers, DependentProwJobFinalizer); removed {
 			log.Info("ProwJob not found, removing the finalizer")
 			ec.Finalizers = finalizers
 			return reconcile.Result{}, r.updateEphemeralCluster(ctx, ec)
 		}
 		return reconcile.Result{}, nil
-	} else {
-		return reconcile.Result{}, fmt.Errorf("get prowjob: %w", err)
 	}
+	return reconcile.Result{}, fmt.Errorf("get prowjob: %w", err)
 }
 
 func (r *reconciler) generateCIOperatorConfig(log *logrus.Entry, ec *ephemeralclusterv1.EphemeralCluster) (*api.ReleaseBuildConfiguration, error) {
@@ -840,8 +838,8 @@ func (r *reconciler) reconcileDeleteEphemeralCluster(ctx context.Context, log *l
 
 	pjId := ec.Status.ProwJobID
 	if pjId == "" {
-		log.Info("ProwJob ID is empty, removing the finalizer")
 		if removeFinalizer() {
+			log.Info("ProwJob ID is empty, removing the finalizer")
 			return reconcile.Result{}, r.updateEphemeralCluster(ctx, ec)
 		}
 		return reconcile.Result{}, nil
@@ -851,8 +849,8 @@ func (r *reconciler) reconcileDeleteEphemeralCluster(ctx context.Context, log *l
 	nn := types.NamespacedName{Namespace: r.prowConfigAgent.Config().ProwJobNamespace, Name: pjId}
 	if err := r.masterClient.Get(ctx, nn, &pj); err != nil {
 		if apierrors.IsNotFound(err) {
-			log.Info("ProwJob not found, removing the finalizer")
 			if removeFinalizer() {
+				log.Info("ProwJob not found, removing the finalizer")
 				return reconcile.Result{}, r.updateEphemeralCluster(ctx, ec)
 			}
 			return reconcile.Result{}, nil
@@ -865,8 +863,8 @@ func (r *reconciler) reconcileDeleteEphemeralCluster(ctx context.Context, log *l
 	log = log.WithField("prowjob_name", pj.Name)
 
 	if isFinalState := r.reportProwJobFinalState(&pj, observedStatus); isFinalState {
-		log.Info("ProwJob in a definitive state already, removing the finalizer")
 		if removeFinalizer() {
+			log.Info("ProwJob in a definitive state, removing the finalizer")
 			return reconcile.Result{}, r.updateEphemeralCluster(ctx, ec)
 		}
 		return reconcile.Result{}, r.updateEphemeralClusterStatus(ctx, ec, observedStatus)

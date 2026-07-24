@@ -111,7 +111,7 @@ func TestReconcileProwJob(t *testing.T) {
 			wantErr: reconcile.TerminalError(errors.New("foo doesn't have the EC label")),
 		},
 		{
-			name: "EphemeralCluster not found, aborting the ProwJob",
+			name: "EphemeralCluster not found, ci-operator NS not found, abort ProwJob",
 			pj: &prowv1.ProwJob{
 				ObjectMeta: metav1.ObjectMeta{
 					Labels: map[string]string{
@@ -140,6 +140,56 @@ func TestReconcileProwJob(t *testing.T) {
 					Description:    AbortECNotFound,
 					CompletionTime: ptr.To(metav1.NewTime(fakeNow)),
 				},
+			},
+		},
+		{
+			name: "EphemeralCluster not found, ProwJob already completed, no-op",
+			pj: &prowv1.ProwJob{
+				ObjectMeta: metav1.ObjectMeta{
+					Labels: map[string]string{
+						EphemeralClusterLabel: "ec",
+					},
+					Name:      "foo",
+					Namespace: "bar",
+				},
+				Spec:   prowv1.ProwJobSpec{Cluster: "build01"},
+				Status: prowv1.ProwJobStatus{State: prowv1.SuccessState},
+			},
+			wantPJ: &prowv1.ProwJob{
+				ObjectMeta: metav1.ObjectMeta{
+					Labels: map[string]string{
+						EphemeralClusterLabel: "ec",
+					},
+					Name:      "foo",
+					Namespace: "bar",
+				},
+				Spec:   prowv1.ProwJobSpec{Cluster: "build01"},
+				Status: prowv1.ProwJobStatus{State: prowv1.SuccessState},
+			},
+		},
+		{
+			name: "EphemeralCluster not found, ProwJob already aborted, no-op",
+			pj: &prowv1.ProwJob{
+				ObjectMeta: metav1.ObjectMeta{
+					Labels: map[string]string{
+						EphemeralClusterLabel: "ec",
+					},
+					Name:      "foo",
+					Namespace: "bar",
+				},
+				Spec:   prowv1.ProwJobSpec{Cluster: "build01"},
+				Status: prowv1.ProwJobStatus{State: prowv1.AbortedState},
+			},
+			wantPJ: &prowv1.ProwJob{
+				ObjectMeta: metav1.ObjectMeta{
+					Labels: map[string]string{
+						EphemeralClusterLabel: "ec",
+					},
+					Name:      "foo",
+					Namespace: "bar",
+				},
+				Spec:   prowv1.ProwJobSpec{Cluster: "build01"},
+				Status: prowv1.ProwJobStatus{State: prowv1.AbortedState},
 			},
 		},
 		{

@@ -1587,16 +1587,18 @@ func TestDeleteProwJob(t *testing.T) {
 	const pollingTime = 5
 
 	for _, tc := range []struct {
-		name    string
-		ec      *ephemeralclusterv1.EphemeralCluster
-		pj      *prowv1.ProwJob
-		wantEC  *ephemeralclusterv1.EphemeralCluster
-		wantPJ  *prowv1.ProwJob
-		wantRes reconcile.Result
-		wantErr error
+		name         string
+		ec           *ephemeralclusterv1.EphemeralCluster
+		pj           *prowv1.ProwJob
+		buildClients func() map[string]*ctrlruntimetest.FakeClient
+		wantEC       *ephemeralclusterv1.EphemeralCluster
+		wantPJ       *prowv1.ProwJob
+		wantSecret   *corev1.Secret
+		wantRes      reconcile.Result
+		wantErr      error
 	}{
 		{
-			name: "Delete EC: abort the ProwJob",
+			name: "Delete EC: signal test completion to allow teardown",
 			ec: &ephemeralclusterv1.EphemeralCluster{
 				ObjectMeta: metav1.ObjectMeta{
 					Name:              "foo",
@@ -1610,6 +1612,19 @@ func TestDeleteProwJob(t *testing.T) {
 			},
 			pj: &prowv1.ProwJob{
 				ObjectMeta: metav1.ObjectMeta{Name: "pj-123", Namespace: prowJobNamespace},
+				Spec:       prowv1.ProwJobSpec{Cluster: "build01"},
+			},
+			buildClients: func() map[string]*ctrlruntimetest.FakeClient {
+				objs := []ctrlclient.Object{&corev1.Namespace{
+					ObjectMeta: metav1.ObjectMeta{
+						Labels: map[string]string{steps.LabelJobID: "pj-123"},
+						Name:   "ci-op-1234",
+					},
+				}}
+				c := fake.NewClientBuilder().WithObjects(objs...).WithScheme(scheme).Build()
+				return map[string]*ctrlruntimetest.FakeClient{
+					"build01": ctrlruntimetest.NewFakeClient(c, scheme, ctrlruntimetest.WithInitObjects(objs...)),
+				}
 			},
 			wantEC: &ephemeralclusterv1.EphemeralCluster{
 				ObjectMeta: metav1.ObjectMeta{
@@ -1624,10 +1639,106 @@ func TestDeleteProwJob(t *testing.T) {
 			},
 			wantPJ: &prowv1.ProwJob{
 				ObjectMeta: metav1.ObjectMeta{Name: "pj-123", Namespace: prowJobNamespace},
+				Spec:       prowv1.ProwJobSpec{Cluster: "build01"},
+			},
+			wantSecret: &corev1.Secret{
+				ObjectMeta: metav1.ObjectMeta{
+					Name:      api.EphemeralClusterTestDoneSignalSecretName,
+					Namespace: "ci-op-1234",
+				},
+			},
+			wantRes: reconcile.Result{RequeueAfter: pollingTime},
+		},
+		{
+			name: "Delete EC: ci-operator NS not found yet, abort ProwJob and remove finalizer",
+			ec: &ephemeralclusterv1.EphemeralCluster{
+				ObjectMeta: metav1.ObjectMeta{
+					Name:              "foo",
+					Namespace:         "bar",
+					DeletionTimestamp: ptr.To(metav1.NewTime(fakeNow)),
+					Finalizers:        []string{DependentProwJobFinalizer},
+				},
+				Status: ephemeralclusterv1.EphemeralClusterStatus{
+					ProwJobID: "pj-123",
+				},
+			},
+			pj: &prowv1.ProwJob{
+				ObjectMeta: metav1.ObjectMeta{Name: "pj-123", Namespace: prowJobNamespace},
+				Spec:       prowv1.ProwJobSpec{Cluster: "build01"},
+			},
+			buildClients: func() map[string]*ctrlruntimetest.FakeClient {
+				c := fake.NewClientBuilder().WithScheme(scheme).Build()
+				return map[string]*ctrlruntimetest.FakeClient{
+					"build01": ctrlruntimetest.NewFakeClient(c, scheme),
+				}
+			},
+			wantPJ: &prowv1.ProwJob{
+				ObjectMeta: metav1.ObjectMeta{Name: "pj-123", Namespace: prowJobNamespace},
+				Spec:       prowv1.ProwJobSpec{Cluster: "build01"},
 				Status: prowv1.ProwJobStatus{
 					State:          prowv1.AbortedState,
-					Description:    AbortProwJobDeleteEC,
+					Description:    "ci-operator namespace not found, no cloud resources to deprovision",
 					CompletionTime: ptr.To(metav1.NewTime(fakeNow)),
+				},
+			},
+			wantRes: reconcile.Result{},
+		},
+		{
+			name: "Delete EC: test-done-signal secret already exists",
+			ec: &ephemeralclusterv1.EphemeralCluster{
+				ObjectMeta: metav1.ObjectMeta{
+					Name:              "foo",
+					Namespace:         "bar",
+					DeletionTimestamp: ptr.To(metav1.NewTime(fakeNow)),
+					Finalizers:        []string{DependentProwJobFinalizer},
+				},
+				Status: ephemeralclusterv1.EphemeralClusterStatus{
+					ProwJobID: "pj-123",
+				},
+			},
+			pj: &prowv1.ProwJob{
+				ObjectMeta: metav1.ObjectMeta{Name: "pj-123", Namespace: prowJobNamespace},
+				Spec:       prowv1.ProwJobSpec{Cluster: "build01"},
+			},
+			buildClients: func() map[string]*ctrlruntimetest.FakeClient {
+				objs := []ctrlclient.Object{
+					&corev1.Namespace{
+						ObjectMeta: metav1.ObjectMeta{
+							Labels: map[string]string{steps.LabelJobID: "pj-123"},
+							Name:   "ci-op-1234",
+						},
+					},
+					&corev1.Secret{
+						ObjectMeta: metav1.ObjectMeta{
+							Name:      api.EphemeralClusterTestDoneSignalSecretName,
+							Namespace: "ci-op-1234",
+						},
+					},
+				}
+				c := fake.NewClientBuilder().WithObjects(objs...).WithScheme(scheme).Build()
+				return map[string]*ctrlruntimetest.FakeClient{
+					"build01": ctrlruntimetest.NewFakeClient(c, scheme, ctrlruntimetest.WithInitObjects(objs...)),
+				}
+			},
+			wantEC: &ephemeralclusterv1.EphemeralCluster{
+				ObjectMeta: metav1.ObjectMeta{
+					Name:              "foo",
+					Namespace:         "bar",
+					DeletionTimestamp: ptr.To(metav1.NewTime(fakeNow)),
+					Finalizers:        []string{DependentProwJobFinalizer},
+				},
+				Status: ephemeralclusterv1.EphemeralClusterStatus{
+					ProwJobID: "pj-123",
+				},
+			},
+			wantPJ: &prowv1.ProwJob{
+				ObjectMeta: metav1.ObjectMeta{Name: "pj-123", Namespace: prowJobNamespace},
+				Spec:       prowv1.ProwJobSpec{Cluster: "build01"},
+			},
+			wantSecret: &corev1.Secret{
+				ObjectMeta: metav1.ObjectMeta{
+					Name:      api.EphemeralClusterTestDoneSignalSecretName,
+					Namespace: "ci-op-1234",
 				},
 			},
 			wantRes: reconcile.Result{RequeueAfter: pollingTime},
@@ -1668,6 +1779,32 @@ func TestDeleteProwJob(t *testing.T) {
 			},
 			wantRes: reconcile.Result{},
 		},
+		{
+			name: "Delete EC: build client not found, abort ProwJob and remove finalizer",
+			ec: &ephemeralclusterv1.EphemeralCluster{
+				ObjectMeta: metav1.ObjectMeta{
+					Name:              "foo",
+					Namespace:         "bar",
+					DeletionTimestamp: ptr.To(metav1.NewTime(fakeNow)),
+					Finalizers:        []string{DependentProwJobFinalizer},
+				},
+				Status: ephemeralclusterv1.EphemeralClusterStatus{ProwJobID: "pj-123"},
+			},
+			pj: &prowv1.ProwJob{
+				ObjectMeta: metav1.ObjectMeta{Name: "pj-123", Namespace: prowJobNamespace},
+				Spec:       prowv1.ProwJobSpec{Cluster: "unknown-cluster"},
+			},
+			wantPJ: &prowv1.ProwJob{
+				ObjectMeta: metav1.ObjectMeta{Name: "pj-123", Namespace: prowJobNamespace},
+				Spec:       prowv1.ProwJobSpec{Cluster: "unknown-cluster"},
+				Status: prowv1.ProwJobStatus{
+					State:          prowv1.AbortedState,
+					Description:    "Build client not found",
+					CompletionTime: ptr.To(metav1.NewTime(fakeNow)),
+				},
+			},
+			wantRes: reconcile.Result{},
+		},
 	} {
 		t.Run(tc.name, func(t *testing.T) {
 			t.Parallel()
@@ -1683,10 +1820,19 @@ func TestDeleteProwJob(t *testing.T) {
 
 			client := bldr.Build()
 
+			clients := make(map[string]ctrlclient.Client)
+			var fakeClients map[string]*ctrlruntimetest.FakeClient
+			if tc.buildClients != nil {
+				fakeClients = tc.buildClients()
+				for cluster, c := range fakeClients {
+					clients[cluster] = c.WithWatch
+				}
+			}
+
 			r := reconciler{
 				logger:       logrus.NewEntry(logrus.StandardLogger()),
 				masterClient: client,
-				buildClients: map[string]ctrlclient.Client{},
+				buildClients: clients,
 				now:          func() time.Time { return fakeNow },
 				polling:      func() time.Duration { return pollingTime },
 				prowConfigAgent: prowConfigAgent(&prowconfig.Config{
@@ -1726,7 +1872,7 @@ func TestDeleteProwJob(t *testing.T) {
 			if tc.wantPJ != nil {
 				gotPJ := prowv1.ProwJob{}
 				if err := client.Get(context.TODO(), types.NamespacedName{Namespace: tc.wantPJ.Namespace, Name: tc.wantPJ.Name}, &gotPJ); err != nil {
-					t.Errorf("unexpected get ephemeralcluster error: %s", err)
+					t.Errorf("unexpected get prowjob error: %s", err)
 				}
 
 				ignoreFields := cmpopts.IgnoreFields(prowv1.ProwJob{}, "ResourceVersion")
@@ -1742,6 +1888,25 @@ func TestDeleteProwJob(t *testing.T) {
 
 				if len(pjList.Items) > 0 {
 					t.Error("prowjob has not been deleted")
+				}
+			}
+
+			if tc.wantSecret != nil && tc.pj != nil && fakeClients != nil {
+				buildClient := fakeClients[tc.pj.Spec.Cluster]
+				gotSecrets := &corev1.SecretList{}
+				if err := buildClient.WithWatch.List(context.TODO(), gotSecrets, ctrlclient.InNamespace(tc.wantSecret.Namespace)); err != nil {
+					t.Errorf("list secrets: %s", err)
+				}
+
+				found := false
+				for _, s := range gotSecrets.Items {
+					if s.Name == tc.wantSecret.Name {
+						found = true
+						break
+					}
+				}
+				if !found {
+					t.Errorf("expected secret %s/%s not found", tc.wantSecret.Namespace, tc.wantSecret.Name)
 				}
 			}
 		})

@@ -8,7 +8,6 @@ import (
 
 	"github.com/sirupsen/logrus"
 
-	corev1 "k8s.io/api/core/v1"
 	apierrors "k8s.io/apimachinery/pkg/api/errors"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/apimachinery/pkg/types"
@@ -23,7 +22,6 @@ import (
 
 	"github.com/openshift/ci-tools/pkg/api"
 	ephemeralclusterv1 "github.com/openshift/ci-tools/pkg/api/ephemeralcluster/v1"
-	"github.com/openshift/ci-tools/pkg/steps"
 )
 
 const (
@@ -90,6 +88,12 @@ func (r *prowJobReconciler) Reconcile(ctx context.Context, req reconcile.Request
 		return reconcile.Result{}, err
 	}
 
+	switch pj.Status.State {
+	case prowv1.AbortedState, prowv1.ErrorState, prowv1.FailureState, prowv1.SuccessState:
+		log.Info("ProwJob already in a terminal state, nothing to do")
+		return reconcile.Result{}, nil
+	}
+
 	return r.gracefullyTerminateClusterProvisioning(ctx, log, pj)
 }
 
@@ -110,7 +114,7 @@ func (r *prowJobReconciler) gracefullyTerminateClusterProvisioning(ctx context.C
 		return reconcile.Result{}, reconcile.TerminalError(err)
 	}
 
-	ns, err := r.findCIOperatorTestNS(ctx, buildClient, pj)
+	ns, err := findCIOperatorTestNS(ctx, buildClient, pj)
 	if err != nil {
 		log.WithError(err).Error("Unable to retrieve ci-operator namespace")
 		return reconcile.Result{}, err
@@ -125,15 +129,12 @@ func (r *prowJobReconciler) gracefullyTerminateClusterProvisioning(ctx context.C
 	log.Info("ci-operator namespace found")
 
 	log = log.WithField("secret", api.EphemeralClusterTestDoneSignalSecretName)
-	if err := buildClient.Create(ctx, &corev1.Secret{ObjectMeta: metav1.ObjectMeta{
-		Name:      api.EphemeralClusterTestDoneSignalSecretName,
-		Namespace: ns,
-	}}); err != nil {
-		if !apierrors.IsAlreadyExists(err) {
-			log.WithError(err).Warn("Failed to create the secret")
-			return reconcile.Result{}, err
-		}
-	} else {
+	created, err := createTestDoneSignalSecret(ctx, buildClient, ns)
+	if err != nil {
+		log.WithError(err).Warn("Failed to create the secret")
+		return reconcile.Result{}, err
+	}
+	if created {
 		log.Info("Secret created")
 	}
 
@@ -154,17 +155,4 @@ func (r *prowJobReconciler) abortProwJob(ctx context.Context, pj *prowv1.ProwJob
 	}
 
 	return reconcile.Result{}, nil
-}
-
-func (r *prowJobReconciler) findCIOperatorTestNS(ctx context.Context, buildClient ctrlruntimeclient.Client, pj *prowv1.ProwJob) (string, error) {
-	nss := corev1.NamespaceList{}
-	if err := buildClient.List(ctx, &nss, ctrlruntimeclient.MatchingLabels{steps.LabelJobID: pj.Name}); err != nil {
-		return "", fmt.Errorf("get namespace for %s: %w", pj.Name, err)
-	}
-
-	if len(nss.Items) == 0 {
-		return "", nil
-	}
-
-	return nss.Items[0].Name, nil
 }

@@ -104,6 +104,11 @@ func (r *prowJobReconciler) Reconcile(ctx context.Context, req reconcile.Request
 // On the other hand, if ci-operator has not even created a namespace, abort the ProwJob right away since no
 // cloud resources has been created so far.
 func (r *prowJobReconciler) gracefullyTerminateClusterProvisioning(ctx context.Context, log *logrus.Entry, pj *prowv1.ProwJob) (reconcile.Result, error) {
+	if pjInAFinalState(pj) {
+		log.WithField("pj_state", pj.Status.State).Info("ProwJob in a final state, skipping graceful termination")
+		return reconcile.Result{}, nil
+	}
+
 	buildClient, err := r.buildClients.forCluster(pj.Spec.Cluster)
 	if err != nil {
 		log.WithField("cluster", pj.Spec.Cluster).WithError(err).Warn("Build client not found")
@@ -167,4 +172,15 @@ func (r *prowJobReconciler) findCIOperatorTestNS(ctx context.Context, buildClien
 	}
 
 	return nss.Items[0].Name, nil
+}
+
+func pjInAFinalState(pj *prowv1.ProwJob) bool {
+	switch pj.Status.State {
+	case prowv1.AbortedState:
+	case prowv1.ErrorState:
+	case prowv1.FailureState:
+	case prowv1.SuccessState:
+		return true
+	}
+	return false
 }

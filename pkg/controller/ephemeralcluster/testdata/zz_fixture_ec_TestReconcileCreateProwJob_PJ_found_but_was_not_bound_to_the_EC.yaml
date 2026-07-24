@@ -3,13 +3,15 @@ metadata:
     ephemeralcluster.ci.openshift.io/konflux-cluster: kcluster
     ephemeralcluster.ci.openshift.io/konflux-tenant: ktenant
   creationTimestamp: null
+  finalizers:
+  - ephemeralcluster.ci.openshift.io/dependent-prowjob
   name: ec
   namespace: ns
-  resourceVersion: "1000"
+  resourceVersion: "1001"
 spec:
   ciOperator:
     test:
       clusterProfile: aws
 status:
-  phase: ""
+  phase: Provisioning
   prowJobId: pj

@@ -52,7 +52,6 @@ const (
 	EphemeralClusterTestName  = "cluster-provisioning"
 	EphemeralClusterLabel     = "ci.openshift.io/ephemeral-cluster"
 	EphemeralClusterNamespace = "ephemeral-cluster"
-	AbortProwJobDeleteEC      = "Ephemeral Cluster deleted"
 	DependentProwJobFinalizer = "ephemeralcluster.ci.openshift.io/dependent-prowjob"
 	UnresolvedConfigVar       = "UNRESOLVED_CONFIG"
 	ProwJobCreatingDoneReason = "ProwJob has been properly created"
@@ -588,8 +587,13 @@ func (r *reconciler) fetchSecrets(ctx context.Context, log *logrus.Entry, ec *ep
 		return reconcile.TerminalError(err)
 	}
 
-	ns, err := r.findCIOperatorTestNS(ctx, buildClient, pj)
+	ns, err := findCIOperatorTestNS(ctx, buildClient, pj)
 	if err != nil {
+		log.WithError(err).Error("Unable to retrieve ci-operator namespace")
+		upsertCondition(ecStatus, ephemeralclusterv1.ClusterReady, ephemeralclusterv1.ConditionFalse, r.now(), ephemeralclusterv1.SecretsFetchFailureReason, err.Error())
+		return err
+	}
+	if ns == "" {
 		upsertCondition(ecStatus, ephemeralclusterv1.ClusterReady, ephemeralclusterv1.ConditionFalse, r.now(), ephemeralclusterv1.SecretsFetchFailureReason, ephemeralclusterv1.CIOperatorNSNotFoundMsg)
 		if !hasCondition(oldStatus, ephemeralclusterv1.ClusterReady, ephemeralclusterv1.ConditionFalse, r.now(), ephemeralclusterv1.SecretsFetchFailureReason, ephemeralclusterv1.CIOperatorNSNotFoundMsg) {
 			log.Info("Fetching cluster credentials but ci-operator NS didn't show up yet")
@@ -855,26 +859,55 @@ func (r *reconciler) deleteEphemeralCluster(ctx context.Context, log *logrus.Ent
 		return removeFinalizer()
 	}
 
-	log.Info("Ephemeral Cluster is being deleted, aborting the ProwJob")
-	return r.abortProwJob(ctx, log, &pj, AbortProwJobDeleteEC)
-}
+	log.Info("Ephemeral Cluster is being deleted, signaling test completion to allow teardown")
 
-func (r *reconciler) abortProwJob(ctx context.Context, log *logrus.Entry, pj *prowv1.ProwJob, reason string) (reconcile.Result, error) {
-	if pj.Status.State == prowv1.AbortedState {
-		log.Info("ProwJob aborted already, skipping")
-		return reconcile.Result{}, nil
+	buildClient, err := r.buildClients.forCluster(pj.Spec.Cluster)
+	if err != nil {
+		log.WithField("cluster", pj.Spec.Cluster).WithError(err).Warn("Build client not found")
+		if err := r.abortProwJob(ctx, log, &pj, "Build client not found"); err != nil {
+			return reconcile.Result{}, err
+		}
+		return removeFinalizer()
 	}
 
+	ns, findErr := findCIOperatorTestNS(ctx, buildClient, &pj)
+	if findErr != nil {
+		log.WithError(findErr).Error("Unable to retrieve ci-operator namespace")
+		return reconcile.Result{}, findErr
+	}
+
+	if ns == "" {
+		if err := r.abortProwJob(ctx, log, &pj, "ci-operator namespace not found, no cloud resources to deprovision"); err != nil {
+			return reconcile.Result{}, err
+		}
+		return removeFinalizer()
+	}
+
+	log = log.WithField("namespace", ns).WithField("secret", api.EphemeralClusterTestDoneSignalSecretName)
+	created, err := createTestDoneSignalSecret(ctx, buildClient, ns)
+	if err != nil {
+		log.WithError(err).Warn("Failed to create the test-done-signal secret")
+		return reconcile.Result{}, err
+	}
+	if created {
+		log.Info("Test-done-signal secret created")
+	}
+
+	return reconcile.Result{RequeueAfter: r.polling()}, nil
+}
+
+func (r *reconciler) abortProwJob(ctx context.Context, log *logrus.Entry, pj *prowv1.ProwJob, reason string) error {
+	if pj.Status.State == prowv1.AbortedState {
+		return nil
+	}
+	log.WithField("reason", reason).Info("Aborting ProwJob")
 	pj.Status.State = prowv1.AbortedState
 	pj.Status.Description = reason
 	pj.Status.CompletionTime = ptr.To(metav1.NewTime(r.now()))
-
 	if err := r.masterClient.Update(ctx, pj); err != nil {
-		return reconcile.Result{}, fmt.Errorf("abort prowjob: %w", err)
+		return fmt.Errorf("abort prowjob: %w", err)
 	}
-	log.Info("ProwJob aborted")
-
-	return reconcile.Result{RequeueAfter: r.polling()}, nil
+	return nil
 }
 
 func (r *reconciler) notifyTestComplete(ctx context.Context, log *logrus.Entry, oldECStatus, ecStatus *ephemeralclusterv1.EphemeralClusterStatus, pj *prowv1.ProwJob) error {
@@ -888,8 +921,14 @@ func (r *reconciler) notifyTestComplete(ctx context.Context, log *logrus.Entry, 
 		return reconcile.TerminalError(err)
 	}
 
-	ns, err := r.findCIOperatorTestNS(ctx, buildClient, pj)
+	ns, err := findCIOperatorTestNS(ctx, buildClient, pj)
 	if err != nil {
+		log.WithError(err).Error("Unable to retrieve ci-operator namespace")
+		upsertCondition(ecStatus, ephemeralclusterv1.TestCompleted, ephemeralclusterv1.ConditionFalse, r.now(), ephemeralclusterv1.CreateTestCompletedSecretFailureReason, err.Error())
+		ecStatus.Phase = ephemeralclusterv1.EphemeralClusterFailed
+		return err
+	}
+	if ns == "" {
 		upsertCondition(ecStatus, ephemeralclusterv1.TestCompleted, ephemeralclusterv1.ConditionFalse, r.now(), ephemeralclusterv1.CreateTestCompletedSecretFailureReason, ephemeralclusterv1.CIOperatorNSNotFoundMsg)
 		ecStatus.Phase = ephemeralclusterv1.EphemeralClusterFailed
 		return nil
@@ -897,15 +936,10 @@ func (r *reconciler) notifyTestComplete(ctx context.Context, log *logrus.Entry, 
 
 	log = log.WithField("namespace", ns).WithField("secret", api.EphemeralClusterTestDoneSignalSecretName)
 
-	if err := buildClient.Create(ctx, &corev1.Secret{ObjectMeta: metav1.ObjectMeta{
-		Name:      api.EphemeralClusterTestDoneSignalSecretName,
-		Namespace: ns,
-	}}); err != nil {
-		if !apierrors.IsAlreadyExists(err) {
-			log.WithError(err).Warn("Failed to create the secret")
-			upsertCondition(ecStatus, ephemeralclusterv1.TestCompleted, ephemeralclusterv1.ConditionFalse, r.now(), ephemeralclusterv1.CreateTestCompletedSecretFailureReason, err.Error())
-			return err
-		}
+	if _, err := createTestDoneSignalSecret(ctx, buildClient, ns); err != nil {
+		log.WithError(err).Warn("Failed to create the secret")
+		upsertCondition(ecStatus, ephemeralclusterv1.TestCompleted, ephemeralclusterv1.ConditionFalse, r.now(), ephemeralclusterv1.CreateTestCompletedSecretFailureReason, err.Error())
+		return err
 	}
 
 	upsertCondition(ecStatus, ephemeralclusterv1.TestCompleted, ephemeralclusterv1.ConditionTrue, r.now(), "", "")
@@ -916,18 +950,31 @@ func (r *reconciler) notifyTestComplete(ctx context.Context, log *logrus.Entry, 
 	return nil
 }
 
-func (r *reconciler) findCIOperatorTestNS(ctx context.Context, buildClient ctrlruntimeclient.Client, pj *prowv1.ProwJob) (string, error) {
+func findCIOperatorTestNS(ctx context.Context, buildClient ctrlruntimeclient.Client, pj *prowv1.ProwJob) (string, error) {
 	nss := corev1.NamespaceList{}
 	if err := buildClient.List(ctx, &nss, ctrlruntimeclient.MatchingLabels{steps.LabelJobID: pj.Name}); err != nil {
 		return "", fmt.Errorf("get namespace for %s: %w", pj.Name, err)
 	}
 
-	// The NS hasn't been created yet, requeuing.
+	// The NS hasn't been created yet.
 	if len(nss.Items) == 0 {
-		return "", errors.New("ci-operator NS not found")
+		return "", nil
 	}
 
 	return nss.Items[0].Name, nil
+}
+
+func createTestDoneSignalSecret(ctx context.Context, buildClient ctrlruntimeclient.Client, ns string) (bool, error) {
+	if err := buildClient.Create(ctx, &corev1.Secret{ObjectMeta: metav1.ObjectMeta{
+		Name:      api.EphemeralClusterTestDoneSignalSecretName,
+		Namespace: ns,
+	}}); err != nil {
+		if apierrors.IsAlreadyExists(err) {
+			return false, nil
+		}
+		return false, err
+	}
+	return true, nil
 }
 
 func upsertCondition(ecStatus *ephemeralclusterv1.EphemeralClusterStatus, t ephemeralclusterv1.EphemeralClusterConditionType, status ephemeralclusterv1.ConditionStatus, now time.Time, reason, msg string) {

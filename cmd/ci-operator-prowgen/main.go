@@ -8,6 +8,7 @@ import (
 	"path/filepath"
 	"strings"
 
+	"sigs.k8s.io/yaml"
 	"github.com/sirupsen/logrus"
 
 	prowconfig "sigs.k8s.io/prow/pkg/config"
@@ -21,6 +22,7 @@ import (
 	"github.com/openshift/ci-tools/pkg/prowgen"
 	"github.com/openshift/ci-tools/pkg/registry"
 	"github.com/openshift/ci-tools/pkg/util"
+	"github.com/openshift/ci-tools/pkg/util/gzip"
 )
 
 type options struct {
@@ -28,6 +30,7 @@ type options struct {
 
 	fromDir         string
 	fromReleaseRepo bool
+	fromFile        string
 
 	toDir         string
 	toReleaseRepo bool
@@ -45,6 +48,7 @@ func bindOptions(flag *flag.FlagSet) *options {
 
 	flag.StringVar(&opt.fromDir, "from-dir", "", "Path to a directory with a directory structure holding ci-operator configuration files for multiple components")
 	flag.BoolVar(&opt.fromReleaseRepo, "from-release-repo", false, "If set, it behaves like --from-dir=$GOPATH/src/github.com/openshift/release/ci-operator/config")
+	flag.StringVar(&opt.fromFile, "from-file", "", "Path to a single ci-operator configuration file (metadata is read from zz_generated_metadata in the file)")
 
 	flag.StringVar(&opt.toDir, "to-dir", "", "Path to a directory with a directory structure holding Prow job configuration files for multiple components")
 	flag.BoolVar(&opt.toReleaseRepo, "to-release-repo", false, "If set, it behaves like --to-dir=$GOPATH/src/github.com/openshift/release/ci-operator/jobs")
@@ -75,21 +79,27 @@ func (o *options) process() error {
 		}
 	}
 
-	if o.fromDir == "" {
-		return fmt.Errorf("ci-operator-prowgen needs exactly one of `--from-{dir,release-repo}` options")
+	if o.fromFile == "" && o.fromDir == "" {
+		return fmt.Errorf("ci-operator-prowgen needs exactly one of `--from-{dir,release-repo,file}` options")
+	}
+
+	if o.fromFile != "" && o.fromDir != "" {
+		return fmt.Errorf("ci-operator-prowgen accepts only one of `--from-{dir,release-repo}` and `--from-file` options")
 	}
 
 	if o.toDir == "" {
 		return fmt.Errorf("ci-operator-prowgen needs exactly one of `--to-{dir,release-repo}` options")
 	}
 
-	// TODO: deprecate --from-dir
-	o.ConfigDir = o.fromDir
-	if err := o.Options.Validate(); err != nil {
-		return fmt.Errorf("failed to validate config options: %w", err)
-	}
-	if err := o.Options.Complete(); err != nil {
-		return fmt.Errorf("failed to complete config options: %w", err)
+	if o.fromFile == "" {
+		// TODO: deprecate --from-dir
+		o.ConfigDir = o.fromDir
+		if err := o.Options.Validate(); err != nil {
+			return fmt.Errorf("failed to validate config options: %w", err)
+		}
+		if err := o.Options.Complete(); err != nil {
+			return fmt.Errorf("failed to complete config options: %w", err)
+		}
 	}
 	if o.registryPath != "" {
 		refs, chains, workflows, clusterProfiles, _, _, observers, err := load.Registry(o.registryPath, load.RegistryFlag(0))
@@ -98,6 +108,46 @@ func (o *options) process() error {
 		}
 		o.resolver = registry.NewResolver(refs, chains, workflows, observers, clusterProfiles)
 	}
+	return nil
+}
+
+func (o *options) generateJobsFromFile() error {
+	logrus.Infof("Reading config from %s", o.fromFile)
+	data, err := gzip.ReadFileMaybeGZIP(o.fromFile)
+	if err != nil {
+		return fmt.Errorf("failed to read config file: %w", err)
+	}
+	var configSpec cioperatorapi.ReleaseBuildConfiguration
+	if err := yaml.Unmarshal(data, &configSpec); err != nil {
+		return fmt.Errorf("failed to unmarshal config: %w", err)
+	}
+	info := configSpec.Metadata
+	if info.Org == "" || info.Repo == "" || info.Branch == "" {
+		return fmt.Errorf("zz_generated_metadata in %s must specify org, repo, and branch", o.fromFile)
+	}
+	logrus.Infof("Loaded config for %s/%s@%s", info.Org, info.Repo, info.Branch)
+	if o.resolver != nil {
+		resolved, err := registry.ResolveConfig(o.resolver, configSpec)
+		if err != nil {
+			return fmt.Errorf("failed to resolve configuration: %w", err)
+		}
+		configSpec = resolved
+	}
+	configSpec.UnresolvedConfigPath = o.fromFile
+	generated, err := prowgen.GenerateJobs(&configSpec, &info)
+	if err != nil {
+		return err
+	}
+	orgRepo := fmt.Sprintf("%s/%s", info.Org, info.Repo)
+	logrus.Infof("Generated %d presubmits, %d postsubmits, %d periodics",
+		len(generated.PresubmitsStatic[orgRepo]),
+		len(generated.PostsubmitsStatic[orgRepo]),
+		len(generated.Periodics))
+	logrus.Infof("Writing jobs to %s/%s/%s", o.toDir, info.Org, info.Repo)
+	if err := jc.WriteBranchToDir(o.toDir, info.Org, info.Repo, generated, prowgen.Generator); err != nil {
+		return err
+	}
+	logrus.Info("Done")
 	return nil
 }
 
@@ -207,15 +257,22 @@ func main() {
 		logrus.WithError(err).Fatal("Failed to process arguments")
 	}
 
-	args := flagSet.Args()
-	if len(args) == 0 {
-		args = append(args, "")
-	}
-	logger := logrus.WithFields(logrus.Fields{"target": opt.toDir, "source": opt.fromDir})
-	for _, subDir := range args {
-		logger = logger.WithFields(logrus.Fields{"subdir": subDir})
-		if err := opt.generateJobsToDir(subDir); err != nil {
-			logger.WithError(err).Fatal("Failed to generate jobs")
+	if opt.fromFile != "" {
+		logger := logrus.WithFields(logrus.Fields{"target": opt.toDir, "source": opt.fromFile})
+		if err := opt.generateJobsFromFile(); err != nil {
+			logger.WithError(err).Fatal("Failed to generate jobs from file")
+		}
+	} else {
+		args := flagSet.Args()
+		if len(args) == 0 {
+			args = append(args, "")
+		}
+		logger := logrus.WithFields(logrus.Fields{"target": opt.toDir, "source": opt.fromDir})
+		for _, subDir := range args {
+			logger = logger.WithFields(logrus.Fields{"subdir": subDir})
+			if err := opt.generateJobsToDir(subDir); err != nil {
+				logger.WithError(err).Fatal("Failed to generate jobs")
+			}
 		}
 	}
 }

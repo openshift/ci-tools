@@ -371,6 +371,63 @@ func WriteToDir(jobDir, org, repo string, jobConfig *prowconfig.JobConfig, gener
 	return nil
 }
 
+// WriteBranchToDir writes only the files for branches present in the given
+// jobConfig, without touching files for other branches. This is used by
+// --from-file mode where prowgen generates jobs for a single branch and
+// must not prune jobs from other branches.
+func WriteBranchToDir(jobDir, org, repo string, jobConfig *prowconfig.JobConfig, generator Generator) error {
+	files := map[string]*prowconfig.JobConfig{}
+	key := fmt.Sprintf("%s/%s", org, repo)
+	for _, job := range jobConfig.PresubmitsStatic[key] {
+		job.Labels[LabelGenerator] = string(generator)
+		branch := "main"
+		if len(job.Branches) > 0 {
+			branch = MakeRegexFilenameLabel(job.Branches[0])
+		}
+		file := fmt.Sprintf("%s-%s-%s-presubmits.yaml", org, repo, branch)
+		if _, ok := files[file]; !ok {
+			files[file] = &prowconfig.JobConfig{PresubmitsStatic: map[string][]prowconfig.Presubmit{}}
+		}
+		files[file].PresubmitsStatic[key] = append(files[file].PresubmitsStatic[key], job)
+	}
+	for _, job := range jobConfig.PostsubmitsStatic[key] {
+		job.Labels[LabelGenerator] = string(generator)
+		branch := "main"
+		if len(job.Branches) > 0 {
+			branch = MakeRegexFilenameLabel(job.Branches[0])
+		}
+		file := fmt.Sprintf("%s-%s-%s-postsubmits.yaml", org, repo, branch)
+		if _, ok := files[file]; !ok {
+			files[file] = &prowconfig.JobConfig{PostsubmitsStatic: map[string][]prowconfig.Postsubmit{}}
+		}
+		files[file].PostsubmitsStatic[key] = append(files[file].PostsubmitsStatic[key], job)
+	}
+	for _, job := range jobConfig.Periodics {
+		if len(job.ExtraRefs) == 0 || job.ExtraRefs[0].Org != org || job.ExtraRefs[0].Repo != repo {
+			continue
+		}
+		job.Labels[LabelGenerator] = string(generator)
+		branch := MakeRegexFilenameLabel(job.ExtraRefs[0].BaseRef)
+		file := fmt.Sprintf("%s-%s-%s-periodics.yaml", org, repo, branch)
+		if _, ok := files[file]; !ok {
+			files[file] = &prowconfig.JobConfig{}
+		}
+		files[file].Periodics = append(files[file].Periodics, job)
+	}
+
+	jobDirForComponent := filepath.Join(jobDir, org, repo)
+	if err := os.MkdirAll(jobDirForComponent, os.ModePerm); err != nil {
+		return err
+	}
+	for file, jc := range files {
+		sortConfigFields(jc)
+		if err := WriteToFileAtomic(filepath.Join(jobDirForComponent, file), jc); err != nil {
+			return err
+		}
+	}
+	return nil
+}
+
 // Given two JobConfig, merge jobs from the `source` one to `destination`
 // one. Jobs are matched by name. All jobs from `source` will be present in
 // `destination` - if there were jobs with the same name in `destination`, they
@@ -606,6 +663,29 @@ func WriteToFile(path string, jobConfig *prowconfig.JobConfig) error {
 		return err
 	}
 
+	return nil
+}
+
+func WriteToFileAtomic(path string, jobConfig *prowconfig.JobConfig) error {
+	dir := filepath.Dir(path)
+	tmp, err := os.CreateTemp(dir, ".tmp-jobconfig-*")
+	if err != nil {
+		return fmt.Errorf("failed to create temp file: %w", err)
+	}
+	tmpPath := tmp.Name()
+	tmp.Close()
+	if err := WriteToFile(tmpPath, jobConfig); err != nil {
+		os.Remove(tmpPath)
+		return err
+	}
+	if err := os.Chmod(tmpPath, 0664); err != nil {
+		os.Remove(tmpPath)
+		return err
+	}
+	if err := os.Rename(tmpPath, path); err != nil {
+		os.Remove(tmpPath)
+		return err
+	}
 	return nil
 }
 

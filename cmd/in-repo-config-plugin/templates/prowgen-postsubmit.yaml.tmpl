@@ -1,0 +1,27 @@
+name: branch-ci-{{.Org}}-{{.Repo}}-{{.Branch}}-prowgen
+agent: kubernetes
+labels:
+  ci.openshift.io/generator: in-repo-config
+max_concurrency: 1
+decorate: true
+branches:
+  - '{{.BranchRegex}}'
+spec:
+  containers:
+    - name: prowgen
+      image: {{.ProwgenImage}}
+      command: ["ci-operator-prowgen"]
+      args:
+{{- if .UseDir}}
+        - "--from-dir={{.ConfigDirPath}}"
+{{- else}}
+        - "--from-file={{.ConfigFilePath}}"
+{{- end}}
+        - "--to-dir=/etc/jobs"
+      volumeMounts:
+        - name: job-configs
+          mountPath: /etc/jobs
+  volumes:
+    - name: job-configs
+      persistentVolumeClaim:
+        claimName: job-configs-nfs

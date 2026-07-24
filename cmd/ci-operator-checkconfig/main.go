@@ -61,11 +61,13 @@ func (o *options) parse() error {
 	}
 	o.clusterProfiles = profiles
 
-	claimOwners, err := load.ClusterClaimOwnersConfig(clusterClaimConfigPath)
-	if err != nil {
-		return fmt.Errorf("failed to load cluster claim owners config: %w", err)
+	if clusterClaimConfigPath != "" {
+		claimOwners, err := load.ClusterClaimOwnersConfig(clusterClaimConfigPath)
+		if err != nil {
+			return fmt.Errorf("failed to load cluster claim owners config: %w", err)
+		}
+		o.clusterClaimOwners = claimOwners
 	}
-	o.clusterClaimOwners = claimOwners
 
 	ciOPConfigAgent, err := agents.NewConfigAgent(o.ConfigDir, nil, agents.WithOrg(o.Org), agents.WithRepo(o.Repo))
 	if err != nil {

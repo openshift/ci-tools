@@ -551,6 +551,12 @@ func TestValidateNoFileCollisionsOnMountPath(t *testing.T) {
 				{Collection: "col-b", Group: "grp-y", Field: "token", MountPath: "/var/bundle"},
 			},
 		},
+		{
+			name: "sync_to_cluster bundle resolved to k8s secret reference is skipped",
+			credentials: []api.CredentialReference{
+				{Namespace: "ci", Name: "cluster-init", MountPath: "/etc/kubeconfigs"},
+			},
+		},
 	} {
 		t.Run(tc.name, func(t *testing.T) {
 			actualErr := ValidateNoFileCollisionsOnMountPath(tc.credentials)

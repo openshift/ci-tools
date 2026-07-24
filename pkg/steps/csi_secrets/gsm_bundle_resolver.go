@@ -27,6 +27,9 @@ func ValidateNoFileCollisionsOnMountPath(credentials []api.CredentialReference) 
 		}
 		seenFiles := make(map[string]credSource)
 		for _, cred := range creds {
+			if IsK8sSecretReference(cred) {
+				continue
+			}
 			fileName := cred.Field
 			if cred.As != "" {
 				fileName = cred.As

@@ -235,6 +235,31 @@ func TestReconcileProwJob(t *testing.T) {
 			},
 		},
 		{
+			name: "ProwJob in a final state, skip graceful termination",
+			pj: &prowv1.ProwJob{
+				ObjectMeta: metav1.ObjectMeta{
+					Labels: map[string]string{
+						EphemeralClusterLabel: "ec",
+					},
+					Name:      "foo",
+					Namespace: "bar",
+				},
+				Spec:   prowv1.ProwJobSpec{Cluster: "build01"},
+				Status: prowv1.ProwJobStatus{State: prowv1.AbortedState},
+			},
+			wantPJ: &prowv1.ProwJob{
+				ObjectMeta: metav1.ObjectMeta{
+					Labels: map[string]string{
+						EphemeralClusterLabel: "ec",
+					},
+					Name:      "foo",
+					Namespace: "bar",
+				},
+				Spec:   prowv1.ProwJobSpec{Cluster: "build01"},
+				Status: prowv1.ProwJobStatus{State: prowv1.AbortedState},
+			},
+		},
+		{
 			name: "Build client not found returns a terminal error",
 			pj: &prowv1.ProwJob{
 				ObjectMeta: metav1.ObjectMeta{

@@ -82,6 +82,17 @@ var (
 
 type buildClients map[string]ctrlruntimeclient.Client
 
+type errCIOperatorNSNotFound struct{}
+
+func (e *errCIOperatorNSNotFound) Error() string {
+	return "ci-operator NS not found"
+}
+
+func (e *errCIOperatorNSNotFound) Is(err error) bool {
+	_, ok := err.(*errCIOperatorNSNotFound)
+	return ok
+}
+
 func (bc buildClients) forCluster(cluster string) (ctrlruntimeclient.Client, error) {
 	buildClient, ok := bc[cluster]
 	if !ok {
@@ -240,7 +251,8 @@ func (r *reconciler) Reconcile(ctx context.Context, req reconcile.Request) (reco
 	}
 
 	if ec.Spec.TearDownCluster {
-		if err := r.notifyTestComplete(ctx, log, &oldStatus, &observedStatus, &pj); err != nil {
+		if err := r.notifyTestComplete(ctx, log, &oldStatus, &observedStatus, &pj); err != nil &&
+			!errors.Is(err, &errCIOperatorNSNotFound{}) {
 			if updateErr := r.updateEphemeralClusterStatus(ctx, ec, &observedStatus); updateErr != nil {
 				msg := utilerrors.NewAggregate([]error{updateErr, err}).Error()
 				return reconcile.Result{}, errors.New(msg)
@@ -871,6 +883,21 @@ func (r *reconciler) reconcileDeleteEphemeralCluster(ctx context.Context, log *l
 	}
 
 	if err := r.notifyTestComplete(ctx, log, &oldStatus, observedStatus, &pj); err != nil {
+		if errors.Is(err, &errCIOperatorNSNotFound{}) {
+			log.Info("EC is being deleted and ci-operator didn't show up yet: aborting the PJ")
+			if err := r.abortProwJob(ctx, log, &pj, "EphemeralCluster being deleted and ci-operator NS not found"); err != nil {
+				return reconcile.Result{}, err
+			}
+
+			if removeFinalizer() {
+				log.Info("EC is being deleted and ci-operator didn't show up yet: removing the finalizer")
+				ec.Status = *observedStatus
+				return reconcile.Result{}, r.updateEphemeralClusterWithStatus(ctx, ec)
+			}
+
+			return reconcile.Result{}, r.updateEphemeralClusterStatus(ctx, ec, observedStatus)
+		}
+
 		if updateErr := r.updateEphemeralClusterStatus(ctx, ec, observedStatus); updateErr != nil {
 			msg := utilerrors.NewAggregate([]error{updateErr, err}).Error()
 			return reconcile.Result{}, errors.New(msg)
@@ -883,6 +910,24 @@ func (r *reconciler) reconcileDeleteEphemeralCluster(ctx context.Context, log *l
 	}
 
 	return reconcile.Result{RequeueAfter: r.polling()}, nil
+}
+
+func (r *reconciler) abortProwJob(ctx context.Context, log *logrus.Entry, pj *prowv1.ProwJob, reason string) error {
+	if pj.Status.State == prowv1.AbortedState {
+		log.Info("ProwJob aborted already, skipping")
+		return nil
+	}
+
+	pj.Status.State = prowv1.AbortedState
+	pj.Status.Description = reason
+	pj.Status.CompletionTime = ptr.To(metav1.NewTime(r.now()))
+
+	if err := r.masterClient.Update(ctx, pj); err != nil {
+		return fmt.Errorf("abort prowjob: %w", err)
+	}
+
+	log.Info("ProwJob aborted")
+	return nil
 }
 
 func (r *reconciler) notifyTestComplete(ctx context.Context, log *logrus.Entry, oldECStatus, ecStatus *ephemeralclusterv1.EphemeralClusterStatus, pj *prowv1.ProwJob) error {
@@ -900,7 +945,7 @@ func (r *reconciler) notifyTestComplete(ctx context.Context, log *logrus.Entry, 
 	if err != nil {
 		upsertCondition(ecStatus, ephemeralclusterv1.TestCompleted, ephemeralclusterv1.ConditionFalse, r.now(), ephemeralclusterv1.CreateTestCompletedSecretFailureReason, ephemeralclusterv1.CIOperatorNSNotFoundMsg)
 		ecStatus.Phase = ephemeralclusterv1.EphemeralClusterFailed
-		return nil
+		return err
 	}
 
 	log = log.WithField("namespace", ns).WithField("secret", api.EphemeralClusterTestDoneSignalSecretName)
@@ -932,7 +977,7 @@ func (r *reconciler) findCIOperatorTestNS(ctx context.Context, buildClient ctrlr
 
 	// The NS hasn't been created yet, requeuing.
 	if len(nss.Items) == 0 {
-		return "", errors.New("ci-operator NS not found")
+		return "", &errCIOperatorNSNotFound{}
 	}
 
 	return nss.Items[0].Name, nil

@@ -1729,6 +1729,41 @@ func TestReconcileDeleteEphemeralCluster(t *testing.T) {
 			wantRes: reconcile.Result{},
 		},
 		{
+			name: "Delete EC: ci-operator NS not found, abort the PJ and remove the finalizer",
+			ec: &ephemeralclusterv1.EphemeralCluster{
+				ObjectMeta: metav1.ObjectMeta{
+					Name:              "foo",
+					Namespace:         "bar",
+					DeletionTimestamp: ptr.To(metav1.NewTime(fakeNow)),
+					Finalizers:        []string{DependentProwJobFinalizer},
+				},
+				Status: ephemeralclusterv1.EphemeralClusterStatus{
+					ProwJobID: "pj-123",
+				},
+			},
+			pj: &prowv1.ProwJob{
+				ObjectMeta: metav1.ObjectMeta{Name: "pj-123", Namespace: prowJobNamespace},
+				Spec:       prowv1.ProwJobSpec{Cluster: "build01"},
+			},
+			buildClients: func() map[string]*ctrlruntimetest.FakeClient {
+				c := fake.NewClientBuilder().WithScheme(scheme).Build()
+				return map[string]*ctrlruntimetest.FakeClient{
+					"build01": ctrlruntimetest.NewFakeClient(c, scheme),
+				}
+			},
+			wantPJ: &prowv1.ProwJob{
+				ObjectMeta: metav1.ObjectMeta{Name: "pj-123", Namespace: prowJobNamespace},
+				Spec:       prowv1.ProwJobSpec{Cluster: "build01"},
+				Status: prowv1.ProwJobStatus{
+					State:          prowv1.AbortedState,
+					Description:    "EphemeralCluster being deleted and ci-operator NS not found",
+					CompletionTime: ptr.To(metav1.NewTime(fakeNow)),
+				},
+			},
+			wantRes: reconcile.Result{},
+			wantErr: fmt.Errorf("update ephemeral cluster and status: ephemeralclusters.ci.openshift.io %q not found", "foo"),
+		},
+		{
 			name: "Aborted ProwJob remove the finalizer and delete",
 			ec: &ephemeralclusterv1.EphemeralCluster{
 				ObjectMeta: metav1.ObjectMeta{

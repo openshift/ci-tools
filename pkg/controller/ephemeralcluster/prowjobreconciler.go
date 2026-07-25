@@ -176,10 +176,10 @@ func (r *prowJobReconciler) findCIOperatorTestNS(ctx context.Context, buildClien
 
 func pjInAFinalState(pj *prowv1.ProwJob) bool {
 	switch pj.Status.State {
-	case prowv1.AbortedState:
-	case prowv1.ErrorState:
-	case prowv1.FailureState:
-	case prowv1.SuccessState:
+	case prowv1.AbortedState,
+		prowv1.ErrorState,
+		prowv1.FailureState,
+		prowv1.SuccessState:
 		return true
 	}
 	return false

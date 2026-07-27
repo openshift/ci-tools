@@ -274,7 +274,7 @@ func TestReconcileProwJob(t *testing.T) {
 			buildClients: func() map[string]*ctrlruntimetest.FakeClient {
 				return map[string]*ctrlruntimetest.FakeClient{}
 			},
-			wantErr: reconcile.TerminalError(errors.New("unknown cluster build01")),
+			wantErr: reconcile.TerminalError(errors.New("build client not found for cluster build01")),
 		},
 	} {
 		t.Run(tc.name, func(t *testing.T) {

@@ -3,6 +3,7 @@ package ephemeralcluster
 import (
 	"context"
 	_ "embed"
+	"errors"
 	"fmt"
 	"time"
 
@@ -109,8 +110,8 @@ func (r *prowJobReconciler) gracefullyTerminateClusterProvisioning(ctx context.C
 		return reconcile.Result{}, nil
 	}
 
-	buildClient, err := r.buildClients.forCluster(pj.Spec.Cluster)
-	if err != nil {
+	buildClient, err := buildClientFor(r.buildClients, pj.Spec.Cluster)
+	if err != nil && errors.Is(err, &errBuildClientNotFound{}) {
 		log.WithField("cluster", pj.Spec.Cluster).WithError(err).Warn("Build client not found")
 		return reconcile.Result{}, reconcile.TerminalError(err)
 	}

@@ -869,7 +869,7 @@ func TestReconcile(t *testing.T) {
 			wantRes: reconcile.Result{RequeueAfter: pollingTime},
 		},
 		{
-			name: "Client not found, return a terminal error",
+			name: "Client not found, abort prowjob",
 			ec: &ephemeralclusterv1.EphemeralCluster{
 				ObjectMeta: metav1.ObjectMeta{
 					Name:      "foo",
@@ -907,13 +907,13 @@ func TestReconcile(t *testing.T) {
 						Type:               ephemeralclusterv1.ClusterReady,
 						Status:             ephemeralclusterv1.ConditionFalse,
 						Reason:             ephemeralclusterv1.SecretsFetchFailureReason,
-						Message:            "unknown cluster build01",
+						Message:            "build client not found for cluster build01",
 						LastTransitionTime: metav1.NewTime(fakeNow),
 					}},
 				},
 			},
 			wantRes: reconcile.Result{},
-			wantErr: reconcile.TerminalError(errors.New("unknown cluster build01")),
+			wantErr: reconcile.TerminalError(errors.New("build client not found for cluster build01")),
 		},
 		{
 			name: "Aborted ProwJob maps to ProwJobCompleted condition",
@@ -1623,6 +1623,15 @@ func TestReconcile(t *testing.T) {
 				}
 			}
 
+			pjList := prowv1.ProwJobList{}
+			if err := client.List(context.TODO(), &pjList, &ctrlclient.ListOptions{}); err != nil {
+				t.Fatalf("list prowjobs: %s", err.Error())
+			}
+
+			if len(pjList.Items) > 0 {
+				testhelper.CompareWithFixture(t, pjList, testhelper.WithPrefix("pj_"))
+			}
+
 			for cluster, c := range fakeClients {
 				allObjs, err := c.Objects()
 				if err != nil {
@@ -1654,7 +1663,7 @@ func TestReconcileDeleteEphemeralCluster(t *testing.T) {
 		wantErr      error
 	}{
 		{
-			name: "Delete EC: start deprovision procedure",
+			name: "Start deprovision procedure",
 			ec: &ephemeralclusterv1.EphemeralCluster{
 				ObjectMeta: metav1.ObjectMeta{
 					Name:              "foo",
@@ -1714,7 +1723,7 @@ func TestReconcileDeleteEphemeralCluster(t *testing.T) {
 			wantRes: reconcile.Result{RequeueAfter: pollingTime},
 		},
 		{
-			name: "Delete EC: ProwJob is gone already, remove the finalizer and delete EC",
+			name: "ProwJob is gone already, remove the finalizer and delete EC",
 			ec: &ephemeralclusterv1.EphemeralCluster{
 				ObjectMeta: metav1.ObjectMeta{
 					Name:              "foo",
@@ -1729,7 +1738,7 @@ func TestReconcileDeleteEphemeralCluster(t *testing.T) {
 			wantRes: reconcile.Result{},
 		},
 		{
-			name: "Delete EC: ci-operator NS not found, abort the PJ and remove the finalizer",
+			name: "ci-operator NS not found: abort the PJ and remove the finalizer",
 			ec: &ephemeralclusterv1.EphemeralCluster{
 				ObjectMeta: metav1.ObjectMeta{
 					Name:              "foo",
@@ -1756,12 +1765,11 @@ func TestReconcileDeleteEphemeralCluster(t *testing.T) {
 				Spec:       prowv1.ProwJobSpec{Cluster: "build01"},
 				Status: prowv1.ProwJobStatus{
 					State:          prowv1.AbortedState,
-					Description:    "EphemeralCluster being deleted and ci-operator NS not found",
+					Description:    "EphemeralCluster being deleted: ci-operator NS not found",
 					CompletionTime: ptr.To(metav1.NewTime(fakeNow)),
 				},
 			},
 			wantRes: reconcile.Result{},
-			wantErr: fmt.Errorf("update ephemeral cluster and status: ephemeralclusters.ci.openshift.io %q not found", "foo"),
 		},
 		{
 			name: "Aborted ProwJob remove the finalizer and delete",
@@ -1781,6 +1789,33 @@ func TestReconcileDeleteEphemeralCluster(t *testing.T) {
 			wantPJ: &prowv1.ProwJob{
 				ObjectMeta: metav1.ObjectMeta{Name: "pj-123", Namespace: prowJobNamespace},
 				Status:     prowv1.ProwJobStatus{State: prowv1.AbortedState},
+			},
+			wantRes: reconcile.Result{},
+		},
+		{
+			name: "Build client not found: remove finalizer and abort PJ",
+			ec: &ephemeralclusterv1.EphemeralCluster{
+				ObjectMeta: metav1.ObjectMeta{
+					Name:              "foo",
+					Namespace:         "bar",
+					DeletionTimestamp: ptr.To(metav1.NewTime(fakeNow)),
+					Finalizers:        []string{DependentProwJobFinalizer},
+				},
+				Status: ephemeralclusterv1.EphemeralClusterStatus{ProwJobID: "pj-123"},
+			},
+			pj: &prowv1.ProwJob{
+				ObjectMeta: metav1.ObjectMeta{Name: "pj-123", Namespace: prowJobNamespace},
+				Spec:       prowv1.ProwJobSpec{Cluster: "build01"},
+				Status:     prowv1.ProwJobStatus{State: prowv1.PendingState},
+			},
+			wantPJ: &prowv1.ProwJob{
+				ObjectMeta: metav1.ObjectMeta{Name: "pj-123", Namespace: prowJobNamespace},
+				Spec:       prowv1.ProwJobSpec{Cluster: "build01"},
+				Status: prowv1.ProwJobStatus{
+					State:          prowv1.AbortedState,
+					CompletionTime: &metav1.Time{Time: fakeNow},
+					Description:    "EphemeralCluster being deleted: build client not found for cluster build01",
+				},
 			},
 			wantRes: reconcile.Result{},
 		},

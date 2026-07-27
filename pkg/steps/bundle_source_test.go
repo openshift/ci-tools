@@ -180,6 +180,9 @@ func TestSingleArchBuildPinMatchesPipelineArchGuarantees(t *testing.T) {
 		t.Fatalf("pinBuildToSingleArchNode did not set a %s node selector", coreapi.LabelArchStable)
 	}
 
+	// This subtest never calls pinBuildToSingleArchNode: it asserts the pipeline-side
+	// invariant the pin depends on (default builds target the pinned arch), so a change
+	// to constructMultiArchBuilds that breaks that invariant fails here first.
 	t.Run("default pipeline build is the pinned architecture", func(t *testing.T) {
 		builds := constructMultiArchBuilds(buildapi.Build{}, nil)
 		if len(builds) != 1 {
@@ -190,6 +193,8 @@ func TestSingleArchBuildPinMatchesPipelineArchGuarantees(t *testing.T) {
 		}
 	})
 
+	// Also does not call pinBuildToSingleArchNode: guards ResolveMultiArch() itself, since a
+	// change there could drop the pinned arch from the resolved set without touching the pin.
 	t.Run("image steps resolve the pinned architecture unconditionally", func(t *testing.T) {
 		step := &projectDirectoryImageBuildStep{
 			config: api.ProjectDirectoryImageBuildStepConfiguration{
@@ -202,6 +207,8 @@ func TestSingleArchBuildPinMatchesPipelineArchGuarantees(t *testing.T) {
 		}
 	})
 
+	// Also does not call pinBuildToSingleArchNode: guards constructMultiArchBuilds() across
+	// multiple configured architectures, the case pinning a bundle build actually relies on.
 	t.Run("multi-arch pipelines still build the pinned architecture", func(t *testing.T) {
 		step := &projectDirectoryImageBuildStep{
 			config: api.ProjectDirectoryImageBuildStepConfiguration{

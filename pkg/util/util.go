@@ -2,6 +2,7 @@ package util
 
 import (
 	"sort"
+	"strings"
 
 	"golang.org/x/exp/constraints"
 )
@@ -93,4 +94,9 @@ func PopCount[T comparable](xs ...T) (ret uint) {
 		}
 	}
 	return
+}
+
+// ShellEscape escapes a string for safe use in shell single quotes
+func ShellEscape(command string) string {
+	return strings.ReplaceAll(command, "'", "'\\''")
 }

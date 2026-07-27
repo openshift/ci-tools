@@ -26,6 +26,7 @@ type bundleSourceStep struct {
 	podClient          kubernetes.PodClient
 	jobSpec            *api.JobSpec
 	pullSecret         *coreapi.Secret
+	buildType          string
 }
 
 func (s *bundleSourceStep) Inputs() (api.InputDefinition, error) {
@@ -82,7 +83,7 @@ func (s *bundleSourceStep) run(ctx context.Context) error {
 	// Bundle images are not multi-arch by design. Here we build it without creating a manifest-listed image.
 	// Note that we are not configuring a node selector here, so the build will be scheduled on any available
 	// node no matter the architecture.
-	return handleBuild(ctx, s.client, s.podClient, *build)
+	return handleBuild(ctx, s.client, s.podClient, *build, s.buildType)
 }
 
 func replaceCommand(pullSpec, with string) string {
@@ -144,6 +145,7 @@ func BundleSourceStep(
 	podClient kubernetes.PodClient,
 	jobSpec *api.JobSpec,
 	pullSecret *coreapi.Secret,
+	buildType string,
 ) api.Step {
 	return &bundleSourceStep{
 		config:             config,
@@ -153,5 +155,6 @@ func BundleSourceStep(
 		podClient:          podClient,
 		jobSpec:            jobSpec,
 		pullSecret:         pullSecret,
+		buildType:          buildType,
 	}
 }

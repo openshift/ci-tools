@@ -32,6 +32,7 @@ type projectDirectoryImageBuildStep struct {
 	multiArch          bool
 	architectures      sets.Set[string]
 	metricsAgent       *metrics.MetricsAgent
+	buildType          string
 }
 
 func (s *projectDirectoryImageBuildStep) Inputs() (api.InputDefinition, error) {
@@ -72,10 +73,10 @@ func (s *projectDirectoryImageBuildStep) run(ctx context.Context) error {
 
 	// Bundle images are non multi-arch by design. No manifest list is needed. Here we spawn a single build.
 	if s.config.IsBundleImage() {
-		return handleBuild(ctx, s.client, s.podClient, *build)
+		return handleBuild(ctx, s.client, s.podClient, *build, s.buildType)
 	}
 
-	return handleBuilds(ctx, s.client, s.podClient, *build, s.metricsAgent, newImageBuildOptions(s.architectures.UnsortedList()))
+	return handleBuilds(ctx, s.client, s.podClient, s.buildType, *build, s.metricsAgent, newImageBuildOptions(s.architectures.UnsortedList()))
 }
 
 type workingDir func(tag string) (string, error)

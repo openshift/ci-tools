@@ -38,6 +38,7 @@ type pipelineImageCacheStep struct {
 	architectures sets.Set[string]
 	metricsAgent  *metrics.MetricsAgent
 	skippedImages sets.Set[string]
+	buildType     string
 }
 
 func (s *pipelineImageCacheStep) Inputs() (api.InputDefinition, error) {
@@ -75,7 +76,7 @@ func (s *pipelineImageCacheStep) run(ctx context.Context) error {
 		build.Spec.Strategy.DockerStrategy.Env = append(build.Spec.Strategy.DockerStrategy.Env, coreapi.EnvVar{Name: SkippedImagesEnvVar, Value: strings.Join(sets.List(s.skippedImages), ",")})
 	}
 
-	return handleBuilds(ctx, s.client, s.podClient, *build, s.metricsAgent, newImageBuildOptions(s.architectures.UnsortedList()))
+	return handleBuilds(ctx, s.client, s.podClient, s.buildType, *build, s.metricsAgent, newImageBuildOptions(s.architectures.UnsortedList()))
 }
 
 func (s *pipelineImageCacheStep) Requires() []api.StepLink {
@@ -124,6 +125,7 @@ func PipelineImageCacheStep(
 	pullSecret *coreapi.Secret,
 	metricsAgent *metrics.MetricsAgent,
 	skippedImages sets.Set[string],
+	buildType string,
 ) api.Step {
 	return &pipelineImageCacheStep{
 		config:        config,
@@ -135,5 +137,6 @@ func PipelineImageCacheStep(
 		architectures: sets.New[string](),
 		metricsAgent:  metricsAgent,
 		skippedImages: skippedImages,
+		buildType:     buildType,
 	}
 }

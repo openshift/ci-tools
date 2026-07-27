@@ -31,6 +31,7 @@ type rpmImageInjectionStep struct {
 	pullSecret    *coreapi.Secret
 	architectures sets.Set[string]
 	metricsAgent  *metrics.MetricsAgent
+	buildType     string
 }
 
 func (s *rpmImageInjectionStep) Inputs() (api.InputDefinition, error) {
@@ -54,7 +55,7 @@ func (s *rpmImageInjectionStep) run(ctx context.Context) error {
 	if err != nil {
 		return err
 	}
-	return handleBuilds(ctx, s.client, s.podClient, *buildFromSource(
+	return handleBuilds(ctx, s.client, s.podClient, s.buildType, *buildFromSource(
 		s.jobSpec, s.config.From, s.config.To,
 		buildapi.BuildSource{
 			Type:       buildapi.BuildSourceDockerfile,
@@ -107,6 +108,7 @@ func RPMImageInjectionStep(
 	jobSpec *api.JobSpec,
 	pullSecret *coreapi.Secret,
 	metricsAgent *metrics.MetricsAgent,
+	buildType string,
 ) api.Step {
 	return &rpmImageInjectionStep{
 		config:        config,
@@ -117,5 +119,6 @@ func RPMImageInjectionStep(
 		pullSecret:    pullSecret,
 		architectures: sets.New[string](),
 		metricsAgent:  metricsAgent,
+		buildType:     buildType,
 	}
 }

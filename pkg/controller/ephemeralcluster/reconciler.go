@@ -648,7 +648,7 @@ func (r *reconciler) fetchSecrets(ctx context.Context, log *logrus.Entry, ec *ep
 		return err
 	}
 
-	ns, err := r.findCIOperatorTestNS(ctx, buildClient, pj)
+	ns, err := findCIOperatorTestNS(ctx, buildClient, pj)
 	if err != nil {
 		upsertCondition(ecStatus, ephemeralclusterv1.ClusterReady, ephemeralclusterv1.ConditionFalse, r.now(), ephemeralclusterv1.SecretsFetchFailureReason, ephemeralclusterv1.CIOperatorNSNotFoundMsg)
 		if !hasCondition(oldStatus, ephemeralclusterv1.ClusterReady, ephemeralclusterv1.ConditionFalse, r.now(), ephemeralclusterv1.SecretsFetchFailureReason, ephemeralclusterv1.CIOperatorNSNotFoundMsg) {
@@ -974,7 +974,7 @@ func (r *reconciler) notifyTestComplete(ctx context.Context, log *logrus.Entry, 
 		return err
 	}
 
-	ns, err := r.findCIOperatorTestNS(ctx, buildClient, pj)
+	ns, err := findCIOperatorTestNS(ctx, buildClient, pj)
 	if err != nil {
 		upsertCondition(ecStatus, ephemeralclusterv1.TestCompleted, ephemeralclusterv1.ConditionFalse, r.now(), ephemeralclusterv1.CreateTestCompletedSecretFailureReason, ephemeralclusterv1.CIOperatorNSNotFoundMsg)
 		ecStatus.Phase = ephemeralclusterv1.EphemeralClusterFailed
@@ -1002,7 +1002,7 @@ func (r *reconciler) notifyTestComplete(ctx context.Context, log *logrus.Entry, 
 	return nil
 }
 
-func (r *reconciler) findCIOperatorTestNS(ctx context.Context, buildClient ctrlruntimeclient.Client, pj *prowv1.ProwJob) (string, error) {
+func findCIOperatorTestNS(ctx context.Context, buildClient ctrlruntimeclient.Client, pj *prowv1.ProwJob) (string, error) {
 	nss := corev1.NamespaceList{}
 	if err := buildClient.List(ctx, &nss, ctrlruntimeclient.MatchingLabels{steps.LabelJobID: pj.Name}); err != nil {
 		return "", fmt.Errorf("get namespace for %s: %w", pj.Name, err)

@@ -2,23 +2,31 @@ package steps
 
 import (
 	"bytes"
+	"context"
+	"encoding/json"
+	"fmt"
 	"os"
 	"os/exec"
 	"path/filepath"
 	"runtime"
 	"strings"
 	"testing"
+	"time"
 
 	coreapi "k8s.io/api/core/v1"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
+	k8sruntime "k8s.io/apimachinery/pkg/runtime"
 	"k8s.io/apimachinery/pkg/util/sets"
+	ctrlruntimeclient "sigs.k8s.io/controller-runtime/pkg/client"
 	fakectrlruntimeclient "sigs.k8s.io/controller-runtime/pkg/client/fake"
 
 	buildapi "github.com/openshift/api/build/v1"
+	"github.com/openshift/api/image/docker10"
 	imagev1 "github.com/openshift/api/image/v1"
 
 	"github.com/openshift/ci-tools/pkg/api"
 	"github.com/openshift/ci-tools/pkg/steps/loggingclient"
+	testhelper_kube "github.com/openshift/ci-tools/pkg/testhelper/kubernetes"
 )
 
 var subs = []api.PullSpecSubstitution{
@@ -164,6 +172,74 @@ RUN find . -type f -regex ".*\.\(yaml\|yml\)" -exec sed -i s?quay.io/openshift/o
 	}
 	if expectedDockerfile != generatedDockerfile {
 		t.Errorf("Generated bundle source dockerfile does not equal expected; generated dockerfile: %s", generatedDockerfile)
+	}
+}
+
+// pendingOnCreateBuildClient stamps newly created builds as Pending before they're persisted,
+// mimicking what a real build controller does immediately on admission. Without this, a build
+// created by the fake client sits at its zero-value phase forever (nothing ever transitions it),
+// so waitForBuild's pending-check — gated on seeing phase New/Pending on the *first* watched
+// event — never fires and the wait blocks until the context is done.
+type pendingOnCreateBuildClient struct {
+	BuildClient
+}
+
+func (c pendingOnCreateBuildClient) Create(ctx context.Context, obj ctrlruntimeclient.Object, opts ...ctrlruntimeclient.CreateOption) error {
+	if b, ok := obj.(*buildapi.Build); ok {
+		b.Status.Phase = buildapi.BuildPhasePending
+	}
+	return c.BuildClient.Create(ctx, obj, opts...)
+}
+
+// TestBundleSourceStepRunPinsBuildToSingleArchNode is a direct unit test of the code path
+// pinBuildToSingleArchNode is called from: it exercises bundleSourceStep.Run and inspects the
+// actual build object submitted to the API, rather than the invariants
+// TestSingleArchBuildPinMatchesPipelineArchGuarantees checks in isolation.
+func TestBundleSourceStepRunPinsBuildToSingleArchNode(t *testing.T) {
+	const namespace = "target-namespace"
+	metadata, err := json.Marshal(docker10.DockerImage{Config: &docker10.DockerConfig{WorkingDir: "/go/src"}})
+	if err != nil {
+		t.Fatalf("failed to marshal image metadata: %v", err)
+	}
+	underlying := &buildClient{LoggingClient: loggingclient.New(fakectrlruntimeclient.NewClientBuilder().WithRuntimeObjects(
+		&imagev1.ImageStreamTag{
+			ObjectMeta: metav1.ObjectMeta{
+				Namespace: namespace,
+				Name:      fmt.Sprintf("%s:%s", api.PipelineImageStream, api.PipelineImageStreamTagReferenceSource),
+			},
+			Image: imagev1.Image{
+				ObjectMeta:          metav1.ObjectMeta{Name: "source-digest"},
+				DockerImageMetadata: k8sruntime.RawExtension{Raw: metadata},
+			},
+		},
+	).Build(), nil)}
+	client := pendingOnCreateBuildClient{BuildClient: underlying}
+	podClient := &testhelper_kube.FakePodClient{
+		FakePodExecutor: &testhelper_kube.FakePodExecutor{LoggingClient: client},
+		PendingTimeout:  0,
+	}
+
+	s := &bundleSourceStep{
+		jobSpec:   &api.JobSpec{},
+		client:    client,
+		podClient: podClient,
+	}
+	s.jobSpec.SetNamespace(namespace)
+
+	ctx, cancel := context.WithTimeout(context.Background(), 30*time.Second)
+	defer cancel()
+	err = s.Run(ctx)
+	if err == nil || !strings.Contains(err.Error(), "didn't start running") {
+		t.Fatalf("expected a pending-timeout error proving the build was created and watched, got: %v", err)
+	}
+
+	created := &buildapi.Build{}
+	key := ctrlruntimeclient.ObjectKey{Namespace: namespace, Name: string(api.PipelineImageStreamTagReferenceBundleSource)}
+	if err := client.Get(context.Background(), key, created); err != nil {
+		t.Fatalf("failed to get created build: %v", err)
+	}
+	if arch := created.Spec.NodeSelector[coreapi.LabelArchStable]; arch != string(api.NodeArchitectureAMD64) {
+		t.Errorf("Run() submitted a build with %s=%q, want %q", coreapi.LabelArchStable, arch, api.NodeArchitectureAMD64)
 	}
 }
 

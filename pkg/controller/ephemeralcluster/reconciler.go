@@ -318,20 +318,12 @@ func (r *reconciler) handleBuildClientNotFoundError(ctx context.Context, log *lo
 		return reconcile.Result{}, errors.New(msg)
 	}
 
-	if removeFinalizer(ec) {
-		if updateErr := r.updateEphemeralClusterStatus(ctx, ec, observedStatus); updateErr != nil {
-			msg := utilerrors.NewAggregate([]error{updateErr, err}).Error()
-			return reconcile.Result{}, errors.New(msg)
-		}
-		return reconcile.Result{}, err
-	}
-
+	removeFinalizer(ec)
 	ec.Status = *observedStatus
 	if updateErr := r.updateEphemeralClusterWithStatus(ctx, ec); updateErr != nil {
 		msg := utilerrors.NewAggregate([]error{updateErr, err}).Error()
 		return reconcile.Result{}, errors.New(msg)
 	}
-
 	return reconcile.Result{}, reconcile.TerminalError(err)
 }
 
@@ -500,7 +492,7 @@ func (r *reconciler) reconcileCreateProwJob(ctx context.Context, log *logrus.Ent
 	if len(pjsForEC.Items) == 1 {
 		log.Info("ProwJob found but was not bound to the EC, binding now")
 		ec.Finalizers, _ = cislices.UniqueAdd(ec.Finalizers, DependentProwJobFinalizer)
-		upsertCondition(&ec.Status, ephemeralclusterv1.ProwJobCreating, ephemeralclusterv1.ConditionTrue, r.now(), "", "")
+		upsertCondition(observedStatus, ephemeralclusterv1.ProwJobCreating, ephemeralclusterv1.ConditionTrue, r.now(), "", "")
 		observedStatus.ProwJobID = pjsForEC.Items[0].Name
 		observedStatus.Phase = ephemeralclusterv1.EphemeralClusterProvisioning
 		ec.Status = *observedStatus
@@ -650,11 +642,14 @@ func (r *reconciler) fetchSecrets(ctx context.Context, log *logrus.Entry, ec *ep
 
 	ns, err := findCIOperatorTestNS(ctx, buildClient, pj)
 	if err != nil {
-		upsertCondition(ecStatus, ephemeralclusterv1.ClusterReady, ephemeralclusterv1.ConditionFalse, r.now(), ephemeralclusterv1.SecretsFetchFailureReason, ephemeralclusterv1.CIOperatorNSNotFoundMsg)
-		if !hasCondition(oldStatus, ephemeralclusterv1.ClusterReady, ephemeralclusterv1.ConditionFalse, r.now(), ephemeralclusterv1.SecretsFetchFailureReason, ephemeralclusterv1.CIOperatorNSNotFoundMsg) {
-			log.Info("Fetching cluster credentials but ci-operator NS didn't show up yet")
+		if errors.Is(err, &errCIOperatorNSNotFound{}) {
+			upsertCondition(ecStatus, ephemeralclusterv1.ClusterReady, ephemeralclusterv1.ConditionFalse, r.now(), ephemeralclusterv1.SecretsFetchFailureReason, ephemeralclusterv1.CIOperatorNSNotFoundMsg)
+			if !hasCondition(oldStatus, ephemeralclusterv1.ClusterReady, ephemeralclusterv1.ConditionFalse, r.now(), ephemeralclusterv1.SecretsFetchFailureReason, ephemeralclusterv1.CIOperatorNSNotFoundMsg) {
+				log.Info("Fetching cluster credentials but ci-operator NS didn't show up yet")
+			}
+			return nil
 		}
-		return nil
+		return err
 	}
 
 	log = log.WithField("namespace", ns)
@@ -946,8 +941,8 @@ func (r *reconciler) reconcileDeleteEphemeralCluster(ctx context.Context, log *l
 }
 
 func (r *reconciler) abortProwJob(ctx context.Context, log *logrus.Entry, pj *prowv1.ProwJob, reason string) error {
-	if pj.Status.State == prowv1.AbortedState {
-		log.Info("ProwJob aborted already, skipping")
+	if pjInAFinalState(pj) {
+		log.Info("ProwJob in a final state already, skipping")
 		return nil
 	}
 
@@ -976,8 +971,10 @@ func (r *reconciler) notifyTestComplete(ctx context.Context, log *logrus.Entry, 
 
 	ns, err := findCIOperatorTestNS(ctx, buildClient, pj)
 	if err != nil {
-		upsertCondition(ecStatus, ephemeralclusterv1.TestCompleted, ephemeralclusterv1.ConditionFalse, r.now(), ephemeralclusterv1.CreateTestCompletedSecretFailureReason, ephemeralclusterv1.CIOperatorNSNotFoundMsg)
-		ecStatus.Phase = ephemeralclusterv1.EphemeralClusterFailed
+		if errors.Is(err, &errCIOperatorNSNotFound{}) {
+			upsertCondition(ecStatus, ephemeralclusterv1.TestCompleted, ephemeralclusterv1.ConditionFalse, r.now(), ephemeralclusterv1.CreateTestCompletedSecretFailureReason, ephemeralclusterv1.CIOperatorNSNotFoundMsg)
+			ecStatus.Phase = ephemeralclusterv1.EphemeralClusterFailed
+		}
 		return err
 	}
 

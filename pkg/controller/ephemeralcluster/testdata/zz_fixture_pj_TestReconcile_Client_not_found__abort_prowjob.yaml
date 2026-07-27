@@ -1,0 +1,14 @@
+items:
+- metadata:
+    creationTimestamp: null
+    name: pj-123
+    namespace: ci
+    resourceVersion: "1000"
+  spec:
+    cluster: build01
+  status:
+    completionTime: "2025-04-02T12:12:12Z"
+    description: 'Build client not found: build client not found for cluster build01'
+    startTime: null
+    state: aborted
+metadata: {}

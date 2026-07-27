@@ -3,6 +3,7 @@ package ephemeralcluster
 import (
 	"context"
 	_ "embed"
+	"errors"
 	"fmt"
 	"time"
 
@@ -23,7 +24,6 @@ import (
 
 	"github.com/openshift/ci-tools/pkg/api"
 	ephemeralclusterv1 "github.com/openshift/ci-tools/pkg/api/ephemeralcluster/v1"
-	"github.com/openshift/ci-tools/pkg/steps"
 )
 
 const (
@@ -104,21 +104,25 @@ func (r *prowJobReconciler) Reconcile(ctx context.Context, req reconcile.Request
 // On the other hand, if ci-operator has not even created a namespace, abort the ProwJob right away since no
 // cloud resources has been created so far.
 func (r *prowJobReconciler) gracefullyTerminateClusterProvisioning(ctx context.Context, log *logrus.Entry, pj *prowv1.ProwJob) (reconcile.Result, error) {
-	buildClient, err := r.buildClients.forCluster(pj.Spec.Cluster)
-	if err != nil {
+	if pjInAFinalState(pj) {
+		log.WithField("pj_state", pj.Status.State).Info("ProwJob in a final state, skipping graceful termination")
+		return reconcile.Result{}, nil
+	}
+
+	buildClient, err := buildClientFor(r.buildClients, pj.Spec.Cluster)
+	if err != nil && errors.Is(err, &errBuildClientNotFound{}) {
 		log.WithField("cluster", pj.Spec.Cluster).WithError(err).Warn("Build client not found")
 		return reconcile.Result{}, reconcile.TerminalError(err)
 	}
 
-	ns, err := r.findCIOperatorTestNS(ctx, buildClient, pj)
+	ns, err := findCIOperatorTestNS(ctx, buildClient, pj)
 	if err != nil {
+		// If the test NS hasn't been created yet we can just abort the PJ, no graceful termination is needed.
+		if errors.Is(err, &errCIOperatorNSNotFound{}) {
+			return r.abortProwJob(ctx, pj)
+		}
 		log.WithError(err).Error("Unable to retrieve ci-operator namespace")
 		return reconcile.Result{}, err
-	}
-
-	// If the test NS hasn't been created yet we can just abort the PJ, no graceful termination is needed.
-	if ns == "" {
-		return r.abortProwJob(ctx, pj)
 	}
 
 	log = log.WithField("namespace", ns)
@@ -156,15 +160,13 @@ func (r *prowJobReconciler) abortProwJob(ctx context.Context, pj *prowv1.ProwJob
 	return reconcile.Result{}, nil
 }
 
-func (r *prowJobReconciler) findCIOperatorTestNS(ctx context.Context, buildClient ctrlruntimeclient.Client, pj *prowv1.ProwJob) (string, error) {
-	nss := corev1.NamespaceList{}
-	if err := buildClient.List(ctx, &nss, ctrlruntimeclient.MatchingLabels{steps.LabelJobID: pj.Name}); err != nil {
-		return "", fmt.Errorf("get namespace for %s: %w", pj.Name, err)
+func pjInAFinalState(pj *prowv1.ProwJob) bool {
+	switch pj.Status.State {
+	case prowv1.AbortedState,
+		prowv1.ErrorState,
+		prowv1.FailureState,
+		prowv1.SuccessState:
+		return true
 	}
-
-	if len(nss.Items) == 0 {
-		return "", nil
-	}
-
-	return nss.Items[0].Name, nil
+	return false
 }

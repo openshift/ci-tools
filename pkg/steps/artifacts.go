@@ -306,6 +306,9 @@ func addPodUtils(
 		decorationConfig := *decorationConfig
 		decorationConfig.SkipCloning = nil
 		decorationConfig.SparseCheckoutFiles = nil
+		if c := generatePodOptions.CloneAuthConfig; c != nil && c.Secret != nil {
+			decorationConfig.OauthTokenSecret = &prowv1.OauthTokenSecret{Name: c.Secret.Name, Key: OauthSecretKey}
+		}
 
 		var cloneRefs *prowv1.Refs
 		if jobSpec.Refs != nil {

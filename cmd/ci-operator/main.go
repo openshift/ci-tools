@@ -390,6 +390,9 @@ type options struct {
 	uploadSecretPath string
 	uploadSecret     *coreapi.Secret
 
+	// oauthTokenSecret is the DecorationConfig.OauthTokenSecret materialization for test-pod CloneRefs.
+	oauthTokenSecret *coreapi.Secret
+
 	cloneAuthConfig *steps.CloneAuthConfig
 
 	resultsOptions results.Options
@@ -685,6 +688,12 @@ func (o *options) Complete() error {
 		gcsSecretName := resolveGCSCredentialsSecret(o.jobSpec)
 		if o.uploadSecret, err = getSecret(gcsSecretName, o.uploadSecretPath); err != nil {
 			return fmt.Errorf("could not get upload secret %s from path %s: %w", gcsSecretName, o.uploadSecretPath, err)
+		}
+	}
+	if o.oauthTokenPath != "" {
+		oauthSecretName := resolveOauthTokenSecretName(o.jobSpec)
+		if o.oauthTokenSecret, err = getSecret(oauthSecretName, o.oauthTokenPath); err != nil {
+			return fmt.Errorf("could not get oauth token secret %s from path %s: %w", oauthSecretName, o.oauthTokenPath, err)
 		}
 	}
 
@@ -1588,7 +1597,7 @@ func (o *options) initializeNamespace() error {
 
 	}
 
-	for _, secret := range []*coreapi.Secret{o.pullSecret, o.pushSecret, o.uploadSecret} {
+	for _, secret := range []*coreapi.Secret{o.pullSecret, o.pushSecret, o.uploadSecret, o.oauthTokenSecret} {
 		if secret != nil {
 			secret.Immutable = utilpointer.Bool(true)
 			if err := client.Create(ctx, secret); err != nil && !kerrors.IsAlreadyExists(err) {
@@ -2387,6 +2396,14 @@ func resolveGCSCredentialsSecret(jobSpec *api.JobSpec) string {
 	}
 
 	return api.GCSUploadCredentialsSecret
+}
+
+func resolveOauthTokenSecretName(jobSpec *api.JobSpec) string {
+	if jobSpec.DecorationConfig != nil && jobSpec.DecorationConfig.OauthTokenSecret != nil {
+		return jobSpec.DecorationConfig.OauthTokenSecret.Name
+	}
+
+	return api.OauthTokenSecretName
 }
 
 func (o *options) getResolverInfo(jobSpec *api.JobSpec) *api.Metadata {

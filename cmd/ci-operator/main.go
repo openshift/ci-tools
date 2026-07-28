@@ -632,6 +632,10 @@ func (o *options) Complete() error {
 		if err != nil {
 			return fmt.Errorf("could not get secret from path %s: %w", cloneAuthSecretPath, err)
 		}
+		if o.cloneAuthConfig.Type == steps.CloneAuthTypeOAuth && o.jobSpec.DecorationConfig != nil && o.jobSpec.DecorationConfig.OauthTokenSecret != nil {
+			o.jobSpec.DecorationConfig.OauthTokenSecret.Name = o.cloneAuthConfig.Secret.Name
+			o.jobSpec.DecorationConfig.OauthTokenSecret.Key = steps.OauthSecretKey
+		}
 	}
 
 	for _, path := range o.secretDirectories.values {

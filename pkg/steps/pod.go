@@ -58,6 +58,7 @@ type PodStepConfiguration struct {
 	Secrets                     []*api.Secret
 	MemoryBackedVolume          *api.MemoryBackedVolume
 	Clone                       bool
+	CloneAuthConfig             *CloneAuthConfig
 	NodeArchitecture            api.NodeArchitecture
 	NestedPodman                bool
 	EnableSecretsStoreCSIDriver bool
@@ -68,6 +69,7 @@ type GeneratePodOptions struct {
 	Clone             bool
 	PropagateExitCode bool
 	NodeArchitecture  string
+	CloneAuthConfig   *CloneAuthConfig
 }
 
 type podStep struct {
@@ -196,7 +198,7 @@ func (s *podStep) ResolveMultiArch() sets.Set[string] {
 
 func (s *podStep) AddArchitectures(archs []string) {}
 
-func TestStep(config api.TestStepConfiguration, resources api.ResourceConfiguration, client kubernetes.PodClient, jobSpec *api.JobSpec, nodeName string, enableCSI bool, gsmConfig *csi_secrets.GSMConfiguration) api.Step {
+func TestStep(config api.TestStepConfiguration, resources api.ResourceConfiguration, client kubernetes.PodClient, jobSpec *api.JobSpec, nodeName string, enableCSI bool, gsmConfig *csi_secrets.GSMConfiguration, cloneAuthConfig *CloneAuthConfig) api.Step {
 	return PodStep(
 		"test",
 		PodStepConfiguration{
@@ -207,6 +209,7 @@ func TestStep(config api.TestStepConfiguration, resources api.ResourceConfigurat
 			Secrets:                     config.Secrets,
 			MemoryBackedVolume:          config.ContainerTestConfiguration.MemoryBackedVolume,
 			Clone:                       *config.ContainerTestConfiguration.Clone,
+			CloneAuthConfig:             cloneAuthConfig,
 			NodeArchitecture:            config.NodeArchitecture,
 			NestedPodman:                config.NestedPodman,
 			EnableSecretsStoreCSIDriver: enableCSI,
@@ -363,7 +366,7 @@ func (s *podStep) generatePodForStep(image string, containerResources coreapi.Re
 	pod, err := GenerateBasePod(s.jobSpec, s.config.Labels, s.config.As,
 		s.config.NodeName, s.name, []string{"/bin/bash", "-c", "#!/bin/bash\nset -eu\n" + s.config.Commands},
 		image, containerResources, artifactDir, s.jobSpec.DecorationConfig, s.jobSpec.RawSpec(),
-		secretVolumeMounts, &GeneratePodOptions{Clone: clone, PropagateExitCode: false, NodeArchitecture: string(s.config.NodeArchitecture)})
+		secretVolumeMounts, &GeneratePodOptions{Clone: clone, PropagateExitCode: false, NodeArchitecture: string(s.config.NodeArchitecture), CloneAuthConfig: s.config.CloneAuthConfig})
 	if err != nil {
 		return nil, err
 	}

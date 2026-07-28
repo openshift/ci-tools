@@ -355,7 +355,7 @@ func TestTestStepAndRequires(t *testing.T) {
 	}
 	for _, tc := range tests {
 		t.Run(tc.name, func(t *testing.T) {
-			actual := TestStep(tc.config, nil, nil, nil, "", false, nil).Requires()
+			actual := TestStep(tc.config, nil, nil, nil, "", false, nil, nil).Requires()
 			if len(actual) == len(tc.expected) {
 				matches := true
 				for i := range actual {

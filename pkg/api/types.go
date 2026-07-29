@@ -782,14 +782,15 @@ func (config PipelineImageCacheStepConfiguration) TargetName() string {
 type Cluster string
 
 const (
-	ClusterAPPCI     Cluster = "app.ci"
-	ClusterBuild01   Cluster = "build01"
-	ClusterBuild02   Cluster = "build02"
-	ClusterBuild03   Cluster = "build03"
-	ClusterBuild10   Cluster = "build10"
-	ClusterVSphere02 Cluster = "vsphere02"
-	ClusterARM01     Cluster = "arm01"
-	ClusterHive      Cluster = "hosted-mgmt"
+	ClusterAPPCI       Cluster = "app.ci"
+	ClusterBuild01     Cluster = "build01"
+	ClusterBuild02     Cluster = "build02"
+	ClusterBuild03     Cluster = "build03"
+	ClusterBuild10     Cluster = "build10"
+	ClusterVSphere02   Cluster = "vsphere02"
+	ClusterARM01       Cluster = "arm01"
+	ClusterHostedMgmt1 Cluster = "hosted-mgmt"
+	ClusterHostedMgmt2 Cluster = "hosted-mgmt2"
 )
 
 // TestStepConfiguration describes a step that runs a

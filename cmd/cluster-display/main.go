@@ -138,7 +138,7 @@ func (g *clusterInfoGetter) GetClusterDetails(ctx context.Context, cluster strin
 		return nil, fmt.Errorf("failed to resolve the console host for cluster %s: %w", cluster, err)
 	}
 	registryHost := "unset"
-	if cluster != string(api.ClusterHive) {
+	if cluster != string(api.ClusterHostedMgmt1) && cluster != string(api.ClusterHostedMgmt2) {
 		host, err := api.ResolveImageRegistryHost(ctx, client)
 		if err != nil {
 			return nil, fmt.Errorf("failed to resolve the image registry host for cluster %s: %w", cluster, err)
@@ -172,23 +172,23 @@ func (g *clusterInfoGetter) GetClusterDetails(ctx context.Context, cluster strin
 		"product":      product,
 		"cloud":        cloud,
 	}
-	if cluster == string(api.ClusterHive) {
+	if cluster == string(api.ClusterHostedMgmt1) || cluster == string(api.ClusterHostedMgmt2) {
 		hypershiftCM := &corev1.ConfigMap{}
 		if err := client.Get(ctx, ctrlruntimeclient.ObjectKey{Namespace: "hypershift", Name: "supported-versions"}, hypershiftCM); err != nil {
-			return nil, fmt.Errorf("failed to get ConfigMap supported-versions in hypershift for cluster hive: %w", err)
+			return nil, fmt.Errorf("failed to get ConfigMap supported-versions in hypershift namespace for cluster %s: %w", cluster, err)
 		}
 		versions, ok := hypershiftCM.Data["supported-versions"]
 		if !ok {
-			return nil, fmt.Errorf("failed to get supported-versions from ConfigMap supported-versions in hypershift for cluster hive: %w", err)
+			return nil, fmt.Errorf("failed to get ConfigMap supported-versions in hypershift namespace for cluster %s: %w", cluster, err)
 		}
 
 		sVersions := &hypershiftSupportedVersions{}
 		if err := json.Unmarshal([]byte(versions), sVersions); err != nil {
-			return nil, fmt.Errorf("failed to unmarshal hive's supported versions: %w", err)
+			return nil, fmt.Errorf("failed to unmarshal hypershift's supported versions: %w", err)
 		}
 		d, err := json.Marshal(sVersions.Versions)
 		if err != nil {
-			return nil, fmt.Errorf("failed to marshal hive's supported versions: %w", err)
+			return nil, fmt.Errorf("failed to marshal hypershift's supported versions: %w", err)
 		}
 		ret["hypershiftSupportedVersions"] = string(d)
 	}
@@ -228,7 +228,7 @@ func (c *memoryCache) GetClusterPoolPage(ctx context.Context, client ctrlruntime
 	return &Page{Data: c.ClusterPoolData}, nil
 }
 
-func (c *memoryCache) GetClusterPage(ctx context.Context, clients map[string]ctrlruntimeclient.Client, skipHive bool, getter ClusterInfoGetter) *Page {
+func (c *memoryCache) GetClusterPage(ctx context.Context, clients map[string]ctrlruntimeclient.Client, skipHostedMgmt bool, getter ClusterInfoGetter) *Page {
 	c.clusterDataMutex.Lock()
 	defer c.clusterDataMutex.Unlock()
 	if c.clusterData == nil || time.Now().After(c.clusterDataLastUpdatedAt.Add(c.CacheDuration)) {
@@ -236,21 +236,21 @@ func (c *memoryCache) GetClusterPage(ctx context.Context, clients map[string]ctr
 		c.clusterDataLastUpdatedAt = time.Now()
 		c.clusterData = data
 	}
-	if skipHive {
-		var skipHiveData []map[string]string
+	if skipHostedMgmt {
+		var skipHostedMgmtData []map[string]string
 		for _, d := range c.clusterData {
-			var hive bool
+			var hostedMgmt bool
 			for k, v := range d {
-				if k == "cluster" && v == string(api.HiveCluster) {
-					hive = true
+				if k == "cluster" && (v == string(api.ClusterHostedMgmt1) || v == string(api.ClusterHostedMgmt2)) {
+					hostedMgmt = true
 					break
 				}
 			}
-			if !hive {
-				skipHiveData = append(skipHiveData, d)
+			if !hostedMgmt {
+				skipHostedMgmtData = append(skipHostedMgmtData, d)
 			}
 		}
-		return &Page{Data: skipHiveData}
+		return &Page{Data: skipHostedMgmtData}
 	}
 	return &Page{Data: c.clusterData}
 }
@@ -312,14 +312,14 @@ func getRouter(ctx context.Context, hiveClient ctrlruntimeclient.Client, clients
 		case "clusterpools":
 			page, err = cache.GetClusterPoolPage(ctx, hiveClient)
 		case "clusters":
-			skipHive := r.URL.Query().Get("skipHive") == "true"
+			skipHostedMgmt := r.URL.Query().Get("skipHostedMgmt") == "true"
 			prowDisabledClusters, err := prowDisabledClustersGetter(ctx)
 			if err != nil {
 				http.Error(w, err.Error(), http.StatusInternalServerError)
 				return
 			}
 			disabledClusters := sets.New(prowDisabledClusters...)
-			page = cache.GetClusterPage(ctx, allClients, skipHive, &clusterInfoGetter{})
+			page = cache.GetClusterPage(ctx, allClients, skipHostedMgmt, &clusterInfoGetter{})
 			var enabled []map[string]string
 			for _, d := range page.Data {
 				c, ok := d["cluster"]

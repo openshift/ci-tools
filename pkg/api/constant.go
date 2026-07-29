@@ -46,7 +46,7 @@ const (
 	NoBuildsValue = "true"
 
 	// HiveCluster is the cluster where Hive is deployed
-	HiveCluster = ClusterHive
+	HiveCluster = ClusterHostedMgmt1
 
 	// HiveAdminKubeconfigSecret is the name of the secret in ci-op-<hash> namespace that stores the Admin's kubeconfig for the ephemeral cluster provisioned by Hive.
 	HiveAdminKubeconfigSecret = "hive-admin-kubeconfig"

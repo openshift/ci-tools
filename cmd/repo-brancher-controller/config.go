@@ -29,7 +29,7 @@ func loadDesiredState(configDir string, forwardingConfig *forwardingConfig) (map
 			return nil
 		}
 
-		if current := forwardingConfig.DefaultBranch; current != nil && (info.Branch == "main" || info.Branch == "master") && api.PromotesOfficialImage(configuration, api.WithoutOKD, current.ConfigsPromotingTo) {
+		if current := forwardingConfig.DefaultBranch; current != nil && (info.Branch == "main" || info.Branch == "master") && api.TargetsOfficialImage(configuration, api.WithoutOKD, current.ConfigsPromotingTo) {
 			for _, forward := range current.forwardBlocks() {
 				if err := addTargets(current.ConfigsPromotingTo, forward, true); err != nil {
 					return err
@@ -38,7 +38,7 @@ func loadDesiredState(configDir string, forwardingConfig *forwardingConfig) (map
 		}
 
 		for _, forwarding := range forwardingConfig.ReleaseBranches {
-			if !api.PromotesOfficialImage(configuration, api.WithoutOKD, forwarding.Source) {
+			if !api.TargetsOfficialImage(configuration, api.WithoutOKD, forwarding.Source) {
 				continue
 			}
 			for _, forward := range forwarding.forwardBlocks() {

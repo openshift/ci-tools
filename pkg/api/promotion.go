@@ -71,6 +71,19 @@ func PromotesOfficialImage(configSpec *ReleaseBuildConfiguration, includeOKD OKD
 	return false
 }
 
+// TargetsOfficialImage determines if a configuration targets promotionName in an
+// official stream, regardless of whether promotion is disabled. Use this instead
+// of PromotesOfficialImage when the disabled flag is irrelevant, e.g. for branch
+// forwarding where release branches always have promotion disabled.
+func TargetsOfficialImage(configSpec *ReleaseBuildConfiguration, includeOKD OKDInclusion, promotionName string) bool {
+	for _, target := range PromotionTargets(configSpec.PromotionConfiguration) {
+		if BuildsOfficialImages(target, includeOKD) && target.Name == promotionName {
+			return true
+		}
+	}
+	return false
+}
+
 // BuildsOfficialImages determines if a configuration will result in official images
 // being built.
 func BuildsOfficialImages(configSpec PromotionTarget, includeOKD OKDInclusion) bool {

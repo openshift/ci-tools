@@ -91,7 +91,9 @@ func TestLoadDesiredStateUsesBranchCategoriesAndScopedIgnores(t *testing.T) {
 	}
 	want := map[repoKey]sets.Set[string]{
 		{org: "org", repo: "default", source: "main"}:                    sets.New("release-5.0", "release-5.1"),
+		{org: "org", repo: "disabled-default", source: "main"}:           sets.New("release-5.0", "release-5.1"),
 		{org: "org", repo: "release", source: "release-5.0"}:             sets.New("release-4.23"),
+		{org: "org", repo: "disabled-release", source: "release-5.0"}:    sets.New("release-4.23"),
 		{org: "org", repo: "openshift-release", source: "openshift-5.0"}: sets.New("openshift-4.23"),
 	}
 	if len(state) != len(want) {

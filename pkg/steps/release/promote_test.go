@@ -874,7 +874,14 @@ func TestGetPromotionPod(t *testing.T) {
 
 	for _, testCase := range testCases {
 		t.Run(testCase.name, func(t *testing.T) {
-			testhelper.CompareWithFixture(t, getPromotionPod(testCase.imageMirror, "20240603235401", testCase.namespace, testCase.stepName, "stable:cli", testCase.nodeArchitectures))
+			jobSpec := &api.JobSpec{}
+			jobSpec.SetNamespace(testCase.namespace)
+			s := &promotionStep{
+				name:              testCase.stepName,
+				jobSpec:           jobSpec,
+				nodeArchitectures: testCase.nodeArchitectures,
+			}
+			testhelper.CompareWithFixture(t, s.getPromotionPod(testCase.imageMirror, "20240603235401", "stable:cli"))
 		})
 	}
 }
@@ -1132,7 +1139,12 @@ func TestGetImageMirror(t *testing.T) {
 
 	for _, testCase := range testCases {
 		t.Run(testCase.name, func(t *testing.T) {
-			if actual, _ := getImageMirrorTarget(testCase.tags, testCase.pipeline, testCase.registry, "20240603235401", testCase.mirrorFunc, testCase.targetNameFunc); !reflect.DeepEqual(actual, testCase.expected) {
+			s := &promotionStep{
+				registry:       testCase.registry,
+				mirrorFunc:     testCase.mirrorFunc,
+				targetNameFunc: testCase.targetNameFunc,
+			}
+			if actual, _ := s.getImageMirrorTarget(testCase.tags, testCase.pipeline, "20240603235401"); !reflect.DeepEqual(actual, testCase.expected) {
 				t.Errorf("%s: got incorrect ImageMirror mapping: %v", testCase.name, diff.ObjectDiff(actual, testCase.expected))
 			}
 		})
@@ -1173,12 +1185,44 @@ func TestGetMirrorRetryShell(t *testing.T) {
 }
 
 func TestGetTagLoopCommandQuotesHeredoc(t *testing.T) {
-	got := getTagLoopCommand([]string{"quay-proxy.ci.openshift.org/openshift/ci@sha256:bbb ci/ci-quay:${component}"}, 2)
+	s := &promotionStep{}
+	got := s.getTagLoopCommand([]string{"quay-proxy.ci.openshift.org/openshift/ci@sha256:bbb ci/ci-quay:${component}"}, 2)
 	if !strings.Contains(got, "<<'EOF'") {
 		t.Fatalf("expected quoted heredoc delimiter, got:\n%s", got)
 	}
 	if !strings.Contains(got, "ci/ci-quay:${component}") {
 		t.Fatalf("expected literal ${component} in tag loop, got:\n%s", got)
+	}
+}
+
+func TestOcTagCommand(t *testing.T) {
+	const importMode = "--import-mode='PreserveOriginal'"
+	testCases := []struct {
+		name           string
+		cliVersion     string
+		wantImportMode bool
+	}{
+		{name: "empty version keeps import-mode", cliVersion: "", wantImportMode: true},
+		{name: "4.11 omits import-mode", cliVersion: "4.11", wantImportMode: false},
+		{name: "4.12 omits import-mode", cliVersion: "4.12", wantImportMode: false},
+		{name: "4.13 keeps import-mode", cliVersion: "4.13", wantImportMode: true},
+		{name: "4.21 keeps import-mode", cliVersion: "4.21", wantImportMode: true},
+		{name: "invalid version keeps import-mode", cliVersion: "not-a-version", wantImportMode: true},
+	}
+	for _, tc := range testCases {
+		t.Run(tc.name, func(t *testing.T) {
+			got := (&promotionStep{cliVersion: tc.cliVersion}).ocTagCommand(2, "--reference", "$tag")
+			has := strings.Contains(got, importMode)
+			if has != tc.wantImportMode {
+				t.Fatalf("cliVersion=%q: import-mode present=%v, want %v\ngot: %s", tc.cliVersion, has, tc.wantImportMode, got)
+			}
+			if !strings.HasPrefix(got, "oc tag --source=docker --loglevel=2 --reference-policy='source'") {
+				t.Fatalf("unexpected command prefix: %s", got)
+			}
+			if !strings.HasSuffix(got, "--reference $tag") {
+				t.Fatalf("unexpected command suffix: %s", got)
+			}
+		})
 	}
 }
 
@@ -1196,6 +1240,7 @@ func TestGetQuayPromotionShell(t *testing.T) {
 		name              string
 		imageMirror       map[string]string
 		nodeArchitectures []string
+		cliVersion        string
 	}{
 		{
 			name:              "promotion-quay",
@@ -1227,6 +1272,7 @@ func TestGetQuayPromotionShell(t *testing.T) {
 		{
 			name:              "promotion-quay-4.12",
 			nodeArchitectures: []string{"amd64"},
+			cliVersion:        "4.12",
 			imageMirror: map[string]string{
 				"quay.io/openshift/ci:20240603235401_prune_ovn-kubernetes":      "quay.io/openshift/ci:ocp_4.12_ovn-kubernetes",
 				"quay.io/openshift/ci:20240603235401_prune_ovn-kubernetes-base": "quay.io/openshift/ci:ocp_4.12_ovn-kubernetes-base",
@@ -1250,7 +1296,11 @@ func TestGetQuayPromotionShell(t *testing.T) {
 
 	for _, testCase := range testCases {
 		t.Run(testCase.name, func(t *testing.T) {
-			testhelper.CompareWithFixture(t, quayPromotionScriptConfigMap(getQuayPromotionShell(testCase.imageMirror, timeStr, testCase.nodeArchitectures)))
+			s := &promotionStep{
+				nodeArchitectures: testCase.nodeArchitectures,
+				cliVersion:        testCase.cliVersion,
+			}
+			testhelper.CompareWithFixture(t, quayPromotionScriptConfigMap(s.getQuayPromotionShell(testCase.imageMirror, timeStr)))
 		})
 	}
 }
@@ -1259,7 +1309,8 @@ func TestGetResolveAndTagRetryShell(t *testing.T) {
 	regcfg := "/etc/push-secret/.dockerconfigjson"
 	proxyTag := "quay-proxy.ci.openshift.org/openshift/ci:ocp_4.21_ovn-kubernetes"
 	isTag := "ocp/4.21:ovn-kubernetes"
-	got := getResolveAndTagRetryShell(regcfg, proxyTag, isTag, 2, "linux/amd64")
+	s := &promotionStep{nodeArchitectures: []string{"amd64"}}
+	got := s.getResolveAndTagRetryShell(regcfg, proxyTag, isTag, 2)
 
 	quayIOTag := "quay.io/openshift/ci:ocp_4.21_ovn-kubernetes"
 	for _, sub := range []string{
@@ -1280,20 +1331,34 @@ func TestGetResolveAndTagRetryShell(t *testing.T) {
 		}
 	}
 
-	got = getResolveAndTagRetryShell(regcfg, "quay-proxy.ci.openshift.org/openshift/ci", isTag, 2, "linux/amd64")
+	got = s.getResolveAndTagRetryShell(regcfg, "quay-proxy.ci.openshift.org/openshift/ci", isTag, 2)
 	if !strings.Contains(got, "malformed quay proxy tag") || !strings.Contains(got, "exit 1") {
 		t.Fatalf("expected malformed-tag shell guard, got:\n%s", got)
 	}
 }
 
 func TestGetQuayPromotionPod(t *testing.T) {
-	pod := newPromotionPod("ci-op-foo", api.PromotionQuayStepName, api.PromotionQuayStepName, "stable:cli", []string{"amd64"},
+	jobSpec := &api.JobSpec{}
+	jobSpec.SetNamespace("ci-op-foo")
+	s := &promotionStep{
+		name:              api.PromotionQuayStepName,
+		jobSpec:           jobSpec,
+		nodeArchitectures: []string{"amd64"},
+	}
+	pod := s.newPromotionPod(api.PromotionQuayStepName, "stable:cli",
 		[]string{"/bin/sh", quayPromotionScriptMountPath + "/" + quayPromotionScriptKey}, nil, "promotion-quay-123")
 	testhelper.CompareWithFixture(t, pod)
 }
 
 func TestGetQuayPromotionPodArm64Only(t *testing.T) {
-	pod := newPromotionPod("ci-op-foo", api.PromotionQuayStepName, api.PromotionQuayStepName, "stable:cli", []string{"arm64"},
+	jobSpec := &api.JobSpec{}
+	jobSpec.SetNamespace("ci-op-foo")
+	s := &promotionStep{
+		name:              api.PromotionQuayStepName,
+		jobSpec:           jobSpec,
+		nodeArchitectures: []string{"arm64"},
+	}
+	pod := s.newPromotionPod(api.PromotionQuayStepName, "stable:cli",
 		[]string{"/bin/sh", quayPromotionScriptMountPath + "/" + quayPromotionScriptKey}, nil, "promotion-quay-123")
 	if got := pod.Spec.NodeSelector["kubernetes.io/arch"]; got != "arm64" {
 		t.Fatalf("expected arm64 node selector, got %q", got)
@@ -1391,7 +1456,7 @@ func TestPromotionCLIImageInfoFilterOS(t *testing.T) {
 		tt := tt
 		t.Run(tt.name, func(t *testing.T) {
 			t.Parallel()
-			if got := promotionCLIImageInfoFilterOS(tt.nodeArchitectures); got != tt.want {
+			if got := (&promotionStep{nodeArchitectures: tt.nodeArchitectures}).promotionCLIImageInfoFilterOS(); got != tt.want {
 				t.Fatalf("got %q, want %q", got, tt.want)
 			}
 		})
@@ -1426,13 +1491,17 @@ func TestPromotionCLIImageFromRegistry(t *testing.T) {
 func TestGetPromotionPodFallbackImageDoesNotPinArm64Node(t *testing.T) {
 	t.Parallel()
 
-	pod := getPromotionPod(
+	jobSpec := &api.JobSpec{}
+	jobSpec.SetNamespace("ci-op-test")
+	s := &promotionStep{
+		name:              "promotion",
+		jobSpec:           jobSpec,
+		nodeArchitectures: []string{"arm64"},
+	}
+	pod := s.getPromotionPod(
 		map[string]string{"registry.ci.openshift.org/ci/bin:latest": "docker-registry.default.svc:5000/ci-op-test/pipeline@sha256:bbb"},
 		"20240603235401",
-		"ci-op-test",
-		"promotion",
 		api.QCIAPPCIDomain+"/openshift/ci:ocp_4.22_cli",
-		[]string{"arm64"},
 	)
 	if got := pod.Spec.NodeSelector["kubernetes.io/arch"]; got != "amd64" {
 		t.Fatalf("expected fallback cli image to run on amd64 node, got selector %v", pod.Spec.NodeSelector)

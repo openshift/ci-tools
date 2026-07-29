@@ -1250,8 +1250,6 @@ func TestGetQuayPromotionShell(t *testing.T) {
 				"quay.io/openshift/ci:20240603235401_prune_ci_c_latest": "quay.io/openshift/ci:ci_c_latest",
 				"quay.io/openshift/ci:ci_a_latest":                      "registry.build02.ci.openshift.org/ci-op-y2n8rsh3/pipeline@sha256:bbb",
 				"quay.io/openshift/ci:ci_c_latest":                      "registry.build02.ci.openshift.org/ci-op-y2n8rsh3/pipeline@sha256:ddd",
-				"ci/ci-quay:${component}":                               "quay-proxy.ci.openshift.org/openshift/ci@sha256:bbb",
-				"ci/${component}-quay:c":                                "quay-proxy.ci.openshift.org/openshift/ci@sha256:ddd",
 			},
 		},
 		{
@@ -1289,7 +1287,6 @@ func TestGetQuayPromotionShell(t *testing.T) {
 				"quay.io/openshift/ci:ocp_4.21_ovn-kubernetes":  "registry.build02.ci.openshift.org/ci-op-y2n8rsh3/pipeline@sha256:aaa",
 				"ocp/4.21:ovn-kubernetes":                       "quay-proxy.ci.openshift.org/openshift/ci@sha256:aaa",
 				"quay.io/openshift/ci:ci_ci_sanitize-prow-jobs": "registry.build02.ci.openshift.org/ci-op-y2n8rsh3/pipeline@sha256:bbb",
-				"ci/ci-quay:sanitize-prow-jobs":                 "quay-proxy.ci.openshift.org/openshift/ci@sha256:bbb",
 			},
 		},
 	}
@@ -1425,16 +1422,24 @@ func TestQuayProxyTagFromISKey(t *testing.T) {
 			wantTag:  "quay-proxy.ci.openshift.org/openshift/ci:ocp_5.0_ansible",
 			wantOK:   true,
 		},
+		{
+			name:     "ocp-priv stream",
+			isTagKey: "ocp-priv/4.23:cli",
+			wantTag:  "quay-proxy.ci.openshift.org/openshift/ci:ocp-priv_4.23_cli",
+			wantOK:   true,
+		},
 	}
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
 			got, ok := quayProxyTagFromISKey(tt.isTagKey)
-			if ok != tt.wantOK {
-				t.Errorf("quayProxyTagFromISKey(%q) ok = %v, want %v", tt.isTagKey, ok, tt.wantOK)
+			if diff := cmp.Diff(tt.wantOK, ok); diff != "" {
+				t.Errorf("quayProxyTagFromISKey(%q) ok mismatch (-want +got):\n%s", tt.isTagKey, diff)
 				return
 			}
-			if ok && got != tt.wantTag {
-				t.Errorf("quayProxyTagFromISKey(%q) = %q, want %q", tt.isTagKey, got, tt.wantTag)
+			if ok {
+				if diff := cmp.Diff(tt.wantTag, got); diff != "" {
+					t.Errorf("quayProxyTagFromISKey(%q) tag mismatch (-want +got):\n%s", tt.isTagKey, diff)
+				}
 			}
 		})
 	}

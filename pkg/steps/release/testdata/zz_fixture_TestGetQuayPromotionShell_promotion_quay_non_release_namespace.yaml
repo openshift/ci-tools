@@ -1,5 +1,5 @@
 data:
-  promote.sh: |-
+  promote.sh: |
     function mirror {
     for r in $(seq 1 $1); do
       echo Mirror attempt $r
@@ -48,18 +48,6 @@ data:
       echo "promotion: retrying digest-tag for ocp/4.21:ovn-kubernetes (attempt $((r+1))/5 after randomized backoff)" >&2
       backoff=$(($RANDOM % 120))s
       sleep "${backoff}"
-    done
-
-    for r in {1..2}; do
-    echo "Tag attempt $r"
-
-    while read tag; do
-    oc tag --source=docker --loglevel=2 --reference-policy='source' --import-mode='PreserveOriginal' --reference $tag || break
-    done <<'EOF'
-    quay-proxy.ci.openshift.org/openshift/ci@sha256:bbb ci/ci-quay:sanitize-prow-jobs
-    EOF
-    [[ $? -ne 0 ]] && break
-    :
     done
 metadata:
   creationTimestamp: null

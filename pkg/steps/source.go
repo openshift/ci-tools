@@ -525,6 +525,20 @@ func handleBuilds(ctx context.Context, buildClient BuildClient, podClient kubern
 	return utilerrors.NewAggregate(errs)
 }
 
+// pinBuildToSingleArchNode pins a non-manifest-listed build (bundle images) to nodes of the one
+// architecture every pipeline manifest list is guaranteed to contain: constructMultiArchBuilds
+// builds NodeArchitectureAMD64 by default and AdditionalArchitectures/Capabilities are additive
+// (see ProjectDirectoryImageBuildStepConfiguration.AllCapabilities and ResolveMultiArch), so amd64
+// nodes can always resolve the build's inputs. Selector keys other than the architecture label are
+// merged rather than replaced so a selector set earlier on the build survives; any pre-existing
+// architecture value is intentionally overwritten with the pinned architecture.
+func pinBuildToSingleArchNode(build *buildapi.Build) {
+	if build.Spec.NodeSelector == nil {
+		build.Spec.NodeSelector = map[string]string{}
+	}
+	build.Spec.NodeSelector[corev1.LabelArchStable] = string(api.NodeArchitectureAMD64)
+}
+
 // constructMultiArchBuilds gets a specific build and constructs multiple builds for each architecture.
 // The name and the output image of the build is suffixed with the architecture name and it will include the nodeSelector for the specific architecture.
 // e.x if the build name is "foo" and the architectures are "amd64,arm64", the new builds will be "foo-amd64" and "foo-arm64".

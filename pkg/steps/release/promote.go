@@ -47,6 +47,7 @@ type promotionStep struct {
 	mirrorFunc        func(source, target string, tag api.ImageStreamTagReference, date string, imageMirror map[string]string)
 	targetNameFunc    func(string, api.PromotionTarget) string
 	nodeArchitectures []string
+	cliVersion        string
 }
 
 func (s *promotionStep) Inputs() (api.InputDefinition, error) {
@@ -98,7 +99,7 @@ func (s *promotionStep) run(ctx context.Context) error {
 	}
 
 	timeStr := time.Now().Format("20060102150405")
-	imageMirrorTarget, namespaces := getImageMirrorTarget(tags, pipeline, s.registry, timeStr, s.mirrorFunc, s.targetNameFunc)
+	imageMirrorTarget, namespaces := s.getImageMirrorTarget(tags, pipeline, timeStr)
 	if len(imageMirrorTarget) == 0 {
 		logger.Info("Nothing to promote, skipping...")
 		return nil
@@ -119,7 +120,7 @@ func (s *promotionStep) run(ctx context.Context) error {
 		return s.runQuayPromotion(ctx, imageMirrorTarget, timeStr, cliImage)
 	}
 
-	if _, err := steps.RunPod(ctx, s.client, getPromotionPod(imageMirrorTarget, timeStr, s.jobSpec.Namespace(), s.name, cliImage, s.nodeArchitectures), false); err != nil {
+	if _, err := steps.RunPod(ctx, s.client, s.getPromotionPod(imageMirrorTarget, timeStr, cliImage), false); err != nil {
 		return fmt.Errorf("unable to run promotion pod: %w", err)
 	}
 	return nil
@@ -169,7 +170,7 @@ func (s *promotionStep) ensureNamespaces(ctx context.Context, namespaces sets.Se
 	return nil
 }
 
-func getImageMirrorTarget(tags map[string][]api.ImageStreamTagReference, pipeline *imagev1.ImageStream, registry string, time string, mirrorFunc func(source, target string, tag api.ImageStreamTagReference, time string, imageMirror map[string]string), targetNameFunc func(string, api.PromotionTarget) string) (map[string]string, sets.Set[string]) {
+func (s *promotionStep) getImageMirrorTarget(tags map[string][]api.ImageStreamTagReference, pipeline *imagev1.ImageStream, time string) (map[string]string, sets.Set[string]) {
 	if pipeline == nil {
 		return nil, nil
 	}
@@ -184,27 +185,27 @@ func getImageMirrorTarget(tags map[string][]api.ImageStreamTagReference, pipelin
 		dockerImageReference = getPublicImageReference(dockerImageReference, pipeline.Status.PublicDockerImageRepository)
 		for _, dst := range dsts {
 			var target string
-			if targetNameFunc != nil {
+			if s.targetNameFunc != nil {
 				// Use targetNameFunc to generate template and substitute ${component} with actual component name
 				promotionTarget := api.PromotionTarget{
 					Namespace: dst.Namespace,
 					Name:      dst.Name,
 					Tag:       dst.Tag,
 				}
-				template := targetNameFunc(registry, promotionTarget)
-				target = strings.Replace(template, api.ComponentFormatReplacement, dst.Tag, -1)
+				template := s.targetNameFunc(s.registry, promotionTarget)
+				target = strings.ReplaceAll(template, api.ComponentFormatReplacement, dst.Tag)
 			} else {
 				// Fallback to direct target construction for backwards compatibility
-				target = fmt.Sprintf("%s/%s", registry, dst.ISTagName())
+				target = fmt.Sprintf("%s/%s", s.registry, dst.ISTagName())
 			}
-			mirrorFunc(dockerImageReference, target, dst, time, imageMirror)
+			s.mirrorFunc(dockerImageReference, target, dst, time, imageMirror)
 			namespaces.Insert(dst.Namespace)
 		}
 	}
 	if len(imageMirror) == 0 {
 		return nil, nil
 	}
-	if registry == api.QuayOpenShiftCIRepo {
+	if s.registry == api.QuayOpenShiftCIRepo {
 		namespaces = nil
 	}
 	return imageMirror, namespaces
@@ -287,18 +288,32 @@ func promotionCLIImageFromRegistryWithResolver(stableVersionResolver func(*http.
 	return image, nil
 }
 
+func (s *promotionStep) ocTagCommand(loglevel int, extra ...string) string {
+	args := []string{
+		"oc", "tag",
+		"--source=docker",
+		fmt.Sprintf("--loglevel=%d", loglevel),
+		"--reference-policy='source'",
+	}
+	if v, err := api.ParseVersion(s.cliVersion); err != nil || v.Major != 4 || v.Minor >= 13 {
+		args = append(args, "--import-mode='PreserveOriginal'")
+	}
+	args = append(args, extra...)
+	return strings.Join(args, " ")
+}
+
 func getMirrorCommand(registryConfig string, images []string, loglevel int) string {
 	return fmt.Sprintf("oc image mirror --loglevel=%d --keep-manifest-list --registry-config=%s --max-per-registry=10 %s",
 		loglevel, registryConfig, strings.Join(images, " "))
 }
 
-func getTagLoopCommand(tagSpecs []string, loglevel int) string {
+func (s *promotionStep) getTagLoopCommand(tagSpecs []string, loglevel int) string {
 	return fmt.Sprintf(`
 while read tag; do
-oc tag --source=docker --loglevel=%d --reference-policy='source' --import-mode='PreserveOriginal' --reference $tag || break
+%s || break
 done <<'EOF'
 %s
-EOF`, loglevel, strings.Join(tagSpecs, "\n"))
+EOF`, s.ocTagCommand(loglevel, "--reference", "$tag"), strings.Join(tagSpecs, "\n"))
 }
 
 // quayProxyTagFromISKey derives the quay-proxy floating tag from an IS tag key.
@@ -337,8 +352,8 @@ func quayProxyTagFromISKey(isTagKey string) (string, bool) {
 
 // promotionCLIImageInfoFilterOS returns the --filter-by-os value matching the promotion pod's
 // node architecture (amd64 vs arm64-only) so oc image info resolves one digest for manifest lists.
-func promotionCLIImageInfoFilterOS(nodeArchitectures []string) string {
-	archs := sets.New[string](nodeArchitectures...)
+func (s *promotionStep) promotionCLIImageInfoFilterOS() string {
+	archs := sets.New(s.nodeArchitectures...)
 	if !archs.Has("amd64") && archs.Has("arm64") {
 		return "linux/arm64"
 	}
@@ -404,7 +419,7 @@ func (s *promotionStep) runQuayPromotion(ctx context.Context, imageMirrorTarget 
 			Namespace: s.jobSpec.Namespace(),
 		},
 		Data: map[string]string{
-			quayPromotionScriptKey: getQuayPromotionShell(imageMirrorTarget, timeStr, s.nodeArchitectures),
+			quayPromotionScriptKey: s.getQuayPromotionShell(imageMirrorTarget, timeStr),
 		},
 	}
 	if err := s.client.Create(ctx, configMap); err != nil {
@@ -418,7 +433,7 @@ func (s *promotionStep) runQuayPromotion(ctx context.Context, imageMirrorTarget 
 		}
 	}()
 
-	pod := newPromotionPod(s.jobSpec.Namespace(), s.name, s.name, cliImage, s.nodeArchitectures,
+	pod := s.newPromotionPod(s.name, cliImage,
 		[]string{"/bin/sh", quayPromotionScriptMountPath + "/" + quayPromotionScriptKey}, nil, configMap.Name)
 	if _, err := steps.RunPod(ctx, s.client, pod, false); err != nil {
 		return fmt.Errorf("unable to run promotion-quay pod: %w", err)
@@ -426,7 +441,7 @@ func (s *promotionStep) runQuayPromotion(ctx context.Context, imageMirrorTarget 
 	return nil
 }
 
-func getQuayPromotionShell(imageMirrorTarget map[string]string, timeStr string, nodeArchitectures []string) string {
+func (s *promotionStep) getQuayPromotionShell(imageMirrorTarget map[string]string, timeStr string) string {
 	var incomingImages, floatTags []string
 	pruneTagForFloat := map[string]string{}
 	var tags []string
@@ -455,25 +470,24 @@ func getQuayPromotionShell(imageMirrorTarget map[string]string, timeStr string, 
 	}
 
 	registryConfig := promotionRegistryConfigPath()
-	filterOS := promotionCLIImageInfoFilterOS(nodeArchitectures)
 	script := []string{mirrorShellFunction}
 	if len(incomingImages) > 0 {
 		script = append(script, getMirrorRetryShell(registryConfig, incomingImages))
 	}
 	sort.Strings(floatTags)
 	for _, floatTag := range floatTags {
-		script = append(script, getStagedQuayFloatPromotionShell(registryConfig, floatTag, pruneTagForFloat[floatTag], filterOS))
+		script = append(script, s.getStagedQuayFloatPromotionShell(registryConfig, floatTag, pruneTagForFloat[floatTag]))
 	}
 	for _, pair := range resolveAndTagPairs {
-		script = append(script, getResolveAndTagRetryShell(registryConfig, pair[0], pair[1], 2, filterOS))
+		script = append(script, s.getResolveAndTagRetryShell(registryConfig, pair[0], pair[1], 2))
 	}
 	if len(tags) > 0 {
-		script = append(script, tagRetryShell(2, `"Tag attempt $r"`, getTagLoopCommand(tags, 2), ""))
+		script = append(script, tagRetryShell(2, `"Tag attempt $r"`, s.getTagLoopCommand(tags, 2), ""))
 	}
 	return strings.Join(script, "\n")
 }
 
-func getResolveAndTagRetryShell(registryConfig, quayProxyTag, isTag string, loglevel int, filterByOS string) string {
+func (s *promotionStep) getResolveAndTagRetryShell(registryConfig, quayProxyTag, isTag string, loglevel int) string {
 	colon := strings.LastIndex(quayProxyTag, ":")
 	if colon == -1 {
 		return fmt.Sprintf("echo promotion-quay: malformed quay proxy tag %q >&2\nexit 1", quayProxyTag)
@@ -489,7 +503,7 @@ func getResolveAndTagRetryShell(registryConfig, quayProxyTag, isTag string, logl
   if [ -z "${_digest}" ]; then
     _digest=$(echo "${_info}" | sed -n '/^Digest:[[:space:]]/s/^Digest:[[:space:]]*//p' | head -n1)
   fi
-  if [ -n "${_digest}" ] && oc tag --source=docker --loglevel=%d --reference-policy='source' --import-mode='PreserveOriginal' --reference %s@${_digest} %s; then
+  if [ -n "${_digest}" ] && %s; then
     break
   fi
   echo "promotion: digest-tag failed for %s attempt ${r}/%d (QCI digest may have moved after mirror)" >&2
@@ -500,15 +514,16 @@ func getResolveAndTagRetryShell(registryConfig, quayProxyTag, isTag string, logl
   backoff=$(($RANDOM %% %d))s
   sleep "${backoff}"
 done
-`, n, registryConfig, filterByOS, quayIOTag, loglevel, repo, isTag,
+`, n, registryConfig, s.promotionCLIImageInfoFilterOS(), quayIOTag,
+		s.ocTagCommand(loglevel, "--reference", repo+"@${_digest}", isTag),
 		isTag, n, n, isTag, n, 120)
 }
 
-func getStagedQuayFloatPromotionShell(registryConfig, floatTag, pruneTag, filterByOS string) string {
+func (s *promotionStep) getStagedQuayFloatPromotionShell(registryConfig, floatTag, pruneTag string) string {
 	// Must use --filter-by-os: oc image info exits non-zero on multi-arch floats without it,
 	// which skipped _prune_ backups and let Quay GC prior digests under active payload jobs.
 	checkOld := fmt.Sprintf(`_OLD_EXISTS=false
-if oc image info --registry-config=%s --filter-by-os=%s %s >/dev/null 2>&1; then _OLD_EXISTS=true; fi`, registryConfig, filterByOS, floatTag)
+if oc image info --registry-config=%s --filter-by-os=%s %s >/dev/null 2>&1; then _OLD_EXISTS=true; fi`, registryConfig, s.promotionCLIImageInfoFilterOS(), floatTag)
 
 	var backupPairs []string
 	if pruneTag != "" {
@@ -544,7 +559,7 @@ func promotionMirrorPair(src, dst string) string {
 	return fmt.Sprintf("%s=%s", src, dst)
 }
 
-func getPromotionPod(imageMirrorTarget map[string]string, timeStr string, namespace string, name string, cliImage string, nodeArchitectures []string) *coreapi.Pod {
+func (s *promotionStep) getPromotionPod(imageMirrorTarget map[string]string, timeStr, cliImage string) *coreapi.Pod {
 	var images, pruneImages, tags []string
 
 	for _, k := range slices.Sorted(maps.Keys(imageMirrorTarget)) {
@@ -568,7 +583,7 @@ func getPromotionPod(imageMirrorTarget map[string]string, timeStr string, namesp
 		commands = append(commands, getMirrorRetryShell(registryConfig, images))
 	}
 	if len(tags) > 0 {
-		commands = append(commands, tagRetryShell(5, "Tag attempt $r", getTagLoopCommand(tags, 2), tagRetryBackoff))
+		commands = append(commands, tagRetryShell(5, "Tag attempt $r", s.getTagLoopCommand(tags, 2), tagRetryBackoff))
 	}
 
 	script := []string{mirrorShellFunction}
@@ -577,10 +592,10 @@ func getPromotionPod(imageMirrorTarget map[string]string, timeStr string, namesp
 		script = append(script, fmt.Sprintf("%s || true", getMirrorCommand(registryConfig, pruneImages, 2)))
 	}
 	script = append(script, commands...)
-	return newPromotionPod(namespace, name, "promotion", cliImage, nodeArchitectures, []string{"/bin/sh", "-c"}, []string{strings.Join(script, "\n")}, "")
+	return s.newPromotionPod("promotion", cliImage, []string{"/bin/sh", "-c"}, []string{strings.Join(script, "\n")}, "")
 }
 
-func newPromotionPod(namespace, name, containerName, cliImage string, nodeArchitectures []string, command, args []string, configMapName string) *coreapi.Pod {
+func (s *promotionStep) newPromotionPod(containerName, cliImage string, command, args []string, configMapName string) *coreapi.Pod {
 	volumes := promotionPodVolumes()
 	mounts := promotionPodVolumeMounts()
 	if configMapName != "" {
@@ -614,12 +629,12 @@ func newPromotionPod(namespace, name, containerName, cliImage string, nodeArchit
 
 	return &coreapi.Pod{
 		ObjectMeta: meta.ObjectMeta{
-			Name:      name,
-			Namespace: namespace,
+			Name:      s.name,
+			Namespace: s.jobSpec.Namespace(),
 			Labels:    map[string]string{steps.AnnotationSaveContainerLogs: "true"},
 		},
 		Spec: coreapi.PodSpec{
-			NodeSelector:  promotionPodNodeSelector(cliImage, nodeArchitectures),
+			NodeSelector:  s.promotionPodNodeSelector(cliImage),
 			RestartPolicy: coreapi.RestartPolicyNever,
 			Containers:    []coreapi.Container{container},
 			Volumes:       volumes,
@@ -627,9 +642,9 @@ func newPromotionPod(namespace, name, containerName, cliImage string, nodeArchit
 	}
 }
 
-func promotionPodNodeSelector(cliImage string, nodeArchitectures []string) map[string]string {
+func (s *promotionStep) promotionPodNodeSelector(cliImage string) map[string]string {
 	nodeSelector := map[string]string{"kubernetes.io/arch": "amd64"}
-	archs := sets.New[string](nodeArchitectures...)
+	archs := sets.New[string](s.nodeArchitectures...)
 	if cliImage == "stable:cli" && !archs.Has("amd64") && archs.Has("arm64") {
 		nodeSelector = map[string]string{"kubernetes.io/arch": "arm64"}
 	}
@@ -871,6 +886,7 @@ func PromotionStep(
 	mirrorFunc func(source, target string, tag api.ImageStreamTagReference, date string, imageMirror map[string]string),
 	targetNameFunc func(string, api.PromotionTarget) string,
 	nodeArchitectures []string,
+	cliVersion string,
 ) api.Step {
 	return &promotionStep{
 		name:              name,
@@ -884,5 +900,6 @@ func PromotionStep(
 		mirrorFunc:        mirrorFunc,
 		targetNameFunc:    targetNameFunc,
 		nodeArchitectures: nodeArchitectures,
+		cliVersion:        cliVersion,
 	}
 }

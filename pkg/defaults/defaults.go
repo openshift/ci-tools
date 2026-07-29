@@ -104,6 +104,7 @@ func fromConfig(ctx context.Context, cfg *Config) ([]api.Step, []api.Step, error
 	var buildSteps []api.Step
 	var imageStepLinks []api.StepLink
 	var hasReleaseStep bool
+	var cliVersion string
 	resolver := rootImageResolver(cfg.kubeClient, ctx, cfg.Promote)
 	imageConfigs := cfg.GraphConf.InputImages()
 	rawSteps, err := runtimeStepConfigsForBuild(cfg.CIConfig, cfg.JobSpec, os.ReadFile, resolver, imageConfigs, cfg.InjectedTest)
@@ -135,19 +136,9 @@ func fromConfig(ctx context.Context, cfg *Config) ([]api.Step, []api.Step, error
 			var value string
 			var err error
 			var overrideCLIReleaseExtractImage *coreapi.ObjectReference
-			var overrideCLIResolveErr error
-			switch {
-			case resolveConfig.Integration != nil:
-				overrideCLIReleaseExtractImage, overrideCLIResolveErr = resolveCLIOverrideImage(api.ReleaseArchitectureAMD64, resolveConfig.Integration.Name)
-			case resolveConfig.Candidate != nil:
-				overrideCLIReleaseExtractImage, overrideCLIResolveErr = resolveCLIOverrideImage(resolveConfig.Candidate.Architecture, resolveConfig.Candidate.Version)
-			case resolveConfig.Release != nil:
-				overrideCLIReleaseExtractImage, overrideCLIResolveErr = resolveCLIOverrideImage(resolveConfig.Release.Architecture, resolveConfig.Release.Version)
-			case resolveConfig.Prerelease != nil:
-				overrideCLIReleaseExtractImage, overrideCLIResolveErr = resolveCLIOverrideImage(resolveConfig.Prerelease.Architecture, resolveConfig.Prerelease.VersionBounds.Lower)
-			}
-			if overrideCLIResolveErr != nil {
-				return nil, nil, results.ForReason("resolving_cli_override").ForError(fmt.Errorf("failed to resolve override CLI image for release %s: %w", resolveConfig.Name, overrideCLIResolveErr))
+			overrideCLIReleaseExtractImage, cliVersion, err = resolveReleaseCLIOverride(resolveConfig.UnresolvedRelease)
+			if err != nil {
+				return nil, nil, results.ForReason("resolving_cli_override").ForError(fmt.Errorf("failed to resolve override CLI image for release %s: %w", resolveConfig.Name, err))
 			}
 			referencePolicy := imagev1.SourceTagReferencePolicy
 			if resolveConfig.Integration != nil && resolveConfig.Integration.ReferencePolicy != nil {
@@ -304,13 +295,13 @@ func fromConfig(ctx context.Context, cfg *Config) ([]api.Step, []api.Step, error
 		}
 
 		if !api.PromotesOfficialImages(cfg.CIConfig, api.WithoutOKD) {
-			promotionSteps = append(promotionSteps, releasesteps.PromotionStep(api.PromotionStepName, cfg.CIConfig, requiredNames, cfg.SkippedImages, cfg.JobSpec, cfg.podClient, cfg.PushSecret, registryDomain(cfg.CIConfig.PromotionConfiguration), api.DefaultMirrorFunc, api.DefaultTargetNameFunc, cfg.NodeArchitectures))
+			promotionSteps = append(promotionSteps, releasesteps.PromotionStep(api.PromotionStepName, cfg.CIConfig, requiredNames, cfg.SkippedImages, cfg.JobSpec, cfg.podClient, cfg.PushSecret, registryDomain(cfg.CIConfig.PromotionConfiguration), api.DefaultMirrorFunc, api.DefaultTargetNameFunc, cfg.NodeArchitectures, cliVersion))
 		}
 		// Used primarily (only?) by the ci-chat-bot
 		if cfg.CIConfig.PromotionConfiguration.RegistryOverride != "" {
 			logrus.Info("No images to promote to quay.io if the registry is overridden")
 		} else {
-			promotionSteps = append(promotionSteps, releasesteps.PromotionStep(api.PromotionQuayStepName, cfg.CIConfig, requiredNames, cfg.SkippedImages, cfg.JobSpec, cfg.podClient, cfg.PushSecret, api.QuayOpenShiftCIRepo, api.QuayCombinedMirrorFunc, api.QuayTargetNameFunc, cfg.NodeArchitectures))
+			promotionSteps = append(promotionSteps, releasesteps.PromotionStep(api.PromotionQuayStepName, cfg.CIConfig, requiredNames, cfg.SkippedImages, cfg.JobSpec, cfg.podClient, cfg.PushSecret, api.QuayOpenShiftCIRepo, api.QuayCombinedMirrorFunc, api.QuayTargetNameFunc, cfg.NodeArchitectures, cliVersion))
 		}
 	}
 
@@ -1161,6 +1152,23 @@ func buildRootImageStreamFromRepository(path string, readFile readFile) (*api.Im
 	}
 
 	return &config.BuildRootImage, validateCIOperatorInrepoConfig(&config)
+}
+
+func resolveReleaseCLIOverride(release api.UnresolvedRelease) (*coreapi.ObjectReference, string, error) {
+	var version string
+	var architecture api.ReleaseArchitecture
+	switch {
+	case release.Integration != nil:
+		version, architecture = release.Integration.Name, api.ReleaseArchitectureAMD64
+	case release.Candidate != nil:
+		version, architecture = release.Candidate.Version, release.Candidate.Architecture
+	case release.Release != nil:
+		version, architecture = release.Release.Version, release.Release.Architecture
+	case release.Prerelease != nil:
+		version, architecture = release.Prerelease.VersionBounds.Lower, release.Prerelease.Architecture
+	}
+	override, err := resolveCLIOverrideImage(architecture, version)
+	return override, version, err
 }
 
 func resolveCLIOverrideImage(architecture api.ReleaseArchitecture, version string) (*coreapi.ObjectReference, error) {

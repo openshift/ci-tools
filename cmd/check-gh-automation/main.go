@@ -40,11 +40,38 @@ type options struct {
 	appName               string
 	appCheckMode          string
 	checkBranchProtection bool
+	warnOnly              bool
 	ignore                flagutil.Strings
+	onlyOrgs              flagutil.Strings
 	repos                 flagutil.Strings
 	releaseRepoPath       string
 	flagutil.GitHubOptions
 	pluginConfig prowpluginconfig.PluginOptions
+}
+
+type membershipCache struct {
+	client automationClient
+	cache  map[string]bool
+}
+
+func newMembershipCache(client automationClient) *membershipCache {
+	return &membershipCache{
+		client: client,
+		cache:  make(map[string]bool),
+	}
+}
+
+func (c *membershipCache) isMember(org, user string) (bool, error) {
+	key := org + "/" + user
+	if result, ok := c.cache[key]; ok {
+		return result, nil
+	}
+	result, err := c.client.IsMember(org, user)
+	if err != nil {
+		return false, fmt.Errorf("check membership for %s/%s: %w", org, user, err)
+	}
+	c.cache[key] = result
+	return result, nil
 }
 
 func gatherOptions() options {
@@ -55,7 +82,9 @@ func gatherOptions() options {
 	fs.StringVar(&o.appName, "app", "openshift-ci", "The name of the app that is checking bot configuration, and for which installation will be checked")
 	fs.StringVar(&o.appCheckMode, "app-check-mode", "standard", "Which mode to check for app installation: 'standard' checks always, 'tide' only checks when tide is configured for the repo")
 	fs.BoolVar(&o.checkBranchProtection, "check-branch-protection", true, fmt.Sprintf("Check branch protection configs in order to verify %s has admin access if necessary. Enabled by default.", branchProtectionRobot))
+	fs.BoolVar(&o.warnOnly, "warn-only", false, "Report failures as warnings instead of fatal errors. The tool will exit 0 even when repos have issues.")
 	fs.Var(&o.ignore, "ignore", "Ignore a repo or entire org. Formatted org or org/repo. Can be passed multiple times.")
+	fs.Var(&o.onlyOrgs, "only-org", "Only check repos from these orgs. Can be passed multiple times. If not set, all orgs are checked.")
 	fs.Var(&o.repos, "repo", "Specifically check only an org/repo. Can be passed multiple times.")
 	fs.StringVar(&o.releaseRepoPath, "candidate-path", "", "Path to a openshift/release working copy with a revision to be tested")
 	o.pluginConfig.AddFlags(fs)
@@ -125,6 +154,10 @@ func main() {
 	}
 
 	repos := determineRepos(o, prowAgent, logger)
+	if len(repos) == 0 {
+		logger.Warnf("No repos to check.")
+		return
+	}
 	configs := &config.ReleaseRepoConfig{}
 	if o.releaseRepoPath != "" {
 		configs, err = config.GetAllConfigs(o.releaseRepoPath)
@@ -132,29 +165,48 @@ func main() {
 			logger.Fatalf("error loading configurations: %v", err)
 		}
 	}
-	failing := checkRepos(repos, o.bots.Strings(), o.appName, o.ignore.StringSet(), appCheckMode(o.appCheckMode), o.checkBranchProtection, configs, client, logger, pluginAgent, tideQueries, prowAgent)
+	cache := newMembershipCache(client)
+	failing := checkRepos(repos, o.bots.Strings(), o.appName, o.ignore.StringSet(), appCheckMode(o.appCheckMode), o.checkBranchProtection, configs, client, cache, logger, pluginAgent, tideQueries, prowAgent)
 
 	if len(failing) > 0 {
-		logger.Fatalf("Repo(s) missing github automation: %s", strings.Join(failing, ", "))
+		if o.warnOnly {
+			logger.Warnf("Repo(s) missing github automation (warn-only): %s", strings.Join(failing, ", "))
+		} else {
+			logger.Fatalf("Repo(s) missing github automation: %s", strings.Join(failing, ", "))
+		}
+	} else {
+		logger.Infof("All repos have github automation configured.")
 	}
-
-	logger.Infof("All repos have github automation configured.")
 }
 
 func determineRepos(o options, prowAgent *prowconfig.Agent, logger *logrus.Entry) []string {
 	repos := o.repos.Strings()
 	if len(repos) > 0 {
-		return repos
+		return filterByOrg(repos, o.onlyOrgs.StringSet())
 	}
 
 	if o.releaseRepoPath != "" {
-		return gatherModifiedRepos(o.releaseRepoPath, logger)
+		return filterByOrg(gatherModifiedRepos(o.releaseRepoPath, logger), o.onlyOrgs.StringSet())
 	}
 
-	return sets.List(prowAgent.Config().AllRepos)
+	return filterByOrg(sets.List(prowAgent.Config().AllRepos), o.onlyOrgs.StringSet())
 }
 
-func checkRepos(repos []string, bots []string, appName string, ignore sets.Set[string], mode appCheckMode, checkBranchProtection bool, configs *config.ReleaseRepoConfig, client automationClient, logger *logrus.Entry, pluginAgent *plugins.ConfigAgent, tideQueries *prowconfig.QueryMap, prowAgent *prowconfig.Agent) []string {
+func filterByOrg(repos []string, onlyOrgs sets.Set[string]) []string {
+	if onlyOrgs.Len() == 0 {
+		return repos
+	}
+	var filtered []string
+	for _, orgRepo := range repos {
+		org := strings.Split(orgRepo, "/")[0]
+		if onlyOrgs.Has(org) {
+			filtered = append(filtered, orgRepo)
+		}
+	}
+	return filtered
+}
+
+func checkRepos(repos []string, bots []string, appName string, ignore sets.Set[string], mode appCheckMode, checkBranchProtection bool, configs *config.ReleaseRepoConfig, client automationClient, cache *membershipCache, logger *logrus.Entry, pluginAgent *plugins.ConfigAgent, tideQueries *prowconfig.QueryMap, prowAgent *prowconfig.Agent) []string {
 	logger.Infof("checking %d repo(s): %s", len(repos), strings.Join(repos, ", "))
 	failing := sets.New[string]()
 	var errs []error
@@ -203,7 +255,7 @@ repoLoop:
 		var missingBots []string
 		if len(bots) > 0 {
 			for _, bot := range bots {
-				isMember, err := client.IsMember(org, bot)
+				isMember, err := cache.isMember(org, bot)
 				if err != nil {
 					repoLogger.WithError(err).Errorf("unable to determine if %s is a member of %s", bot, org)
 					failing.Insert(orgRepo)
@@ -297,7 +349,7 @@ repoLoop:
 			}
 			for _, plugin := range externalPlugins {
 				if plugin.Name == cherrypickPlugin {
-					isMember, err := client.IsMember(org, cherrypickRobot)
+					isMember, err := cache.isMember(org, cherrypickRobot)
 					if err != nil {
 						repoLogger.WithError(err).Errorf("failed to determine membership status of '%s' in '%s'", cherrypickRobot, org)
 						failing.Insert(orgRepo)

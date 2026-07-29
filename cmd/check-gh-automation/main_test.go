@@ -504,12 +504,111 @@ func TestCheckRepos(t *testing.T) {
 	for _, tc := range testCases {
 		t.Run(tc.name, func(t *testing.T) {
 			logrus.Infof("Testing %s", tc.name)
-			failing := checkRepos(tc.repos, tc.bots, "openshift-ci", tc.ignore, tc.mode, true, newFakeConfiguration(), client, logrus.NewEntry(logrus.New()), newFakePluginConfigAgent(), newFakeProwConfigAgent().Config().Tide.Queries.QueryMap(), newFakeProwConfigAgent())
+			failing := checkRepos(tc.repos, tc.bots, "openshift-ci", tc.ignore, tc.mode, true, newFakeConfiguration(), client, newMembershipCache(client), logrus.NewEntry(logrus.New()), newFakePluginConfigAgent(), newFakeProwConfigAgent().Config().Tide.Queries.QueryMap(), newFakeProwConfigAgent())
 			if diff := cmp.Diff(tc.expected, failing); diff != "" {
 				t.Fatalf("returned failing repos did not match expected, diff: %s", diff)
 			}
 		})
 	}
+}
+
+func TestFilterByOrg(t *testing.T) {
+	testCases := []struct {
+		name     string
+		repos    []string
+		onlyOrgs sets.Set[string]
+		expected []string
+	}{
+		{
+			name:     "empty only-orgs returns all repos",
+			repos:    []string{"org-1/repo-a", "org-2/repo-b"},
+			onlyOrgs: sets.New[string](),
+			expected: []string{"org-1/repo-a", "org-2/repo-b"},
+		},
+		{
+			name:     "filters to specified orgs",
+			repos:    []string{"org-1/repo-a", "org-2/repo-b", "org-1/repo-c"},
+			onlyOrgs: sets.New[string]("org-1"),
+			expected: []string{"org-1/repo-a", "org-1/repo-c"},
+		},
+		{
+			name:     "multiple orgs",
+			repos:    []string{"org-1/repo-a", "org-2/repo-b", "org-3/repo-c"},
+			onlyOrgs: sets.New[string]("org-1", "org-3"),
+			expected: []string{"org-1/repo-a", "org-3/repo-c"},
+		},
+		{
+			name:     "no matching orgs returns empty",
+			repos:    []string{"org-1/repo-a", "org-2/repo-b"},
+			onlyOrgs: sets.New[string]("org-99"),
+			expected: nil,
+		},
+	}
+	for _, tc := range testCases {
+		t.Run(tc.name, func(t *testing.T) {
+			result := filterByOrg(tc.repos, tc.onlyOrgs)
+			if diff := cmp.Diff(tc.expected, result); diff != "" {
+				t.Fatalf("filtered repos did not match expected, diff: %s", diff)
+			}
+		})
+	}
+}
+
+func TestMembershipCache(t *testing.T) {
+	calls := 0
+	client := &countingMemberClient{calls: &calls}
+	cache := newMembershipCache(client)
+
+	result1, err := cache.isMember("org-1", "bot-a")
+	if err != nil {
+		t.Fatalf("unexpected error: %v", err)
+	}
+	if result1 {
+		t.Fatal("expected false")
+	}
+	if calls != 1 {
+		t.Fatalf("expected 1 call, got %d", calls)
+	}
+
+	result2, err := cache.isMember("org-1", "bot-a")
+	if err != nil {
+		t.Fatalf("unexpected error: %v", err)
+	}
+	if result2 {
+		t.Fatal("expected false from cache")
+	}
+	if calls != 1 {
+		t.Fatalf("expected still 1 call (cached), got %d", calls)
+	}
+
+	_, err = cache.isMember("org-2", "bot-a")
+	if err != nil {
+		t.Fatalf("unexpected error: %v", err)
+	}
+	if calls != 2 {
+		t.Fatalf("expected 2 calls (different org), got %d", calls)
+	}
+}
+
+type countingMemberClient struct {
+	calls *int
+}
+
+func (c *countingMemberClient) IsMember(org, user string) (bool, error) {
+	*c.calls++
+	return false, nil
+}
+
+func (c *countingMemberClient) IsCollaborator(_, _, _ string) (bool, error) { return false, nil }
+func (c *countingMemberClient) IsAppInstalled(_, _ string) (bool, error)    { return false, nil }
+func (c *countingMemberClient) HasPermission(_, _, _ string, _ ...string) (bool, error) {
+	return false, nil
+}
+func (c *countingMemberClient) GetRepo(_, _ string) (github.FullRepo, error) {
+	return github.FullRepo{}, nil
+}
+func (c *countingMemberClient) GetOrg(_ string) (*github.Organization, error) {
+	return &github.Organization{}, nil
 }
 
 func TestGatherModifiedReposProwConfigs(t *testing.T) {

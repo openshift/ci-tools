@@ -7,6 +7,7 @@ import (
 	"io"
 	"net/http"
 	"strconv"
+	"strings"
 
 	"github.com/sirupsen/logrus"
 
@@ -39,7 +40,17 @@ func architecture(architecture api.ReleaseArchitecture) string {
 }
 
 func Endpoint(d api.ReleaseDescriptor, version, stream, suffix string) string {
-	return fmt.Sprintf("%s/%s%s%s%s", ServiceHost(d), version, stream, architecture(d.Architecture), suffix)
+	return EndpointWithBase(d, version, stream, suffix, "")
+}
+
+// EndpointWithBase is like Endpoint but allows overriding the service host
+// base URL. When baseURL is empty, it uses the default ServiceHost.
+func EndpointWithBase(d api.ReleaseDescriptor, version, stream, suffix, baseURL string) string {
+	host := ServiceHost(d)
+	if baseURL != "" {
+		host = strings.TrimRight(baseURL, "/")
+	}
+	return fmt.Sprintf("%s/%s%s%s%s", host, version, stream, architecture(d.Architecture), suffix)
 }
 
 // endpoint determines the API endpoint to use for a candidate release

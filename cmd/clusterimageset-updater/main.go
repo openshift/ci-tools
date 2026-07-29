@@ -23,6 +23,8 @@ import (
 	hivev1 "github.com/openshift/hive/apis/hive/v1"
 
 	"github.com/openshift/ci-tools/pkg/api"
+	"github.com/openshift/ci-tools/pkg/release"
+	"github.com/openshift/ci-tools/pkg/release/candidate"
 	"github.com/openshift/ci-tools/pkg/release/prerelease"
 )
 
@@ -33,8 +35,9 @@ const (
 )
 
 type options struct {
-	poolDir   string
-	outputDir string
+	poolDir              string
+	outputDir            string
+	releaseControllerURL string
 }
 
 func gatherOptions() (options, error) {
@@ -43,6 +46,7 @@ func gatherOptions() (options, error) {
 
 	fs.StringVar(&o.poolDir, "pools", "", "Path to directory containing cluster pool specs (*_clusterpool.yaml files)")
 	fs.StringVar(&o.outputDir, "imagesets", "", "Path to directory containing clusterimagesets  (*_clusterimageset.yaml files)")
+	fs.StringVar(&o.releaseControllerURL, "release-controller-url", "", "Override the release controller base URL (for testing).")
 
 	if err := fs.Parse(os.Args[1:]); err != nil {
 		return o, fmt.Errorf("failed to parse flags: %w", err)
@@ -81,6 +85,12 @@ func main() {
 		logrus.WithError(err).Fatal("Failed to set up scheme")
 	}
 
+	if err := run(o, &http.Client{}); err != nil {
+		logrus.WithError(err).Fatal("Failed to update cluster image sets")
+	}
+}
+
+func run(o options, client release.HTTPClient) error {
 	s := json.NewSerializerWithOptions(json.DefaultMetaFactory, scheme.Scheme,
 		scheme.Scheme, json.SerializerOptions{Yaml: true, Pretty: false, Strict: false})
 
@@ -93,10 +103,9 @@ func main() {
 		}
 		return ensureLabelsOnClusterPool(s, path, path)
 	}); err != nil {
-		logrus.WithError(err).Fatal("Failed to ensure labels on cluster pools")
+		return fmt.Errorf("failed to ensure labels on cluster pools: %w", err)
 	}
 
-	// key: version_in; value: list of file paths
 	poolFilesByBounds := make(map[api.VersionBounds][]string)
 	if err := filepath.WalkDir(o.poolDir, func(path string, info fs.DirEntry, err error) error {
 		if err != nil {
@@ -122,33 +131,31 @@ func main() {
 		}
 		return nil
 	}); err != nil {
-		logrus.WithError(err).Fatal("Failed to get list of clusterpools setting version bounds")
+		return fmt.Errorf("failed to get list of clusterpools setting version bounds: %w", err)
 	}
 
 	boundsToPullspec := make(map[api.VersionBounds]string)
 	for versionBounds := range poolFilesByBounds {
-		// Use multi payload for 4.12+; use amd64 for older versions (multi not available).
 		arch, err := architectureForBounds(versionBounds)
 		if err != nil {
-			logrus.WithError(err).Fatalf("Invalid version bounds %s", versionBounds.Query())
+			return fmt.Errorf("invalid version bounds %s: %w", versionBounds.Query(), err)
 		}
-		release := api.Prerelease{
+		rel := api.Prerelease{
 			ReleaseDescriptor: api.ReleaseDescriptor{
 				Product:      api.ReleaseProductOCP,
 				Architecture: arch,
 			},
 			VersionBounds: versionBounds,
 		}
-		pullSpec, err := prerelease.ResolvePullSpec(&http.Client{}, release)
+		pullSpec, err := resolvePullSpec(client, rel, o.releaseControllerURL)
 		if err != nil {
-			logrus.WithError(err).Fatalf("Failed to get pullspec for version range `%s`", versionBounds.Query())
+			return fmt.Errorf("failed to get pullspec for version range %q: %w", versionBounds.Query(), err)
 		}
 		boundsToPullspec[versionBounds] = pullSpec
 	}
 
 	poolFilesByBounds, boundsToPullspec = mergeCollidingBounds(poolFilesByBounds, boundsToPullspec)
 
-	// keep list of outdated or removed cluster image set definitions to delete
 	var toDelete []string
 	if err := filepath.WalkDir(o.outputDir, func(path string, info fs.DirEntry, err error) error {
 		if err != nil {
@@ -167,22 +174,20 @@ func main() {
 		}
 		bounds, err := labelsToBounds(imageset.Annotations)
 		if err != nil {
-			return fmt.Errorf("Failed to parse version labels for clusterimageset %s: %w", imageset.Name, err)
+			return fmt.Errorf("failed to parse version labels for clusterimageset %s: %w", imageset.Name, err)
 		}
 		if bounds != nil && !clusterImageSetFileIsCurrent(path, o.outputDir, imageset, bounds, boundsToPullspec) {
 			toDelete = append(toDelete, path)
 		}
 		return nil
 	}); err != nil {
-		logrus.WithError(err).Fatal("Failed to get list of clusterpools setting version bounds")
+		return fmt.Errorf("failed to scan existing clusterimagesets: %w", err)
 	}
 
-	// make as much progress as possible and print list of errors at end of command
 	var errs []error
 
 	boundsOrder := sortedBounds(boundsToPullspec)
 
-	// any remaining items in autopools/versionToPullspec need to be updated
 	for _, bounds := range boundsOrder {
 		pullspec := boundsToPullspec[bounds]
 		name := nameFromPullspec(pullspec, bounds)
@@ -207,55 +212,55 @@ func main() {
 		}
 		raw, err := yaml.Marshal(clusterimageset)
 		if err != nil {
-			errs = append(errs, fmt.Errorf("Could not marshal yaml for clusterimageset %s: %w", name, err))
+			errs = append(errs, fmt.Errorf("could not marshal yaml for clusterimageset %s: %w", name, err))
 			continue
 		}
 		if err := os.WriteFile(clusterImageSetYAMLPath(o.outputDir, pullspec, bounds), raw, 0644); err != nil {
-			errs = append(errs, fmt.Errorf("Failed to write file for clusterimageset %s: %w", name, err))
+			errs = append(errs, fmt.Errorf("failed to write file for clusterimageset %s: %w", name, err))
 		}
 	}
 
-	// delete old clusterimagesets
 	for _, path := range toDelete {
 		if err := os.Remove(path); err != nil && !os.IsNotExist(err) {
-			errs = append(errs, fmt.Errorf("Failed to delete file %s: %w", path, err))
+			errs = append(errs, fmt.Errorf("failed to delete file %s: %w", path, err))
 		}
 	}
 
-	// update all clusterpool specs
 	for _, bounds := range boundsOrder {
 		files := poolFilesByBounds[bounds]
 		imagesetName := nameFromPullspec(boundsToPullspec[bounds], bounds)
 		for _, path := range files {
 			raw, err := os.ReadFile(path)
 			if err != nil {
-				errs = append(errs, fmt.Errorf("Failed to read file %s: %w", path, err))
+				errs = append(errs, fmt.Errorf("failed to read file %s: %w", path, err))
 				continue
 			}
 			var newClusterPool hivev1.ClusterPool
 			if err := yaml.Unmarshal(raw, &newClusterPool); err != nil {
-				errs = append(errs, fmt.Errorf("Failed to unmarshal clusterpool %s: %w", path, err))
+				errs = append(errs, fmt.Errorf("failed to unmarshal clusterpool %s: %w", path, err))
 				continue
 			}
 			newClusterPool.Spec.ImageSetRef.Name = imagesetName
 			newRaw, err := yaml.Marshal(newClusterPool)
 			if err != nil {
-				errs = append(errs, fmt.Errorf("Failed to remarshal clusterpool %s: %w", path, err))
+				errs = append(errs, fmt.Errorf("failed to remarshal clusterpool %s: %w", path, err))
 				continue
 			}
 			if err := os.WriteFile(path, newRaw, 0644); err != nil {
-				errs = append(errs, fmt.Errorf("Failed to write updated file %s: %w", path, err))
+				errs = append(errs, fmt.Errorf("failed to write updated file %s: %w", path, err))
 			}
 		}
 	}
 
-	if errs != nil {
-		fmt.Println("The following errors occurred:")
-		for _, err := range errs {
-			fmt.Printf("\t%v\n", err)
-		}
-		os.Exit(1)
+	return errors.Join(errs...)
+}
+
+func resolvePullSpec(client release.HTTPClient, rel api.Prerelease, baseURL string) (string, error) {
+	if baseURL == "" {
+		return prerelease.ResolvePullSpec(client, rel)
 	}
+	ep := prerelease.EndpointWithBase(rel, baseURL)
+	return candidate.ResolvePullSpecCommon(client, ep, &rel.VersionBounds, rel.Relative)
 }
 
 func ensureLabelsOnClusterPool(s *json.Serializer, input, output string) error {

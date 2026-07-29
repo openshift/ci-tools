@@ -19,6 +19,17 @@ func endpoint(prerelease api.Prerelease) string {
 	return candidate.Endpoint(prerelease.ReleaseDescriptor, "", stream, "/latest")
 }
 
+// EndpointWithBase constructs the release controller endpoint for a prerelease
+// using the given base URL instead of the default service host.
+func EndpointWithBase(p api.Prerelease, baseURL string) string {
+	p = defaultFields(p)
+	stream := p.VersionBounds.Stream
+	if stream == "" {
+		stream = deriveStreamFromBounds(p.VersionBounds)
+	}
+	return candidate.EndpointWithBase(p.ReleaseDescriptor, "", stream, "/latest", baseURL)
+}
+
 func deriveStreamFromBounds(bounds api.VersionBounds) string {
 	for _, version := range []string{bounds.Lower, bounds.Upper} {
 		if version == "" {

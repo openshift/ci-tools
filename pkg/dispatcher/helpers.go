@@ -13,6 +13,7 @@ func loadClusterConfigFromBytes(data []byte) (ClusterMap, sets.Set[string], erro
 	var clusters map[string][]struct {
 		Name         string   `yaml:"name"`
 		Capacity     int      `yaml:"capacity"`
+		IPCapacity   int      `yaml:"ipCapacity,omitempty"`
 		Capabilities []string `yaml:"capabilities"`
 		Blocked      bool     `yaml:"blocked"`
 	}
@@ -36,6 +37,7 @@ func loadClusterConfigFromBytes(data []byte) (ClusterMap, sets.Set[string], erro
 			clusterMap[cluster.Name] = ClusterInfo{
 				Provider:     provider,
 				Capacity:     cluster.Capacity,
+				IPCapacity:   cluster.IPCapacity,
 				Capabilities: cluster.Capabilities,
 			}
 		}
@@ -107,6 +109,9 @@ func HasCapacityOrCapabilitiesChanged(prev, next ClusterMap) bool {
 			continue
 		}
 		if info1.Capacity != info2.Capacity {
+			return true
+		}
+		if info1.IPCapacity != info2.IPCapacity {
 			return true
 		}
 		if !reflect.DeepEqual(info1.Capabilities, info2.Capabilities) {

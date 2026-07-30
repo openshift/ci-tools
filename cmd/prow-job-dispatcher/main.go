@@ -208,9 +208,11 @@ type clusterVolume struct {
 	clusterMap         dispatcher.ClusterMap
 }
 
+func clusterStressScore(volume float64, info dispatcher.ClusterInfo, maxIP int) float64 {
+	return volume / dispatcher.LoadWeight(info, maxIP)
+}
+
 // findClusterForJobConfig finds a cluster running on a preferred cloud provider for the jobs in a Prow job config.
-// The chosen cluster will be the one with minimal workload with the given cloud provider.
-// If the cluster provider is empty string, it will choose the one with minimal workload across all cloud providers.
 func (cv *clusterVolume) findClusterForJobConfig(cloudProvider string, jc *prowconfig.JobConfig, path string, config *dispatcher.Config, jobVolumes map[string]float64) (string, error) {
 	if _, ok := cv.clusterVolumeMap[cloudProvider]; !ok {
 		cloudProvider = ""
@@ -224,21 +226,29 @@ func (cv *clusterVolume) findClusterForJobConfig(cloudProvider string, jc *prowc
 	mostUsedCluster := dispatcher.FindMostUsedCluster(jc)
 	// TODO: 75% as we still have manual assignments and these are affecting even distribution, re-evaluate when manual assignments are gone
 	if determinedCloudProvider := config.IsInBuildFarm(api.Cluster(mostUsedCluster)); determinedCloudProvider != "" &&
+		!cv.blocked.Has(mostUsedCluster) &&
 		cv.clusterVolumeMap[string(determinedCloudProvider)][mostUsedCluster] < cv.volumeDistribution[mostUsedCluster]*0.75 {
 		cluster = mostUsedCluster
 	} else {
-		min := float64(-1)
+		maxIP := dispatcher.MaxIPCapacity(cv.clusterMap)
+		minScore := float64(-1)
 		for _, cp := range sets.List(cv.cloudProviders) {
 			m := cv.clusterVolumeMap[cp]
 			for c, v := range m {
-				if cv.clusterMap[c].Capacity != 100 {
+				if cloudProvider != "" && cloudProvider != cp {
 					continue
 				}
-				if cloudProvider == "" || cloudProvider == cp {
-					if min < 0 || min > v {
-						min = v
-						cluster = c
-					}
+				if cv.blocked.Has(c) {
+					continue
+				}
+				info, ok := cv.clusterMap[c]
+				if !ok || info.Capacity <= 0 {
+					continue
+				}
+				score := clusterStressScore(v, info, maxIP)
+				if minScore < 0 || score < minScore {
+					minScore = score
+					cluster = c
 				}
 			}
 		}

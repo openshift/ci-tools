@@ -114,6 +114,20 @@ func (o *options) loadConfig(caller string) error {
 	return nil
 }
 
+// syncQCIIgnoreImageStreamTags keeps ignore in sync with current QCIToAppCIImages keys.
+// tracked holds keys previously added from this config section so removals are deleted from ignore.
+func syncQCIIgnoreImageStreamTags(ignore, tracked sets.Set[string], current map[string]quayiociimagesdistributor.Source) {
+	next := sets.KeySet(current)
+	removed := tracked.Difference(next)
+	ignore.Delete(removed.UnsortedList()...)
+	tracked.Delete(removed.UnsortedList()...)
+	for _, k := range next.Difference(tracked).UnsortedList() {
+		logrus.WithField("target", k).Debug("Ignore target of QCI-to-app.ci backfill on mirroring")
+		ignore.Insert(k)
+		tracked.Insert(k)
+	}
+}
+
 func (o *options) validate() error {
 	var errs []error
 	if o.leaderElectionNamespace == "" && !o.validateConfigOnly {
@@ -299,6 +313,18 @@ func main() {
 		// TODO: multi-arch support
 		FilterByOS: "linux/amd64",
 	}
+
+	// Shared with the distributor; mutated on QCI config reload so adds/removes take effect without restart.
+	ignoreImageStreamTags := sets.New[string](opts.quayIOCIImagesDistributorOptions.ignoreImageStreamTagsRaw.Strings()...)
+	qciIgnoredTags := sets.New[string]()
+	if opts.config != nil {
+		for k := range opts.config.SupplementalCIImages {
+			logrus.WithField("target", k).Debug("Ignore target of supplemental CI images on mirroring")
+			ignoreImageStreamTags.Insert(k)
+		}
+		syncQCIIgnoreImageStreamTags(ignoreImageStreamTags, qciIgnoredTags, opts.config.QCIToAppCIImages)
+	}
+
 	if opts.configFile != "" {
 		supplementalCIImagesService := newSupplementalCIImagesServiceWithMirrorStore(mirrorStore, logrus.WithField("subcomponent", "supplementalCIImagesService"), quayIOImageHelper, ocImageInfoOptions)
 		interrupts.TickLiteral(func() {
@@ -324,6 +350,18 @@ func main() {
 			}
 			if err := artImagesService.Mirror(m); err != nil {
 				logrus.WithError(err).Error("Failed to mirror ART images")
+			}
+		}, time.Hour)
+
+		qciLogger := logrus.WithField("subcomponent", "qciToAppCIImages")
+		interrupts.TickLiteral(func() {
+			if err := opts.loadConfig("qciToAppCIImages"); err != nil {
+				logrus.WithError(err).Error("Failed to reload config")
+				return
+			}
+			syncQCIIgnoreImageStreamTags(ignoreImageStreamTags, qciIgnoredTags, opts.config.QCIToAppCIImages)
+			if err := quayiociimagesdistributor.MirrorQCIToAppCI(mirrorStore, qciLogger, quayIOImageHelper, ocImageInfoOptions, opts.config.QCIToAppCIImages); err != nil {
+				logrus.WithError(err).Error("Failed to mirror QCI images to app.ci")
 			}
 		}, time.Hour)
 	}
@@ -367,13 +405,6 @@ func main() {
 			logrus.WithError(err).Fatal("failed to construct registryAgent")
 		}
 
-		ignoreImageStreamTags := sets.New[string](opts.quayIOCIImagesDistributorOptions.ignoreImageStreamTagsRaw.Strings()...)
-		if opts.config != nil {
-			for k := range opts.config.SupplementalCIImages {
-				logrus.WithField("target", k).Debug("Ignore target of supplemental CI images on mirroring")
-				ignoreImageStreamTags.Insert(k)
-			}
-		}
 		logrus.WithField("tags", ignoreImageStreamTags.UnsortedList()).Infof("%s will ignore mirroring those tags", quayiociimagesdistributor.ControllerName)
 		if err := quayiociimagesdistributor.AddToManager(mgr,
 			ciOPConfigAgent,

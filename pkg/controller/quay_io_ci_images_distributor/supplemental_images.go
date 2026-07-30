@@ -38,17 +38,30 @@ func LoadConfig(bytes []byte) (*CIImagesMirrorConfig, error) {
 	}
 	var errs []error
 	for k, v := range c.SupplementalCIImages {
-		splits := strings.Split(k, "/")
-		if len(splits) != 2 || splits[0] == "" || splits[1] == "" {
-			errs = append(errs, fmt.Errorf("invalid target: %s", k))
-		} else {
-			splits = strings.Split(splits[1], ":")
-			if len(splits) != 2 || splits[0] == "" || splits[1] == "" {
-				errs = append(errs, fmt.Errorf("invalid target: %s", k))
-			}
+		if err := validateTargetISTag(k); err != nil {
+			errs = append(errs, err)
 		}
 		if err := validateSource(v); err != nil {
 			errs = append(errs, err)
+		}
+	}
+
+	for k, v := range c.QCIToAppCIImages {
+		if err := validateTargetISTag(k); err != nil {
+			errs = append(errs, fmt.Errorf("qciToAppCIImages: %w", err))
+			continue
+		}
+		if v.Image == "" {
+			ref, err := parseISTagName(k)
+			if err != nil {
+				errs = append(errs, fmt.Errorf("qciToAppCIImages: %w", err))
+				continue
+			}
+			v.Image = api.QuayImageReference(ref)
+			c.QCIToAppCIImages[k] = v
+		}
+		if err := validateQCISource(v); err != nil {
+			errs = append(errs, fmt.Errorf("qciToAppCIImages[%s]: %w", k, err))
 		}
 	}
 
@@ -92,7 +105,36 @@ func LoadConfig(bytes []byte) (*CIImagesMirrorConfig, error) {
 		}
 	}
 	c.SupplementalCIImages = remained
+
+	qciRemained := map[string]Source{}
+	for k, v := range c.QCIToAppCIImages {
+		if !ignored(c.IgnoredSources, v, "QCIToAppCIImages") {
+			qciRemained[k] = v
+		}
+	}
+	c.QCIToAppCIImages = qciRemained
 	return c, nil
+}
+
+func validateTargetISTag(k string) error {
+	splits := strings.Split(k, "/")
+	if len(splits) != 2 || splits[0] == "" || splits[1] == "" {
+		return fmt.Errorf("invalid target: %s", k)
+	}
+	nameTag := strings.Split(splits[1], ":")
+	if len(nameTag) != 2 || nameTag[0] == "" || nameTag[1] == "" {
+		return fmt.Errorf("invalid target: %s", k)
+	}
+	return nil
+}
+
+func parseISTagName(k string) (api.ImageStreamTagReference, error) {
+	if err := validateTargetISTag(k); err != nil {
+		return api.ImageStreamTagReference{}, err
+	}
+	ns, rest, _ := strings.Cut(k, "/")
+	name, tag, _ := strings.Cut(rest, ":")
+	return api.ImageStreamTagReference{Namespace: ns, Name: name, Tag: tag}, nil
 }
 
 func ignored(ignoredSources []IgnoredSource, s Source, section string) bool {
@@ -135,10 +177,45 @@ func validateSource(v Source) error {
 	return nil
 }
 
+// validateQCISource requires an explicit pullspec under quay.io/openshift/ci or the QCI proxy.
+// Namespace/Name/Tag on Source are not used for reverse mirrors; reject them so config is not silently ignored.
+func validateQCISource(v Source) error {
+	if v.As != "" {
+		return errors.New("as cannot be set")
+	}
+	if v.Namespace != "" || v.Name != "" || v.Tag != "" {
+		return errors.New("namespace/name/tag must not be set; use image or omit to derive from the key")
+	}
+	if v.Image == "" {
+		return errors.New("image must resolve to a QCI pullspec")
+	}
+	if !isQCIPullspec(v.Image) {
+		return fmt.Errorf("image %q must be under %s or %s/openshift/ci", v.Image, api.QuayOpenShiftCIRepo, api.QCIAPPCIDomain)
+	}
+	return nil
+}
+
+func isQCIPullspec(image string) bool {
+	for _, prefix := range []string{
+		api.QuayOpenShiftCIRepo + ":",
+		api.QuayOpenShiftCIRepo + "@",
+		api.QCIAPPCIDomain + "/openshift/ci:",
+		api.QCIAPPCIDomain + "/openshift/ci@",
+	} {
+		if strings.HasPrefix(image, prefix) {
+			return true
+		}
+	}
+	return false
+}
+
 type CIImagesMirrorConfig struct {
 	SupplementalCIImages map[string]Source `json:"supplementalCIImages"`
-	IgnoredSources       []IgnoredSource   `json:"ignoredSources"`
-	ArtImages            []ArtImage        `json:"artImages,omitempty"`
+	// QCIToAppCIImages backfills app.ci ISTags from QCI. Key is namespace/name:tag.
+	// Only Source.Image is honored (or derived from the key); do not set namespace/name/tag.
+	QCIToAppCIImages map[string]Source `json:"qciToAppCIImages,omitempty"`
+	IgnoredSources   []IgnoredSource   `json:"ignoredSources"`
+	ArtImages        []ArtImage        `json:"artImages,omitempty"`
 }
 
 type ArtImage struct {

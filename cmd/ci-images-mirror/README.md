@@ -17,6 +17,7 @@ For example, `registry.ci.openshift.org/namespace/name:tag` is mirrored to
 This tool is extended with the following features (and thus is no longer temporary):
 - mirror images from external registries to QCI: See `.supplementalCIImages` of [the configuration file](https://github.com/openshift/release/blob/main/core-services/image-mirroring/_config.yaml).
 - mirror ART images from app.ci to QCI: See `.artImages` of [the configuration file](https://github.com/openshift/release/blob/main/core-services/image-mirroring/_config.yaml).
+- backfill images from QCI to app.ci (emergency): See `.qciToAppCIImages` of the same config file. Key is `namespace/name:tag` on app.ci; optional `image` must be under `quay.io/openshift/ci` or `quay-proxy.ci.openshift.org/openshift/ci` (defaults to `quay-proxy.ci.openshift.org/openshift/ci:<namespace>_<name>_<tag>`). Those targets are excluded from the normal app.ci→QCI distributor.
 
 ## Run the tool locally
 

@@ -8,6 +8,7 @@ import (
 	"net/http/httptest"
 	"net/http/httputil"
 	"net/url"
+	"sync"
 	"testing"
 
 	"github.com/sirupsen/logrus"
@@ -215,7 +216,11 @@ func TestRewrite(t *testing.T) {
 			t.Parallel()
 
 			logger := logrus.NewEntry(logrus.StandardLogger())
-			router := newRouter(logger, &tc.config)
+			router := router{
+				log:  logger,
+				m:    &sync.RWMutex{},
+				conf: &tc.config,
+			}
 			router.rewrite(tc.pr)
 
 			gotURL := tc.pr.Out.URL.String()

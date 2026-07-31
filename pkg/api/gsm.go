@@ -33,6 +33,7 @@ type GSMBundle struct {
 	Components    []string          `json:"components,omitempty"`
 	DockerConfig  *DockerConfigSpec `json:"dockerconfig,omitempty"`
 	GSMSecrets    []GSMSecretRef    `json:"gsm_secrets,omitempty"`
+	Labels        []string          `json:"labels,omitempty"`
 	SyncToCluster bool              `json:"sync_to_cluster,omitempty"`
 	Targets       []TargetSpec      `json:"targets,omitempty"`
 }
@@ -240,6 +241,7 @@ func (c *GSMConfig) resolve() error {
 				Name:          bundle.Name,
 				Components:    nil, // Already resolved in phase 2
 				DockerConfig:  bundle.DockerConfig,
+				Labels:        bundle.Labels,
 				SyncToCluster: bundle.SyncToCluster,
 				Targets:       targets,
 			}
@@ -445,6 +447,15 @@ func validateBundle(bundle *GSMBundle, idx int) error {
 		}
 		if err := validateDockerConfig(bundle.DockerConfig, idx, bundle.Name); err != nil {
 			errs = append(errs, err)
+		}
+	}
+
+	for i, label := range bundle.Labels {
+		key, _, err := ParseLabel(label)
+		if err != nil {
+			errs = append(errs, fmt.Errorf("bundle %s labels[%d]: %w", bundle.Name, i, err))
+		} else if key == DPTPRequesterLabel {
+			errs = append(errs, fmt.Errorf("bundle %s labels[%d]: %q is a reserved label key", bundle.Name, i, DPTPRequesterLabel))
 		}
 	}
 

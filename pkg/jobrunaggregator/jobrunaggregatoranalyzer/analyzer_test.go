@@ -6,11 +6,13 @@ import (
 	"encoding/xml"
 	"fmt"
 	"os"
+	"path/filepath"
 	"testing"
 	"time"
 
 	"github.com/stretchr/testify/assert"
 	"go.uber.org/mock/gomock"
+	"gopkg.in/yaml.v2"
 
 	v1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	fakeclock "k8s.io/utils/clock/testing"
@@ -68,9 +70,11 @@ func TestAnalyzer(t *testing.T) {
 	}
 
 	tests := []struct {
-		name              string
-		jobRunInfos       []jobrunaggregatorapi.JobRunInfo
-		expectErrContains string
+		name                   string
+		jobRunInfos            []jobrunaggregatorapi.JobRunInfo
+		expectErrContains      string
+		expectedFinishedJobs   int
+		expectedUnfinishedJobs int
 	}{
 		{
 			name: "no jobs finished",
@@ -106,7 +110,15 @@ func TestAnalyzer(t *testing.T) {
 					},
 				},
 			}),
-			expectErrContains: "",
+			expectErrContains:    "",
+			expectedFinishedJobs: 10,
+		},
+		{
+			name:                   "tolerated unfinished jobs are reported as unfinished",
+			jobRunInfos:            buildJobRunInfosWithFinishedCount(mockCtrl, payloadStartTime, historicalDisruption, 7),
+			expectErrContains:      "Some tests failed aggregation",
+			expectedFinishedJobs:   7,
+			expectedUnfinishedJobs: 3,
 		},
 		{
 			name: "too much disruption",
@@ -152,7 +164,8 @@ func TestAnalyzer(t *testing.T) {
 					},
 				},
 			}),
-			expectErrContains: "",
+			expectErrContains:    "",
+			expectedFinishedJobs: 10,
 		},
 	}
 	for _, tc := range tests {
@@ -215,12 +228,25 @@ func TestAnalyzer(t *testing.T) {
 			} else {
 				assert.NoError(t, err)
 			}
+
+			if tc.expectedFinishedJobs > 0 || tc.expectedUnfinishedJobs > 0 {
+				aggregationConfigData, readErr := os.ReadFile(filepath.Join(workDir, testJobName, testPayloadtag, "aggregation-config.yaml"))
+				assert.NoError(t, readErr)
+				aggregationConfig := &AggregationConfiguration{}
+				assert.NoError(t, yaml.Unmarshal(aggregationConfigData, aggregationConfig))
+				assert.Len(t, aggregationConfig.FinishedJobs, tc.expectedFinishedJobs)
+				assert.Len(t, aggregationConfig.UnfinishedJobs, tc.expectedUnfinishedJobs)
+			}
 		})
 	}
 
 }
 
 func buildJobRunInfos(mockCtrl *gomock.Controller, payloadStartTime time.Time, disruption jobrunaggregatorlib.BackendDisruptionList) []jobrunaggregatorapi.JobRunInfo {
+	return buildJobRunInfosWithFinishedCount(mockCtrl, payloadStartTime, disruption, 10)
+}
+
+func buildJobRunInfosWithFinishedCount(mockCtrl *gomock.Controller, payloadStartTime time.Time, disruption jobrunaggregatorlib.BackendDisruptionList, finishedCount int) []jobrunaggregatorapi.JobRunInfo {
 	backendDisruptionJSON, _ := json.Marshal(disruption)
 	openshiftFiles := map[string]string{
 		"0": string(backendDisruptionJSON),
@@ -229,18 +255,11 @@ func buildJobRunInfos(mockCtrl *gomock.Controller, payloadStartTime time.Time, d
 <testsuite tests="1" failures="0" time="1983" name="BackendDisruption">
 </testsuite>
 </testsuites>`
-	return []jobrunaggregatorapi.JobRunInfo{
-		buildFakeJobRunInfo(mockCtrl, "1001", payloadStartTime, true, junitXML, openshiftFiles),
-		buildFakeJobRunInfo(mockCtrl, "1002", payloadStartTime, true, junitXML, openshiftFiles),
-		buildFakeJobRunInfo(mockCtrl, "1003", payloadStartTime, true, junitXML, openshiftFiles),
-		buildFakeJobRunInfo(mockCtrl, "1004", payloadStartTime, true, junitXML, openshiftFiles),
-		buildFakeJobRunInfo(mockCtrl, "1005", payloadStartTime, true, junitXML, openshiftFiles),
-		buildFakeJobRunInfo(mockCtrl, "1006", payloadStartTime, true, junitXML, openshiftFiles),
-		buildFakeJobRunInfo(mockCtrl, "1007", payloadStartTime, true, junitXML, openshiftFiles),
-		buildFakeJobRunInfo(mockCtrl, "1008", payloadStartTime, true, junitXML, openshiftFiles),
-		buildFakeJobRunInfo(mockCtrl, "1009", payloadStartTime, true, junitXML, openshiftFiles),
-		buildFakeJobRunInfo(mockCtrl, "1010", payloadStartTime, true, junitXML, openshiftFiles),
+	jobRunInfos := make([]jobrunaggregatorapi.JobRunInfo, 0, 10)
+	for i := 1; i <= 10; i++ {
+		jobRunInfos = append(jobRunInfos, buildFakeJobRunInfo(mockCtrl, fmt.Sprintf("10%02d", i), payloadStartTime, i <= finishedCount, junitXML, openshiftFiles))
 	}
+	return jobRunInfos
 }
 
 func buildFakeJobRunInfo(mockCtrl *gomock.Controller,

@@ -167,8 +167,8 @@ func (o *JobRunAggregatorAnalyzerOptions) Run(ctx context.Context) error {
 		if len(o.explicitGCSPrefix) > 0 {
 			jobRunGCSBucketRoot = filepath.Join(o.explicitGCSPrefix, jobRunName)
 		}
-		aggregationConfiguration.FinishedJobs = append(
-			aggregationConfiguration.FinishedJobs,
+		aggregationConfiguration.UnfinishedJobs = append(
+			aggregationConfiguration.UnfinishedJobs,
 			JobRunInfo{
 				JobName:      o.jobName,
 				JobRunID:     jobRunName,

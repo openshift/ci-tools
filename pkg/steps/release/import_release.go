@@ -14,6 +14,7 @@ import (
 	kerrors "k8s.io/apimachinery/pkg/api/errors"
 	meta "k8s.io/apimachinery/pkg/apis/meta/v1"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
+	"k8s.io/apimachinery/pkg/runtime"
 	"k8s.io/apimachinery/pkg/util/sets"
 	"k8s.io/apimachinery/pkg/util/wait"
 	"k8s.io/client-go/util/retry"
@@ -365,6 +366,8 @@ func ImportReleaseStep(
 
 const overrideCLIStreamName = "amd64-cli"
 
+const cliImageSpecVisibilityTimeout = 3 * time.Minute
+
 func (s *importReleaseStep) ensureCLIStream(ctx context.Context, streamName string) error {
 	stableIS := &imagev1.ImageStream{
 		ObjectMeta: meta.ObjectMeta{
@@ -389,6 +392,10 @@ func (s *importReleaseStep) resolveCLIImageFromStream(ctx context.Context, strea
 			return nil, nil
 		}
 		return nil, fmt.Errorf("unable to get existing %s imagestreamtag: %w", streamTagName, err)
+	}
+
+	if err := waitForCLIImageTagInSpec(ctx, s.client, s.jobSpec.Namespace(), streamName, cliImageSpecVisibilityTimeout); err != nil {
+		return nil, fmt.Errorf("unable to wait for the existing 'cli' image tag to appear in the stable stream spec: %w", err)
 	}
 
 	if err := utils.WaitForImportingISTag(ctx, s.client, s.jobSpec.Namespace(), streamName, nil, sets.New("cli"), 10*time.Minute, s.client.MetricsAgent()); err != nil {
@@ -487,11 +494,36 @@ func (s *importReleaseStep) extractAndTagCLIImage(ctx context.Context, targetCLI
 		return nil, fmt.Errorf("unable to tag the 'cli' image into the stable stream: %w", err)
 	}
 
+	if err := waitForCLIImageTagInSpec(ctx, s.client, s.jobSpec.Namespace(), streamName, cliImageSpecVisibilityTimeout); err != nil {
+		return nil, fmt.Errorf("unable to wait for the 'cli' image tag to appear in the stable stream spec: %w", err)
+	}
+
 	if err := utils.WaitForImportingISTag(ctx, s.client, s.jobSpec.Namespace(), streamName, nil, sets.New("cli"), 10*time.Minute, s.client.MetricsAgent()); err != nil {
 		return nil, fmt.Errorf("unable to wait for the 'cli' image in the stable stream to populate: %w", err)
 	}
 
 	return &cliImageRef, nil
+}
+
+// waitForCLIImageTagInSpec waits for the CLI tag definition to be visible before
+// inspecting its import status. An ImageStreamTag update can succeed before the
+// corresponding tag is returned in the parent ImageStream spec.
+func waitForCLIImageTagInSpec(ctx context.Context, client ctrlruntimeclient.WithWatch, namespace, streamName string, timeout time.Duration) error {
+	imageStream := &imagev1.ImageStream{}
+	evaluate := func(obj runtime.Object) (bool, error) {
+		stream, ok := obj.(*imagev1.ImageStream)
+		if !ok {
+			return false, fmt.Errorf("got an event that did not contain an imagestream: %v", obj)
+		}
+		for _, tag := range stream.Spec.Tags {
+			if tag.Name == "cli" {
+				return true, nil
+			}
+		}
+		logrus.Debugf("CLI tag has not shown up in the spec of imagestream %s/%s, waiting ...", stream.Namespace, stream.Name)
+		return false, nil
+	}
+	return kubernetes.WaitForConditionOnObject(ctx, client, ctrlruntimeclient.ObjectKey{Namespace: namespace, Name: streamName}, &imagev1.ImageStreamList{}, imageStream, evaluate, timeout)
 }
 
 func (s *importReleaseStep) getCLIImage(ctx context.Context, target, streamName string) (*api.ImageStreamTagReference, error) {

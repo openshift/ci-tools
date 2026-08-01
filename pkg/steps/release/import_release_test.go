@@ -174,12 +174,17 @@ func (c *releaseImportGuardClient) Watch(ctx context.Context, list ctrlruntimecl
 		Name: "cli",
 		From: &corev1.ObjectReference{Kind: "DockerImage", Name: testCLIImage},
 	}}
-	stream.Status.Tags = []imagev1.NamedTagEventList{{
-		Tag: "cli",
-		Items: []imagev1.TagEvent{{
-			DockerImageReference: "quay.io/test/cli@sha256:aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
-		}},
-	}}
+	// Reveal import status only after a separate watch has exposed the spec tag.
+	// Without the production spec-visibility guard, the import wait sees only
+	// this first spec-only event and the direct regression tests time out.
+	if c.imageStreamWatchCount > 1 {
+		stream.Status.Tags = []imagev1.NamedTagEventList{{
+			Tag: "cli",
+			Items: []imagev1.TagEvent{{
+				DockerImageReference: "quay.io/test/cli@sha256:aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
+			}},
+		}}
+	}
 	if err := c.FakePodExecutor.LoggingClient.Update(ctx, stream); err != nil {
 		return nil, err
 	}

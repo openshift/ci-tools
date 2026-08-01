@@ -512,7 +512,7 @@ func waitForCLIImageTagInSpec(ctx context.Context, client ctrlruntimeclient.With
 	imageStream := &imagev1.ImageStream{}
 	evaluate := func(obj runtime.Object) (bool, error) {
 		stream, ok := obj.(*imagev1.ImageStream)
-		if !ok {
+		if !ok || stream == nil {
 			return false, fmt.Errorf("got an event that did not contain an imagestream: %v", obj)
 		}
 		for _, tag := range stream.Spec.Tags {

@@ -361,58 +361,17 @@ func TestEnsureLabelsOnClusterPools(t *testing.T) {
 	defer os.RemoveAll(dir)
 
 	testCases := []struct {
-		name            string
-		input           string
-		output          string
-		expected        error
-		expectedContent string
+		name         string
+		input        string
+		output       string
+		expected     error
+		expectedFile string
 	}{
 		{
-			name:   "basic case",
-			input:  filepath.Join("testdata", "pools", "cvp-ocp-4-9-amd64-aws-us-west-2_clusterpool.yaml"),
-			output: filepath.Join(dir, "cvp-ocp-4-9-amd64-aws-us-west-2_clusterpool.yaml"),
-			expectedContent: `apiVersion: hive.openshift.io/v1
-kind: ClusterPool
-metadata:
-  creationTimestamp: null
-  labels:
-    architecture: amd64
-    cloud: aws
-    owner: cvp
-    product: ocp
-    region: us-west-2
-    version: "4.9"
-    version_lower: 4.9.0-0
-    version_upper: 4.10.0-0
-  name: cvp-ocp-4-9-amd64-aws-us-west-2
-  namespace: cvp-cluster-pool
-spec:
-  baseDomain: cpaas-ci.devcluster.openshift.com
-  hibernationConfig:
-    resumeTimeout: 15m0s
-  imageSetRef:
-    name: ocp-release-4.9.57-x86-64-for-4.9.0-0-to-4.10.0-0
-  installAttemptsLimit: 1
-  installConfigSecretTemplateRef:
-    name: install-config-aws-us-west-2
-  labels:
-    tp.openshift.io/owner: cvp
-  maxSize: 10
-  platform:
-    aws:
-      credentialsSecretRef:
-        name: cvp-aws-credentials
-      region: us-west-2
-  pullSecretRef:
-    name: pull-secret
-  runningCount: 1
-  size: 5
-  skipMachinePools: true
-status:
-  ready: 0
-  size: 0
-  standby: 0
-`,
+			name:         "basic case",
+			input:        filepath.Join("testdata", "pools", "cvp-ocp-4-9-amd64-aws-us-west-2_clusterpool.yaml"),
+			output:       filepath.Join(dir, "cvp-ocp-4-9-amd64-aws-us-west-2_clusterpool.yaml"),
+			expectedFile: filepath.Join("testdata", "pools", "cvp-ocp-4-9-amd64-aws-us-west-2_clusterpool_expected.yaml"),
 		},
 	}
 
@@ -428,11 +387,15 @@ status:
 				t.Errorf("%s differs from expected:\n%s", tc.name, diff)
 			}
 			if actual == nil {
-				raw, err := os.ReadFile(tc.output)
+				got, err := os.ReadFile(tc.output)
 				if err != nil {
 					t.Errorf("failed to read file: %v", err)
 				}
-				if diff := cmp.Diff(tc.expectedContent, string(raw)); diff != "" {
+				want, err := os.ReadFile(tc.expectedFile)
+				if err != nil {
+					t.Fatalf("failed to read expected file: %v", err)
+				}
+				if diff := cmp.Diff(string(want), string(got)); diff != "" {
 					t.Errorf("%s differs from expected:\n%s", tc.name, diff)
 				}
 			}

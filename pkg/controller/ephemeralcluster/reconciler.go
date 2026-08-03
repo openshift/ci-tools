@@ -72,11 +72,6 @@ var (
 		},
 	}
 
-	defaultReconcilerOpts = reconcilerOptions{
-		polling:           3 * time.Second,
-		privilegedTenants: sets.New[string](),
-	}
-
 	isTagRegexp = regexp.MustCompile(`(?P<Namespace>.+)/(?P<Name>.+)\:(?P<Tag>.+)`)
 )
 
@@ -110,6 +105,7 @@ type reconcilerOptions struct {
 	polling           time.Duration
 	cliISTagRef       string
 	privilegedTenants sets.Set[string]
+	metricsInterval   time.Duration
 }
 
 type ReconcilerOption func(*reconcilerOptions)
@@ -131,6 +127,13 @@ func WithCLIISTagRef(isTagRef string) ReconcilerOption {
 func WithPrivilegedTenants(tenants []string) ReconcilerOption {
 	return func(o *reconcilerOptions) {
 		o.privilegedTenants.Insert(tenants...)
+	}
+}
+
+// WithMetricsInterval determines how often the controller reconciles metrics.
+func WithMetricsInterval(interval time.Duration) ReconcilerOption {
+	return func(o *reconcilerOptions) {
+		o.metricsInterval = interval
 	}
 }
 
@@ -181,11 +184,17 @@ func AddToManager(log *logrus.Entry, mgr manager.Manager, allManagers map[string
 		buildClients[clusterName] = clusterManager.GetClient()
 	}
 
-	for _, opt := range opts {
-		opt(&defaultReconcilerOpts)
+	reconcilerOpts := reconcilerOptions{
+		polling:           time.Minute,
+		privilegedTenants: sets.New[string](),
+		metricsInterval:   time.Minute,
 	}
 
-	cliISTagRef, err := parseCLIISTagRef(defaultReconcilerOpts.cliISTagRef)
+	for _, opt := range opts {
+		opt(&reconcilerOpts)
+	}
+
+	cliISTagRef, err := parseCLIISTagRef(reconcilerOpts.cliISTagRef)
 	if err != nil {
 		return err
 	}
@@ -199,9 +208,9 @@ func AddToManager(log *logrus.Entry, mgr manager.Manager, allManagers map[string
 		scheme:                 mgr.GetScheme(),
 		newProwJob:             pjutil.NewProwJob,
 		now:                    time.Now,
-		polling:                func() time.Duration { return defaultReconcilerOpts.polling },
+		polling:                func() time.Duration { return reconcilerOpts.polling },
 		cliISTagRef:            cliISTagRef,
-		privilegedTenants:      defaultReconcilerOpts.privilegedTenants,
+		privilegedTenants:      reconcilerOpts.privilegedTenants,
 	}
 
 	if err := ctrlbldr.ControllerManagedBy(mgr).
@@ -216,7 +225,11 @@ func AddToManager(log *logrus.Entry, mgr manager.Manager, allManagers map[string
 	}
 
 	if err := addPJReconcilerToManager(log, mgr, buildClients); err != nil {
-		return fmt.Errorf("build prowjob controller: %w", err)
+		return fmt.Errorf("add prowjob controller: %w", err)
+	}
+
+	if err := addMetricsToManager(log, mgr, EphemeralClusterNamespace, reconcilerOpts.metricsInterval); err != nil {
+		return fmt.Errorf("add metrics controller: %w", err)
 	}
 
 	return nil

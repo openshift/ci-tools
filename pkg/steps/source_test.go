@@ -412,7 +412,7 @@ func TestWaitForBuild(t *testing.T) {
 							CompletionTimestamp: &end,
 						},
 					},
-				).Build(), nil), nil, nil, "", "", nil),
+				).Build(), nil), api.BuildTypeOpenshift, nil, nil, "", "", nil),
 			expected: fmt.Errorf("build didn't start running within 0s (phase: Pending)"),
 		},
 		{
@@ -441,7 +441,7 @@ func TestWaitForBuild(t *testing.T) {
 							Namespace: ns,
 						},
 					},
-				).Build(), nil), nil, nil, "", "", nil),
+				).Build(), nil), api.BuildTypeOpenshift, nil, nil, "", "", nil),
 			expected: fmt.Errorf("build didn't start running within 0s (phase: Pending):\nFound 0 events for Pod some-build-build:"),
 		},
 		{
@@ -482,7 +482,7 @@ func TestWaitForBuild(t *testing.T) {
 							}},
 						},
 					},
-				).Build(), nil), nil, nil, "", "", nil),
+				).Build(), nil), api.BuildTypeOpenshift, nil, nil, "", "", nil),
 			expected: fmt.Errorf(`build didn't start running within 0s (phase: Pending):
 * Container the-container is not ready with reason the_reason and message the_message
 Found 0 events for Pod some-build-build:`),
@@ -501,7 +501,7 @@ Found 0 events for Pod some-build-build:`),
 						StartTimestamp:      &start,
 						CompletionTimestamp: &end,
 					},
-				}).Build(), nil), nil, nil, "", "", nil),
+				}).Build(), nil), api.BuildTypeOpenshift, nil, nil, "", "", nil),
 			timeout: 30 * time.Minute,
 		},
 		{
@@ -545,7 +545,7 @@ Found 0 events for Pod some-build-build:`),
 							Time: now.Add(-59 * time.Minute),
 						},
 					},
-				}).Build(), nil), nil, nil, "", "", nil),
+				}).Build(), nil), api.BuildTypeOpenshift, nil, nil, "", "", nil),
 			timeout: 30 * time.Minute,
 		},
 		{
@@ -730,6 +730,10 @@ func (c *fakeBuildClient) MetricsAgent() *metrics.MetricsAgent { return nil }
 
 func (c *fakeBuildClient) Client() loggingclient.LoggingClient {
 	return c.LoggingClient
+}
+
+func (c *fakeBuildClient) BuildType() string {
+	return api.BuildTypeOpenshift
 }
 
 func Test_constructMultiArchBuilds(t *testing.T) {

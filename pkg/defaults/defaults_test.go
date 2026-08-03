@@ -1298,7 +1298,7 @@ func TestFromConfig(t *testing.T) {
 			t.Fatal(err)
 		}
 	}
-	buildClient := steps.NewBuildClient(client, nil, nil, "", "", nil)
+	buildClient := steps.NewBuildClient(client, api.BuildTypeOpenshift, nil, nil, "", "", nil)
 	podClient := kubernetes.NewPodClient(client, nil, nil, 0, nil)
 
 	clusterPool := hivev1.ClusterPool{

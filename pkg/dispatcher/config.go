@@ -118,13 +118,17 @@ func DetermineCloud(jobBase prowconfig.JobBase) string {
 	return ""
 }
 
-func extractRequiredCapabilities(labels map[string]string) []string {
+// ExtractCapabilities returns a sorted list of capability values from labels of
+// the form "capability/<name>: <name>" (key suffix must equal value).
+// The result is sorted to ensure deterministic comparison with slices.Equal.
+func ExtractCapabilities(labels map[string]string) []string {
 	var capabilities []string
 	for key, value := range labels {
 		if strings.HasPrefix(key, "capability/") && strings.TrimPrefix(key, "capability/") == value {
 			capabilities = append(capabilities, value)
 		}
 	}
+	sort.Strings(capabilities)
 	return capabilities
 }
 
@@ -172,7 +176,7 @@ func (config *Config) DetermineClusterForJob(jobBase prowconfig.JobBase, path st
 			return api.Cluster(cluster), false, nil
 		}
 
-		requiredCapabilities := extractRequiredCapabilities(jobBase.Labels)
+		requiredCapabilities := ExtractCapabilities(jobBase.Labels)
 		if len(requiredCapabilities) > 0 {
 			matchingClusters := []string{}
 			matchingClustersByProvider := map[string][]string{}
@@ -361,6 +365,9 @@ func LoadConfig(configPath string) (*Config, error) {
 	if len(errs) > 0 {
 		return nil, utilerrors.NewAggregate(errs)
 	}
+	if err := config.Validate(); err != nil {
+		return nil, err
+	}
 	return config, nil
 }
 
@@ -383,7 +390,7 @@ func (config *Config) Validate() error {
 	}
 	// sort for tests
 	sort.Strings(matches)
-	if len(matches) > 1 {
+	if len(matches) > 0 {
 		return fmt.Errorf("there are job names occurring more than once: %s", matches)
 	}
 	return nil

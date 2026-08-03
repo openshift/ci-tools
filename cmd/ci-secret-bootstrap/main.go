@@ -717,13 +717,12 @@ func generateUserSecretLabels(secretKeys map[string]string) (map[string]string, 
 		return labels, nil
 	}
 	for _, label := range strings.Split(raw, ",") {
-		label = strings.TrimSpace(label)
-		if label == "" {
+		if strings.TrimSpace(label) == "" {
 			continue
 		}
-		key, value, ok := strings.Cut(label, ":")
-		if !ok {
-			return nil, fmt.Errorf("invalid label %q: expected key:value", label)
+		key, value, err := api.ParseLabel(label)
+		if err != nil {
+			return nil, err
 		}
 		labels[key] = value
 	}
@@ -1550,11 +1549,18 @@ func constructSecretsFromGSM(
 			if target.Type == "" {
 				target.Type = coreapi.SecretTypeOpaque
 			}
+			labels := map[string]string{}
+			for _, l := range bundle.Labels {
+				if k, v, err := api.ParseLabel(l); err == nil {
+					labels[k] = v
+				}
+			}
+			labels[api.DPTPRequesterLabel] = api.CISecretBootstrapName
 			secret := &coreapi.Secret{
 				ObjectMeta: metav1.ObjectMeta{
 					Name:      bundle.Name,
 					Namespace: target.Namespace,
-					Labels:    map[string]string{api.DPTPRequesterLabel: "ci-secret-bootstrap"},
+					Labels:    labels,
 				},
 				Type: target.Type,
 				Data: make(map[string][]byte, len(k8sSecretData)),

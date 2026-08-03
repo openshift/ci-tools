@@ -502,6 +502,11 @@ func (in *GSMBundle) DeepCopyInto(out *GSMBundle) {
 			(*in)[i].DeepCopyInto(&(*out)[i])
 		}
 	}
+	if in.Labels != nil {
+		in, out := &in.Labels, &out.Labels
+		*out = make([]string, len(*in))
+		copy(*out, *in)
+	}
 	if in.Targets != nil {
 		in, out := &in.Targets, &out.Targets
 		*out = make([]TargetSpec, len(*in))

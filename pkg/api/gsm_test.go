@@ -737,6 +737,94 @@ func TestGSMConfigResolve(t *testing.T) {
 			},
 			expectedError: `bundle "test-bundle-no-targets" uses ${CLUSTER} variable substitution but has no resolvable targets (check that cluster_groups or cluster references are valid)`,
 		},
+		{
+			name: "resolved bundle doesn't drop labels",
+			config: GSMConfig{
+				ClusterGroups: map[string][]string{
+					"managed-clusters": {"build01", "build02", "build03"},
+				},
+				Bundles: []GSMBundle{
+					{
+						Name: "bundle-with-labels",
+						GSMSecrets: []GSMSecretRef{
+							{
+								Collection: "test-platform-infra",
+								Group:      "build-farm",
+							},
+						},
+						Targets: []TargetSpec{
+							{ClusterGroups: []string{"managed-clusters"}, Namespace: "ci"},
+						},
+						SyncToCluster: true,
+						Labels:        []string{"argocd.argoproj.io/secret-type:cluster"},
+					},
+				},
+			},
+			expectedConfig: GSMConfig{
+				ClusterGroups: map[string][]string{
+					"managed-clusters": {"build01", "build02", "build03"},
+				},
+				Bundles: []GSMBundle{
+					{
+						Name: "bundle-with-labels",
+						GSMSecrets: []GSMSecretRef{
+							{
+								Collection: "test-platform-infra",
+								Group:      "build-farm",
+							},
+						},
+						SyncToCluster: true,
+						Targets: []TargetSpec{
+							{Cluster: "build01", Namespace: "ci", Type: corev1.SecretTypeOpaque},
+							{Cluster: "build02", Namespace: "ci", Type: corev1.SecretTypeOpaque},
+							{Cluster: "build03", Namespace: "ci", Type: corev1.SecretTypeOpaque},
+						},
+						Labels: []string{"argocd.argoproj.io/secret-type:cluster"},
+					},
+				},
+			},
+		},
+		{
+			name: "${CLUSTER} substitution preserves labels",
+			config: GSMConfig{
+				Bundles: []GSMBundle{
+					{
+						Name: "gitops-cluster",
+						GSMSecrets: []GSMSecretRef{
+							{
+								Collection: "test-platform-infra",
+								Group:      "gitops",
+								Fields:     []FieldEntry{{Name: "token-${CLUSTER}"}},
+							},
+						},
+						Targets: []TargetSpec{
+							{Cluster: "build01", Namespace: "openshift-gitops"},
+						},
+						SyncToCluster: true,
+						Labels:        []string{"argocd.argoproj.io/secret-type:cluster", "env:ci"},
+					},
+				},
+			},
+			expectedConfig: GSMConfig{
+				Bundles: []GSMBundle{
+					{
+						Name: "gitops-cluster",
+						GSMSecrets: []GSMSecretRef{
+							{
+								Collection: "test-platform-infra",
+								Group:      "gitops",
+								Fields:     []FieldEntry{{Name: "token-build01"}},
+							},
+						},
+						Targets: []TargetSpec{
+							{Cluster: "build01", Namespace: "openshift-gitops", Type: corev1.SecretTypeOpaque},
+						},
+						SyncToCluster: true,
+						Labels:        []string{"argocd.argoproj.io/secret-type:cluster", "env:ci"},
+					},
+				},
+			},
+		},
 	}
 
 	for _, tc := range testCases {
@@ -1602,6 +1690,77 @@ func TestGSMConfigValidate(t *testing.T) {
 						Targets: []TargetSpec{
 							{Cluster: "build01", Namespace: "ci"},
 						},
+					},
+				},
+			},
+			expectError: false,
+		},
+		{
+			name: "error: invalid label format",
+			config: GSMConfig{
+				Bundles: []GSMBundle{
+					{
+						Name: "bundle-bad-label",
+						GSMSecrets: []GSMSecretRef{
+							{Collection: "test-secrets", Group: "group1", Fields: []FieldEntry{{Name: "token"}}},
+						},
+						SyncToCluster: true,
+						Targets:       []TargetSpec{{Cluster: "build01", Namespace: "ci"}},
+						Labels:        []string{"missing-colon"},
+					},
+				},
+			},
+			expectError:   true,
+			errorContains: `invalid label "missing-colon": expected key:value format`,
+		},
+		{
+			name: "error: invalid label key",
+			config: GSMConfig{
+				Bundles: []GSMBundle{
+					{
+						Name: "bundle-bad-key",
+						GSMSecrets: []GSMSecretRef{
+							{Collection: "test-secrets", Group: "group1", Fields: []FieldEntry{{Name: "token"}}},
+						},
+						SyncToCluster: true,
+						Targets:       []TargetSpec{{Cluster: "build01", Namespace: "ci"}},
+						Labels:        []string{"@invalid:value"},
+					},
+				},
+			},
+			expectError:   true,
+			errorContains: `invalid label key`,
+		},
+		{
+			name: "error: reserved label key",
+			config: GSMConfig{
+				Bundles: []GSMBundle{
+					{
+						Name: "bundle-reserved-label",
+						GSMSecrets: []GSMSecretRef{
+							{Collection: "test-secrets", Group: "group1", Fields: []FieldEntry{{Name: "token"}}},
+						},
+						SyncToCluster: true,
+						Targets:       []TargetSpec{{Cluster: "build01", Namespace: "ci"}},
+						Labels:        []string{"dptp.openshift.io/requester:evil"},
+					},
+				},
+			},
+			expectError:   true,
+			errorContains: `is a reserved label key`,
+		},
+		{
+			name: "valid: bundle with labels",
+			config: GSMConfig{
+				Bundles: []GSMBundle{
+					{
+						Name: "bundle-with-labels",
+						GSMSecrets: []GSMSecretRef{
+							{Collection: "test-secrets", Group: "group1", Fields: []FieldEntry{{Name: "token"}}},
+						},
+						SyncToCluster: true,
+						Targets:       []TargetSpec{{Cluster: "build01", Namespace: "ci"}},
+						Labels:        []string{"argocd.argoproj.io/secret-type:cluster", "env:ci"},
 					},
 				},
 			},

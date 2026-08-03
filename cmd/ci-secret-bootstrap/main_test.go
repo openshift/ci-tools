@@ -1137,7 +1137,7 @@ Code: 404. Errors:
 				},
 			},
 			config:        secretbootstrap.Config{UserSecretsTargetClusters: []string{"a"}},
-			expectedError: `invalid label "key@value": expected key:value`,
+			expectedError: `invalid label "key@value": expected key:value format`,
 			expected:      map[string][]*coreapi.Secret{},
 		},
 		{
@@ -4205,6 +4205,50 @@ func TestConstructSecretsFromGSM(t *testing.T) {
 				},
 			},
 		},
+		{
+			name: "bundle with labels",
+			config: api.GSMConfig{
+				Bundles: []api.GSMBundle{
+					{
+						Name: "gitops-cluster-build04",
+						Targets: []api.TargetSpec{
+							{Namespace: "openshift-gitops", Cluster: "build04"},
+						},
+						SyncToCluster: true,
+						Labels:        []string{"argocd.argoproj.io/secret-type:cluster", "env:ci"},
+						GSMSecrets: []api.GSMSecretRef{
+							{
+								Collection: "test-platform-infra",
+								Group:      "gitops",
+								Fields:     []api.FieldEntry{{Name: "token"}},
+							},
+						},
+					},
+				},
+			},
+			gsmSecretsPayloads: map[string][]byte{
+				"projects/123456/secrets/test-platform-infra__gitops__token/versions/latest": []byte("my-token"),
+			},
+			expected: map[string][]*coreapi.Secret{
+				"build04": {
+					{
+						ObjectMeta: metav1.ObjectMeta{
+							Name:      "gitops-cluster-build04",
+							Namespace: "openshift-gitops",
+							Labels: map[string]string{
+								"dptp.openshift.io/requester":    "ci-secret-bootstrap",
+								"argocd.argoproj.io/secret-type": "cluster",
+								"env":                            "ci",
+							},
+						},
+						Type: coreapi.SecretTypeOpaque,
+						Data: map[string][]byte{
+							"token": []byte("my-token"),
+						},
+					},
+				},
+			},
+		},
 	}
 
 	for _, tc := range testCases {
@@ -4637,7 +4681,7 @@ func TestGenerateUserSecretLabels(t *testing.T) {
 				vaultapi.SecretSyncTargetLabelsKey: "labelKey@labelValue",
 			},
 			expected:      map[string]string{},
-			expectedError: `invalid label "labelKey@labelValue": expected key:value`,
+			expectedError: `invalid label "labelKey@labelValue": expected key:value format`,
 		},
 		{
 			name: "multiple labels",

@@ -2,8 +2,10 @@ package api
 
 import (
 	"fmt"
+	"strings"
 
 	"k8s.io/apimachinery/pkg/util/sets"
+	"k8s.io/apimachinery/pkg/util/validation"
 )
 
 const (
@@ -36,7 +38,29 @@ const (
 	// DPTPRequesterLabel is the label on a Kubernates CR whose value indicates the automated tool that requests the CR
 	DPTPRequesterLabel    = "dptp.openshift.io/requester"
 	CISecretBootstrapName = "ci-secret-bootstrap"
+)
 
+// ParseLabel parses a "key:value" label string, returning the key and value.
+// Leading/trailing whitespace on the input is trimmed. The key is split on the
+// first ":" — the key is validated with validation.IsQualifiedName and the value
+// with validation.IsValidLabelValue. Returns an error if the format is invalid
+// or either component fails K8s label validation.
+func ParseLabel(label string) (string, string, error) {
+	label = strings.TrimSpace(label)
+	key, value, ok := strings.Cut(label, ":")
+	if !ok {
+		return "", "", fmt.Errorf("invalid label %q: expected key:value format", label)
+	}
+	if errs := validation.IsQualifiedName(key); len(errs) > 0 {
+		return "", "", fmt.Errorf("invalid label key %q: %s", key, errs[0])
+	}
+	if errs := validation.IsValidLabelValue(value); len(errs) > 0 {
+		return "", "", fmt.Errorf("invalid label value %q: %s", value, errs[0])
+	}
+	return key, value, nil
+}
+
+const (
 	KVMDeviceLabel           = "devices.kubevirt.io/kvm"
 	ClusterLabel             = "ci-operator.openshift.io/cluster"
 	CloudLabel               = "ci-operator.openshift.io/cloud"

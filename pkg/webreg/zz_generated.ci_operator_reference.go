@@ -1090,6 +1090,17 @@ const ciOperatorReferenceYaml = "# The list of base images describe\n" +
 	"        # PipelineRunIfChanged is a regex that will result in the test only running in second\n" +
 	"        # stage of the pipeline run if something that matches it was changed.\n" +
 	"        pipeline_run_if_changed: ' '\n" +
+	"        # PipelineRunIfDockerfileChanged determines whether to run a test based on\n" +
+	"        # whether the container image built by the specified Dockerfile(s) would change.\n" +
+	"        # Instead of hand-maintained regex, it resolves which files matter by parsing\n" +
+	"        # Dockerfile COPY/ADD instructions.\n" +
+	"        pipeline_run_if_dockerfile_changed:\n" +
+	"            - # GoBinaryTargets is an optional list of Go build targets (e.g., \"./cmd/foo\").\n" +
+	"              # When set, enables go-dependency-aware filtering for COPY-all Dockerfiles.\n" +
+	"              go_binary_targets:\n" +
+	"                - \"\"\n" +
+	"              # Path is the path to the Dockerfile relative to the repo root.\n" +
+	"              path: ' '\n" +
 	"        # PipelineSkipIfOnlyChanged is a regex that will result in the test being skipped in second\n" +
 	"        # stage of the pipeline run if all changed files match that regex.\n" +
 	"        pipeline_skip_if_only_changed: ' '\n" +
@@ -2071,6 +2082,17 @@ const ciOperatorReferenceYaml = "# The list of base images describe\n" +
 	"      # PipelineRunIfChanged is a regex that will result in the test only running in second\n" +
 	"      # stage of the pipeline run if something that matches it was changed.\n" +
 	"      pipeline_run_if_changed: ' '\n" +
+	"      # PipelineRunIfDockerfileChanged determines whether to run a test based on\n" +
+	"      # whether the container image built by the specified Dockerfile(s) would change.\n" +
+	"      # Instead of hand-maintained regex, it resolves which files matter by parsing\n" +
+	"      # Dockerfile COPY/ADD instructions.\n" +
+	"      pipeline_run_if_dockerfile_changed:\n" +
+	"        - # GoBinaryTargets is an optional list of Go build targets (e.g., \"./cmd/foo\").\n" +
+	"          # When set, enables go-dependency-aware filtering for COPY-all Dockerfiles.\n" +
+	"          go_binary_targets:\n" +
+	"            - \"\"\n" +
+	"          # Path is the path to the Dockerfile relative to the repo root.\n" +
+	"          path: ' '\n" +
 	"      # PipelineSkipIfOnlyChanged is a regex that will result in the test being skipped in second\n" +
 	"      # stage of the pipeline run if all changed files match that regex.\n" +
 	"      pipeline_skip_if_only_changed: ' '\n" +

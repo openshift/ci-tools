@@ -525,7 +525,7 @@ func TestValidateImageConfiguration(t *testing.T) {
 			SkipIfOnlyChanged: `^docs/`,
 		},
 		output: []error{
-			errors.New("images: `run_if_changed`, `skip_if_only_changed`, `pipeline_run_if_changed`, and `pipeline_skip_if_only_changed` are mutually exclusive"),
+			errors.New("images: `run_if_changed`, `skip_if_only_changed`, `pipeline_run_if_changed`, `pipeline_skip_if_only_changed`, and `pipeline_run_if_dockerfile_changed` are mutually exclusive"),
 		},
 	}, {
 		name: "pipeline_run_if_changed and pipeline_skip_if_only_changed are mutually exclusive",
@@ -534,7 +534,7 @@ func TestValidateImageConfiguration(t *testing.T) {
 			PipelineSkipIfOnlyChanged: `^docs/`,
 		},
 		output: []error{
-			errors.New("images: `run_if_changed`, `skip_if_only_changed`, `pipeline_run_if_changed`, and `pipeline_skip_if_only_changed` are mutually exclusive"),
+			errors.New("images: `run_if_changed`, `skip_if_only_changed`, `pipeline_run_if_changed`, `pipeline_skip_if_only_changed`, and `pipeline_run_if_dockerfile_changed` are mutually exclusive"),
 		},
 	}, {
 		name: "run_if_changed with pipeline_skip_if_only_changed are mutually exclusive",
@@ -543,7 +543,7 @@ func TestValidateImageConfiguration(t *testing.T) {
 			PipelineSkipIfOnlyChanged: `^docs/`,
 		},
 		output: []error{
-			errors.New("images: `run_if_changed`, `skip_if_only_changed`, `pipeline_run_if_changed`, and `pipeline_skip_if_only_changed` are mutually exclusive"),
+			errors.New("images: `run_if_changed`, `skip_if_only_changed`, `pipeline_run_if_changed`, `pipeline_skip_if_only_changed`, and `pipeline_run_if_dockerfile_changed` are mutually exclusive"),
 		},
 	}, {
 		name: "run_if_changed alone is valid",

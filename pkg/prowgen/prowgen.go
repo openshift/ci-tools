@@ -1,6 +1,7 @@
 package prowgen
 
 import (
+	"encoding/json"
 	"fmt"
 	"hash/fnv"
 
@@ -226,6 +227,7 @@ func handlePresubmit(g *prowJobBaseBuilder, element cioperatorapi.TestStepConfig
 	presubmit := generatePresubmitForTest(g, name, info, func(options *generatePresubmitOptions) {
 		options.pipelineRunIfChanged = element.PipelineRunIfChanged
 		options.pipelineSkipIfOnlyChanged = element.PipelineSkipIfOnlyChanged
+		options.pipelineRunIfDockerfileChanged = element.PipelineRunIfDockerfileChanged
 		options.Capabilities = element.Capabilities
 		options.runIfChanged = element.RunIfChanged
 		options.skipIfOnlyChanged = element.SkipIfOnlyChanged
@@ -244,21 +246,22 @@ func handlePresubmit(g *prowJobBaseBuilder, element cioperatorapi.TestStepConfig
 }
 
 type generatePresubmitOptions struct {
-	pipelineRunIfChanged      string
-	pipelineSkipIfOnlyChanged string
-	Capabilities              []string
-	runIfChanged              string
-	skipIfOnlyChanged         string
-	skipBranches              []string
-	defaultDisable            bool
-	optional                  bool
-	disableRehearsal          bool
-	maxConcurrency            int
-	slackReporterConfig       *cioperatorapi.SlackReporterConfig
+	pipelineRunIfChanged           string
+	pipelineSkipIfOnlyChanged      string
+	pipelineRunIfDockerfileChanged []cioperatorapi.DockerfileEntry
+	Capabilities                   []string
+	runIfChanged                   string
+	skipIfOnlyChanged              string
+	skipBranches                   []string
+	defaultDisable                 bool
+	optional                       bool
+	disableRehearsal               bool
+	maxConcurrency                 int
+	slackReporterConfig            *cioperatorapi.SlackReporterConfig
 }
 
 func (opts *generatePresubmitOptions) shouldAlwaysRun() bool {
-	return opts.runIfChanged == "" && opts.skipIfOnlyChanged == "" && !opts.defaultDisable && opts.pipelineRunIfChanged == "" && opts.pipelineSkipIfOnlyChanged == ""
+	return opts.runIfChanged == "" && opts.skipIfOnlyChanged == "" && !opts.defaultDisable && opts.pipelineRunIfChanged == "" && opts.pipelineSkipIfOnlyChanged == "" && len(opts.pipelineRunIfDockerfileChanged) == 0
 }
 
 type generatePresubmitOption func(options *generatePresubmitOptions)
@@ -304,6 +307,14 @@ func generatePresubmitForTest(jobBaseBuilder *prowJobBaseBuilder, name string, i
 			base.Annotations = make(map[string]string)
 		}
 		base.Annotations["pipeline_skip_if_only_changed"] = opts.pipelineSkipIfOnlyChanged
+		pipelineOpt = true
+	}
+	if len(opts.pipelineRunIfDockerfileChanged) > 0 {
+		if base.Annotations == nil {
+			base.Annotations = make(map[string]string)
+		}
+		data, _ := json.Marshal(opts.pipelineRunIfDockerfileChanged)
+		base.Annotations["pipeline_run_if_dockerfile_changed"] = string(data)
 		pipelineOpt = true
 	}
 	triggerCommand := prowconfig.DefaultTriggerFor(shortName)

@@ -2,7 +2,6 @@ package release
 
 import (
 	"context"
-	"strings"
 	"testing"
 	"time"
 
@@ -21,40 +20,6 @@ import (
 )
 
 const testCLIImage = "quay.io/test/cli:latest"
-
-func TestWaitForCLIImageTagInSpec(t *testing.T) {
-	const (
-		namespace  = "test-namespace"
-		streamName = "stable-initial"
-	)
-
-	t.Run("waits for CLI tag to become visible", func(t *testing.T) {
-		client := newReleaseImportGuardClient(t, namespace, streamName, &imagev1.ImageStream{
-			ObjectMeta: metav1.ObjectMeta{Namespace: namespace, Name: streamName},
-		})
-
-		if err := waitForCLIImageTagInSpec(context.Background(), client, namespace, streamName, time.Second); err != nil {
-			t.Fatalf("wait for CLI tag in spec: %v", err)
-		}
-		if client.imageStreamWatchCount == 0 {
-			t.Fatal("expected an ImageStream watch before the CLI tag became visible")
-		}
-	})
-
-	t.Run("returns a bounded timeout when CLI tag remains absent", func(t *testing.T) {
-		client := newImageStreamFakeClient(t, &imagev1.ImageStream{
-			ObjectMeta: metav1.ObjectMeta{Namespace: namespace, Name: streamName},
-		})
-
-		err := waitForCLIImageTagInSpec(context.Background(), client, namespace, streamName, 100*time.Millisecond)
-		if err == nil {
-			t.Fatal("expected timeout while CLI tag remains absent")
-		}
-		if !strings.Contains(err.Error(), "timed out waiting for the condition") {
-			t.Fatalf("expected bounded wait timeout, got: %v", err)
-		}
-	})
-}
 
 func TestResolveCLIImageFromStreamWaitsForSpecVisibility(t *testing.T) {
 	const (
@@ -82,8 +47,8 @@ func TestResolveCLIImageFromStreamWaitsForSpecVisibility(t *testing.T) {
 		t.Fatalf("resolve CLI image from stream: %v", err)
 	}
 	assertTestCLIReference(t, got)
-	if client.imageStreamWatchCount == 0 {
-		t.Fatal("expected resolveCLIImageFromStream to wait for CLI spec visibility")
+	if client.imageStreamWatchCount != 1 {
+		t.Fatalf("expected the shared import wait to use one ImageStream watch, got %d", client.imageStreamWatchCount)
 	}
 }
 
@@ -108,8 +73,8 @@ func TestExtractAndTagCLIImageWaitsForSpecVisibility(t *testing.T) {
 		t.Fatalf("extract and tag CLI image: %v", err)
 	}
 	assertTestCLIReference(t, got)
-	if client.imageStreamWatchCount == 0 {
-		t.Fatal("expected extractAndTagCLIImage to wait for CLI spec visibility")
+	if client.imageStreamWatchCount != 1 {
+		t.Fatalf("expected the shared import wait to use one ImageStream watch, got %d", client.imageStreamWatchCount)
 	}
 	if len(client.CreatedPods) != 1 || client.CreatedPods[0].Name != targetCLI {
 		t.Fatalf("expected CLI extractor pod %q to be created, got %#v", targetCLI, client.CreatedPods)
@@ -174,21 +139,21 @@ func (c *releaseImportGuardClient) Watch(ctx context.Context, list ctrlruntimecl
 		Name: "cli",
 		From: &corev1.ObjectReference{Kind: "DockerImage", Name: testCLIImage},
 	}}
-	// Reveal import status only after a separate watch has exposed the spec tag.
-	// Without the production spec-visibility guard, the import wait sees only
-	// this first spec-only event and the direct regression tests time out.
-	if c.imageStreamWatchCount > 1 {
-		stream.Status.Tags = []imagev1.NamedTagEventList{{
-			Tag: "cli",
-			Items: []imagev1.TagEvent{{
-				DockerImageReference: "quay.io/test/cli@sha256:aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
-			}},
-		}}
-	}
+	specOnly := stream.DeepCopy()
+	stream.Status.Tags = []imagev1.NamedTagEventList{{
+		Tag: "cli",
+		Items: []imagev1.TagEvent{{
+			DockerImageReference: "quay.io/test/cli@sha256:aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
+		}},
+	}}
 	if err := c.FakePodExecutor.LoggingClient.Update(ctx, stream); err != nil {
 		return nil, err
 	}
-	events := make(chan watch.Event, 1)
+	// The first event exposes the spec tag; the second exposes import status.
+	// Without the spec-aware shared evaluator, the initial empty list fails
+	// before this watch can be established.
+	events := make(chan watch.Event, 2)
+	events <- watch.Event{Type: watch.Modified, Object: specOnly}
 	events <- watch.Event{Type: watch.Modified, Object: stream.DeepCopy()}
 	return watch.NewProxyWatcher(events), nil
 }
@@ -218,13 +183,4 @@ func newReleaseImportGuardClient(t *testing.T, namespace, streamName string, obj
 		namespace:  namespace,
 		streamName: streamName,
 	}
-}
-
-func newImageStreamFakeClient(t *testing.T, objects ...runtime.Object) ctrlruntimeclient.WithWatch {
-	t.Helper()
-	scheme := runtime.NewScheme()
-	if err := imagev1.AddToScheme(scheme); err != nil {
-		t.Fatalf("add image API to scheme: %v", err)
-	}
-	return fakectrlruntimeclient.NewClientBuilder().WithScheme(scheme).WithRuntimeObjects(objects...).Build()
 }

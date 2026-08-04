@@ -6,6 +6,7 @@ import (
 	"fmt"
 	"strings"
 	"testing"
+	"time"
 
 	"github.com/google/go-cmp/cmp"
 
@@ -323,13 +324,14 @@ func (client *imageStreamImportStatusSettingClient) Create(ctx context.Context, 
 
 func TestGetEvaluator(t *testing.T) {
 	var testCases = []struct {
-		name          string
-		client        ctrlruntimeclient.Client
-		obj           *imagev1.ImageStream
-		tags          sets.Set[string]
-		expected      bool
-		expectedErr   error
-		expectedCount int
+		name            string
+		client          ctrlruntimeclient.Client
+		obj             *imagev1.ImageStream
+		tags            sets.Set[string]
+		waitForSpecTags bool
+		expected        bool
+		expectedErr     error
+		expectedCount   int
 	}{
 		{
 			name:   "happy path",
@@ -617,10 +619,33 @@ func TestGetEvaluator(t *testing.T) {
 			expected:    false,
 			expectedErr: fmt.Errorf("failed to import tag(s) [m-tag1,m-tag2] on image stream imported/is because of missing definition in the spec"),
 		},
+		{
+			name:   "wait for requested tag not yet visible in spec",
+			client: bcc(fakectrlruntimeclient.NewClientBuilder().Build()),
+			obj: &imagev1.ImageStream{
+				ObjectMeta: metav1.ObjectMeta{
+					Name:      "is",
+					Namespace: "imported",
+				},
+				Spec: imagev1.ImageStreamSpec{
+					Tags: []imagev1.TagReference{{Name: "tag1"}},
+				},
+				Status: imagev1.ImageStreamStatus{
+					PublicDockerImageRepository: "registry",
+					Tags: []imagev1.NamedTagEventList{{
+						Tag:   "tag1",
+						Items: []imagev1.TagEvent{{Image: "some"}},
+					}},
+				},
+			},
+			tags:            sets.New[string]("tag1", "cli"),
+			waitForSpecTags: true,
+			expected:        false,
+		},
 	}
 
 	for _, testCase := range testCases {
-		e := getEvaluator(context.Background(), testCase.client, testCase.obj.Namespace, testCase.obj.Name, testCase.tags, nil)
+		e := getEvaluator(context.Background(), testCase.client, testCase.obj.Namespace, testCase.obj.Name, testCase.tags, testCase.waitForSpecTags, nil)
 		actual, actualErr := e(testCase.obj)
 		if diff := cmp.Diff(testCase.expectedErr, actualErr, testhelper.EquateErrorMessage); diff != "" {
 			t.Errorf("%s: actualErr does not match expectedErr, diff: %s", testCase.name, diff)
@@ -636,6 +661,24 @@ func TestGetEvaluator(t *testing.T) {
 				t.Errorf("%s: actual does not match expected, diff: %s", testCase.name, diff)
 			}
 		}
+	}
+}
+
+func TestWaitForImportingISTagWithSpecVisibilityTimesOut(t *testing.T) {
+	const (
+		namespace  = "test-namespace"
+		streamName = "stable"
+	)
+	client := fakectrlruntimeclient.NewClientBuilder().WithScheme(scheme.Scheme).WithRuntimeObjects(&imagev1.ImageStream{
+		ObjectMeta: metav1.ObjectMeta{Namespace: namespace, Name: streamName},
+	}).Build()
+
+	err := WaitForImportingISTagWithSpecVisibility(context.Background(), client, namespace, streamName, nil, sets.New("cli"), 100*time.Millisecond, nil)
+	if err == nil {
+		t.Fatal("expected timeout while the requested tag remains absent from the spec")
+	}
+	if !strings.Contains(err.Error(), "timed out waiting for the condition") {
+		t.Fatalf("expected bounded wait timeout, got: %v", err)
 	}
 }
 

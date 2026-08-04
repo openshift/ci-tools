@@ -32,7 +32,7 @@ type metric struct {
 	Value  float64
 }
 
-func ec(cluster, tenant, clusterProfile, workflow, hostedMgmtClusterEnv string) *ephemeralclusterv1.EphemeralCluster {
+func ec(cluster, tenant, clusterProfile, workflow, hostedMgmtClusterEnv string, phase ephemeralclusterv1.EphemeralClusterPhase) *ephemeralclusterv1.EphemeralCluster {
 	ec := ephemeralclusterv1.EphemeralCluster{
 		ObjectMeta: v1.ObjectMeta{
 			Annotations: map[string]string{
@@ -49,6 +49,9 @@ func ec(cluster, tenant, clusterProfile, workflow, hostedMgmtClusterEnv string) 
 					Workflow:       workflow,
 				},
 			},
+		},
+		Status: ephemeralclusterv1.EphemeralClusterStatus{
+			Phase: phase,
 		},
 	}
 
@@ -119,7 +122,7 @@ func TestStart(t *testing.T) {
 		t.Cleanup(func() { cancel() })
 
 		client := fake.NewClientBuilder().WithScheme(scheme).Build()
-		ecTotalGauge := ecTotalGaugeVec()
+		ecTotalGauge := ecCountGaugeVec()
 
 		mg := newMetricsGatherer(logrus.NewEntry(logrus.StandardLogger()), client, ecTotalGauge,
 			EphemeralClusterNamespace, gatherInterval)
@@ -135,28 +138,28 @@ func TestStart(t *testing.T) {
 		}{
 			{
 				ecs: []*ephemeralclusterv1.EphemeralCluster{
-					ec("stone-prd-rh01", "tp-ci-tenant", "aws", "e2e-aws-workflow", ""),
-					ec("stone-prd-rh01", "tp-ci-tenant", "aws", "e2e-aws-workflow", ""),
-					ec("stone-stg-rh01", "tp-ci-tenant-2", "aws-2", "e2e-aws-workflow", ""),
+					ec("stone-prd-rh01", "tp-ci-tenant", "aws", "e2e-aws-workflow", "", ephemeralclusterv1.EphemeralClusterProvisioning),
+					ec("stone-prd-rh01", "tp-ci-tenant", "aws", "e2e-aws-workflow", "", ephemeralclusterv1.EphemeralClusterProvisioning),
+					ec("stone-stg-rh01", "tp-ci-tenant-2", "aws-2", "e2e-aws-workflow", "", ephemeralclusterv1.EphemeralClusterFailed),
 				},
 				wantMetricVals: []metric{{
-					Labels: []string{"stone-prd-rh01", "tp-ci-tenant", "aws", "e2e-aws-workflow"},
+					Labels: []string{"stone-prd-rh01", "tp-ci-tenant", "aws", "e2e-aws-workflow", "Provisioning"},
 					Value:  2,
 				}, {
-					Labels: []string{"stone-stg-rh01", "tp-ci-tenant-2", "aws-2", "e2e-aws-workflow"},
+					Labels: []string{"stone-stg-rh01", "tp-ci-tenant-2", "aws-2", "e2e-aws-workflow", "Failed"},
 					Value:  1,
 				}},
 			},
 			{
 				ecs: []*ephemeralclusterv1.EphemeralCluster{
-					ec("stone-stg-rh01", "tp-ci-tenant-2", "aws-2", "e2e-aws-workflow", ""),
-					ec("stone-prd-rh01", "amisstea-tenant", "aws-konflux-prod", "hypershift-hostedcluster-workflow", "hosted-mgmt2"),
+					ec("stone-stg-rh01", "tp-ci-tenant-2", "aws-2", "e2e-aws-workflow", "", ephemeralclusterv1.EphemeralClusterFailed),
+					ec("stone-prd-rh01", "amisstea-tenant", "aws-konflux-prod", "hypershift-hostedcluster-workflow", "hosted-mgmt2", ephemeralclusterv1.EphemeralClusterDeprovisioning),
 				},
 				wantMetricVals: []metric{{
-					Labels: []string{"stone-stg-rh01", "tp-ci-tenant-2", "aws-2", "e2e-aws-workflow"},
+					Labels: []string{"stone-stg-rh01", "tp-ci-tenant-2", "aws-2", "e2e-aws-workflow", "Failed"},
 					Value:  1,
 				}, {
-					Labels: []string{"stone-prd-rh01", "amisstea-tenant", "aws-konflux-prod", "hypershift-hostedcluster-workflow_hosted-mgmt2"},
+					Labels: []string{"stone-prd-rh01", "amisstea-tenant", "aws-konflux-prod", "hypershift-hostedcluster-workflow_hosted-mgmt2", "Deprovisioning"},
 					Value:  1,
 				}},
 			},

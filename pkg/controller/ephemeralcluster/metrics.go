@@ -20,30 +20,31 @@ const (
 	hypershiftHostedClusterWorkflow = "hypershift-hostedcluster-workflow"
 )
 
-func ecTotalGaugeVec() *prometheus.GaugeVec {
+func ecCountGaugeVec() *prometheus.GaugeVec {
 	return prometheus.NewGaugeVec(prometheus.GaugeOpts{
-		Name: "ephemeralclusters",
-		Help: "The number of ephemeralclusters the controller created",
-	}, []string{"konflux_cluster", "konflux_tenant", "cluster_profile", "workflow"})
+		Namespace: "ephemeralcluster",
+		Name:      "count",
+		Help:      "The number of ephemeralclusters the controller created",
+	}, []string{"konflux_cluster", "konflux_tenant", "cluster_profile", "workflow", "phase"})
 }
 
 type metricsGatherer struct {
 	logger       *logrus.Entry
 	client       ctrlruntimeclient.Client
-	ecTotalGauge *prometheus.GaugeVec
+	ecCountGauge *prometheus.GaugeVec
 	ecNS         string
 	interval     time.Duration
 }
 
 func addMetricsToManager(logger *logrus.Entry, mgr manager.Manager, ecNS string, interval time.Duration) error {
-	ecTotalGauge := ecTotalGaugeVec()
+	ecCountGauge := ecCountGaugeVec()
 
-	if err := metrics.Registry.Register(ecTotalGauge); err != nil {
+	if err := metrics.Registry.Register(ecCountGauge); err != nil {
 		return fmt.Errorf("failed to register ephemeralclusters metric: %w", err)
 	}
 
 	metricsGatherer := newMetricsGatherer(logger.WithField("controller", "ephemeral_cluster_metrics"),
-		mgr.GetClient(), ecTotalGauge, ecNS, interval)
+		mgr.GetClient(), ecCountGauge, ecNS, interval)
 	if err := mgr.Add(metricsGatherer); err != nil {
 		return fmt.Errorf("add metrics to manager: %w", err)
 	}
@@ -72,11 +73,12 @@ func (mg *metricsGatherer) Start(ctx context.Context) error {
 }
 
 func (mg *metricsGatherer) collect(ecList *ephemeralclusterv1.EphemeralClusterList) {
-	ecTotal := make(map[struct {
+	ecCount := make(map[struct {
 		konfluxCluster string
 		konfluxTenant  string
 		clusterProfile string
 		workflow       string
+		phase          string
 	}]uint)
 
 	for i := range ecList.Items {
@@ -87,11 +89,13 @@ func (mg *metricsGatherer) collect(ecList *ephemeralclusterv1.EphemeralClusterLi
 			konfluxTenant  string
 			clusterProfile string
 			workflow       string
+			phase          string
 		}{
 			konfluxCluster: ec.KonfluxCluster(),
 			konfluxTenant:  ec.KonfluxTenant(),
 			clusterProfile: ec.Spec.CIOperator.Test.ClusterProfile,
 			workflow:       ec.Spec.CIOperator.Test.Workflow,
+			phase:          string(ec.Status.Phase),
 		}
 
 		// This combination of workflow and env var is used mainly by Konflux users.
@@ -99,23 +103,25 @@ func (mg *metricsGatherer) collect(ecList *ephemeralclusterv1.EphemeralClusterLi
 			k.workflow = k.workflow + "_" + hostedMgmt
 		}
 
-		ecTotal[k]++
+		ecCount[k]++
 	}
 
-	mg.ecTotalGauge.Reset()
-	for k, v := range ecTotal {
-		mg.ecTotalGauge.WithLabelValues(k.konfluxCluster, k.konfluxTenant, k.clusterProfile, k.workflow).Set(float64(v))
+	mg.ecCountGauge.Reset()
+	for k, v := range ecCount {
+		mg.ecCountGauge.
+			WithLabelValues(k.konfluxCluster, k.konfluxTenant, k.clusterProfile, k.workflow, k.phase).
+			Set(float64(v))
 	}
 }
 
 func (mg *metricsGatherer) NeedLeaderElection() bool { return true }
 
-func newMetricsGatherer(logger *logrus.Entry, client ctrlruntimeclient.Client, ecTotalGauge *prometheus.GaugeVec,
+func newMetricsGatherer(logger *logrus.Entry, client ctrlruntimeclient.Client, ecCountGauge *prometheus.GaugeVec,
 	ecNS string, interval time.Duration) *metricsGatherer {
 	return &metricsGatherer{
 		logger:       logger,
 		client:       client,
-		ecTotalGauge: ecTotalGauge,
+		ecCountGauge: ecCountGauge,
 		ecNS:         ecNS,
 		interval:     interval,
 	}

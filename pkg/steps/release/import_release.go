@@ -391,7 +391,7 @@ func (s *importReleaseStep) resolveCLIImageFromStream(ctx context.Context, strea
 		return nil, fmt.Errorf("unable to get existing %s imagestreamtag: %w", streamTagName, err)
 	}
 
-	if err := utils.WaitForImportingISTag(ctx, s.client, s.jobSpec.Namespace(), streamName, nil, sets.New("cli"), 10*time.Minute, s.client.MetricsAgent()); err != nil {
+	if err := utils.WaitForImportingISTag(ctx, s.client, s.jobSpec.Namespace(), streamName, nil, sets.New("cli"), 10*time.Minute, s.client.MetricsAgent(), utils.WaitForSpecTags()); err != nil {
 		return nil, fmt.Errorf("unable to wait for the existing 'cli' image in the stable stream to populate: %w", err)
 	}
 
@@ -487,7 +487,7 @@ func (s *importReleaseStep) extractAndTagCLIImage(ctx context.Context, targetCLI
 		return nil, fmt.Errorf("unable to tag the 'cli' image into the stable stream: %w", err)
 	}
 
-	if err := utils.WaitForImportingISTag(ctx, s.client, s.jobSpec.Namespace(), streamName, nil, sets.New("cli"), 10*time.Minute, s.client.MetricsAgent()); err != nil {
+	if err := utils.WaitForImportingISTag(ctx, s.client, s.jobSpec.Namespace(), streamName, nil, sets.New("cli"), 10*time.Minute, s.client.MetricsAgent(), utils.WaitForSpecTags()); err != nil {
 		return nil, fmt.Errorf("unable to wait for the 'cli' image in the stable stream to populate: %w", err)
 	}
 

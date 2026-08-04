@@ -180,7 +180,7 @@ func FindStatusTag(is *imagev1.ImageStream, tag string) (*coreapi.ObjectReferenc
 
 const DefaultImageImportTimeout = 45 * time.Minute
 
-func getEvaluator(ctx context.Context, client ctrlruntimeclient.Client, ns, name string, tags sets.Set[string], metricsAgent *metrics.MetricsAgent) func(obj runtime.Object) (bool, error) {
+func getEvaluator(ctx context.Context, client ctrlruntimeclient.Client, ns, name string, tags sets.Set[string], waitForSpecTags bool, metricsAgent *metrics.MetricsAgent) func(obj runtime.Object) (bool, error) {
 	return func(obj runtime.Object) (bool, error) {
 		switch stream := obj.(type) {
 		case *imagev1.ImageStream:
@@ -219,6 +219,10 @@ func getEvaluator(ctx context.Context, client ctrlruntimeclient.Client, ns, name
 			if diff := tags.Difference(checkedTags); diff.Len() > 0 {
 				l := diff.UnsortedList()
 				sort.Strings(l)
+				if waitForSpecTags {
+					logrus.Debugf("Waiting for tag definition(s) [%s] on image stream %s/%s ...", strings.Join(l, ","), stream.Namespace, stream.Name)
+					return false, nil
+				}
 				return false, fmt.Errorf("failed to import tag(s) [%s] on image stream %s/%s because of missing definition in the spec", strings.Join(l, ","), stream.Namespace, stream.Name)
 			}
 			return true, nil
@@ -228,15 +232,34 @@ func getEvaluator(ctx context.Context, client ctrlruntimeclient.Client, ns, name
 	}
 }
 
-// WaitForImportingISTag waits for the tags on the image stream are imported
-func WaitForImportingISTag(ctx context.Context, client ctrlruntimeclient.WithWatch, ns, name string, into *imagev1.ImageStream, tags sets.Set[string], timeout time.Duration, metricsAgent *metrics.MetricsAgent) error {
+type importWaitOptions struct {
+	waitForSpecTags bool
+}
+
+// ImportWaitOption configures an image stream tag import wait.
+type ImportWaitOption func(*importWaitOptions)
+
+// WaitForSpecTags keeps watching when requested tags are not yet visible in
+// the image stream spec. The import timeout also bounds spec visibility.
+func WaitForSpecTags() ImportWaitOption {
+	return func(options *importWaitOptions) {
+		options.waitForSpecTags = true
+	}
+}
+
+// WaitForImportingISTag waits for the tags on the image stream are imported.
+func WaitForImportingISTag(ctx context.Context, client ctrlruntimeclient.WithWatch, ns, name string, into *imagev1.ImageStream, tags sets.Set[string], timeout time.Duration, metricsAgent *metrics.MetricsAgent, optionFns ...ImportWaitOption) error {
+	options := importWaitOptions{}
+	for _, optionFn := range optionFns {
+		optionFn(&options)
+	}
 	startTime := time.Now()
 
 	obj := into
 	if obj == nil {
 		obj = &imagev1.ImageStream{}
 	}
-	err := kubernetes.WaitForConditionOnObject(ctx, client, ctrlruntimeclient.ObjectKey{Namespace: ns, Name: name}, &imagev1.ImageStreamList{}, obj, getEvaluator(ctx, client, ns, name, tags, metricsAgent), timeout)
+	err := kubernetes.WaitForConditionOnObject(ctx, client, ctrlruntimeclient.ObjectKey{Namespace: ns, Name: name}, &imagev1.ImageStreamList{}, obj, getEvaluator(ctx, client, ns, name, tags, options.waitForSpecTags, metricsAgent), timeout)
 
 	completionTime := time.Now()
 	duration := completionTime.Sub(startTime)

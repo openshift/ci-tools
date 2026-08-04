@@ -253,17 +253,13 @@ func WaitForImportingISTag(ctx context.Context, client ctrlruntimeclient.WithWat
 	for _, optionFn := range optionFns {
 		optionFn(&options)
 	}
-	return waitForImportingISTag(ctx, client, ns, name, into, tags, options.waitForSpecTags, timeout, metricsAgent)
-}
-
-func waitForImportingISTag(ctx context.Context, client ctrlruntimeclient.WithWatch, ns, name string, into *imagev1.ImageStream, tags sets.Set[string], waitForSpecTags bool, timeout time.Duration, metricsAgent *metrics.MetricsAgent) error {
 	startTime := time.Now()
 
 	obj := into
 	if obj == nil {
 		obj = &imagev1.ImageStream{}
 	}
-	err := kubernetes.WaitForConditionOnObject(ctx, client, ctrlruntimeclient.ObjectKey{Namespace: ns, Name: name}, &imagev1.ImageStreamList{}, obj, getEvaluator(ctx, client, ns, name, tags, waitForSpecTags, metricsAgent), timeout)
+	err := kubernetes.WaitForConditionOnObject(ctx, client, ctrlruntimeclient.ObjectKey{Namespace: ns, Name: name}, &imagev1.ImageStreamList{}, obj, getEvaluator(ctx, client, ns, name, tags, options.waitForSpecTags, metricsAgent), timeout)
 
 	completionTime := time.Now()
 	duration := completionTime.Sub(startTime)

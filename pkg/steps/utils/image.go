@@ -232,16 +232,28 @@ func getEvaluator(ctx context.Context, client ctrlruntimeclient.Client, ns, name
 	}
 }
 
-// WaitForImportingISTag waits for the tags on the image stream are imported
-func WaitForImportingISTag(ctx context.Context, client ctrlruntimeclient.WithWatch, ns, name string, into *imagev1.ImageStream, tags sets.Set[string], timeout time.Duration, metricsAgent *metrics.MetricsAgent) error {
-	return waitForImportingISTag(ctx, client, ns, name, into, tags, false, timeout, metricsAgent)
+type importWaitOptions struct {
+	waitForSpecTags bool
 }
 
-// WaitForImportingISTagWithSpecVisibility waits for requested tags to appear in
-// the image stream spec before checking their import status. The supplied
-// timeout bounds both spec visibility and import completion.
-func WaitForImportingISTagWithSpecVisibility(ctx context.Context, client ctrlruntimeclient.WithWatch, ns, name string, into *imagev1.ImageStream, tags sets.Set[string], timeout time.Duration, metricsAgent *metrics.MetricsAgent) error {
-	return waitForImportingISTag(ctx, client, ns, name, into, tags, true, timeout, metricsAgent)
+// ImportWaitOption configures an image stream tag import wait.
+type ImportWaitOption func(*importWaitOptions)
+
+// WaitForSpecTags keeps watching when requested tags are not yet visible in
+// the image stream spec. The import timeout also bounds spec visibility.
+func WaitForSpecTags() ImportWaitOption {
+	return func(options *importWaitOptions) {
+		options.waitForSpecTags = true
+	}
+}
+
+// WaitForImportingISTag waits for the tags on the image stream are imported.
+func WaitForImportingISTag(ctx context.Context, client ctrlruntimeclient.WithWatch, ns, name string, into *imagev1.ImageStream, tags sets.Set[string], timeout time.Duration, metricsAgent *metrics.MetricsAgent, optionFns ...ImportWaitOption) error {
+	options := importWaitOptions{}
+	for _, optionFn := range optionFns {
+		optionFn(&options)
+	}
+	return waitForImportingISTag(ctx, client, ns, name, into, tags, options.waitForSpecTags, timeout, metricsAgent)
 }
 
 func waitForImportingISTag(ctx context.Context, client ctrlruntimeclient.WithWatch, ns, name string, into *imagev1.ImageStream, tags sets.Set[string], waitForSpecTags bool, timeout time.Duration, metricsAgent *metrics.MetricsAgent) error {

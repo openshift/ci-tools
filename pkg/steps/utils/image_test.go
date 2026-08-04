@@ -664,7 +664,7 @@ func TestGetEvaluator(t *testing.T) {
 	}
 }
 
-func TestWaitForImportingISTagWithSpecVisibilityTimesOut(t *testing.T) {
+func TestWaitForImportingISTagSpecTimeout(t *testing.T) {
 	const (
 		namespace  = "test-namespace"
 		streamName = "stable"
@@ -673,7 +673,7 @@ func TestWaitForImportingISTagWithSpecVisibilityTimesOut(t *testing.T) {
 		ObjectMeta: metav1.ObjectMeta{Namespace: namespace, Name: streamName},
 	}).Build()
 
-	err := WaitForImportingISTagWithSpecVisibility(context.Background(), client, namespace, streamName, nil, sets.New("cli"), 100*time.Millisecond, nil)
+	err := WaitForImportingISTag(context.Background(), client, namespace, streamName, nil, sets.New("cli"), 100*time.Millisecond, nil, WaitForSpecTags())
 	if err == nil {
 		t.Fatal("expected timeout while the requested tag remains absent from the spec")
 	}

@@ -3389,13 +3389,13 @@ func StringsToOrgRepos(vs []string) []OrgRepo {
 func (pc *ProwConfig) mergeFrom(additional *ProwConfig) error {
 	emptyReference := &ProwConfig{
 		BranchProtection:     additional.BranchProtection,
-		Tide:                 Tide{TideGitHubConfig: TideGitHubConfig{MergeType: additional.Tide.MergeType, Queries: additional.Tide.Queries}},
+		Tide:                 Tide{GitHubMergeBlocksPolicyMap: additional.Tide.GitHubMergeBlocksPolicyMap, TideGitHubConfig: TideGitHubConfig{MergeType: additional.Tide.MergeType, Queries: additional.Tide.Queries}},
 		SlackReporterConfigs: additional.SlackReporterConfigs,
 	}
 
 	var errs []error
 	if diff := cmp.Diff(additional, emptyReference, DefaultDiffOpts...); diff != "" {
-		errs = append(errs, fmt.Errorf("only 'branch-protection', 'slack_reporter_configs', 'tide.merge_method' and 'tide.queries' may be set via additional config, all other fields have no merging logic yet. Diff: %s", diff))
+		errs = append(errs, fmt.Errorf("only 'branch-protection', 'slack_reporter_configs', 'tide.merge_method', 'tide.queries' and 'tide.github_merge_blocks_policy' may be set via additional config, all other fields have no merging logic yet. Diff: %s", diff))
 	}
 	if err := pc.BranchProtection.merge(&additional.BranchProtection); err != nil {
 		errs = append(errs, fmt.Errorf("failed to merge branch protection config: %w", err))
@@ -3489,6 +3489,17 @@ func (pc *ProwConfig) HasConfigFor() (global bool, orgs sets.Set[string], repos 
 		}
 	}
 
+	for orgOrRepo := range pc.Tide.GitHubMergeBlocksPolicyMap {
+		if orgOrRepo == "*" {
+			continue
+		}
+		if strings.Contains(orgOrRepo, "/") {
+			repos.Insert(orgOrRepo)
+		} else {
+			orgs.Insert(orgOrRepo)
+		}
+	}
+
 	for _, query := range pc.Tide.Queries {
 		orgs.Insert(query.Orgs...)
 		repos.Insert(query.Repos...)
@@ -3516,7 +3527,7 @@ func (pc *ProwConfig) hasGlobalConfig() bool {
 	}
 	emptyReference := &ProwConfig{
 		BranchProtection:     pc.BranchProtection,
-		Tide:                 Tide{TideGitHubConfig: TideGitHubConfig{MergeType: pc.Tide.MergeType, Queries: pc.Tide.Queries}},
+		Tide:                 Tide{GitHubMergeBlocksPolicyMap: pc.Tide.GitHubMergeBlocksPolicyMap, TideGitHubConfig: TideGitHubConfig{MergeType: pc.Tide.MergeType, Queries: pc.Tide.Queries}},
 		SlackReporterConfigs: pc.SlackReporterConfigs,
 	}
 	return cmp.Diff(pc, emptyReference, DefaultDiffOpts...) != ""

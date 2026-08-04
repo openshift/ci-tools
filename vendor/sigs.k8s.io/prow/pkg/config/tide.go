@@ -354,18 +354,30 @@ func (t *Tide) mergeFrom(additional *Tide) error {
 	// increase token usage needlessly.
 	t.Queries = append(t.Queries, additional.Queries...)
 
+	var errs []error
+
 	if t.MergeType == nil {
 		t.MergeType = additional.MergeType
-		return nil
+	} else {
+		for orgOrRepo, mergeMethod := range additional.MergeType {
+			if _, alreadyConfigured := t.MergeType[orgOrRepo]; alreadyConfigured {
+				errs = append(errs, fmt.Errorf("config for org or repo %s passed more than once", orgOrRepo))
+				continue
+			}
+			t.MergeType[orgOrRepo] = mergeMethod
+		}
 	}
 
-	var errs []error
-	for orgOrRepo, mergeMethod := range additional.MergeType {
-		if _, alreadyConfigured := t.MergeType[orgOrRepo]; alreadyConfigured {
-			errs = append(errs, fmt.Errorf("config for org or repo %s passed more than once", orgOrRepo))
-			continue
+	if t.GitHubMergeBlocksPolicyMap == nil {
+		t.GitHubMergeBlocksPolicyMap = additional.GitHubMergeBlocksPolicyMap
+	} else {
+		for orgOrRepo, policy := range additional.GitHubMergeBlocksPolicyMap {
+			if _, alreadyConfigured := t.GitHubMergeBlocksPolicyMap[orgOrRepo]; alreadyConfigured {
+				errs = append(errs, fmt.Errorf("github_merge_blocks_policy config for org or repo %s passed more than once", orgOrRepo))
+				continue
+			}
+			t.GitHubMergeBlocksPolicyMap[orgOrRepo] = policy
 		}
-		t.MergeType[orgOrRepo] = mergeMethod
 	}
 
 	return utilerrors.NewAggregate(errs)

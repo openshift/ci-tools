@@ -3,6 +3,7 @@ package gsmvalidation
 import (
 	"fmt"
 	"regexp"
+	"slices"
 	"strings"
 )
 
@@ -31,10 +32,8 @@ func validateDecodedMountFileName(encoded, decoded string) error {
 	if strings.HasPrefix(decoded, "/") {
 		return fmt.Errorf("mount file name %q decodes to %q which is an absolute path", encoded, decoded)
 	}
-	for _, segment := range strings.Split(decoded, "/") {
-		if segment == ".." {
-			return fmt.Errorf("mount file name %q decodes to %q which contains a path traversal segment", encoded, decoded)
-		}
+	if slices.Contains(strings.Split(decoded, "/"), "..") {
+		return fmt.Errorf("mount file name %q decodes to %q which contains a path traversal segment", encoded, decoded)
 	}
 	if invalidCharacters := mountFileNameCharRegexp.FindAllString(decoded, -1); len(invalidCharacters) > 0 {
 		return fmt.Errorf(

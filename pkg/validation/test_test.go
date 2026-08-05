@@ -606,6 +606,61 @@ func TestValidateTests(t *testing.T) {
 			},
 		},
 		{
+			id: "GSM secret with invalid group name means error",
+			tests: []api.TestStepConfiguration{
+				{
+					As:                         "unit",
+					Commands:                   "commands",
+					ContainerTestConfiguration: &api.ContainerTestConfiguration{From: "ignored"},
+					Secrets: []*api.Secret{
+						{Collection: "col", Group: "_leading-underscore", MountPath: "/path"},
+					},
+				},
+			},
+			expectedError: errors.New(`tests[0].secrets[0].group: "_leading-underscore" is not a valid group name`),
+		},
+		{
+			id: "GSM secret with path traversal in field means error",
+			tests: []api.TestStepConfiguration{
+				{
+					As:                         "unit",
+					Commands:                   "commands",
+					ContainerTestConfiguration: &api.ContainerTestConfiguration{From: "ignored"},
+					Secrets: []*api.Secret{
+						{Collection: "col", Group: "grp", Field: "--dot----dot--", MountPath: "/path"},
+					},
+				},
+			},
+			expectedError: errors.New(`tests[0].secrets[0].field: mount file name "--dot----dot--" decodes to ".." which contains a path traversal segment`),
+		},
+		{
+			id: "GSM secret with invalid as means error",
+			tests: []api.TestStepConfiguration{
+				{
+					As:                         "unit",
+					Commands:                   "commands",
+					ContainerTestConfiguration: &api.ContainerTestConfiguration{From: "ignored"},
+					Secrets: []*api.Secret{
+						{Collection: "col", Group: "grp", Field: "fld", As: "--dot----dot--", MountPath: "/path"},
+					},
+				},
+			},
+			expectedError: errors.New(`tests[0].secrets[0].as: mount file name "--dot----dot--" decodes to ".." which contains a path traversal segment`),
+		},
+		{
+			id: "GSM secret with group/subgroup is valid",
+			tests: []api.TestStepConfiguration{
+				{
+					As:                         "unit",
+					Commands:                   "commands",
+					ContainerTestConfiguration: &api.ContainerTestConfiguration{From: "ignored"},
+					Secrets: []*api.Secret{
+						{Collection: "col", Group: "grp/subgrp", MountPath: "/path"},
+					},
+				},
+			},
+		},
+		{
 			id:       "non-literal test is invalid in fully-resolved configuration",
 			resolved: true,
 			tests: []api.TestStepConfiguration{
@@ -1851,13 +1906,75 @@ func TestValidateCredentials(t *testing.T) {
 				{Collection: "coll", Group: "grp", Field: "fld", MountPath: "/tmp/gsm"},
 			},
 		},
+		{
+			name: "auto-discovery with invalid collection name means error",
+			input: []api.CredentialReference{
+				{Collection: "INVALID_UPPER", Group: "grp", MountPath: "/foo"},
+			},
+			output: []error{
+				errors.New(`root.credentials[0].collection: "INVALID_UPPER" is not a valid collection name`),
+			},
+		},
+		{
+			name: "auto-discovery with invalid group name means error",
+			input: []api.CredentialReference{
+				{Collection: "coll", Group: "_leading-underscore", MountPath: "/foo"},
+			},
+			output: []error{
+				errors.New(`root.credentials[0].group: "_leading-underscore" is not a valid group name`),
+			},
+		},
+		{
+			name: "explicit field with invalid collection and group means multiple errors",
+			input: []api.CredentialReference{
+				{Collection: "BAD!", Group: "__bad", Field: "fld", MountPath: "/foo"},
+			},
+			output: []error{
+				errors.New(`root.credentials[0].collection: "BAD!" is not a valid collection name`),
+				errors.New(`root.credentials[0].group: "__bad" is not a valid group name`),
+			},
+		},
+		{
+			name: "explicit field with path traversal in field means error",
+			input: []api.CredentialReference{
+				{Collection: "coll", Group: "grp", Field: "--dot----dot--", MountPath: "/foo"},
+			},
+			output: []error{
+				errors.New(`root.credentials[0].field: mount file name "--dot----dot--" decodes to ".." which contains a path traversal segment`),
+			},
+		},
+		{
+			name: "explicit field with invalid as means error",
+			input: []api.CredentialReference{
+				{Collection: "coll", Group: "grp", Field: "fld", As: "--dot----dot--", MountPath: "/foo"},
+			},
+			output: []error{
+				errors.New(`root.credentials[0].as: mount file name "--dot----dot--" decodes to ".." which contains a path traversal segment`),
+			},
+		},
+		{
+			name: "explicit field with valid names is valid",
+			input: []api.CredentialReference{
+				{Collection: "test-platform-infra", Group: "my-group", Field: "my-field", MountPath: "/foo"},
+			},
+		},
+		{
+			name: "explicit field with valid as is valid",
+			input: []api.CredentialReference{
+				{Collection: "test-platform-infra", Group: "my-group", Field: "my-field", As: "renamed", MountPath: "/foo"},
+			},
+		},
+		{
+			name: "auto-discovery with group/subgroup is valid",
+			input: []api.CredentialReference{
+				{Collection: "coll", Group: "group/subgroup", MountPath: "/foo"},
+			},
+		},
 	}
 	for _, testCase := range testCases {
 		t.Run(testCase.name, func(t *testing.T) {
-			if actual, expected := validateCredentials("root", testCase.input), testCase.output; !reflect.DeepEqual(actual, expected) {
-				t.Errorf("%s: got incorrect errors (-want,+got): %s", testCase.name, cmp.Diff(actual, expected, cmp.Comparer(func(x, y error) bool {
-					return x.Error() == y.Error()
-				})))
+			if diff := cmp.Diff(testCase.output, validateCredentials("root", testCase.input), testhelper.EquateErrorMessage); diff != "" {
+				t.Errorf("%s: got incorrect errors (-want,+got): %s", testCase.name, diff)
 			}
 		})
 	}

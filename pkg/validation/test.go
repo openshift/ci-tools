@@ -14,6 +14,7 @@ import (
 	"k8s.io/apimachinery/pkg/util/validation"
 
 	"github.com/openshift/ci-tools/pkg/api"
+	gsmvalidation "github.com/openshift/ci-tools/pkg/gsm-validation"
 	"github.com/openshift/ci-tools/pkg/privateorg"
 	"github.com/openshift/ci-tools/pkg/util"
 )
@@ -280,6 +281,24 @@ func (v *Validator) validateTestStepConfiguration(
 					validationErrors = append(validationErrors, fmt.Errorf("%s.secrets[%d]: `field` requires `collection` and `group` to be set", fieldRootN, i))
 				} else {
 					validationErrors = append(validationErrors, fmt.Errorf("%s.secrets[%d]: must specify `bundle` or `collection`+`group`", fieldRootN, i))
+				}
+				if secret.IsGSMReference() && !secret.IsBundleReference() {
+					if !gsmvalidation.ValidateCollectionName(secret.Collection) {
+						validationErrors = append(validationErrors, fmt.Errorf("%s.secrets[%d].collection: %q is not a valid collection name", fieldRootN, i, secret.Collection))
+					}
+					if !gsmvalidation.ValidateGroupName(secret.Group) {
+						validationErrors = append(validationErrors, fmt.Errorf("%s.secrets[%d].group: %q is not a valid group name", fieldRootN, i, secret.Group))
+					}
+					if secret.Field != "" {
+						if err := gsmvalidation.ValidateMountFileName(secret.Field); err != nil {
+							validationErrors = append(validationErrors, fmt.Errorf("%s.secrets[%d].field: %w", fieldRootN, i, err))
+						}
+					}
+					if secret.As != "" {
+						if err := gsmvalidation.ValidateMountFileName(secret.As); err != nil {
+							validationErrors = append(validationErrors, fmt.Errorf("%s.secrets[%d].as: %w", fieldRootN, i, err))
+						}
+					}
 				}
 			} else {
 				// K8s object names must be valid DNS 1123 subdomains.
@@ -869,19 +888,28 @@ func validateCredentials(fieldRoot string, credentials []api.CredentialReference
 				if credential.Collection != "" || credential.Group != "" || credential.Field != "" {
 					errs = append(errs, fmt.Errorf("%s.credentials[%d]: `bundle` cannot be used with `collection`, `group`, or `field`", fieldRoot, i))
 				}
-			} else if credential.IsAutoDiscovery() {
+			} else if credential.IsAutoDiscovery() || credential.IsExplicitField() {
 				if credential.Bundle != "" {
 					errs = append(errs, fmt.Errorf("%s.credentials[%d]: `bundle` cannot be used with `collection`, `group`, or `field`", fieldRoot, i))
 				}
 				if credential.Namespace != "" {
 					errs = append(errs, fmt.Errorf("%s.credentials[%d]: `namespace` cannot be used with `collection`, `group`, or `field`", fieldRoot, i))
 				}
-			} else if credential.IsExplicitField() {
-				if credential.Bundle != "" {
-					errs = append(errs, fmt.Errorf("%s.credentials[%d]: `bundle` cannot be used with `collection`, `group`, or `field`", fieldRoot, i))
+				if !gsmvalidation.ValidateCollectionName(credential.Collection) {
+					errs = append(errs, fmt.Errorf("%s.credentials[%d].collection: %q is not a valid collection name", fieldRoot, i, credential.Collection))
 				}
-				if credential.Namespace != "" {
-					errs = append(errs, fmt.Errorf("%s.credentials[%d]: `namespace` cannot be used with `collection`, `group`, or `field`", fieldRoot, i))
+				if !gsmvalidation.ValidateGroupName(credential.Group) {
+					errs = append(errs, fmt.Errorf("%s.credentials[%d].group: %q is not a valid group name", fieldRoot, i, credential.Group))
+				}
+				if credential.Field != "" {
+					if err := gsmvalidation.ValidateMountFileName(credential.Field); err != nil {
+						errs = append(errs, fmt.Errorf("%s.credentials[%d].field: %w", fieldRoot, i, err))
+					}
+				}
+				if credential.As != "" {
+					if err := gsmvalidation.ValidateMountFileName(credential.As); err != nil {
+						errs = append(errs, fmt.Errorf("%s.credentials[%d].as: %w", fieldRoot, i, err))
+					}
 				}
 			} else {
 				errs = append(errs, fmt.Errorf("%s.credentials[%d]: must specify `bundle`, `collection`+`group`, or `collection`+`group`+`field`", fieldRoot, i))

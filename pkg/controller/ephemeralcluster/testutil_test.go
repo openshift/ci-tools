@@ -16,6 +16,7 @@ import (
 	dto "github.com/prometheus/client_model/go"
 	corev1 "k8s.io/api/core/v1"
 	"k8s.io/apimachinery/pkg/runtime"
+	aggerrs "k8s.io/apimachinery/pkg/util/errors"
 	prowv1 "sigs.k8s.io/prow/pkg/apis/prowjobs/v1"
 )
 
@@ -112,16 +113,18 @@ func histogramBuckets(upperBounds []float64, counts ...uint64) []bucket {
 	return res
 }
 
-func collect(v *prometheus.MetricVec, transform metricTransformer) (result []metric, err error) {
+func collect(v *prometheus.MetricVec, transform metricTransformer) ([]metric, error) {
 	metricCh := make(chan prometheus.Metric)
+	errs := make([]error, 0)
+	var result []metric
 
 	wg := sync.WaitGroup{}
 	wg.Go(func() {
 		for m := range metricCh {
 			dtoMetric := dto.Metric{}
 			if writeErr := m.Write(&dtoMetric); writeErr != nil {
-				err = fmt.Errorf("write gauge: %w", writeErr)
-				return
+				errs = append(errs, fmt.Errorf("write gauge: %w", writeErr))
+				continue
 			}
 			result = append(result, transform(&dtoMetric))
 		}
@@ -131,7 +134,7 @@ func collect(v *prometheus.MetricVec, transform metricTransformer) (result []met
 	close(metricCh)
 	wg.Wait()
 
-	return
+	return result, aggerrs.NewAggregate(errs)
 }
 
 func collectGauge(v *prometheus.MetricVec) (result []metric, err error) {

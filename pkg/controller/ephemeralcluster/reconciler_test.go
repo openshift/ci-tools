@@ -983,9 +983,10 @@ func TestReconcile(t *testing.T) {
 			name: "Succeeded ProwJob maps to ProwJobCompleted condition",
 			ec: &ephemeralclusterv1.EphemeralCluster{
 				ObjectMeta: metav1.ObjectMeta{
-					Name:      "foo",
-					Namespace: "bar",
-					UID:       types.UID("test-ec-uid"),
+					Name:              "foo",
+					Namespace:         "bar",
+					CreationTimestamp: metav1.NewTime(parseTime(t, "2025-04-02 11:52:12")),
+					UID:               types.UID("test-ec-uid"),
 				},
 				Status: ephemeralclusterv1.EphemeralClusterStatus{
 					ProwJobID: "pj-123",
@@ -1018,8 +1019,9 @@ func TestReconcile(t *testing.T) {
 			},
 			wantEC: &ephemeralclusterv1.EphemeralCluster{
 				ObjectMeta: metav1.ObjectMeta{
-					Name:      "foo",
-					Namespace: "bar",
+					Name:              "foo",
+					Namespace:         "bar",
+					CreationTimestamp: metav1.NewTime(parseTime(t, "2025-04-02 11:52:12")),
 				},
 				Status: ephemeralclusterv1.EphemeralClusterStatus{
 					Phase:     ephemeralclusterv1.EphemeralClusterDeprovisioned,
@@ -1044,6 +1046,13 @@ func TestReconcile(t *testing.T) {
 				},
 			},
 			wantRes: reconcile.Result{},
+			wantProvisioningDurationHistogram: []metric{{
+				Histogram: &histogram{
+					Labels:      []string{""},
+					SampleCount: 1,
+					Buckets:     histogramBuckets(provisioningDurationBuckets, 0, 0, 0, 1),
+				},
+			}},
 		},
 		{
 			name: "ProwJob not found remove the finalizer",
@@ -1129,9 +1138,10 @@ func TestReconcile(t *testing.T) {
 			name: "Test completed, create secret",
 			ec: &ephemeralclusterv1.EphemeralCluster{
 				ObjectMeta: metav1.ObjectMeta{
-					Name:      "foo",
-					Namespace: "bar",
-					UID:       types.UID("test-ec-uid"),
+					Name:              "foo",
+					Namespace:         "bar",
+					CreationTimestamp: metav1.NewTime(parseTime(t, "2025-04-02 11:57:12")),
+					UID:               types.UID("test-ec-uid"),
 				},
 				Spec: ephemeralclusterv1.EphemeralClusterSpec{TearDownCluster: true},
 				Status: ephemeralclusterv1.EphemeralClusterStatus{
@@ -1164,9 +1174,10 @@ func TestReconcile(t *testing.T) {
 			},
 			wantEC: &ephemeralclusterv1.EphemeralCluster{
 				ObjectMeta: metav1.ObjectMeta{
-					Name:            "foo",
-					Namespace:       "bar",
-					ResourceVersion: "1000",
+					Name:              "foo",
+					Namespace:         "bar",
+					CreationTimestamp: metav1.NewTime(parseTime(t, "2025-04-02 11:57:12")),
+					ResourceVersion:   "1000",
 				},
 				Spec: ephemeralclusterv1.EphemeralClusterSpec{TearDownCluster: true},
 				Status: ephemeralclusterv1.EphemeralClusterStatus{
@@ -1190,6 +1201,13 @@ func TestReconcile(t *testing.T) {
 				},
 			},
 			wantRes: reconcile.Result{RequeueAfter: pollingTime},
+			wantProvisioningDurationHistogram: []metric{{
+				Histogram: &histogram{
+					Labels:      []string{""},
+					SampleCount: 1,
+					Buckets:     histogramBuckets(provisioningDurationBuckets, 0, 0, 1),
+				},
+			}},
 		},
 		{
 			name: "Test completed, ci-operator NS not found",
@@ -1588,6 +1606,13 @@ func TestReconcile(t *testing.T) {
 				},
 			},
 			wantRes: reconcile.Result{},
+			wantProvisioningDurationHistogram: []metric{{
+				Histogram: &histogram{
+					Labels:      []string{"e2e-aws"},
+					SampleCount: 1,
+					Buckets:     histogramBuckets(provisioningDurationBuckets, 0, 0, 0, 0, 1),
+				},
+			}},
 			wantDeprovisioningDurationHistogram: []metric{{
 				Histogram: &histogram{
 					Labels:      []string{"e2e-aws"},

@@ -22,6 +22,14 @@ const (
 	hypershiftHostedClusterWorkflow = "hypershift-hostedcluster-workflow"
 )
 
+func workflowLabel(ec *ephemeralclusterv1.EphemeralCluster) string {
+	workflow := ec.Spec.CIOperator.Test.Workflow
+	if hostedMgmt, ok := ec.Spec.CIOperator.Test.Env[hostedManagementClusterEnvVar]; ok && workflow == hypershiftHostedClusterWorkflow {
+		workflow = workflow + "_" + hostedMgmt
+	}
+	return workflow
+}
+
 func newCountGaugeVec() *prometheus.GaugeVec {
 	return prometheus.NewGaugeVec(prometheus.GaugeOpts{
 		Namespace: metricsNamespace,
@@ -133,13 +141,8 @@ func (mg *metricsGatherer) collectCount(ecList *ephemeralclusterv1.EphemeralClus
 			konfluxCluster: ec.KonfluxCluster(),
 			konfluxTenant:  ec.KonfluxTenant(),
 			clusterProfile: ec.Spec.CIOperator.Test.ClusterProfile,
-			workflow:       ec.Spec.CIOperator.Test.Workflow,
+			workflow:       workflowLabel(ec),
 			phase:          string(ec.Status.Phase),
-		}
-
-		// This combination of workflow and env var is used mainly by Konflux users.
-		if hostedMgmt, ok := ec.Spec.CIOperator.Test.Env[hostedManagementClusterEnvVar]; ok && k.workflow == hypershiftHostedClusterWorkflow {
-			k.workflow = k.workflow + "_" + hostedMgmt
 		}
 
 		count[k]++
@@ -166,8 +169,7 @@ func (mg *metricsGatherer) collectProvisioningDuration(ec *ephemeralclusterv1.Ep
 	if end, ok := find(ephemeralclusterv1.ClusterReady); ok {
 		start := ec.CreationTimestamp.Time
 		duration := end.Sub(start).Seconds()
-		workflow := ec.Spec.CIOperator.Test.Workflow
-		mg.provisioningDurationHistogramVec.WithLabelValues(workflow).Observe(duration)
+		mg.provisioningDurationHistogramVec.WithLabelValues(workflowLabel(ec)).Observe(duration)
 		return true
 	}
 
@@ -184,12 +186,17 @@ func (mg *metricsGatherer) collectDeprovisioningDuration(ec *ephemeralclusterv1.
 		return time.Time{}, false
 	}
 
+	// Normally TestCompleted is in oldStatus from a prior reconcile. After a controller
+	// restart both TestCompleted and ProwJobCompleted may be set in the same cycle,
+	// so fall back to observedStatus to avoid losing the data point.
 	start, startOk := find(oldStatus, ephemeralclusterv1.TestCompleted)
+	if !startOk {
+		start, startOk = find(observedStatus, ephemeralclusterv1.TestCompleted)
+	}
 	end, endOk := find(observedStatus, ephemeralclusterv1.ProwJobCompleted)
 	if startOk && endOk {
 		duration := end.Sub(start).Seconds()
-		workflow := ec.Spec.CIOperator.Test.Workflow
-		mg.deprovisioningDurationHistogramVec.WithLabelValues(workflow).Observe(duration)
+		mg.deprovisioningDurationHistogramVec.WithLabelValues(workflowLabel(ec)).Observe(duration)
 		return true
 	}
 

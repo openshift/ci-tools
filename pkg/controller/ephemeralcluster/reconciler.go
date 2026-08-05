@@ -309,6 +309,7 @@ func (r *reconciler) Reconcile(ctx context.Context, req reconcile.Request) (reco
 			if updateErr := r.updateEphemeralClusterWithStatus(ctx, ec); updateErr != nil {
 				return reconcile.Result{}, updateErr
 			}
+			r.collectProvisioningDurationMetric(ec, &oldStatus, &observedStatus)
 			r.collectDeprovisioningDurationMetric(ec, &oldStatus, &observedStatus)
 			return reconcile.Result{}, nil
 		}
@@ -1036,7 +1037,16 @@ func (r *reconciler) notifyTestComplete(ctx context.Context, log *logrus.Entry, 
 }
 
 func (r *reconciler) collectProvisioningDurationMetric(ec *ephemeralclusterv1.EphemeralCluster, oldStatus, observedStatus *ephemeralclusterv1.EphemeralClusterStatus) {
-	if oldStatus.Phase != ephemeralclusterv1.EphemeralClusterReady && observedStatus.Phase == ephemeralclusterv1.EphemeralClusterReady {
+	hasClusterReady := func(status *ephemeralclusterv1.EphemeralClusterStatus) bool {
+		for i := range status.Conditions {
+			if c := &status.Conditions[i]; c.Type == ephemeralclusterv1.ClusterReady && c.Status == ephemeralclusterv1.ConditionTrue {
+				return true
+			}
+		}
+		return false
+	}
+
+	if !hasClusterReady(oldStatus) && hasClusterReady(observedStatus) {
 		if !r.collectProvisioningDurationMetricFunc(ec, observedStatus) {
 			r.logger.Warn("Failed to collect the provisioning duration metric")
 		}

@@ -16,39 +16,87 @@ import (
 )
 
 const (
+	metricsNamespace = "ephemeralcluster"
+
 	hostedManagementClusterEnvVar   = "HOSTED_MANAGEMENT_CLUSTER"
 	hypershiftHostedClusterWorkflow = "hypershift-hostedcluster-workflow"
 )
 
-func ecTotalGaugeVec() *prometheus.GaugeVec {
+func workflowLabel(ec *ephemeralclusterv1.EphemeralCluster) string {
+	workflow := ec.Spec.CIOperator.Test.Workflow
+	if hostedMgmt, ok := ec.Spec.CIOperator.Test.Env[hostedManagementClusterEnvVar]; ok && workflow == hypershiftHostedClusterWorkflow {
+		workflow = workflow + "_" + hostedMgmt
+	}
+	return workflow
+}
+
+func newCountGaugeVec() *prometheus.GaugeVec {
 	return prometheus.NewGaugeVec(prometheus.GaugeOpts{
-		Name: "ephemeralclusters",
-		Help: "The number of ephemeralclusters the controller created",
-	}, []string{"konflux_cluster", "konflux_tenant", "cluster_profile", "workflow"})
+		Namespace: metricsNamespace,
+		Name:      "count",
+		Help:      "The number of ephemeralclusters that currently exist",
+	}, []string{"konflux_cluster", "konflux_tenant", "cluster_profile", "workflow", "phase"})
+}
+
+var (
+	provisioningDurationBuckets = []float64{300, 600, 900, 1800, 3600, 5400, 7200, 9000, 10800}
+)
+
+func newProvisioningDurationHistogramVec() *prometheus.HistogramVec {
+	return prometheus.NewHistogramVec(prometheus.HistogramOpts{
+		Namespace: metricsNamespace,
+		Name:      "provisioning_duration_seconds",
+		Help:      "Measure how long the provisioning procedure takes",
+		Buckets:   provisioningDurationBuckets,
+	}, []string{"workflow"})
+}
+
+var (
+	deprovisioningDurationBuckets = []float64{300, 600, 900, 1800, 3600, 5400, 7200, 9000, 10800}
+)
+
+func newDeprovisioningDurationHistogramVec() *prometheus.HistogramVec {
+	return prometheus.NewHistogramVec(prometheus.HistogramOpts{
+		Namespace: metricsNamespace,
+		Name:      "deprovisioning_duration_seconds",
+		Help:      "Measure how long the deprovisioning procedure takes",
+		Buckets:   deprovisioningDurationBuckets,
+	}, []string{"workflow"})
 }
 
 type metricsGatherer struct {
-	logger       *logrus.Entry
-	client       ctrlruntimeclient.Client
-	ecTotalGauge *prometheus.GaugeVec
-	ecNS         string
-	interval     time.Duration
+	logger                             *logrus.Entry
+	client                             ctrlruntimeclient.Client
+	countGauge                         *prometheus.GaugeVec
+	provisioningDurationHistogramVec   *prometheus.HistogramVec
+	deprovisioningDurationHistogramVec *prometheus.HistogramVec
+	ecNS                               string
+	interval                           time.Duration
 }
 
-func addMetricsToManager(logger *logrus.Entry, mgr manager.Manager, ecNS string, interval time.Duration) error {
-	ecTotalGauge := ecTotalGaugeVec()
+func addMetricsToManager(logger *logrus.Entry, mgr manager.Manager, ecNS string, interval time.Duration) (*metricsGatherer, error) {
+	countGauge := newCountGaugeVec()
+	if err := metrics.Registry.Register(countGauge); err != nil {
+		return nil, fmt.Errorf("failed to register count gauge: %w", err)
+	}
 
-	if err := metrics.Registry.Register(ecTotalGauge); err != nil {
-		return fmt.Errorf("failed to register ephemeralclusters metric: %w", err)
+	provisioningDurationHistogram := newProvisioningDurationHistogramVec()
+	if err := metrics.Registry.Register(provisioningDurationHistogram); err != nil {
+		return nil, fmt.Errorf("failed to register provisioning duration histogram: %w", err)
+	}
+
+	deprovisioningDurationHistogram := newDeprovisioningDurationHistogramVec()
+	if err := metrics.Registry.Register(deprovisioningDurationHistogram); err != nil {
+		return nil, fmt.Errorf("failed to register deprovisioning duration histogram: %w", err)
 	}
 
 	metricsGatherer := newMetricsGatherer(logger.WithField("controller", "ephemeral_cluster_metrics"),
-		mgr.GetClient(), ecTotalGauge, ecNS, interval)
+		mgr.GetClient(), countGauge, provisioningDurationHistogram, deprovisioningDurationHistogram, ecNS, interval)
 	if err := mgr.Add(metricsGatherer); err != nil {
-		return fmt.Errorf("add metrics to manager: %w", err)
+		return nil, fmt.Errorf("add metrics to manager: %w", err)
 	}
 
-	return nil
+	return metricsGatherer, nil
 }
 
 func (mg *metricsGatherer) Start(ctx context.Context) error {
@@ -66,17 +114,18 @@ func (mg *metricsGatherer) Start(ctx context.Context) error {
 				continue
 			}
 
-			mg.collect(&ecList)
+			mg.collectCount(&ecList)
 		}
 	}
 }
 
-func (mg *metricsGatherer) collect(ecList *ephemeralclusterv1.EphemeralClusterList) {
-	ecTotal := make(map[struct {
+func (mg *metricsGatherer) collectCount(ecList *ephemeralclusterv1.EphemeralClusterList) {
+	count := make(map[struct {
 		konfluxCluster string
 		konfluxTenant  string
 		clusterProfile string
 		workflow       string
+		phase          string
 	}]uint)
 
 	for i := range ecList.Items {
@@ -87,36 +136,85 @@ func (mg *metricsGatherer) collect(ecList *ephemeralclusterv1.EphemeralClusterLi
 			konfluxTenant  string
 			clusterProfile string
 			workflow       string
+			phase          string
 		}{
 			konfluxCluster: ec.KonfluxCluster(),
 			konfluxTenant:  ec.KonfluxTenant(),
 			clusterProfile: ec.Spec.CIOperator.Test.ClusterProfile,
-			workflow:       ec.Spec.CIOperator.Test.Workflow,
+			workflow:       workflowLabel(ec),
+			phase:          string(ec.Status.Phase),
 		}
 
-		// This combination of workflow and env var is used mainly by Konflux users.
-		if hostedMgmt, ok := ec.Spec.CIOperator.Test.Env[hostedManagementClusterEnvVar]; ok && k.workflow == hypershiftHostedClusterWorkflow {
-			k.workflow = k.workflow + "_" + hostedMgmt
+		count[k]++
+	}
+
+	mg.countGauge.Reset()
+	for k, v := range count {
+		mg.countGauge.
+			WithLabelValues(k.konfluxCluster, k.konfluxTenant, k.clusterProfile, k.workflow, k.phase).
+			Set(float64(v))
+	}
+}
+
+func (mg *metricsGatherer) collectProvisioningDuration(ec *ephemeralclusterv1.EphemeralCluster, status *ephemeralclusterv1.EphemeralClusterStatus) bool {
+	find := func(t ephemeralclusterv1.EphemeralClusterConditionType) (time.Time, bool) {
+		for i := range status.Conditions {
+			if c := &status.Conditions[i]; c.Type == t && c.Status == ephemeralclusterv1.ConditionTrue {
+				return c.LastTransitionTime.Time, true
+			}
 		}
-
-		ecTotal[k]++
+		return time.Time{}, false
 	}
 
-	mg.ecTotalGauge.Reset()
-	for k, v := range ecTotal {
-		mg.ecTotalGauge.WithLabelValues(k.konfluxCluster, k.konfluxTenant, k.clusterProfile, k.workflow).Set(float64(v))
+	if end, ok := find(ephemeralclusterv1.ClusterReady); ok {
+		start := ec.CreationTimestamp.Time
+		duration := end.Sub(start).Seconds()
+		mg.provisioningDurationHistogramVec.WithLabelValues(workflowLabel(ec)).Observe(duration)
+		return true
 	}
+
+	return false
+}
+
+func (mg *metricsGatherer) collectDeprovisioningDuration(ec *ephemeralclusterv1.EphemeralCluster, oldStatus, observedStatus *ephemeralclusterv1.EphemeralClusterStatus) bool {
+	find := func(status *ephemeralclusterv1.EphemeralClusterStatus, t ephemeralclusterv1.EphemeralClusterConditionType) (time.Time, bool) {
+		for i := range status.Conditions {
+			if c := &status.Conditions[i]; c.Type == t && c.Status == ephemeralclusterv1.ConditionTrue {
+				return c.LastTransitionTime.Time, true
+			}
+		}
+		return time.Time{}, false
+	}
+
+	// Normally TestCompleted is in oldStatus from a prior reconcile. After a controller
+	// restart both TestCompleted and ProwJobCompleted may be set in the same cycle,
+	// so fall back to observedStatus to avoid losing the data point.
+	start, startOk := find(oldStatus, ephemeralclusterv1.TestCompleted)
+	if !startOk {
+		start, startOk = find(observedStatus, ephemeralclusterv1.TestCompleted)
+	}
+	end, endOk := find(observedStatus, ephemeralclusterv1.ProwJobCompleted)
+	if startOk && endOk {
+		duration := end.Sub(start).Seconds()
+		mg.deprovisioningDurationHistogramVec.WithLabelValues(workflowLabel(ec)).Observe(duration)
+		return true
+	}
+
+	return false
 }
 
 func (mg *metricsGatherer) NeedLeaderElection() bool { return true }
 
-func newMetricsGatherer(logger *logrus.Entry, client ctrlruntimeclient.Client, ecTotalGauge *prometheus.GaugeVec,
+func newMetricsGatherer(logger *logrus.Entry, client ctrlruntimeclient.Client,
+	countGauge *prometheus.GaugeVec, provisioningDurationHistogramVec, deprovisioningDurationHistogramVec *prometheus.HistogramVec,
 	ecNS string, interval time.Duration) *metricsGatherer {
 	return &metricsGatherer{
-		logger:       logger,
-		client:       client,
-		ecTotalGauge: ecTotalGauge,
-		ecNS:         ecNS,
-		interval:     interval,
+		logger:                             logger,
+		client:                             client,
+		countGauge:                         countGauge,
+		provisioningDurationHistogramVec:   provisioningDurationHistogramVec,
+		deprovisioningDurationHistogramVec: deprovisioningDurationHistogramVec,
+		ecNS:                               ecNS,
+		interval:                           interval,
 	}
 }

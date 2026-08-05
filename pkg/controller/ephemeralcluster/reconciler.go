@@ -160,6 +160,8 @@ type reconciler struct {
 	cliISTagRef            api.ImageStreamTagReference
 	privilegedTenants      sets.Set[string]
 
+	collectProvisioningDurationMetricFunc func(ec *ephemeralclusterv1.EphemeralCluster, status *ephemeralclusterv1.EphemeralClusterStatus) bool
+
 	// Mock for testing
 	now     func() time.Time
 	polling func() time.Duration
@@ -199,18 +201,24 @@ func AddToManager(log *logrus.Entry, mgr manager.Manager, allManagers map[string
 		return err
 	}
 
+	metricsGatherer, err := addMetricsToManager(log, mgr, EphemeralClusterNamespace, reconcilerOpts.metricsInterval)
+	if err != nil {
+		return fmt.Errorf("add metrics controller: %w", err)
+	}
+
 	r := reconciler{
-		logger:                 log.WithField("controller", ControllerName),
-		masterClient:           mgr.GetClient(),
-		buildClients:           buildClients,
-		prowConfigAgent:        prowConfigAgent,
-		clusterProfileResolver: clusterProfileResolverAdapter(registryAgent),
-		scheme:                 mgr.GetScheme(),
-		newProwJob:             pjutil.NewProwJob,
-		now:                    time.Now,
-		polling:                func() time.Duration { return reconcilerOpts.polling },
-		cliISTagRef:            cliISTagRef,
-		privilegedTenants:      reconcilerOpts.privilegedTenants,
+		logger:                                log.WithField("controller", ControllerName),
+		masterClient:                          mgr.GetClient(),
+		buildClients:                          buildClients,
+		prowConfigAgent:                       prowConfigAgent,
+		clusterProfileResolver:                clusterProfileResolverAdapter(registryAgent),
+		scheme:                                mgr.GetScheme(),
+		newProwJob:                            pjutil.NewProwJob,
+		cliISTagRef:                           cliISTagRef,
+		privilegedTenants:                     reconcilerOpts.privilegedTenants,
+		collectProvisioningDurationMetricFunc: metricsGatherer.collectProvisioningDuration,
+		now:                                   time.Now,
+		polling:                               func() time.Duration { return reconcilerOpts.polling },
 	}
 
 	if err := ctrlbldr.ControllerManagedBy(mgr).
@@ -226,10 +234,6 @@ func AddToManager(log *logrus.Entry, mgr manager.Manager, allManagers map[string
 
 	if err := addPJReconcilerToManager(log, mgr, buildClients); err != nil {
 		return fmt.Errorf("add prowjob controller: %w", err)
-	}
-
-	if err := addMetricsToManager(log, mgr, EphemeralClusterNamespace, reconcilerOpts.metricsInterval); err != nil {
-		return fmt.Errorf("add metrics controller: %w", err)
 	}
 
 	return nil
@@ -309,6 +313,8 @@ func (r *reconciler) Reconcile(ctx context.Context, req reconcile.Request) (reco
 	if err := r.updateEphemeralClusterStatus(ctx, ec, &observedStatus); err != nil {
 		return reconcile.Result{}, err
 	}
+
+	r.collectProvisioningDurationMetric(ec, &oldStatus, &observedStatus)
 
 	return reconcile.Result{RequeueAfter: requeueAfter}, nil
 }
@@ -1010,6 +1016,14 @@ func (r *reconciler) notifyTestComplete(ctx context.Context, log *logrus.Entry, 
 	}
 
 	return nil
+}
+
+func (r *reconciler) collectProvisioningDurationMetric(ec *ephemeralclusterv1.EphemeralCluster, oldStatus, observedStatus *ephemeralclusterv1.EphemeralClusterStatus) {
+	if oldStatus.Phase != ephemeralclusterv1.EphemeralClusterReady && observedStatus.Phase == ephemeralclusterv1.EphemeralClusterReady {
+		if !r.collectProvisioningDurationMetricFunc(ec, observedStatus) {
+			r.logger.Warn("Failed to collect the provisioning duration metric")
+		}
+	}
 }
 
 func findCIOperatorTestNS(ctx context.Context, buildClient ctrlruntimeclient.Client, pj *prowv1.ProwJob) (string, error) {

@@ -16,40 +16,60 @@ import (
 )
 
 const (
+	metricsNamespace = "ephemeralcluster"
+
 	hostedManagementClusterEnvVar   = "HOSTED_MANAGEMENT_CLUSTER"
 	hypershiftHostedClusterWorkflow = "hypershift-hostedcluster-workflow"
 )
 
-func ecCountGaugeVec() *prometheus.GaugeVec {
+func newCountGaugeVec() *prometheus.GaugeVec {
 	return prometheus.NewGaugeVec(prometheus.GaugeOpts{
-		Namespace: "ephemeralcluster",
+		Namespace: metricsNamespace,
 		Name:      "count",
-		Help:      "The number of ephemeralclusters the controller created",
+		Help:      "The number of ephemeralclusters that currently exist",
 	}, []string{"konflux_cluster", "konflux_tenant", "cluster_profile", "workflow", "phase"})
 }
 
-type metricsGatherer struct {
-	logger       *logrus.Entry
-	client       ctrlruntimeclient.Client
-	ecCountGauge *prometheus.GaugeVec
-	ecNS         string
-	interval     time.Duration
+var (
+	provisioningDurationBuckets = []float64{300, 600, 900, 1800, 3600, 5400, 7200, 9000, 10800}
+)
+
+func newProvisioningDurationHistogramVec() *prometheus.HistogramVec {
+	return prometheus.NewHistogramVec(prometheus.HistogramOpts{
+		Namespace: metricsNamespace,
+		Name:      "provisioning_duration_seconds",
+		Help:      "Measure how long the provisioning procedure takes",
+		Buckets:   provisioningDurationBuckets,
+	}, []string{"workflow"})
 }
 
-func addMetricsToManager(logger *logrus.Entry, mgr manager.Manager, ecNS string, interval time.Duration) error {
-	ecCountGauge := ecCountGaugeVec()
+type metricsGatherer struct {
+	logger                           *logrus.Entry
+	client                           ctrlruntimeclient.Client
+	countGauge                       *prometheus.GaugeVec
+	provisioningDurationHistogramVec *prometheus.HistogramVec
+	ecNS                             string
+	interval                         time.Duration
+}
 
-	if err := metrics.Registry.Register(ecCountGauge); err != nil {
-		return fmt.Errorf("failed to register ephemeralclusters metric: %w", err)
+func addMetricsToManager(logger *logrus.Entry, mgr manager.Manager, ecNS string, interval time.Duration) (*metricsGatherer, error) {
+	countGauge := newCountGaugeVec()
+	if err := metrics.Registry.Register(countGauge); err != nil {
+		return nil, fmt.Errorf("failed to register count gauge: %w", err)
+	}
+
+	provisioningDurationHistogram := newProvisioningDurationHistogramVec()
+	if err := metrics.Registry.Register(provisioningDurationHistogram); err != nil {
+		return nil, fmt.Errorf("failed to register provisioning duration histogram: %w", err)
 	}
 
 	metricsGatherer := newMetricsGatherer(logger.WithField("controller", "ephemeral_cluster_metrics"),
-		mgr.GetClient(), ecCountGauge, ecNS, interval)
+		mgr.GetClient(), countGauge, provisioningDurationHistogram, ecNS, interval)
 	if err := mgr.Add(metricsGatherer); err != nil {
-		return fmt.Errorf("add metrics to manager: %w", err)
+		return nil, fmt.Errorf("add metrics to manager: %w", err)
 	}
 
-	return nil
+	return metricsGatherer, nil
 }
 
 func (mg *metricsGatherer) Start(ctx context.Context) error {
@@ -67,13 +87,13 @@ func (mg *metricsGatherer) Start(ctx context.Context) error {
 				continue
 			}
 
-			mg.collect(&ecList)
+			mg.collectCount(&ecList)
 		}
 	}
 }
 
-func (mg *metricsGatherer) collect(ecList *ephemeralclusterv1.EphemeralClusterList) {
-	ecCount := make(map[struct {
+func (mg *metricsGatherer) collectCount(ecList *ephemeralclusterv1.EphemeralClusterList) {
+	count := make(map[struct {
 		konfluxCluster string
 		konfluxTenant  string
 		clusterProfile string
@@ -103,26 +123,49 @@ func (mg *metricsGatherer) collect(ecList *ephemeralclusterv1.EphemeralClusterLi
 			k.workflow = k.workflow + "_" + hostedMgmt
 		}
 
-		ecCount[k]++
+		count[k]++
 	}
 
-	mg.ecCountGauge.Reset()
-	for k, v := range ecCount {
-		mg.ecCountGauge.
+	mg.countGauge.Reset()
+	for k, v := range count {
+		mg.countGauge.
 			WithLabelValues(k.konfluxCluster, k.konfluxTenant, k.clusterProfile, k.workflow, k.phase).
 			Set(float64(v))
 	}
 }
 
+func (mg *metricsGatherer) collectProvisioningDuration(ec *ephemeralclusterv1.EphemeralCluster, status *ephemeralclusterv1.EphemeralClusterStatus) bool {
+	find := func(t ephemeralclusterv1.EphemeralClusterConditionType) (time.Time, bool) {
+		for i := range status.Conditions {
+			if c := &status.Conditions[i]; c.Type == t && c.Status == ephemeralclusterv1.ConditionTrue {
+				return c.LastTransitionTime.Time, true
+			}
+		}
+		return time.Time{}, false
+	}
+
+	if end, ok := find(ephemeralclusterv1.ClusterReady); ok {
+		start := ec.CreationTimestamp.Time
+		duration := end.Sub(start).Seconds()
+		workflow := ec.Spec.CIOperator.Test.Workflow
+		mg.provisioningDurationHistogramVec.WithLabelValues(workflow).Observe(duration)
+		return true
+	}
+
+	return false
+}
+
 func (mg *metricsGatherer) NeedLeaderElection() bool { return true }
 
-func newMetricsGatherer(logger *logrus.Entry, client ctrlruntimeclient.Client, ecCountGauge *prometheus.GaugeVec,
+func newMetricsGatherer(logger *logrus.Entry, client ctrlruntimeclient.Client,
+	countGauge *prometheus.GaugeVec, provisioningDurationHistogramVec *prometheus.HistogramVec,
 	ecNS string, interval time.Duration) *metricsGatherer {
 	return &metricsGatherer{
-		logger:       logger,
-		client:       client,
-		ecCountGauge: ecCountGauge,
-		ecNS:         ecNS,
-		interval:     interval,
+		logger:                           logger,
+		client:                           client,
+		countGauge:                       countGauge,
+		provisioningDurationHistogramVec: provisioningDurationHistogramVec,
+		ecNS:                             ecNS,
+		interval:                         interval,
 	}
 }

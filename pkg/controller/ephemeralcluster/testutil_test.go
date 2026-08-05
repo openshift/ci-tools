@@ -11,13 +11,15 @@ import (
 	"time"
 
 	"github.com/google/go-cmp/cmp"
-	ephemeralclusterv1 "github.com/openshift/ci-tools/pkg/api/ephemeralcluster/v1"
 	"github.com/prometheus/client_golang/prometheus"
 	dto "github.com/prometheus/client_model/go"
+
 	corev1 "k8s.io/api/core/v1"
 	"k8s.io/apimachinery/pkg/runtime"
 	aggerrs "k8s.io/apimachinery/pkg/util/errors"
 	prowv1 "sigs.k8s.io/prow/pkg/apis/prowjobs/v1"
+
+	ephemeralclusterv1 "github.com/openshift/ci-tools/pkg/api/ephemeralcluster/v1"
 )
 
 type metric struct {

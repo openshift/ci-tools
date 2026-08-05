@@ -62,8 +62,10 @@ func TestStart(t *testing.T) {
 		countGauge := newCountGaugeVec()
 		provisioningDurationHistogram := newProvisioningDurationHistogramVec()
 
+		deprovisioningDurationHistogram := newDeprovisioningDurationHistogramVec()
+
 		mg := newMetricsGatherer(logrus.NewEntry(logrus.StandardLogger()), client,
-			countGauge, provisioningDurationHistogram, EphemeralClusterNamespace, gatherInterval)
+			countGauge, provisioningDurationHistogram, deprovisioningDurationHistogram, EphemeralClusterNamespace, gatherInterval)
 		go func() {
 			if err := mg.Start(ctx); err != nil {
 				t.Errorf("Failed to start metrics gatherer: %s", err.Error())

@@ -1,0 +1,26 @@
+- apiVersion: v1
+  kind: Namespace
+  metadata:
+    creationTimestamp: null
+    labels:
+      ci.openshift.io/jobid: pj-123
+    name: ci-op-1234
+    resourceVersion: "999"
+  spec: {}
+  status: {}
+- apiVersion: v1
+  data:
+    kubeconfig: a3ViZWNvbmZpZw==
+  kind: Secret
+  metadata:
+    creationTimestamp: null
+    name: cluster-provisioning
+    namespace: ci-op-1234
+    resourceVersion: "999"
+- apiVersion: v1
+  kind: Secret
+  metadata:
+    creationTimestamp: null
+    name: test-done-signal
+    namespace: ci-op-1234
+    resourceVersion: "999"

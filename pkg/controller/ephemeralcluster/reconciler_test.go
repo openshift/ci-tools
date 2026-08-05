@@ -606,16 +606,17 @@ func TestReconcile(t *testing.T) {
 	const pollingTime = 5
 
 	for _, tc := range []struct {
-		name                              string
-		ec                                *ephemeralclusterv1.EphemeralCluster
-		objs                              []ctrlclient.Object
-		buildClients                      func() map[string]*ctrlruntimetest.FakeClient
-		now                               *time.Time
-		wantEC                            *ephemeralclusterv1.EphemeralCluster
-		wantSecret                        *corev1.Secret
-		wantRes                           reconcile.Result
-		wantProvisioningDurationHistogram []metric
-		wantErr                           error
+		name                                string
+		ec                                  *ephemeralclusterv1.EphemeralCluster
+		objs                                []ctrlclient.Object
+		buildClients                        func() map[string]*ctrlruntimetest.FakeClient
+		now                                 *time.Time
+		wantEC                              *ephemeralclusterv1.EphemeralCluster
+		wantSecret                          *corev1.Secret
+		wantRes                             reconcile.Result
+		wantProvisioningDurationHistogram   []metric
+		wantDeprovisioningDurationHistogram []metric
+		wantErr                             error
 	}{
 		{
 			name: "Kubeconfig ready",
@@ -1491,6 +1492,111 @@ func TestReconcile(t *testing.T) {
 			wantRes: reconcile.Result{RequeueAfter: pollingTime},
 		},
 		{
+			name: "ProwJob succeeded after deprovisioning, collect deprovisioning metric",
+			ec: &ephemeralclusterv1.EphemeralCluster{
+				ObjectMeta: metav1.ObjectMeta{
+					Name:              "foo",
+					Namespace:         "bar",
+					CreationTimestamp: metav1.NewTime(parseTime(t, "2025-04-02 12:00:00")),
+					UID:               types.UID("test-ec-uid"),
+					Finalizers:        []string{DependentProwJobFinalizer},
+				},
+				Spec: ephemeralclusterv1.EphemeralClusterSpec{
+					TearDownCluster: true,
+					CIOperator: ephemeralclusterv1.CIOperatorSpec{
+						Test: ephemeralclusterv1.TestSpec{Workflow: "e2e-aws"},
+					},
+				},
+				Status: ephemeralclusterv1.EphemeralClusterStatus{
+					ProwJobID: "pj-123",
+					Phase:     ephemeralclusterv1.EphemeralClusterDeprovisioning,
+					Conditions: []ephemeralclusterv1.EphemeralClusterCondition{{
+						Type:               ephemeralclusterv1.TestCompleted,
+						Status:             ephemeralclusterv1.ConditionTrue,
+						LastTransitionTime: metav1.NewTime(parseTime(t, "2025-04-02 12:30:00")),
+					}},
+				},
+			},
+			objs: []ctrlclient.Object{
+				&prowv1.ProwJob{
+					ObjectMeta: metav1.ObjectMeta{Name: "pj-123", Namespace: prowJobNamespace},
+					Spec:       prowv1.ProwJobSpec{Cluster: "build01"},
+					Status:     prowv1.ProwJobStatus{State: prowv1.SuccessState},
+				},
+			},
+			buildClients: func() map[string]*ctrlruntimetest.FakeClient {
+				objs := []ctrlclient.Object{
+					&corev1.Namespace{
+						ObjectMeta: metav1.ObjectMeta{
+							Labels: map[string]string{steps.LabelJobID: "pj-123"},
+							Name:   "ci-op-1234",
+						},
+					},
+					&corev1.Secret{
+						ObjectMeta: metav1.ObjectMeta{Name: EphemeralClusterTestName, Namespace: "ci-op-1234"},
+						Data:       map[string][]byte{"kubeconfig": []byte("kubeconfig")},
+					},
+					&corev1.Secret{
+						ObjectMeta: metav1.ObjectMeta{
+							Name:      api.EphemeralClusterTestDoneSignalSecretName,
+							Namespace: "ci-op-1234",
+						},
+					},
+				}
+				c := fake.NewClientBuilder().WithObjects(objs...).WithScheme(scheme).Build()
+				return map[string]*ctrlruntimetest.FakeClient{
+					"build01": ctrlruntimetest.NewFakeClient(c, scheme, ctrlruntimetest.WithInitObjects(objs...)),
+				}
+			},
+			now: ptr.To(parseTime(t, "2025-04-02 12:45:00")),
+			wantEC: &ephemeralclusterv1.EphemeralCluster{
+				ObjectMeta: metav1.ObjectMeta{
+					Name:              "foo",
+					Namespace:         "bar",
+					CreationTimestamp: metav1.NewTime(parseTime(t, "2025-04-02 12:00:00")),
+				},
+				Spec: ephemeralclusterv1.EphemeralClusterSpec{
+					TearDownCluster: true,
+					CIOperator: ephemeralclusterv1.CIOperatorSpec{
+						Test: ephemeralclusterv1.TestSpec{Workflow: "e2e-aws"},
+					},
+				},
+				Status: ephemeralclusterv1.EphemeralClusterStatus{
+					Phase:     ephemeralclusterv1.EphemeralClusterDeprovisioned,
+					ProwJobID: "pj-123",
+					SecretRef: "foo-credentials",
+					Conditions: []ephemeralclusterv1.EphemeralClusterCondition{{
+						Type:               ephemeralclusterv1.ProwJobCreating,
+						Status:             ephemeralclusterv1.ConditionFalse,
+						Reason:             ProwJobCreatingDoneReason,
+						LastTransitionTime: metav1.NewTime(parseTime(t, "2025-04-02 12:45:00")),
+					}, {
+						Type:               ephemeralclusterv1.ClusterReady,
+						Status:             ephemeralclusterv1.ConditionTrue,
+						LastTransitionTime: metav1.NewTime(parseTime(t, "2025-04-02 12:45:00")),
+					}, {
+						Type:               ephemeralclusterv1.TestCompleted,
+						Status:             ephemeralclusterv1.ConditionTrue,
+						LastTransitionTime: metav1.NewTime(parseTime(t, "2025-04-02 12:45:00")),
+					}, {
+						Type:               ephemeralclusterv1.ProwJobCompleted,
+						Status:             ephemeralclusterv1.ConditionTrue,
+						Reason:             ephemeralclusterv1.ProwJobCompletedReason,
+						Message:            "prowjob state: success",
+						LastTransitionTime: metav1.NewTime(parseTime(t, "2025-04-02 12:45:00")),
+					}},
+				},
+			},
+			wantRes: reconcile.Result{},
+			wantDeprovisioningDurationHistogram: []metric{{
+				Histogram: &histogram{
+					Labels:      []string{"e2e-aws"},
+					SampleCount: 1,
+					Buckets:     histogramBuckets(deprovisioningDurationBuckets, 0, 0, 1),
+				},
+			}},
+		},
+		{
 			name: "Hive cluster not ready yet, errs out when fetching a secret",
 			ec: &ephemeralclusterv1.EphemeralCluster{
 				ObjectMeta: metav1.ObjectMeta{
@@ -1595,8 +1701,9 @@ func TestReconcile(t *testing.T) {
 			}
 
 			provisioningDurationHistogramVec := newProvisioningDurationHistogramVec()
+			deprovisioningDurationHistogramVec := newDeprovisioningDurationHistogramVec()
 			metricsGatherer := newMetricsGatherer(logrus.NewEntry(logrus.StandardLogger()),
-				nil, nil, provisioningDurationHistogramVec, "", 0)
+				nil, nil, provisioningDurationHistogramVec, deprovisioningDurationHistogramVec, "", 0)
 
 			subTestFakeNow := fakeNow
 			if tc.now != nil {
@@ -1614,7 +1721,8 @@ func TestReconcile(t *testing.T) {
 				prowConfigAgent: prowConfigAgent(&prowconfig.Config{
 					ProwConfig: prowconfig.ProwConfig{ProwJobNamespace: prowJobNamespace},
 				}),
-				collectProvisioningDurationMetricFunc: metricsGatherer.collectProvisioningDuration,
+				collectProvisioningDurationMetricFunc:   metricsGatherer.collectProvisioningDuration,
+				collectDeprovisioningDurationMetricFunc: metricsGatherer.collectDeprovisioningDuration,
 			}
 
 			gotRes, gotErr := r.Reconcile(context.TODO(), reconcile.Request{NamespacedName: types.NamespacedName{Name: tc.ec.Name, Namespace: tc.ec.Namespace}})
@@ -1679,6 +1787,15 @@ func TestReconcile(t *testing.T) {
 			if diff := cmpMetrics(tc.wantProvisioningDurationHistogram, gotProvisioningDurationMetrics); diff != "" {
 				t.Errorf("Provisioning duration metric differ: %s\n", diff)
 			}
+
+			gotDeprovisioningDurationMetrics, err := collectHistogram(deprovisioningDurationHistogramVec.MetricVec)
+			if err != nil {
+				t.Fatalf("collect deprovisioning duration histogram: %s", err)
+			}
+
+			if diff := cmpMetrics(tc.wantDeprovisioningDurationHistogram, gotDeprovisioningDurationMetrics); diff != "" {
+				t.Errorf("Deprovisioning duration metric differ: %s\n", diff)
+			}
 		})
 	}
 }
@@ -1689,15 +1806,16 @@ func TestReconcileDeleteEphemeralCluster(t *testing.T) {
 	const pollingTime = 5
 
 	for _, tc := range []struct {
-		name         string
-		ec           *ephemeralclusterv1.EphemeralCluster
-		pj           *prowv1.ProwJob
-		buildClients func() map[string]*ctrlruntimetest.FakeClient
-		wantEC       *ephemeralclusterv1.EphemeralCluster
-		wantPJ       *prowv1.ProwJob
-		wantSecret   *corev1.Secret
-		wantRes      reconcile.Result
-		wantErr      error
+		name                                string
+		ec                                  *ephemeralclusterv1.EphemeralCluster
+		pj                                  *prowv1.ProwJob
+		buildClients                        func() map[string]*ctrlruntimetest.FakeClient
+		wantEC                              *ephemeralclusterv1.EphemeralCluster
+		wantPJ                              *prowv1.ProwJob
+		wantSecret                          *corev1.Secret
+		wantRes                             reconcile.Result
+		wantDeprovisioningDurationHistogram []metric
+		wantErr                             error
 	}{
 		{
 			name: "Start deprovision procedure",
@@ -1856,6 +1974,49 @@ func TestReconcileDeleteEphemeralCluster(t *testing.T) {
 			},
 			wantRes: reconcile.Result{},
 		},
+		{
+			name: "ProwJob succeeded after deprovisioning, collect deprovisioning metric",
+			ec: &ephemeralclusterv1.EphemeralCluster{
+				ObjectMeta: metav1.ObjectMeta{
+					Name:              "foo",
+					Namespace:         "bar",
+					DeletionTimestamp: ptr.To(metav1.NewTime(fakeNow)),
+					Finalizers:        []string{DependentProwJobFinalizer},
+				},
+				Spec: ephemeralclusterv1.EphemeralClusterSpec{
+					CIOperator: ephemeralclusterv1.CIOperatorSpec{
+						Test: ephemeralclusterv1.TestSpec{Workflow: "e2e-aws"},
+					},
+				},
+				Status: ephemeralclusterv1.EphemeralClusterStatus{
+					ProwJobID: "pj-123",
+					Phase:     ephemeralclusterv1.EphemeralClusterDeprovisioning,
+					Conditions: []ephemeralclusterv1.EphemeralClusterCondition{{
+						Type:               ephemeralclusterv1.TestCompleted,
+						Status:             ephemeralclusterv1.ConditionTrue,
+						LastTransitionTime: metav1.NewTime(parseTime(t, "2025-04-02 12:00:00")),
+					}},
+				},
+			},
+			pj: &prowv1.ProwJob{
+				ObjectMeta: metav1.ObjectMeta{Name: "pj-123", Namespace: prowJobNamespace},
+				Spec:       prowv1.ProwJobSpec{Cluster: "build01"},
+				Status:     prowv1.ProwJobStatus{State: prowv1.SuccessState},
+			},
+			wantPJ: &prowv1.ProwJob{
+				ObjectMeta: metav1.ObjectMeta{Name: "pj-123", Namespace: prowJobNamespace},
+				Spec:       prowv1.ProwJobSpec{Cluster: "build01"},
+				Status:     prowv1.ProwJobStatus{State: prowv1.SuccessState},
+			},
+			wantRes: reconcile.Result{},
+			wantDeprovisioningDurationHistogram: []metric{{
+				Histogram: &histogram{
+					Labels:      []string{"e2e-aws"},
+					SampleCount: 1,
+					Buckets:     histogramBuckets(deprovisioningDurationBuckets, 0, 0, 1),
+				},
+			}},
+		},
 	} {
 		t.Run(tc.name, func(t *testing.T) {
 			t.Parallel()
@@ -1879,6 +2040,10 @@ func TestReconcileDeleteEphemeralCluster(t *testing.T) {
 				}
 			}
 
+			deprovisioningDurationHistogramVec := newDeprovisioningDurationHistogramVec()
+			metricsGatherer := newMetricsGatherer(logrus.NewEntry(logrus.StandardLogger()),
+				nil, nil, nil, deprovisioningDurationHistogramVec, "", 0)
+
 			r := reconciler{
 				logger:       logrus.NewEntry(logrus.StandardLogger()),
 				masterClient: client,
@@ -1888,6 +2053,7 @@ func TestReconcileDeleteEphemeralCluster(t *testing.T) {
 				prowConfigAgent: prowConfigAgent(&prowconfig.Config{
 					ProwConfig: prowconfig.ProwConfig{ProwJobNamespace: prowJobNamespace},
 				}),
+				collectDeprovisioningDurationMetricFunc: metricsGatherer.collectDeprovisioningDuration,
 			}
 
 			gotRes, gotErr := r.Reconcile(context.TODO(), reconcile.Request{NamespacedName: types.NamespacedName{Name: tc.ec.Name, Namespace: tc.ec.Namespace}})
@@ -1953,6 +2119,15 @@ func TestReconcileDeleteEphemeralCluster(t *testing.T) {
 				if diff := cmp.Diff(tc.wantSecret.Data, gotSecret.Data); diff != "" {
 					t.Errorf("unexpected credentials secret data: %s", diff)
 				}
+			}
+
+			gotDeprovisioningDurationMetrics, err := collectHistogram(deprovisioningDurationHistogramVec.MetricVec)
+			if err != nil {
+				t.Fatalf("collect deprovisioning duration histogram: %s", err)
+			}
+
+			if diff := cmpMetrics(tc.wantDeprovisioningDurationHistogram, gotDeprovisioningDurationMetrics); diff != "" {
+				t.Errorf("Deprovisioning duration metric differ: %s\n", diff)
 			}
 		})
 	}

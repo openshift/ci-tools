@@ -40,7 +40,7 @@ type bucket struct {
 	Count      uint64
 }
 
-func sortMetricsFunc(a, b metric) int {
+func sortMetrics(a, b metric) int {
 	metricLabels := func(m metric) []string {
 		if m.Gauge != nil {
 			sort.Strings(m.Gauge.Labels)
@@ -143,8 +143,8 @@ func collectHistogram(v *prometheus.MetricVec) (result []metric, err error) {
 }
 
 func cmpMetrics(a, b []metric) string {
-	slices.SortFunc(a, sortMetricsFunc)
-	slices.SortFunc(b, sortMetricsFunc)
+	slices.SortFunc(a, sortMetrics)
+	slices.SortFunc(b, sortMetrics)
 	return cmp.Diff(a, b)
 }
 

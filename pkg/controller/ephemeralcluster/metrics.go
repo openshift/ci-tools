@@ -43,13 +43,27 @@ func newProvisioningDurationHistogramVec() *prometheus.HistogramVec {
 	}, []string{"workflow"})
 }
 
+var (
+	deprovisioningDurationBuckets = []float64{300, 600, 900, 1800, 3600, 5400, 7200, 9000, 10800}
+)
+
+func newDeprovisioningDurationHistogramVec() *prometheus.HistogramVec {
+	return prometheus.NewHistogramVec(prometheus.HistogramOpts{
+		Namespace: metricsNamespace,
+		Name:      "deprovisioning_duration_seconds",
+		Help:      "Measure how long the deprovisioning procedure takes",
+		Buckets:   deprovisioningDurationBuckets,
+	}, []string{"workflow"})
+}
+
 type metricsGatherer struct {
-	logger                           *logrus.Entry
-	client                           ctrlruntimeclient.Client
-	countGauge                       *prometheus.GaugeVec
-	provisioningDurationHistogramVec *prometheus.HistogramVec
-	ecNS                             string
-	interval                         time.Duration
+	logger                             *logrus.Entry
+	client                             ctrlruntimeclient.Client
+	countGauge                         *prometheus.GaugeVec
+	provisioningDurationHistogramVec   *prometheus.HistogramVec
+	deprovisioningDurationHistogramVec *prometheus.HistogramVec
+	ecNS                               string
+	interval                           time.Duration
 }
 
 func addMetricsToManager(logger *logrus.Entry, mgr manager.Manager, ecNS string, interval time.Duration) (*metricsGatherer, error) {
@@ -63,8 +77,13 @@ func addMetricsToManager(logger *logrus.Entry, mgr manager.Manager, ecNS string,
 		return nil, fmt.Errorf("failed to register provisioning duration histogram: %w", err)
 	}
 
+	deprovisioningDurationHistogram := newDeprovisioningDurationHistogramVec()
+	if err := metrics.Registry.Register(deprovisioningDurationHistogram); err != nil {
+		return nil, fmt.Errorf("failed to register deprovisioning duration histogram: %w", err)
+	}
+
 	metricsGatherer := newMetricsGatherer(logger.WithField("controller", "ephemeral_cluster_metrics"),
-		mgr.GetClient(), countGauge, provisioningDurationHistogram, ecNS, interval)
+		mgr.GetClient(), countGauge, provisioningDurationHistogram, deprovisioningDurationHistogram, ecNS, interval)
 	if err := mgr.Add(metricsGatherer); err != nil {
 		return nil, fmt.Errorf("add metrics to manager: %w", err)
 	}
@@ -155,17 +174,40 @@ func (mg *metricsGatherer) collectProvisioningDuration(ec *ephemeralclusterv1.Ep
 	return false
 }
 
+func (mg *metricsGatherer) collectDeprovisioningDuration(ec *ephemeralclusterv1.EphemeralCluster, oldStatus, observedStatus *ephemeralclusterv1.EphemeralClusterStatus) bool {
+	find := func(status *ephemeralclusterv1.EphemeralClusterStatus, t ephemeralclusterv1.EphemeralClusterConditionType) (time.Time, bool) {
+		for i := range status.Conditions {
+			if c := &status.Conditions[i]; c.Type == t && c.Status == ephemeralclusterv1.ConditionTrue {
+				return c.LastTransitionTime.Time, true
+			}
+		}
+		return time.Time{}, false
+	}
+
+	start, startOk := find(oldStatus, ephemeralclusterv1.TestCompleted)
+	end, endOk := find(observedStatus, ephemeralclusterv1.ProwJobCompleted)
+	if startOk && endOk {
+		duration := end.Sub(start).Seconds()
+		workflow := ec.Spec.CIOperator.Test.Workflow
+		mg.deprovisioningDurationHistogramVec.WithLabelValues(workflow).Observe(duration)
+		return true
+	}
+
+	return false
+}
+
 func (mg *metricsGatherer) NeedLeaderElection() bool { return true }
 
 func newMetricsGatherer(logger *logrus.Entry, client ctrlruntimeclient.Client,
-	countGauge *prometheus.GaugeVec, provisioningDurationHistogramVec *prometheus.HistogramVec,
+	countGauge *prometheus.GaugeVec, provisioningDurationHistogramVec, deprovisioningDurationHistogramVec *prometheus.HistogramVec,
 	ecNS string, interval time.Duration) *metricsGatherer {
 	return &metricsGatherer{
-		logger:                           logger,
-		client:                           client,
-		countGauge:                       countGauge,
-		provisioningDurationHistogramVec: provisioningDurationHistogramVec,
-		ecNS:                             ecNS,
-		interval:                         interval,
+		logger:                             logger,
+		client:                             client,
+		countGauge:                         countGauge,
+		provisioningDurationHistogramVec:   provisioningDurationHistogramVec,
+		deprovisioningDurationHistogramVec: deprovisioningDurationHistogramVec,
+		ecNS:                               ecNS,
+		interval:                           interval,
 	}
 }

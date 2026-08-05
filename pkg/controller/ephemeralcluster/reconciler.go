@@ -160,7 +160,8 @@ type reconciler struct {
 	cliISTagRef            api.ImageStreamTagReference
 	privilegedTenants      sets.Set[string]
 
-	collectProvisioningDurationMetricFunc func(ec *ephemeralclusterv1.EphemeralCluster, status *ephemeralclusterv1.EphemeralClusterStatus) bool
+	collectProvisioningDurationMetricFunc   func(ec *ephemeralclusterv1.EphemeralCluster, status *ephemeralclusterv1.EphemeralClusterStatus) bool
+	collectDeprovisioningDurationMetricFunc func(ec *ephemeralclusterv1.EphemeralCluster, oldStatus, observedStatus *ephemeralclusterv1.EphemeralClusterStatus) bool
 
 	// Mock for testing
 	now     func() time.Time
@@ -207,18 +208,19 @@ func AddToManager(log *logrus.Entry, mgr manager.Manager, allManagers map[string
 	}
 
 	r := reconciler{
-		logger:                                log.WithField("controller", ControllerName),
-		masterClient:                          mgr.GetClient(),
-		buildClients:                          buildClients,
-		prowConfigAgent:                       prowConfigAgent,
-		clusterProfileResolver:                clusterProfileResolverAdapter(registryAgent),
-		scheme:                                mgr.GetScheme(),
-		newProwJob:                            pjutil.NewProwJob,
-		cliISTagRef:                           cliISTagRef,
-		privilegedTenants:                     reconcilerOpts.privilegedTenants,
-		collectProvisioningDurationMetricFunc: metricsGatherer.collectProvisioningDuration,
-		now:                                   time.Now,
-		polling:                               func() time.Duration { return reconcilerOpts.polling },
+		logger:                                  log.WithField("controller", ControllerName),
+		masterClient:                            mgr.GetClient(),
+		buildClients:                            buildClients,
+		prowConfigAgent:                         prowConfigAgent,
+		clusterProfileResolver:                  clusterProfileResolverAdapter(registryAgent),
+		scheme:                                  mgr.GetScheme(),
+		newProwJob:                              pjutil.NewProwJob,
+		cliISTagRef:                             cliISTagRef,
+		privilegedTenants:                       reconcilerOpts.privilegedTenants,
+		collectProvisioningDurationMetricFunc:   metricsGatherer.collectProvisioningDuration,
+		collectDeprovisioningDurationMetricFunc: metricsGatherer.collectDeprovisioningDuration,
+		now:                                     time.Now,
+		polling:                                 func() time.Duration { return reconcilerOpts.polling },
 	}
 
 	if err := ctrlbldr.ControllerManagedBy(mgr).
@@ -304,7 +306,11 @@ func (r *reconciler) Reconcile(ctx context.Context, req reconcile.Request) (reco
 		if removeFinalizer(ec) {
 			log.Info("ProwJob in a definitive state, finalizer removed")
 			ec.Status = observedStatus
-			return reconcile.Result{}, r.updateEphemeralClusterWithStatus(ctx, ec)
+			if updateErr := r.updateEphemeralClusterWithStatus(ctx, ec); updateErr != nil {
+				return reconcile.Result{}, updateErr
+			}
+			r.collectDeprovisioningDurationMetric(ec, &oldStatus, &observedStatus)
+			return reconcile.Result{}, nil
 		}
 	} else {
 		requeueAfter = r.polling()
@@ -315,6 +321,7 @@ func (r *reconciler) Reconcile(ctx context.Context, req reconcile.Request) (reco
 	}
 
 	r.collectProvisioningDurationMetric(ec, &oldStatus, &observedStatus)
+	r.collectDeprovisioningDurationMetric(ec, &oldStatus, &observedStatus)
 
 	return reconcile.Result{RequeueAfter: requeueAfter}, nil
 }
@@ -925,9 +932,19 @@ func (r *reconciler) reconcileDeleteEphemeralCluster(ctx context.Context, log *l
 	if isFinalState := r.reportProwJobFinalState(&pj, observedStatus); isFinalState {
 		if removeFinalizer(ec) {
 			log.Info("ProwJob in a definitive state, removing the finalizer")
-			return reconcile.Result{}, r.updateEphemeralCluster(ctx, ec)
+			if updateErr := r.updateEphemeralCluster(ctx, ec); updateErr != nil {
+				return reconcile.Result{}, updateErr
+			}
+			r.collectDeprovisioningDurationMetric(ec, &oldStatus, observedStatus)
+			return reconcile.Result{}, nil
 		}
-		return reconcile.Result{}, r.updateEphemeralClusterStatus(ctx, ec, observedStatus)
+
+		if updateErr := r.updateEphemeralClusterStatus(ctx, ec, observedStatus); updateErr != nil {
+			return reconcile.Result{}, updateErr
+		}
+
+		r.collectDeprovisioningDurationMetric(ec, &oldStatus, observedStatus)
+		return reconcile.Result{}, nil
 	}
 
 	if err := r.notifyTestComplete(ctx, log, &oldStatus, observedStatus, &pj); err != nil {
@@ -1022,6 +1039,14 @@ func (r *reconciler) collectProvisioningDurationMetric(ec *ephemeralclusterv1.Ep
 	if oldStatus.Phase != ephemeralclusterv1.EphemeralClusterReady && observedStatus.Phase == ephemeralclusterv1.EphemeralClusterReady {
 		if !r.collectProvisioningDurationMetricFunc(ec, observedStatus) {
 			r.logger.Warn("Failed to collect the provisioning duration metric")
+		}
+	}
+}
+
+func (r *reconciler) collectDeprovisioningDurationMetric(ec *ephemeralclusterv1.EphemeralCluster, oldStatus, observedStatus *ephemeralclusterv1.EphemeralClusterStatus) {
+	if oldStatus.Phase != ephemeralclusterv1.EphemeralClusterDeprovisioned && observedStatus.Phase == ephemeralclusterv1.EphemeralClusterDeprovisioned {
+		if !r.collectDeprovisioningDurationMetricFunc(ec, oldStatus, observedStatus) {
+			r.logger.Warn("Failed to collect the deprovisioning duration metric")
 		}
 	}
 }

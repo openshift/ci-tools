@@ -109,11 +109,6 @@ type EphemeralClusterSpec struct {
 	TearDownCluster bool `json:"tearDownCluster,omitempty"`
 }
 
-type PullRequestMeta struct {
-	Payload string `json:"event,omitempty"`
-	Headers string `json:"headers,omitempty"`
-}
-
 // CIOperatorSpec contains what is needed to run ci-operator
 type CIOperatorSpec struct {
 	BuildRootImage *api.BuildRootImageConfiguration       `json:"buildRoot,omitempty"`

@@ -270,7 +270,7 @@ func (r *reconciler) Reconcile(ctx context.Context, req reconcile.Request) (reco
 		return r.reconcileCreateProwJob(ctx, log, ec, &observedStatus)
 	}
 
-	upsertCondition(&observedStatus, ephemeralclusterv1.ProwJobCreating, ephemeralclusterv1.ConditionFalse, r.now(), ProwJobCreatingDoneReason, "")
+	upsertCondition(&observedStatus, ephemeralclusterv1.ProwJobCreating, metav1.ConditionFalse, r.now(), ProwJobCreatingDoneReason, "")
 	observedStatus.Phase = ephemeralclusterv1.EphemeralClusterProvisioning
 	observedStatus.ProwJobURL = pj.Status.URL
 
@@ -481,7 +481,7 @@ func (r *reconciler) reconcileCreateProwJob(ctx context.Context, log *logrus.Ent
 	log.Info("Starting the procedure to create a ProwJob")
 
 	if err := r.validateEphemeralCluster(log, ec); err != nil {
-		upsertCondition(observedStatus, ephemeralclusterv1.ProwJobCreating, ephemeralclusterv1.ConditionFalse, r.now(), ephemeralclusterv1.EphemeralClusterValidationFailureReason, err.Error())
+		upsertCondition(observedStatus, ephemeralclusterv1.ProwJobCreating, metav1.ConditionFalse, r.now(), ephemeralclusterv1.EphemeralClusterValidationFailureReason, err.Error())
 		observedStatus.Phase = ephemeralclusterv1.EphemeralClusterFailed
 		if updateErr := r.updateEphemeralClusterStatus(ctx, ec, observedStatus); updateErr != nil {
 			msg := utilerrors.NewAggregate([]error{updateErr, err}).Error()
@@ -504,7 +504,7 @@ func (r *reconciler) reconcileCreateProwJob(ctx context.Context, log *logrus.Ent
 	// is creating PJs manually or there is a bug in this controller.
 	if len(pjsForEC.Items) > 1 {
 		log.Error(TooManyPJsBoundErrMsg)
-		upsertCondition(observedStatus, ephemeralclusterv1.ProwJobCreating, ephemeralclusterv1.ConditionFalse, r.now(), ephemeralclusterv1.TooManyProwJobsBoundReason, TooManyPJsBoundErrMsg)
+		upsertCondition(observedStatus, ephemeralclusterv1.ProwJobCreating, metav1.ConditionFalse, r.now(), ephemeralclusterv1.TooManyProwJobsBoundReason, TooManyPJsBoundErrMsg)
 		observedStatus.Phase = ephemeralclusterv1.EphemeralClusterFailed
 		err := errors.New("too many ProwJobs associated")
 		if updateErr := r.updateEphemeralClusterStatus(ctx, ec, observedStatus); updateErr != nil {
@@ -519,7 +519,7 @@ func (r *reconciler) reconcileCreateProwJob(ctx context.Context, log *logrus.Ent
 	if len(pjsForEC.Items) == 1 {
 		log.Info("ProwJob found but was not bound to the EC, binding now")
 		ec.Finalizers, _ = cislices.UniqueAdd(ec.Finalizers, DependentProwJobFinalizer)
-		upsertCondition(observedStatus, ephemeralclusterv1.ProwJobCreating, ephemeralclusterv1.ConditionTrue, r.now(), "", "")
+		upsertCondition(observedStatus, ephemeralclusterv1.ProwJobCreating, metav1.ConditionTrue, r.now(), "", "")
 		observedStatus.ProwJobID = pjsForEC.Items[0].Name
 		observedStatus.Phase = ephemeralclusterv1.EphemeralClusterProvisioning
 		ec.Status = *observedStatus
@@ -545,7 +545,7 @@ func (r *reconciler) reconcileCreateProwJob(ctx context.Context, log *logrus.Ent
 }
 
 func (r *reconciler) createProwJob(ctx context.Context, log *logrus.Entry, ec *ephemeralclusterv1.EphemeralCluster) error {
-	upsertProvisioningCond := func(status ephemeralclusterv1.ConditionStatus, reason, msg string) {
+	upsertProvisioningCond := func(status metav1.ConditionStatus, reason, msg string) {
 		upsertCondition(&ec.Status, ephemeralclusterv1.ProwJobCreating, status, r.now(), reason, msg)
 	}
 
@@ -553,7 +553,7 @@ func (r *reconciler) createProwJob(ctx context.Context, log *logrus.Entry, ec *e
 	if err != nil {
 		log.WithError(err).Error("generate ci-operator config")
 		err = fmt.Errorf("generate ci-operator config: %w", err)
-		upsertProvisioningCond(ephemeralclusterv1.ConditionFalse, ephemeralclusterv1.CIOperatorJobsGenerateFailureReason, err.Error())
+		upsertProvisioningCond(metav1.ConditionFalse, ephemeralclusterv1.CIOperatorJobsGenerateFailureReason, err.Error())
 		ec.Status.Phase = ephemeralclusterv1.EphemeralClusterFailed
 		return reconcile.TerminalError(err)
 	}
@@ -561,7 +561,7 @@ func (r *reconciler) createProwJob(ctx context.Context, log *logrus.Entry, ec *e
 	pj, err := r.makeProwJob(ciOperatorConfig, ec)
 	if err != nil {
 		log.WithError(err).Error("make prowjob")
-		upsertProvisioningCond(ephemeralclusterv1.ConditionFalse, ephemeralclusterv1.CIOperatorJobsGenerateFailureReason, err.Error())
+		upsertProvisioningCond(metav1.ConditionFalse, ephemeralclusterv1.CIOperatorJobsGenerateFailureReason, err.Error())
 		ec.Status.Phase = ephemeralclusterv1.EphemeralClusterFailed
 		return reconcile.TerminalError(err)
 	}
@@ -571,14 +571,14 @@ func (r *reconciler) createProwJob(ctx context.Context, log *logrus.Entry, ec *e
 	if err := r.masterClient.Create(ctx, pj); err != nil {
 		log.WithError(err).Error("create prowjob")
 		err = fmt.Errorf("create prowjob: %w", err)
-		upsertProvisioningCond(ephemeralclusterv1.ConditionFalse, ephemeralclusterv1.CIOperatorJobsGenerateFailureReason, err.Error())
+		upsertProvisioningCond(metav1.ConditionFalse, ephemeralclusterv1.CIOperatorJobsGenerateFailureReason, err.Error())
 		return err
 	}
 	log.Info("The ProwJob has been created")
 
 	ec.Status.ProwJobID = pj.Name
 	ec.Finalizers, _ = cislices.UniqueAdd(ec.Finalizers, DependentProwJobFinalizer)
-	upsertProvisioningCond(ephemeralclusterv1.ConditionTrue, "", "")
+	upsertProvisioningCond(metav1.ConditionTrue, "", "")
 	ec.Status.Phase = ephemeralclusterv1.EphemeralClusterProvisioning
 	return nil
 }
@@ -662,7 +662,7 @@ func (r *reconciler) fetchSecrets(ctx context.Context, log *logrus.Entry, ec *ep
 	buildClient, err := buildClientFor(r.buildClients, pj.Spec.Cluster)
 	if err != nil {
 		log.WithField("cluster", pj.Spec.Cluster).WithError(err).Error("Build client not found")
-		upsertCondition(ecStatus, ephemeralclusterv1.ClusterReady, ephemeralclusterv1.ConditionFalse, r.now(), ephemeralclusterv1.SecretsFetchFailureReason, err.Error())
+		upsertCondition(ecStatus, ephemeralclusterv1.ClusterReady, metav1.ConditionFalse, r.now(), ephemeralclusterv1.SecretsFetchFailureReason, err.Error())
 		ecStatus.Phase = ephemeralclusterv1.EphemeralClusterFailed
 		return err
 	}
@@ -670,8 +670,8 @@ func (r *reconciler) fetchSecrets(ctx context.Context, log *logrus.Entry, ec *ep
 	ns, err := findCIOperatorTestNS(ctx, buildClient, pj)
 	if err != nil {
 		if errors.Is(err, &errCIOperatorNSNotFound{}) {
-			upsertCondition(ecStatus, ephemeralclusterv1.ClusterReady, ephemeralclusterv1.ConditionFalse, r.now(), ephemeralclusterv1.SecretsFetchFailureReason, ephemeralclusterv1.CIOperatorNSNotFoundMsg)
-			if !hasCondition(oldStatus, ephemeralclusterv1.ClusterReady, ephemeralclusterv1.ConditionFalse, r.now(), ephemeralclusterv1.SecretsFetchFailureReason, ephemeralclusterv1.CIOperatorNSNotFoundMsg) {
+			upsertCondition(ecStatus, ephemeralclusterv1.ClusterReady, metav1.ConditionFalse, r.now(), ephemeralclusterv1.SecretsFetchFailureReason, ephemeralclusterv1.CIOperatorNSNotFoundMsg)
+			if !hasCondition(oldStatus, ephemeralclusterv1.ClusterReady, metav1.ConditionFalse, r.now(), ephemeralclusterv1.SecretsFetchFailureReason, ephemeralclusterv1.CIOperatorNSNotFoundMsg) {
 				log.Info("Fetching cluster credentials but ci-operator NS didn't show up yet")
 			}
 			return nil
@@ -715,7 +715,7 @@ func (r *reconciler) fetchHiveSecrets(
 			if !apierrors.IsNotFound(err) {
 				log.WithField("secret", secret.name).WithError(err).Error("Failed to read secret")
 				readSecretErr := fmt.Errorf("read secret %s/%s: %w", secret.name, ns, err)
-				upsertCondition(ecStatus, ephemeralclusterv1.ClusterReady, ephemeralclusterv1.ConditionFalse, r.now(), ephemeralclusterv1.SecretsFetchFailureReason, readSecretErr.Error())
+				upsertCondition(ecStatus, ephemeralclusterv1.ClusterReady, metav1.ConditionFalse, r.now(), ephemeralclusterv1.SecretsFetchFailureReason, readSecretErr.Error())
 				return
 			}
 			break
@@ -731,7 +731,7 @@ func (r *reconciler) fetchHiveSecrets(
 	}
 
 	if !secretsReady {
-		upsertCondition(ecStatus, ephemeralclusterv1.ClusterReady, ephemeralclusterv1.ConditionFalse, r.now(), ephemeralclusterv1.SecretsFetchFailureReason, ephemeralclusterv1.HiveSecretsNotReadyMsg)
+		upsertCondition(ecStatus, ephemeralclusterv1.ClusterReady, metav1.ConditionFalse, r.now(), ephemeralclusterv1.SecretsFetchFailureReason, ephemeralclusterv1.HiveSecretsNotReadyMsg)
 		return
 	}
 
@@ -741,13 +741,13 @@ func (r *reconciler) fetchHiveSecrets(
 	}
 	if err := r.createCredentialsSecret(ctx, log, ec, secretData); err != nil {
 		log.WithError(err).Error("Failed to create credentials secret")
-		upsertCondition(ecStatus, ephemeralclusterv1.ClusterReady, ephemeralclusterv1.ConditionFalse, r.now(), ephemeralclusterv1.SecretsFetchFailureReason, err.Error())
+		upsertCondition(ecStatus, ephemeralclusterv1.ClusterReady, metav1.ConditionFalse, r.now(), ephemeralclusterv1.SecretsFetchFailureReason, err.Error())
 		return
 	}
 
 	ecStatus.SecretRef = credentialsSecretName(ec)
-	upsertCondition(ecStatus, ephemeralclusterv1.ClusterReady, ephemeralclusterv1.ConditionTrue, r.now(), "", "")
-	if !hasCondition(oldStatus, ephemeralclusterv1.ClusterReady, ephemeralclusterv1.ConditionTrue, r.now(), "", "") {
+	upsertCondition(ecStatus, ephemeralclusterv1.ClusterReady, metav1.ConditionTrue, r.now(), "", "")
+	if !hasCondition(oldStatus, ephemeralclusterv1.ClusterReady, metav1.ConditionTrue, r.now(), "", "") {
 		log.Info("Hive secrets fetched, the cluster is ready")
 	}
 	ecStatus.Phase = ephemeralclusterv1.EphemeralClusterReady
@@ -765,14 +765,14 @@ func (r *reconciler) fetchClusterKubeconfig(
 	// The secret is named after the test name.
 	if err := buildClient.Get(ctx, types.NamespacedName{Name: EphemeralClusterTestName, Namespace: ns}, &kubeconfigSecret); err != nil {
 		log.WithField("secret", EphemeralClusterTestName).WithError(err).Error("Failed to read secret")
-		upsertCondition(ecStatus, ephemeralclusterv1.ClusterReady, ephemeralclusterv1.ConditionFalse, r.now(), ephemeralclusterv1.SecretsFetchFailureReason, err.Error())
+		upsertCondition(ecStatus, ephemeralclusterv1.ClusterReady, metav1.ConditionFalse, r.now(), ephemeralclusterv1.SecretsFetchFailureReason, err.Error())
 		return
 	}
 
 	kubeconfig, ok := kubeconfigSecret.Data["kubeconfig"]
 	if !ok {
 		// The kubeconfig takes time before being stored into the secret, requeuing.
-		upsertCondition(ecStatus, ephemeralclusterv1.ClusterReady, ephemeralclusterv1.ConditionFalse, r.now(), ephemeralclusterv1.SecretsFetchFailureReason, ephemeralclusterv1.KubeconfigNotReadyMsg)
+		upsertCondition(ecStatus, ephemeralclusterv1.ClusterReady, metav1.ConditionFalse, r.now(), ephemeralclusterv1.SecretsFetchFailureReason, ephemeralclusterv1.KubeconfigNotReadyMsg)
 		return
 	}
 
@@ -782,13 +782,13 @@ func (r *reconciler) fetchClusterKubeconfig(
 	}
 	if err := r.createCredentialsSecret(ctx, log, ec, secretData); err != nil {
 		log.WithError(err).Error("Failed to create credentials secret")
-		upsertCondition(ecStatus, ephemeralclusterv1.ClusterReady, ephemeralclusterv1.ConditionFalse, r.now(), ephemeralclusterv1.SecretsFetchFailureReason, err.Error())
+		upsertCondition(ecStatus, ephemeralclusterv1.ClusterReady, metav1.ConditionFalse, r.now(), ephemeralclusterv1.SecretsFetchFailureReason, err.Error())
 		return
 	}
 
 	ecStatus.SecretRef = credentialsSecretName(ec)
-	upsertCondition(ecStatus, ephemeralclusterv1.ClusterReady, ephemeralclusterv1.ConditionTrue, r.now(), "", "")
-	if !hasCondition(oldStatus, ephemeralclusterv1.ClusterReady, ephemeralclusterv1.ConditionTrue, r.now(), "", "") {
+	upsertCondition(ecStatus, ephemeralclusterv1.ClusterReady, metav1.ConditionTrue, r.now(), "", "")
+	if !hasCondition(oldStatus, ephemeralclusterv1.ClusterReady, metav1.ConditionTrue, r.now(), "", "") {
 		log.Info("Kubeconfig fetched, the cluster is ready")
 	}
 	ecStatus.Phase = ephemeralclusterv1.EphemeralClusterReady
@@ -796,7 +796,7 @@ func (r *reconciler) fetchClusterKubeconfig(
 
 func (r *reconciler) updateEphemeralClusterStatus(ctx context.Context, ec *ephemeralclusterv1.EphemeralCluster, observedStatus *ephemeralclusterv1.EphemeralClusterStatus) error {
 	cmpECStatusOpts := []cmp.Option{
-		cmpopts.SortSlices(func(a, b ephemeralclusterv1.EphemeralClusterCondition) int {
+		cmpopts.SortSlices(func(a, b metav1.Condition) int {
 			return strings.Compare(string(a.Type), string(b.Type))
 		}),
 		cmpopts.IgnoreTypes(metav1.Time{}),
@@ -884,19 +884,19 @@ func (r *reconciler) createCredentialsSecret(
 
 // reportProwJobFinalState reports whether the pj is in a final state or not.
 func (r *reconciler) reportProwJobFinalState(pj *prowv1.ProwJob, observedStatus *ephemeralclusterv1.EphemeralClusterStatus) bool {
-	addCondition := func(status ephemeralclusterv1.ConditionStatus, reason, msg string) {
+	addCondition := func(status metav1.ConditionStatus, reason, msg string) {
 		upsertCondition(observedStatus, ephemeralclusterv1.ProwJobCompleted, status, r.now(), reason, msg)
 	}
 
 	switch pj.Status.State {
 	case prowv1.AbortedState, prowv1.ErrorState, prowv1.FailureState:
 		msg := "prowjob state: " + string(pj.Status.State)
-		addCondition(ephemeralclusterv1.ConditionTrue, ephemeralclusterv1.ProwJobFailureReason, msg)
+		addCondition(metav1.ConditionTrue, ephemeralclusterv1.ProwJobFailureReason, msg)
 		observedStatus.Phase = ephemeralclusterv1.EphemeralClusterFailed
 		return true
 	case prowv1.SuccessState:
 		msg := "prowjob state: " + string(pj.Status.State)
-		addCondition(ephemeralclusterv1.ConditionTrue, ephemeralclusterv1.ProwJobCompletedReason, msg)
+		addCondition(metav1.ConditionTrue, ephemeralclusterv1.ProwJobCompletedReason, msg)
 		observedStatus.Phase = ephemeralclusterv1.EphemeralClusterDeprovisioned
 		return true
 	}
@@ -1001,7 +1001,7 @@ func (r *reconciler) notifyTestComplete(ctx context.Context, log *logrus.Entry, 
 	buildClient, err := buildClientFor(r.buildClients, pj.Spec.Cluster)
 	if err != nil {
 		log.WithField("cluster", pj.Spec.Cluster).WithError(err).Warn("Build client not found")
-		upsertCondition(ecStatus, ephemeralclusterv1.TestCompleted, ephemeralclusterv1.ConditionFalse, r.now(), ephemeralclusterv1.CreateTestCompletedSecretFailureReason, err.Error())
+		upsertCondition(ecStatus, ephemeralclusterv1.TestCompleted, metav1.ConditionFalse, r.now(), ephemeralclusterv1.CreateTestCompletedSecretFailureReason, err.Error())
 		ecStatus.Phase = ephemeralclusterv1.EphemeralClusterFailed
 		return err
 	}
@@ -1009,7 +1009,7 @@ func (r *reconciler) notifyTestComplete(ctx context.Context, log *logrus.Entry, 
 	ns, err := findCIOperatorTestNS(ctx, buildClient, pj)
 	if err != nil {
 		if errors.Is(err, &errCIOperatorNSNotFound{}) {
-			upsertCondition(ecStatus, ephemeralclusterv1.TestCompleted, ephemeralclusterv1.ConditionFalse, r.now(), ephemeralclusterv1.CreateTestCompletedSecretFailureReason, ephemeralclusterv1.CIOperatorNSNotFoundMsg)
+			upsertCondition(ecStatus, ephemeralclusterv1.TestCompleted, metav1.ConditionFalse, r.now(), ephemeralclusterv1.CreateTestCompletedSecretFailureReason, ephemeralclusterv1.CIOperatorNSNotFoundMsg)
 			ecStatus.Phase = ephemeralclusterv1.EphemeralClusterFailed
 		}
 		return err
@@ -1023,13 +1023,13 @@ func (r *reconciler) notifyTestComplete(ctx context.Context, log *logrus.Entry, 
 	}}); err != nil {
 		if !apierrors.IsAlreadyExists(err) {
 			log.WithError(err).Warn("Failed to create the secret")
-			upsertCondition(ecStatus, ephemeralclusterv1.TestCompleted, ephemeralclusterv1.ConditionFalse, r.now(), ephemeralclusterv1.CreateTestCompletedSecretFailureReason, err.Error())
+			upsertCondition(ecStatus, ephemeralclusterv1.TestCompleted, metav1.ConditionFalse, r.now(), ephemeralclusterv1.CreateTestCompletedSecretFailureReason, err.Error())
 			return err
 		}
 	}
 
-	upsertCondition(ecStatus, ephemeralclusterv1.TestCompleted, ephemeralclusterv1.ConditionTrue, r.now(), "", "")
-	if !hasCondition(oldECStatus, ephemeralclusterv1.TestCompleted, ephemeralclusterv1.ConditionTrue, r.now(), "", "") {
+	upsertCondition(ecStatus, ephemeralclusterv1.TestCompleted, metav1.ConditionTrue, r.now(), "", "")
+	if !hasCondition(oldECStatus, ephemeralclusterv1.TestCompleted, metav1.ConditionTrue, r.now(), "", "") {
 		log.Info("Secret to signal deprovisioning procedures created")
 	}
 
@@ -1039,7 +1039,7 @@ func (r *reconciler) notifyTestComplete(ctx context.Context, log *logrus.Entry, 
 func (r *reconciler) collectProvisioningDurationMetric(ec *ephemeralclusterv1.EphemeralCluster, oldStatus, observedStatus *ephemeralclusterv1.EphemeralClusterStatus) {
 	hasClusterReady := func(status *ephemeralclusterv1.EphemeralClusterStatus) bool {
 		for i := range status.Conditions {
-			if c := &status.Conditions[i]; c.Type == ephemeralclusterv1.ClusterReady && c.Status == ephemeralclusterv1.ConditionTrue {
+			if c := &status.Conditions[i]; c.Type == ephemeralclusterv1.ClusterReady && c.Status == metav1.ConditionTrue {
 				return true
 			}
 		}
@@ -1075,8 +1075,8 @@ func findCIOperatorTestNS(ctx context.Context, buildClient ctrlruntimeclient.Cli
 	return nss.Items[0].Name, nil
 }
 
-func upsertCondition(ecStatus *ephemeralclusterv1.EphemeralClusterStatus, t ephemeralclusterv1.EphemeralClusterConditionType, status ephemeralclusterv1.ConditionStatus, now time.Time, reason, msg string) {
-	newCond := ephemeralclusterv1.EphemeralClusterCondition{
+func upsertCondition(ecStatus *ephemeralclusterv1.EphemeralClusterStatus, t string, status metav1.ConditionStatus, now time.Time, reason, msg string) {
+	newCond := metav1.Condition{
 		Type:               t,
 		Status:             status,
 		LastTransitionTime: metav1.NewTime(now),
@@ -1098,8 +1098,8 @@ func upsertCondition(ecStatus *ephemeralclusterv1.EphemeralClusterStatus, t ephe
 	ecStatus.Conditions = append(ecStatus.Conditions, newCond)
 }
 
-func hasCondition(ecStatus *ephemeralclusterv1.EphemeralClusterStatus, t ephemeralclusterv1.EphemeralClusterConditionType, status ephemeralclusterv1.ConditionStatus, now time.Time, reason, msg string) bool {
-	newCond := ephemeralclusterv1.EphemeralClusterCondition{
+func hasCondition(ecStatus *ephemeralclusterv1.EphemeralClusterStatus, t string, status metav1.ConditionStatus, now time.Time, reason, msg string) bool {
+	newCond := metav1.Condition{
 		Type:               t,
 		Status:             status,
 		LastTransitionTime: metav1.NewTime(now),
@@ -1119,7 +1119,7 @@ func hasCondition(ecStatus *ephemeralclusterv1.EphemeralClusterStatus, t ephemer
 	return false
 }
 
-func conditionsEqual(a, b *ephemeralclusterv1.EphemeralClusterCondition) bool {
+func conditionsEqual(a, b *metav1.Condition) bool {
 	return a.Message == b.Message && a.Reason == b.Reason &&
 		a.Status == b.Status && a.Type == b.Type
 }

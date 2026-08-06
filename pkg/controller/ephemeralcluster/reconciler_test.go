@@ -689,14 +689,14 @@ func TestReconcile(t *testing.T) {
 					ProwJobID:  "pj-123",
 					SecretRef:  "foo-credentials",
 					ProwJobURL: "https://pj-123.html",
-					Conditions: []ephemeralclusterv1.EphemeralClusterCondition{{
+					Conditions: []metav1.Condition{{
 						Type:               ephemeralclusterv1.ProwJobCreating,
-						Status:             ephemeralclusterv1.ConditionFalse,
+						Status:             metav1.ConditionFalse,
 						Reason:             ProwJobCreatingDoneReason,
 						LastTransitionTime: metav1.NewTime(parseTime(t, "2025-04-02 12:14:12")),
 					}, {
 						Type:               ephemeralclusterv1.ClusterReady,
-						Status:             ephemeralclusterv1.ConditionTrue,
+						Status:             metav1.ConditionTrue,
 						LastTransitionTime: metav1.NewTime(parseTime(t, "2025-04-02 12:14:12")),
 					}},
 				},
@@ -743,15 +743,15 @@ func TestReconcile(t *testing.T) {
 				Status: ephemeralclusterv1.EphemeralClusterStatus{
 					ProwJobID: "pj-123",
 					Phase:     ephemeralclusterv1.EphemeralClusterProvisioning,
-					Conditions: []ephemeralclusterv1.EphemeralClusterCondition{
+					Conditions: []metav1.Condition{
 						{
 							Type:               ephemeralclusterv1.ProwJobCreating,
-							Status:             ephemeralclusterv1.ConditionFalse,
+							Status:             metav1.ConditionFalse,
 							Reason:             ProwJobCreatingDoneReason,
 							LastTransitionTime: metav1.NewTime(fakeNow),
 						}, {
 							Type:               ephemeralclusterv1.ClusterReady,
-							Status:             ephemeralclusterv1.ConditionFalse,
+							Status:             metav1.ConditionFalse,
 							Reason:             ephemeralclusterv1.SecretsFetchFailureReason,
 							Message:            ephemeralclusterv1.CIOperatorNSNotFoundMsg,
 							LastTransitionTime: metav1.NewTime(fakeNow),
@@ -801,14 +801,14 @@ func TestReconcile(t *testing.T) {
 				Status: ephemeralclusterv1.EphemeralClusterStatus{
 					ProwJobID: "pj-123",
 					Phase:     ephemeralclusterv1.EphemeralClusterProvisioning,
-					Conditions: []ephemeralclusterv1.EphemeralClusterCondition{{
+					Conditions: []metav1.Condition{{
 						Type:               ephemeralclusterv1.ProwJobCreating,
-						Status:             ephemeralclusterv1.ConditionFalse,
+						Status:             metav1.ConditionFalse,
 						Reason:             ProwJobCreatingDoneReason,
 						LastTransitionTime: metav1.NewTime(fakeNow),
 					}, {
 						Type:               ephemeralclusterv1.ClusterReady,
-						Status:             ephemeralclusterv1.ConditionFalse,
+						Status:             metav1.ConditionFalse,
 						Reason:             ephemeralclusterv1.SecretsFetchFailureReason,
 						Message:            fmt.Sprintf("secrets %q not found", EphemeralClusterTestName),
 						LastTransitionTime: metav1.NewTime(fakeNow),
@@ -861,14 +861,14 @@ func TestReconcile(t *testing.T) {
 				Status: ephemeralclusterv1.EphemeralClusterStatus{
 					ProwJobID: "pj-123",
 					Phase:     ephemeralclusterv1.EphemeralClusterProvisioning,
-					Conditions: []ephemeralclusterv1.EphemeralClusterCondition{{
+					Conditions: []metav1.Condition{{
 						Type:               ephemeralclusterv1.ProwJobCreating,
-						Status:             ephemeralclusterv1.ConditionFalse,
+						Status:             metav1.ConditionFalse,
 						Reason:             ProwJobCreatingDoneReason,
 						LastTransitionTime: metav1.NewTime(fakeNow),
 					}, {
 						Type:               ephemeralclusterv1.ClusterReady,
-						Status:             ephemeralclusterv1.ConditionFalse,
+						Status:             metav1.ConditionFalse,
 						Reason:             ephemeralclusterv1.SecretsFetchFailureReason,
 						Message:            ephemeralclusterv1.KubeconfigNotReadyMsg,
 						LastTransitionTime: metav1.NewTime(fakeNow),
@@ -907,14 +907,14 @@ func TestReconcile(t *testing.T) {
 				Status: ephemeralclusterv1.EphemeralClusterStatus{
 					Phase:     ephemeralclusterv1.EphemeralClusterFailed,
 					ProwJobID: "pj-123",
-					Conditions: []ephemeralclusterv1.EphemeralClusterCondition{{
+					Conditions: []metav1.Condition{{
 						Type:               ephemeralclusterv1.ProwJobCreating,
-						Status:             ephemeralclusterv1.ConditionFalse,
+						Status:             metav1.ConditionFalse,
 						Reason:             ProwJobCreatingDoneReason,
 						LastTransitionTime: metav1.NewTime(fakeNow),
 					}, {
 						Type:               ephemeralclusterv1.ClusterReady,
-						Status:             ephemeralclusterv1.ConditionFalse,
+						Status:             metav1.ConditionFalse,
 						Reason:             ephemeralclusterv1.SecretsFetchFailureReason,
 						Message:            "build client not found for cluster build01",
 						LastTransitionTime: metav1.NewTime(fakeNow),
@@ -956,20 +956,20 @@ func TestReconcile(t *testing.T) {
 				},
 				Status: ephemeralclusterv1.EphemeralClusterStatus{
 					ProwJobID: "pj-123",
-					Conditions: []ephemeralclusterv1.EphemeralClusterCondition{{
+					Conditions: []metav1.Condition{{
 						Type:               ephemeralclusterv1.ProwJobCreating,
-						Status:             ephemeralclusterv1.ConditionFalse,
+						Status:             metav1.ConditionFalse,
 						Reason:             ProwJobCreatingDoneReason,
 						LastTransitionTime: metav1.NewTime(fakeNow),
 					}, {
 						Type:               ephemeralclusterv1.ClusterReady,
-						Status:             ephemeralclusterv1.ConditionFalse,
+						Status:             metav1.ConditionFalse,
 						Reason:             ephemeralclusterv1.SecretsFetchFailureReason,
 						Message:            ephemeralclusterv1.CIOperatorNSNotFoundMsg,
 						LastTransitionTime: metav1.NewTime(fakeNow),
 					}, {
 						Type:               ephemeralclusterv1.ProwJobCompleted,
-						Status:             ephemeralclusterv1.ConditionTrue,
+						Status:             metav1.ConditionTrue,
 						Reason:             ephemeralclusterv1.ProwJobFailureReason,
 						Message:            "prowjob state: aborted",
 						LastTransitionTime: metav1.NewTime(fakeNow),
@@ -1027,18 +1027,18 @@ func TestReconcile(t *testing.T) {
 					Phase:     ephemeralclusterv1.EphemeralClusterDeprovisioned,
 					ProwJobID: "pj-123",
 					SecretRef: "foo-credentials",
-					Conditions: []ephemeralclusterv1.EphemeralClusterCondition{{
+					Conditions: []metav1.Condition{{
 						Type:               ephemeralclusterv1.ProwJobCreating,
-						Status:             ephemeralclusterv1.ConditionFalse,
+						Status:             metav1.ConditionFalse,
 						Reason:             ProwJobCreatingDoneReason,
 						LastTransitionTime: metav1.NewTime(fakeNow),
 					}, {
 						Type:               ephemeralclusterv1.ClusterReady,
-						Status:             ephemeralclusterv1.ConditionTrue,
+						Status:             metav1.ConditionTrue,
 						LastTransitionTime: metav1.NewTime(fakeNow),
 					}, {
 						Type:               ephemeralclusterv1.ProwJobCompleted,
-						Status:             ephemeralclusterv1.ConditionTrue,
+						Status:             metav1.ConditionTrue,
 						Reason:             string(ephemeralclusterv1.ProwJobCompleted),
 						Message:            "prowjob state: success",
 						LastTransitionTime: metav1.NewTime(fakeNow),
@@ -1112,20 +1112,20 @@ func TestReconcile(t *testing.T) {
 				Status: ephemeralclusterv1.EphemeralClusterStatus{
 					ProwJobID: "pj-123",
 					Phase:     ephemeralclusterv1.EphemeralClusterDeprovisioned,
-					Conditions: []ephemeralclusterv1.EphemeralClusterCondition{{
+					Conditions: []metav1.Condition{{
 						Type:               ephemeralclusterv1.ProwJobCreating,
-						Status:             ephemeralclusterv1.ConditionFalse,
+						Status:             metav1.ConditionFalse,
 						Reason:             ProwJobCreatingDoneReason,
 						LastTransitionTime: metav1.NewTime(fakeNow),
 					}, {
 						Type:               ephemeralclusterv1.ClusterReady,
-						Status:             ephemeralclusterv1.ConditionFalse,
+						Status:             metav1.ConditionFalse,
 						Reason:             ephemeralclusterv1.SecretsFetchFailureReason,
 						Message:            ephemeralclusterv1.CIOperatorNSNotFoundMsg,
 						LastTransitionTime: metav1.NewTime(fakeNow),
 					}, {
 						Type:               ephemeralclusterv1.ProwJobCompleted,
-						Status:             ephemeralclusterv1.ConditionTrue,
+						Status:             metav1.ConditionTrue,
 						Reason:             ephemeralclusterv1.ProwJobCompletedReason,
 						Message:            "prowjob state: " + string(prowv1.SuccessState),
 						LastTransitionTime: metav1.NewTime(fakeNow),
@@ -1184,18 +1184,18 @@ func TestReconcile(t *testing.T) {
 					Phase:     ephemeralclusterv1.EphemeralClusterDeprovisioning,
 					ProwJobID: "pj-123",
 					SecretRef: "foo-credentials",
-					Conditions: []ephemeralclusterv1.EphemeralClusterCondition{{
+					Conditions: []metav1.Condition{{
 						Type:               ephemeralclusterv1.ProwJobCreating,
-						Status:             ephemeralclusterv1.ConditionFalse,
+						Status:             metav1.ConditionFalse,
 						Reason:             ProwJobCreatingDoneReason,
 						LastTransitionTime: metav1.NewTime(fakeNow),
 					}, {
 						Type:               ephemeralclusterv1.ClusterReady,
-						Status:             ephemeralclusterv1.ConditionTrue,
+						Status:             metav1.ConditionTrue,
 						LastTransitionTime: metav1.NewTime(fakeNow),
 					}, {
 						Type:               ephemeralclusterv1.TestCompleted,
-						Status:             ephemeralclusterv1.ConditionTrue,
+						Status:             metav1.ConditionTrue,
 						LastTransitionTime: metav1.NewTime(fakeNow),
 					}},
 				},
@@ -1244,20 +1244,20 @@ func TestReconcile(t *testing.T) {
 				Status: ephemeralclusterv1.EphemeralClusterStatus{
 					Phase:     ephemeralclusterv1.EphemeralClusterFailed,
 					ProwJobID: "pj-123",
-					Conditions: []ephemeralclusterv1.EphemeralClusterCondition{{
+					Conditions: []metav1.Condition{{
 						Type:               ephemeralclusterv1.ProwJobCreating,
-						Status:             ephemeralclusterv1.ConditionFalse,
+						Status:             metav1.ConditionFalse,
 						Reason:             ProwJobCreatingDoneReason,
 						LastTransitionTime: metav1.NewTime(fakeNow),
 					}, {
 						Type:               ephemeralclusterv1.ClusterReady,
-						Status:             ephemeralclusterv1.ConditionFalse,
+						Status:             metav1.ConditionFalse,
 						Reason:             ephemeralclusterv1.SecretsFetchFailureReason,
 						Message:            ephemeralclusterv1.CIOperatorNSNotFoundMsg,
 						LastTransitionTime: metav1.NewTime(fakeNow),
 					}, {
 						Type:               ephemeralclusterv1.TestCompleted,
-						Status:             ephemeralclusterv1.ConditionFalse,
+						Status:             metav1.ConditionFalse,
 						Reason:             ephemeralclusterv1.CreateTestCompletedSecretFailureReason,
 						Message:            ephemeralclusterv1.CIOperatorNSNotFoundMsg,
 						LastTransitionTime: metav1.NewTime(fakeNow),
@@ -1316,20 +1316,20 @@ func TestReconcile(t *testing.T) {
 				Status: ephemeralclusterv1.EphemeralClusterStatus{
 					Phase:     ephemeralclusterv1.EphemeralClusterDeprovisioning,
 					ProwJobID: "pj-123",
-					Conditions: []ephemeralclusterv1.EphemeralClusterCondition{{
+					Conditions: []metav1.Condition{{
 						Type:               ephemeralclusterv1.ProwJobCreating,
-						Status:             ephemeralclusterv1.ConditionFalse,
+						Status:             metav1.ConditionFalse,
 						Reason:             ProwJobCreatingDoneReason,
 						LastTransitionTime: metav1.NewTime(fakeNow),
 					}, {
 						Type:               ephemeralclusterv1.ClusterReady,
-						Status:             ephemeralclusterv1.ConditionFalse,
+						Status:             metav1.ConditionFalse,
 						Reason:             ephemeralclusterv1.SecretsFetchFailureReason,
 						Message:            `secrets "cluster-provisioning" not found`,
 						LastTransitionTime: metav1.NewTime(fakeNow),
 					}, {
 						Type:               ephemeralclusterv1.TestCompleted,
-						Status:             ephemeralclusterv1.ConditionTrue,
+						Status:             metav1.ConditionTrue,
 						LastTransitionTime: metav1.NewTime(fakeNow),
 					}},
 				},
@@ -1413,14 +1413,14 @@ func TestReconcile(t *testing.T) {
 					Phase:     ephemeralclusterv1.EphemeralClusterReady,
 					ProwJobID: "pj-123",
 					SecretRef: "foo-credentials",
-					Conditions: []ephemeralclusterv1.EphemeralClusterCondition{{
+					Conditions: []metav1.Condition{{
 						Type:               ephemeralclusterv1.ProwJobCreating,
-						Status:             ephemeralclusterv1.ConditionFalse,
+						Status:             metav1.ConditionFalse,
 						Reason:             ProwJobCreatingDoneReason,
 						LastTransitionTime: metav1.NewTime(parseTime(t, "2025-04-02 13:11:12")),
 					}, {
 						Type:               ephemeralclusterv1.ClusterReady,
-						Status:             ephemeralclusterv1.ConditionTrue,
+						Status:             metav1.ConditionTrue,
 						LastTransitionTime: metav1.NewTime(parseTime(t, "2025-04-02 13:11:12")),
 					}},
 				},
@@ -1493,14 +1493,14 @@ func TestReconcile(t *testing.T) {
 				Status: ephemeralclusterv1.EphemeralClusterStatus{
 					ProwJobID: "pj-123",
 					Phase:     ephemeralclusterv1.EphemeralClusterProvisioning,
-					Conditions: []ephemeralclusterv1.EphemeralClusterCondition{{
+					Conditions: []metav1.Condition{{
 						Type:               ephemeralclusterv1.ProwJobCreating,
-						Status:             ephemeralclusterv1.ConditionFalse,
+						Status:             metav1.ConditionFalse,
 						Reason:             ProwJobCreatingDoneReason,
 						LastTransitionTime: metav1.NewTime(fakeNow),
 					}, {
 						Type:               ephemeralclusterv1.ClusterReady,
-						Status:             ephemeralclusterv1.ConditionFalse,
+						Status:             metav1.ConditionFalse,
 						Reason:             ephemeralclusterv1.SecretsFetchFailureReason,
 						Message:            ephemeralclusterv1.HiveSecretsNotReadyMsg,
 						LastTransitionTime: metav1.NewTime(fakeNow),
@@ -1528,9 +1528,9 @@ func TestReconcile(t *testing.T) {
 				Status: ephemeralclusterv1.EphemeralClusterStatus{
 					ProwJobID: "pj-123",
 					Phase:     ephemeralclusterv1.EphemeralClusterDeprovisioning,
-					Conditions: []ephemeralclusterv1.EphemeralClusterCondition{{
+					Conditions: []metav1.Condition{{
 						Type:               ephemeralclusterv1.TestCompleted,
-						Status:             ephemeralclusterv1.ConditionTrue,
+						Status:             metav1.ConditionTrue,
 						LastTransitionTime: metav1.NewTime(parseTime(t, "2025-04-02 12:30:00")),
 					}},
 				},
@@ -1583,22 +1583,22 @@ func TestReconcile(t *testing.T) {
 					Phase:     ephemeralclusterv1.EphemeralClusterDeprovisioned,
 					ProwJobID: "pj-123",
 					SecretRef: "foo-credentials",
-					Conditions: []ephemeralclusterv1.EphemeralClusterCondition{{
+					Conditions: []metav1.Condition{{
 						Type:               ephemeralclusterv1.ProwJobCreating,
-						Status:             ephemeralclusterv1.ConditionFalse,
+						Status:             metav1.ConditionFalse,
 						Reason:             ProwJobCreatingDoneReason,
 						LastTransitionTime: metav1.NewTime(parseTime(t, "2025-04-02 12:45:00")),
 					}, {
 						Type:               ephemeralclusterv1.ClusterReady,
-						Status:             ephemeralclusterv1.ConditionTrue,
+						Status:             metav1.ConditionTrue,
 						LastTransitionTime: metav1.NewTime(parseTime(t, "2025-04-02 12:45:00")),
 					}, {
 						Type:               ephemeralclusterv1.TestCompleted,
-						Status:             ephemeralclusterv1.ConditionTrue,
+						Status:             metav1.ConditionTrue,
 						LastTransitionTime: metav1.NewTime(parseTime(t, "2025-04-02 12:45:00")),
 					}, {
 						Type:               ephemeralclusterv1.ProwJobCompleted,
-						Status:             ephemeralclusterv1.ConditionTrue,
+						Status:             metav1.ConditionTrue,
 						Reason:             ephemeralclusterv1.ProwJobCompletedReason,
 						Message:            "prowjob state: success",
 						LastTransitionTime: metav1.NewTime(parseTime(t, "2025-04-02 12:45:00")),
@@ -1689,14 +1689,14 @@ func TestReconcile(t *testing.T) {
 				Status: ephemeralclusterv1.EphemeralClusterStatus{
 					ProwJobID: "pj-123",
 					Phase:     ephemeralclusterv1.EphemeralClusterProvisioning,
-					Conditions: []ephemeralclusterv1.EphemeralClusterCondition{{
+					Conditions: []metav1.Condition{{
 						Type:               ephemeralclusterv1.ProwJobCreating,
-						Status:             ephemeralclusterv1.ConditionFalse,
+						Status:             metav1.ConditionFalse,
 						Reason:             ProwJobCreatingDoneReason,
 						LastTransitionTime: metav1.NewTime(fakeNow),
 					}, {
 						Type:               ephemeralclusterv1.ClusterReady,
-						Status:             ephemeralclusterv1.ConditionFalse,
+						Status:             metav1.ConditionFalse,
 						Reason:             ephemeralclusterv1.SecretsFetchFailureReason,
 						Message:            "read secret cluster-provisioning-hive-admin-kubeconfig/ci-op-1234: injected",
 						LastTransitionTime: metav1.NewTime(fakeNow),
@@ -1883,9 +1883,9 @@ func TestReconcileDeleteEphemeralCluster(t *testing.T) {
 				Status: ephemeralclusterv1.EphemeralClusterStatus{
 					ProwJobID: "pj-123",
 					Phase:     ephemeralclusterv1.EphemeralClusterDeprovisioning,
-					Conditions: []ephemeralclusterv1.EphemeralClusterCondition{{
+					Conditions: []metav1.Condition{{
 						Type:               ephemeralclusterv1.TestCompleted,
-						Status:             ephemeralclusterv1.ConditionTrue,
+						Status:             metav1.ConditionTrue,
 						LastTransitionTime: metav1.NewTime(fakeNow),
 					}},
 				},
@@ -2016,9 +2016,9 @@ func TestReconcileDeleteEphemeralCluster(t *testing.T) {
 				Status: ephemeralclusterv1.EphemeralClusterStatus{
 					ProwJobID: "pj-123",
 					Phase:     ephemeralclusterv1.EphemeralClusterDeprovisioning,
-					Conditions: []ephemeralclusterv1.EphemeralClusterCondition{{
+					Conditions: []metav1.Condition{{
 						Type:               ephemeralclusterv1.TestCompleted,
-						Status:             ephemeralclusterv1.ConditionTrue,
+						Status:             metav1.ConditionTrue,
 						LastTransitionTime: metav1.NewTime(parseTime(t, "2025-04-02 12:00:00")),
 					}},
 				},

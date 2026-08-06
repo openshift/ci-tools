@@ -8,6 +8,7 @@ import (
 	"github.com/prometheus/client_golang/prometheus"
 	"github.com/sirupsen/logrus"
 
+	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	ctrlruntimeclient "sigs.k8s.io/controller-runtime/pkg/client"
 	"sigs.k8s.io/controller-runtime/pkg/manager"
 	"sigs.k8s.io/controller-runtime/pkg/metrics"
@@ -157,9 +158,9 @@ func (mg *metricsGatherer) collectCount(ecList *ephemeralclusterv1.EphemeralClus
 }
 
 func (mg *metricsGatherer) collectProvisioningDuration(ec *ephemeralclusterv1.EphemeralCluster, status *ephemeralclusterv1.EphemeralClusterStatus) bool {
-	find := func(t ephemeralclusterv1.EphemeralClusterConditionType) (time.Time, bool) {
+	find := func(t string) (time.Time, bool) {
 		for i := range status.Conditions {
-			if c := &status.Conditions[i]; c.Type == t && c.Status == ephemeralclusterv1.ConditionTrue {
+			if c := &status.Conditions[i]; c.Type == t && c.Status == metav1.ConditionTrue {
 				return c.LastTransitionTime.Time, true
 			}
 		}
@@ -177,9 +178,9 @@ func (mg *metricsGatherer) collectProvisioningDuration(ec *ephemeralclusterv1.Ep
 }
 
 func (mg *metricsGatherer) collectDeprovisioningDuration(ec *ephemeralclusterv1.EphemeralCluster, oldStatus, observedStatus *ephemeralclusterv1.EphemeralClusterStatus) bool {
-	find := func(status *ephemeralclusterv1.EphemeralClusterStatus, t ephemeralclusterv1.EphemeralClusterConditionType) (time.Time, bool) {
+	find := func(status *ephemeralclusterv1.EphemeralClusterStatus, t string) (time.Time, bool) {
 		for i := range status.Conditions {
-			if c := &status.Conditions[i]; c.Type == t && c.Status == ephemeralclusterv1.ConditionTrue {
+			if c := &status.Conditions[i]; c.Type == t && c.Status == metav1.ConditionTrue {
 				return c.LastTransitionTime.Time, true
 			}
 		}

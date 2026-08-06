@@ -25,27 +25,16 @@ const (
 	TaskRunNameAnnotation     = "ephemeralcluster.ci.openshift.io/task-run-name"
 )
 
-// EphemeralClusterCondition is a valid value for EphemeralClusterCondition.Type
-type EphemeralClusterConditionType string
-
+// Conditions
 const (
 	// ProwJobCreating indicates whether the prowjob is being created.
-	ProwJobCreating EphemeralClusterConditionType = "ProwJobCreating"
+	ProwJobCreating string = "ProwJobCreating"
 	// ContainersReady indicates whether the cluster is up and running.
-	ClusterReady EphemeralClusterConditionType = "ClusterReady"
+	ClusterReady string = "ClusterReady"
 	// ProwJobCompleted indicates whether the ProwJob has done.
-	ProwJobCompleted EphemeralClusterConditionType = "ProwJobCompleted"
+	ProwJobCompleted string = "ProwJobCompleted"
 	// TestCompleted indicates test has completed and the ephemeral cluster isn't needed anymore.
-	TestCompleted EphemeralClusterConditionType = "TestCompleted"
-)
-
-type ConditionStatus string
-
-// These are valid condition statuses. "ConditionTrue" means a resource is in the condition.
-// "ConditionFalse" means a resource is not in the condition.
-const (
-	ConditionTrue  ConditionStatus = "True"
-	ConditionFalse ConditionStatus = "False"
+	TestCompleted string = "TestCompleted"
 )
 
 type EphemeralClusterPhase string
@@ -145,29 +134,12 @@ type TestSpec struct {
 
 type EphemeralClusterStatus struct {
 	// Phase is an high level description of where the ephemeral cluster is in its lifecycle
-	Phase      EphemeralClusterPhase       `json:"phase"`
-	Conditions []EphemeralClusterCondition `json:"conditions,omitempty"`
-	ProwJobID  string                      `json:"prowJobId,omitempty"`
-	ProwJobURL string                      `json:"prowJobURL,omitempty"`
+	Phase      EphemeralClusterPhase `json:"phase"`
+	Conditions []metav1.Condition    `json:"conditions,omitempty"`
+	ProwJobID  string                `json:"prowJobId,omitempty"`
+	ProwJobURL string                `json:"prowJobURL,omitempty"`
 	// SecretRef is the name of the Secret containing credentials to access the
 	// ephemeral cluster. The Secret is in the same namespace as the EphemeralCluster
 	// and contains a "kubeconfig" key and optionally a "kubeAdminPassword" key.
 	SecretRef string `json:"secretRef,omitempty"`
-}
-
-// EphemeralClusterCondition contains details for the current condition of this EphemeralCluster.
-type EphemeralClusterCondition struct {
-	// Type is the type of the condition.
-	Type EphemeralClusterConditionType `json:"type"`
-	// Status is the status of the condition.
-	Status ConditionStatus `json:"status"`
-	// Last time the condition transitioned from one status to another.
-	// +optional
-	LastTransitionTime metav1.Time `json:"lastTransitionTime,omitempty"`
-	// Unique, one-word, CamelCase reason for the condition's last transition.
-	// +optional
-	Reason string `json:"reason,omitempty"`
-	// Human-readable message indicating details about last transition.
-	// +optional
-	Message string `json:"message,omitempty"`
 }

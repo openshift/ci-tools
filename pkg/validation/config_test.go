@@ -867,7 +867,7 @@ func TestValidateOperator(t *testing.T) {
 			},
 			withResolvesTo: goodStepLink,
 			output: []error{
-				errors.New("operator.bundles[0]: `run_if_changed`, `skip_if_only_changed`, `pipeline_run_if_changed`, and `pipeline_skip_if_only_changed` are mutually exclusive"),
+				errors.New("operator.bundles[0]: `run_if_changed` and `skip_if_only_changed` are mutually exclusive"),
 			},
 		},
 	}

@@ -67,6 +67,24 @@ func TestReplaceWithNextVersion(t *testing.T) {
 			major:    5,
 			expected: "ocp-5.1-testing",
 		},
+		{
+			name:     "Dot format substring false positive: 15.0 not bumped when major is 5",
+			line:     "product-15.0",
+			major:    5,
+			expected: "product-15.0",
+		},
+		{
+			name:     "Dot format: only standalone version bumped, not substring",
+			line:     "thing-5.0 thing-15.0",
+			major:    5,
+			expected: "thing-5.1 thing-15.0",
+		},
+		{
+			name:     "Adjacent dot versions both bumped",
+			line:     "release-5.0-to-5.1",
+			major:    5,
+			expected: "release-5.1-to-5.2",
+		},
 	}
 
 	for _, test := range tests {
@@ -185,12 +203,24 @@ func TestReplaceVersionVariants(t *testing.T) {
 			major:    5,
 			expected: "prefix_5_1",
 		},
-		// Substring false-positive guard (hyphen separator)
+		// Substring false-positive guards
 		{
 			name:     "Substring false positive: only standalone hyphen version is bumped",
 			line:     "valid-5-0 invalid-15-0",
 			major:    5,
 			expected: "valid-5-1 invalid-15-0",
+		},
+		{
+			name:     "Substring false positive: dot format 15.0 not bumped when major is 5",
+			line:     "thing-15.0-and-5.0",
+			major:    5,
+			expected: "thing-15.0-and-5.1",
+		},
+		{
+			name:     "Substring false positive: underscore format 15_0 not bumped",
+			line:     "valid_5_0 invalid_15_0",
+			major:    5,
+			expected: "valid_5_1 invalid_15_0",
 		},
 		// Adjacent version tokens
 		{

@@ -19,6 +19,18 @@ const (
 	KubeconfigNotReadyMsg   = "kubeconfig not ready"
 	HiveSecretsNotReadyMsg  = "hive secrets not ready"
 
+	// Event reasons
+	EventReasonBuildClientNotFound  = "BuildClientNotFound"
+	EventReasonAborted              = "Aborted"
+	EventReasonDeprovisioningStarted = "DeprovisioningStarted"
+	EventReasonValidationFailed     = "ValidationFailed"
+	EventReasonProwJobCreationFailed = "ProwJobCreationFailed"
+	EventReasonProwJobCreated       = "ProwJobCreated"
+	EventReasonClusterReady         = "ClusterReady"
+	EventReasonProwJobFailed        = "ProwJobFailed"
+	EventReasonProwJobSucceeded     = "ProwJobSucceeded"
+	EventReasonProwJobAborted       = "ProwJobAborted"
+
 	KonfluxClusterAnnotation  = "ephemeralcluster.ci.openshift.io/konflux-cluster"
 	KonfluxTenantAnnotation   = "ephemeralcluster.ci.openshift.io/konflux-tenant"
 	PipelineRunNameAnnotation = "ephemeralcluster.ci.openshift.io/pipeline-run-name"

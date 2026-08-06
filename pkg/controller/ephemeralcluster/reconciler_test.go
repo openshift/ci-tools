@@ -15,6 +15,7 @@ import (
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/apimachinery/pkg/types"
 	"k8s.io/apimachinery/pkg/util/sets"
+	"k8s.io/client-go/tools/record"
 	"k8s.io/utils/ptr"
 	ctrlclient "sigs.k8s.io/controller-runtime/pkg/client"
 	"sigs.k8s.io/controller-runtime/pkg/client/fake"
@@ -172,6 +173,7 @@ func TestReconcileCreateProwJob(t *testing.T) {
 		interceptors interceptor.Funcs
 		prowConfig   *prowconfig.Config
 		wantRes      reconcile.Result
+		wantEvents   []string
 		wantErr      error
 	}{
 		{
@@ -219,6 +221,9 @@ func TestReconcileCreateProwJob(t *testing.T) {
 			},
 			req:     reconcile.Request{NamespacedName: types.NamespacedName{Namespace: "ns", Name: "ec"}},
 			wantRes: reconcile.Result{RequeueAfter: pollingTime},
+			wantEvents: []string{
+				"Normal ProwJobCreated Created ProwJob foobar",
+			},
 		},
 		{
 			name: "Privileged tenant",
@@ -263,6 +268,9 @@ func TestReconcileCreateProwJob(t *testing.T) {
 			},
 			req:     reconcile.Request{NamespacedName: types.NamespacedName{Namespace: "ns", Name: "ec"}},
 			wantRes: reconcile.Result{RequeueAfter: pollingTime},
+			wantEvents: []string{
+				"Normal ProwJobCreated Created ProwJob foobar",
+			},
 		},
 		{
 			name: "Invalid cluster profile",
@@ -287,6 +295,9 @@ func TestReconcileCreateProwJob(t *testing.T) {
 			},
 			req:     reconcile.Request{NamespacedName: types.NamespacedName{Namespace: "ns", Name: "ec"}},
 			wantRes: reconcile.Result{},
+			wantEvents: []string{
+				`Warning ValidationFailed konflux cluster "foo" and tenant "bar" don't own the cluster profile "aws-2"`,
+			},
 			wantErr: errors.New(`terminal error: validate ephemeral cluster: konflux cluster "foo" and tenant "bar" don't own the cluster profile "aws-2"`),
 		},
 		{
@@ -311,6 +322,9 @@ func TestReconcileCreateProwJob(t *testing.T) {
 			},
 			req:     reconcile.Request{NamespacedName: types.NamespacedName{Namespace: "ns", Name: "ec"}},
 			wantRes: reconcile.Result{},
+			wantEvents: []string{
+				"Warning ValidationFailed cluster profile has not been set",
+			},
 			wantErr: errors.New(`terminal error: validate ephemeral cluster: cluster profile has not been set`),
 		},
 		{
@@ -361,6 +375,9 @@ func TestReconcileCreateProwJob(t *testing.T) {
 			},
 			req:     reconcile.Request{NamespacedName: types.NamespacedName{Namespace: "ns", Name: "ec"}},
 			wantRes: reconcile.Result{RequeueAfter: pollingTime},
+			wantEvents: []string{
+				"Normal ProwJobCreated Created ProwJob foobar",
+			},
 		},
 		{
 			name: "Handle invalid prow config",
@@ -431,6 +448,9 @@ func TestReconcileCreateProwJob(t *testing.T) {
 			}},
 			req:     reconcile.Request{NamespacedName: types.NamespacedName{Namespace: "ns", Name: "ec"}},
 			wantRes: reconcile.Result{},
+			wantEvents: []string{
+				"Warning ProwJobCreationFailed Failed to create ProwJob: create prowjob: fake err",
+			},
 			wantErr: errors.New("create prowjob: fake err"),
 		},
 		{
@@ -564,6 +584,7 @@ func TestReconcileCreateProwJob(t *testing.T) {
 				pc = tc.prowConfig
 			}
 
+			fakeEventRecorder := record.NewFakeRecorder(100)
 			r := reconciler{
 				logger:                 logrus.NewEntry(logrus.StandardLogger()),
 				masterClient:           client,
@@ -574,6 +595,7 @@ func TestReconcileCreateProwJob(t *testing.T) {
 				prowConfigAgent:        prowConfigAgent(pc),
 				clusterProfileResolver: clusterProfileResolverAdapter(&fakeRegistryAgent),
 				privilegedTenants:      sets.New("ktenant-privileged"),
+				recorder:               fakeEventRecorder,
 			}
 
 			gotRes, gotErr := r.Reconcile(context.TODO(), reconcile.Request{NamespacedName: types.NamespacedName{Name: tc.ec.Name, Namespace: tc.ec.Namespace}})
@@ -596,6 +618,10 @@ func TestReconcileCreateProwJob(t *testing.T) {
 			}
 
 			testhelper.CompareWithFixture(t, pjs, testhelper.WithPrefix("pj-"))
+
+			if diff := cmp.Diff(tc.wantEvents, drainEvents(fakeEventRecorder)); diff != "" {
+				t.Errorf("events differ: %s\n", diff)
+			}
 		})
 	}
 }
@@ -616,6 +642,7 @@ func TestReconcile(t *testing.T) {
 		wantRes                             reconcile.Result
 		wantProvisioningDurationHistogram   []metric
 		wantDeprovisioningDurationHistogram []metric
+		wantEvents                          []string
 		wantErr                             error
 	}{
 		{
@@ -702,6 +729,9 @@ func TestReconcile(t *testing.T) {
 				},
 			},
 			wantRes: reconcile.Result{RequeueAfter: pollingTime},
+			wantEvents: []string{
+				"Normal ClusterReady Cluster credentials are available",
+			},
 			wantProvisioningDurationHistogram: []metric{{
 				Histogram: &histogram{
 					Labels:      []string{"e2e-aws"},
@@ -922,6 +952,10 @@ func TestReconcile(t *testing.T) {
 				},
 			},
 			wantRes: reconcile.Result{},
+			wantEvents: []string{
+				"Warning BuildClientNotFound Build client not found, aborting ProwJob pj-123: build client not found for cluster build01",
+				"Warning ProwJobAborted ProwJob pj-123 aborted: Build client not found: build client not found for cluster build01",
+			},
 			wantErr: reconcile.TerminalError(errors.New("build client not found for cluster build01")),
 		},
 		{
@@ -978,6 +1012,9 @@ func TestReconcile(t *testing.T) {
 				},
 			},
 			wantRes: reconcile.Result{},
+			wantEvents: []string{
+				"Warning ProwJobFailed ProwJob pj-123 finished with state: aborted",
+			},
 		},
 		{
 			name: "Succeeded ProwJob maps to ProwJobCompleted condition",
@@ -1046,6 +1083,10 @@ func TestReconcile(t *testing.T) {
 				},
 			},
 			wantRes: reconcile.Result{},
+			wantEvents: []string{
+				"Normal ClusterReady Cluster credentials are available",
+				"Normal ProwJobSucceeded ProwJob pj-123 completed successfully",
+			},
 			wantProvisioningDurationHistogram: []metric{{
 				Histogram: &histogram{
 					Labels:      []string{""},
@@ -1133,6 +1174,9 @@ func TestReconcile(t *testing.T) {
 				},
 			},
 			wantRes: reconcile.Result{},
+			wantEvents: []string{
+				"Normal ProwJobSucceeded ProwJob pj-123 completed successfully",
+			},
 		},
 		{
 			name: "Test completed, create secret",
@@ -1201,6 +1245,10 @@ func TestReconcile(t *testing.T) {
 				},
 			},
 			wantRes: reconcile.Result{RequeueAfter: pollingTime},
+			wantEvents: []string{
+				"Normal ClusterReady Cluster credentials are available",
+				"Normal DeprovisioningStarted Deprovisioning signal sent",
+			},
 			wantProvisioningDurationHistogram: []metric{{
 				Histogram: &histogram{
 					Labels:      []string{""},
@@ -1335,6 +1383,9 @@ func TestReconcile(t *testing.T) {
 				},
 			},
 			wantRes: reconcile.Result{RequeueAfter: pollingTime},
+			wantEvents: []string{
+				"Normal DeprovisioningStarted Deprovisioning signal sent",
+			},
 		},
 		{
 			name: "Hive cluster provisioned, report secrets",
@@ -1426,6 +1477,9 @@ func TestReconcile(t *testing.T) {
 				},
 			},
 			wantRes: reconcile.Result{RequeueAfter: pollingTime},
+			wantEvents: []string{
+				"Normal ClusterReady Cluster credentials are available",
+			},
 			wantProvisioningDurationHistogram: []metric{{
 				Histogram: &histogram{
 					Labels:      []string{""},
@@ -1606,6 +1660,10 @@ func TestReconcile(t *testing.T) {
 				},
 			},
 			wantRes: reconcile.Result{},
+			wantEvents: []string{
+				"Normal ClusterReady Cluster credentials are available",
+				"Normal ProwJobSucceeded ProwJob pj-123 completed successfully",
+			},
 			wantProvisioningDurationHistogram: []metric{{
 				Histogram: &histogram{
 					Labels:      []string{"e2e-aws"},
@@ -1735,6 +1793,7 @@ func TestReconcile(t *testing.T) {
 				subTestFakeNow = *tc.now
 			}
 
+			fakeEventRecorder := record.NewFakeRecorder(100)
 			r := reconciler{
 				logger:       logrus.NewEntry(logrus.StandardLogger()),
 				masterClient: client,
@@ -1743,6 +1802,7 @@ func TestReconcile(t *testing.T) {
 				now:          func() time.Time { return subTestFakeNow },
 				polling:      func() time.Duration { return pollingTime },
 				newProwJob:   newProwJobFaker("foobar", subTestFakeNow),
+				recorder:     fakeEventRecorder,
 				prowConfigAgent: prowConfigAgent(&prowconfig.Config{
 					ProwConfig: prowconfig.ProwConfig{ProwJobNamespace: prowJobNamespace},
 				}),
@@ -1821,6 +1881,10 @@ func TestReconcile(t *testing.T) {
 			if diff := cmpMetrics(tc.wantDeprovisioningDurationHistogram, gotDeprovisioningDurationMetrics); diff != "" {
 				t.Errorf("Deprovisioning duration metric differ: %s\n", diff)
 			}
+
+			if diff := cmp.Diff(tc.wantEvents, drainEvents(fakeEventRecorder)); diff != "" {
+				t.Errorf("events differ: %s\n", diff)
+			}
 		})
 	}
 }
@@ -1840,6 +1904,7 @@ func TestReconcileDeleteEphemeralCluster(t *testing.T) {
 		wantSecret                          *corev1.Secret
 		wantRes                             reconcile.Result
 		wantDeprovisioningDurationHistogram []metric
+		wantEvents                          []string
 		wantErr                             error
 	}{
 		{
@@ -1901,6 +1966,9 @@ func TestReconcileDeleteEphemeralCluster(t *testing.T) {
 				},
 			},
 			wantRes: reconcile.Result{RequeueAfter: pollingTime},
+			wantEvents: []string{
+				"Normal DeprovisioningStarted Deprovisioning signal sent",
+			},
 		},
 		{
 			name: "ProwJob is gone already, remove the finalizer and delete EC",
@@ -1950,6 +2018,9 @@ func TestReconcileDeleteEphemeralCluster(t *testing.T) {
 				},
 			},
 			wantRes: reconcile.Result{},
+			wantEvents: []string{
+				"Warning ProwJobAborted ProwJob pj-123 aborted: EphemeralCluster being deleted: ci-operator NS not found",
+			},
 		},
 		{
 			name: "Aborted ProwJob remove the finalizer and delete",
@@ -1971,6 +2042,9 @@ func TestReconcileDeleteEphemeralCluster(t *testing.T) {
 				Status:     prowv1.ProwJobStatus{State: prowv1.AbortedState},
 			},
 			wantRes: reconcile.Result{},
+			wantEvents: []string{
+				"Warning ProwJobFailed ProwJob pj-123 finished with state: aborted",
+			},
 		},
 		{
 			name: "Build client not found: remove finalizer and abort PJ",
@@ -1998,6 +2072,9 @@ func TestReconcileDeleteEphemeralCluster(t *testing.T) {
 				},
 			},
 			wantRes: reconcile.Result{},
+			wantEvents: []string{
+				"Warning ProwJobAborted ProwJob pj-123 aborted: EphemeralCluster being deleted: build client not found for cluster build01",
+			},
 		},
 		{
 			name: "ProwJob succeeded after deprovisioning, collect deprovisioning metric",
@@ -2034,6 +2111,9 @@ func TestReconcileDeleteEphemeralCluster(t *testing.T) {
 				Status:     prowv1.ProwJobStatus{State: prowv1.SuccessState},
 			},
 			wantRes: reconcile.Result{},
+			wantEvents: []string{
+				"Normal ProwJobSucceeded ProwJob pj-123 completed successfully",
+			},
 			wantDeprovisioningDurationHistogram: []metric{{
 				Histogram: &histogram{
 					Labels:      []string{"e2e-aws"},
@@ -2069,12 +2149,14 @@ func TestReconcileDeleteEphemeralCluster(t *testing.T) {
 			metricsGatherer := newMetricsGatherer(logrus.NewEntry(logrus.StandardLogger()),
 				nil, nil, nil, deprovisioningDurationHistogramVec, "", 0)
 
+			fakeEventRecorder := record.NewFakeRecorder(100)
 			r := reconciler{
 				logger:       logrus.NewEntry(logrus.StandardLogger()),
 				masterClient: client,
 				buildClients: buildClients,
 				now:          func() time.Time { return fakeNow },
 				polling:      func() time.Duration { return pollingTime },
+				recorder:     fakeEventRecorder,
 				prowConfigAgent: prowConfigAgent(&prowconfig.Config{
 					ProwConfig: prowconfig.ProwConfig{ProwJobNamespace: prowJobNamespace},
 				}),
@@ -2153,6 +2235,10 @@ func TestReconcileDeleteEphemeralCluster(t *testing.T) {
 
 			if diff := cmpMetrics(tc.wantDeprovisioningDurationHistogram, gotDeprovisioningDurationMetrics); diff != "" {
 				t.Errorf("Deprovisioning duration metric differ: %s\n", diff)
+			}
+
+			if diff := cmp.Diff(tc.wantEvents, drainEvents(fakeEventRecorder)); diff != "" {
+				t.Errorf("events differ: %s\n", diff)
 			}
 		})
 	}

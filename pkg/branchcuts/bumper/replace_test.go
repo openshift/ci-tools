@@ -185,6 +185,26 @@ func TestReplaceVersionVariants(t *testing.T) {
 			major:    5,
 			expected: "prefix_5_1",
 		},
+		// Substring false-positive guard (hyphen separator)
+		{
+			name:     "Substring false positive: only standalone hyphen version is bumped",
+			line:     "valid-5-0 invalid-15-0",
+			major:    5,
+			expected: "valid-5-1 invalid-15-0",
+		},
+		// Adjacent version tokens
+		{
+			name:     "Adjacent hyphen tokens both bumped",
+			line:     "5-0-5-1",
+			major:    5,
+			expected: "5-1-5-2",
+		},
+		{
+			name:     "Adjacent underscore tokens both bumped",
+			line:     "5_0_5_1",
+			major:    5,
+			expected: "5_1_5_2",
+		},
 	}
 
 	for _, test := range tests {

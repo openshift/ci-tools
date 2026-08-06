@@ -72,26 +72,46 @@ func ReplaceVersionVariants(line string, major int) (string, error) {
 // It uses word-boundary-like context to avoid false positives (e.g., not matching
 // "15-0" when major is 5).
 func replaceVersionWithSeparator(line string, major int, sep string) (string, error) {
-	// Match {major}{sep}{minor} where major is preceded by a non-digit (or start of string)
-	// and minor is followed by a non-digit (or end of string), to avoid partial matches.
-	p := fmt.Sprintf(`(?:^|[^0-9])%d%s(?P<minor>\d+)(?:[^0-9]|$)`, major, regexp.QuoteMeta(sep))
+	// Match {major}{sep}{minor} without boundary characters in the pattern.
+	// Boundaries are checked manually after matching to avoid:
+	// 1. False positives from strings.ReplaceAll matching substrings (e.g., "5-0" inside "15-0")
+	// 2. Adjacent token misses from consumed delimiters (e.g., only finding one "5-0" in "5-0-5-1")
+	p := fmt.Sprintf(`%d%s(\d+)`, major, regexp.QuoteMeta(sep))
 	r := regexp.MustCompile(p)
-	m := r.FindAllStringSubmatch(line, -1)
-	if m == nil {
+	indices := r.FindAllStringSubmatchIndex(line, -1)
+	if indices == nil {
 		return line, nil
 	}
 
-	minors, err := uniqueSortedMinors(m)
-	if err != nil {
-		return line, err
+	// Filter matches: keep only those bounded by non-digit (or string edge)
+	var validIndices [][]int
+	for _, idx := range indices {
+		matchStart := idx[0]
+		matchEnd := idx[1]
+		if matchStart > 0 && line[matchStart-1] >= '0' && line[matchStart-1] <= '9' {
+			continue
+		}
+		if matchEnd < len(line) && line[matchEnd] >= '0' && line[matchEnd] <= '9' {
+			continue
+		}
+		validIndices = append(validIndices, idx)
 	}
 
-	// Replace in reverse order of minors to avoid double-bumping
-	for i := len(minors) - 1; i >= 0; i-- {
-		minor := minors[i]
-		curVersion := fmt.Sprintf("%d%s%d", major, sep, minor)
-		nextVersion := fmt.Sprintf("%d%s%d", major, sep, minor+1)
-		line = strings.ReplaceAll(line, curVersion, nextVersion)
+	if len(validIndices) == 0 {
+		return line, nil
+	}
+
+	// Replace minor versions at exact positions, right-to-left to preserve indices
+	for i := len(validIndices) - 1; i >= 0; i-- {
+		idx := validIndices[i]
+		minorStart, minorEnd := idx[2], idx[3]
+		minorStr := line[minorStart:minorEnd]
+		minor, err := strconv.Atoi(minorStr)
+		if err != nil {
+			return line, fmt.Errorf("collect %q-separated versions: %w", sep, err)
+		}
+		nextMinor := strconv.Itoa(minor + 1)
+		line = line[:minorStart] + nextMinor + line[minorEnd:]
 	}
 
 	return line, nil

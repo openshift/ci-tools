@@ -104,10 +104,10 @@ func (e *errBuildClientNotFound) Is(err error) bool {
 }
 
 type reconcilerOptions struct {
-	polling                time.Duration
-	cliISTagRef            string
-	privilegedTenants      sets.Set[string]
-	metricsInterval        time.Duration
+	polling                 time.Duration
+	cliISTagRef             string
+	privilegedTenants       sets.Set[string]
+	metricsInterval         time.Duration
 	maxConcurrentReconciles int
 }
 

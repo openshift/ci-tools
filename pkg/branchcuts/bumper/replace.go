@@ -138,4 +138,3 @@ func replaceVersionWithSeparator(line string, major int, sep string) (string, er
 
 	return line, nil
 }
-

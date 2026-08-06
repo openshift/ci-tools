@@ -117,12 +117,13 @@ type serviceAccountSecretRefresherOptions struct {
 }
 
 type ephemeralClusterProvisionerOptions struct {
-	pollingRaw         string
-	polling            time.Duration
-	cliISTagRef        string
-	privilegedTenants  flagutil.Strings
-	metricsIntervalRaw string
-	metricsInterval    time.Duration
+	pollingRaw              string
+	polling                 time.Duration
+	cliISTagRef             string
+	privilegedTenants       flagutil.Strings
+	metricsIntervalRaw      string
+	metricsInterval         time.Duration
+	maxConcurrentReconciles int
 }
 
 func newOpts() (*options, error) {
@@ -155,6 +156,7 @@ func newOpts() (*options, error) {
 	fs.StringVar(&opts.ephemeralClusterProvisinerOptions.cliISTagRef, "ephemeralClusterProvisionerOptions.cliISTagRef", "ocp/4.21:cli", "Set the cli image into the ci-operator base images in the form of `<namespace>/<name>:<tag>`. Defaults to `ocp/4.21:cli`.")
 	fs.Var(&opts.ephemeralClusterProvisinerOptions.privilegedTenants, "ephemeralClusterProvisionerOptions.privilegedTenants", "Konflux tenants that are allowed to use any cluster profile. Can be passed multiple times.")
 	fs.StringVar(&opts.ephemeralClusterProvisinerOptions.metricsIntervalRaw, "ephemeralClusterProvisionerOptions.metricsInterval", "1m", "Set how often the reconciler synchronizes metrics.")
+	fs.IntVar(&opts.ephemeralClusterProvisinerOptions.maxConcurrentReconciles, "ephemeralClusterProvisionerOptions.maxConcurrentReconciles", 1, "Maximum number of concurrent reconciles for the ephemeral cluster reconcilers.")
 	fs.BoolVar(&opts.dryRun, "dry-run", true, "Whether to run the controller-manager with dry-run")
 	fs.StringVar(&opts.releaseRepoGitSyncPath, "release-repo-git-sync-path", "", "Path to release repository dir")
 	if err := fs.Parse(os.Args[1:]); err != nil {
@@ -576,7 +578,8 @@ func main() {
 			ephemeralcluster.WithPolling(opts.ephemeralClusterProvisinerOptions.polling),
 			ephemeralcluster.WithCLIISTagRef(opts.ephemeralClusterProvisinerOptions.cliISTagRef),
 			ephemeralcluster.WithPrivilegedTenants(opts.ephemeralClusterProvisinerOptions.privilegedTenants.Strings()),
-			ephemeralcluster.WithMetricsInterval(opts.ephemeralClusterProvisinerOptions.metricsInterval)); err != nil {
+			ephemeralcluster.WithMetricsInterval(opts.ephemeralClusterProvisinerOptions.metricsInterval),
+			ephemeralcluster.WithMaxConcurrentReconciles(opts.ephemeralClusterProvisinerOptions.maxConcurrentReconciles)); err != nil {
 			logrus.WithError(err).Fatalf("Failed to construct the %s controller", ephemeralcluster.ControllerName)
 		}
 	}

@@ -103,10 +103,11 @@ func (e *errBuildClientNotFound) Is(err error) bool {
 }
 
 type reconcilerOptions struct {
-	polling           time.Duration
-	cliISTagRef       string
-	privilegedTenants sets.Set[string]
-	metricsInterval   time.Duration
+	polling                time.Duration
+	cliISTagRef            string
+	privilegedTenants      sets.Set[string]
+	metricsInterval        time.Duration
+	maxConcurrentReconciles int
 }
 
 type ReconcilerOption func(*reconcilerOptions)
@@ -135,6 +136,14 @@ func WithPrivilegedTenants(tenants []string) ReconcilerOption {
 func WithMetricsInterval(interval time.Duration) ReconcilerOption {
 	return func(o *reconcilerOptions) {
 		o.metricsInterval = interval
+	}
+}
+
+// WithMaxConcurrentReconciles sets the maximum number of concurrent reconciles for both
+// the EphemeralCluster and ProwJob reconcilers.
+func WithMaxConcurrentReconciles(n int) ReconcilerOption {
+	return func(o *reconcilerOptions) {
+		o.maxConcurrentReconciles = n
 	}
 }
 
@@ -189,9 +198,10 @@ func AddToManager(log *logrus.Entry, mgr manager.Manager, allManagers map[string
 	}
 
 	reconcilerOpts := reconcilerOptions{
-		polling:           time.Minute,
-		privilegedTenants: sets.New[string](),
-		metricsInterval:   time.Minute,
+		polling:                 time.Minute,
+		privilegedTenants:       sets.New[string](),
+		metricsInterval:         time.Minute,
+		maxConcurrentReconciles: 1,
 	}
 
 	for _, opt := range opts {
@@ -225,7 +235,7 @@ func AddToManager(log *logrus.Entry, mgr manager.Manager, allManagers map[string
 	}
 
 	if err := ctrlbldr.ControllerManagedBy(mgr).
-		WithOptions(controller.Options{MaxConcurrentReconciles: 1}).
+		WithOptions(controller.Options{MaxConcurrentReconciles: reconcilerOpts.maxConcurrentReconciles}).
 		WithEventFilter(predicate.And(
 			predicate.GenerationChangedPredicate{},
 			predicate.NewPredicateFuncs(ECPredicateFilter),
@@ -235,7 +245,7 @@ func AddToManager(log *logrus.Entry, mgr manager.Manager, allManagers map[string
 		return fmt.Errorf("build controller: %w", err)
 	}
 
-	if err := addPJReconcilerToManager(log, mgr, buildClients); err != nil {
+	if err := addPJReconcilerToManager(log, mgr, buildClients, reconcilerOpts.maxConcurrentReconciles); err != nil {
 		return fmt.Errorf("add prowjob controller: %w", err)
 	}
 

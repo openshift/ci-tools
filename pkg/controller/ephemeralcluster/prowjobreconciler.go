@@ -43,7 +43,7 @@ func ProwJobFilter(object ctrlruntimeclient.Object) bool {
 	return ok
 }
 
-func addPJReconcilerToManager(logger *logrus.Entry, mgr manager.Manager, buildClients buildClients) error {
+func addPJReconcilerToManager(logger *logrus.Entry, mgr manager.Manager, buildClients buildClients, maxConcurrentReconciles int) error {
 	r := prowJobReconciler{
 		logger:       logger.WithField("controller", "ephemeral_cluster_provisioner_pj"),
 		masterClient: mgr.GetClient(),
@@ -52,7 +52,7 @@ func addPJReconcilerToManager(logger *logrus.Entry, mgr manager.Manager, buildCl
 	}
 
 	if err := ctrlbldr.ControllerManagedBy(mgr).
-		WithOptions(controller.Options{MaxConcurrentReconciles: 1}).
+		WithOptions(controller.Options{MaxConcurrentReconciles: maxConcurrentReconciles}).
 		WithEventFilter(predicate.NewPredicateFuncs(ProwJobFilter)).
 		For(&prowv1.ProwJob{}).
 		Complete(&r); err != nil {

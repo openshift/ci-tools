@@ -142,6 +142,30 @@ func TestCalculateVolumeDistribution(t *testing.T) {
 				"clusterB": 1000,
 			},
 		},
+		{
+			name:       "ipCapacity scales capacity share",
+			jobVolumes: map[string]float64{"jobA": 1500},
+			clusterMap: ClusterMap{
+				"build05": {Provider: "AWS", Capacity: 100, IPCapacity: 200},
+				"build09": {Provider: "AWS", Capacity: 100, IPCapacity: 100},
+			},
+			expected: map[string]float64{
+				"build05": 1000,
+				"build09": 500,
+			},
+		},
+		{
+			name:       "capacity half cuts share with same ipCapacity",
+			jobVolumes: map[string]float64{"jobA": 1500},
+			clusterMap: ClusterMap{
+				"build05": {Provider: "AWS", Capacity: 50, IPCapacity: 200},
+				"build09": {Provider: "AWS", Capacity: 100, IPCapacity: 200},
+			},
+			expected: map[string]float64{
+				"build05": 500,
+				"build09": 1000,
+			},
+		},
 	}
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {

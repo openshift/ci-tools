@@ -62,16 +62,22 @@ func (pv *prometheusVolumes) getTotalVolume() float64 {
 }
 
 func (pv *prometheusVolumes) CalculateVolumeDistribution(clusterMap ClusterMap) map[string]float64 {
-	totalCapacity := 0
-	for _, cluster := range clusterMap {
-		totalCapacity += cluster.Capacity
+	maxIP := MaxIPCapacity(clusterMap)
+	var totalWeight float64
+	weights := make(map[string]float64, len(clusterMap))
+	for name, cluster := range clusterMap {
+		w := LoadWeight(cluster, maxIP)
+		weights[name] = w
+		totalWeight += w
 	}
 	totalVolume := pv.getTotalVolume()
-	volumeDistribution := make(map[string]float64)
-	for clusterName, cluster := range clusterMap {
-		volumeShare := (float64(cluster.Capacity) / float64(totalCapacity)) * totalVolume
-		volumeDistribution[clusterName] = volumeShare
+	volumeDistribution := make(map[string]float64, len(clusterMap))
+	for name, w := range weights {
+		if totalWeight == 0 {
+			volumeDistribution[name] = 0
+			continue
+		}
+		volumeDistribution[name] = (w / totalWeight) * totalVolume
 	}
-
 	return volumeDistribution
 }

@@ -243,6 +243,123 @@ func TestDispatchJobConfig(t *testing.T) {
 			},
 			expected: "build02",
 		},
+		{
+			name: "capacity-weighted: prefers lower volume/capacity even when capacity is not 100",
+			cv: &clusterVolume{
+				clusterVolumeMap: map[string]map[string]float64{
+					"aws": {
+						"build01": 90,
+						"build09": 20,
+					},
+				},
+				cloudProviders:  sets.New[string]("aws"),
+				pjs:             map[string]dispatcher.ProwJobData{},
+				blocked:         sets.New[string](),
+				specialClusters: map[string]float64{},
+				volumeDistribution: map[string]float64{
+					"build01": 50,
+					"build09": 30,
+				},
+				clusterMap: dispatcher.ClusterMap{
+					"build01": dispatcher.ClusterInfo{Capacity: 100},
+					"build09": dispatcher.ClusterInfo{Capacity: 75},
+				},
+			},
+			config: &c,
+			jc: &prowconfig.JobConfig{
+				PresubmitsStatic: map[string][]prowconfig.Presubmit{
+					"repo": {{JobBase: prowconfig.JobBase{Name: "job",
+						Spec: &corev1.PodSpec{
+							Containers: []corev1.Container{
+								{Env: []corev1.EnvVar{{Name: "CLUSTER_TYPE", Value: "openstack"}}},
+							},
+						}}}},
+				},
+			},
+			path: "repo-presubmits.yaml",
+			jobVolumes: map[string]float64{
+				"job": 1,
+			},
+			expected: "build09",
+		},
+		{
+			name: "capacity-weighted: skips blocked clusters",
+			cv: &clusterVolume{
+				clusterVolumeMap: map[string]map[string]float64{
+					"aws": {
+						"build01": 10,
+						"build09": 0,
+					},
+				},
+				cloudProviders:  sets.New[string]("aws"),
+				pjs:             map[string]dispatcher.ProwJobData{},
+				blocked:         sets.New[string]("build09"),
+				specialClusters: map[string]float64{},
+				volumeDistribution: map[string]float64{
+					"build01": 50,
+					"build09": 30,
+				},
+				clusterMap: dispatcher.ClusterMap{
+					"build01": dispatcher.ClusterInfo{Capacity: 100},
+					"build09": dispatcher.ClusterInfo{Capacity: 75},
+				},
+			},
+			config: &c,
+			jc: &prowconfig.JobConfig{
+				PresubmitsStatic: map[string][]prowconfig.Presubmit{
+					"repo": {{JobBase: prowconfig.JobBase{Name: "job",
+						Spec: &corev1.PodSpec{
+							Containers: []corev1.Container{
+								{Env: []corev1.EnvVar{{Name: "CLUSTER_TYPE", Value: "openstack"}}},
+							},
+						}}}},
+				},
+			},
+			path: "repo-presubmits.yaml",
+			jobVolumes: map[string]float64{
+				"job": 1,
+			},
+			expected: "build01",
+		},
+		{
+			name: "ipCapacity: prefers roomy /24 cluster over tight /26 at equal load capacity",
+			cv: &clusterVolume{
+				clusterVolumeMap: map[string]map[string]float64{
+					"aws": {
+						"build05": 40,
+						"build09": 40,
+					},
+				},
+				cloudProviders:  sets.New[string]("aws"),
+				pjs:             map[string]dispatcher.ProwJobData{},
+				blocked:         sets.New[string](),
+				specialClusters: map[string]float64{},
+				volumeDistribution: map[string]float64{
+					"build05": 50,
+					"build09": 50,
+				},
+				clusterMap: dispatcher.ClusterMap{
+					"build05": dispatcher.ClusterInfo{Capacity: 50, IPCapacity: 743},
+					"build09": dispatcher.ClusterInfo{Capacity: 50, IPCapacity: 167},
+				},
+			},
+			config: &c,
+			jc: &prowconfig.JobConfig{
+				PresubmitsStatic: map[string][]prowconfig.Presubmit{
+					"repo": {{JobBase: prowconfig.JobBase{Name: "job",
+						Spec: &corev1.PodSpec{
+							Containers: []corev1.Container{
+								{Env: []corev1.EnvVar{{Name: "CLUSTER_TYPE", Value: "openstack"}}},
+							},
+						}}}},
+				},
+			},
+			path: "repo-presubmits.yaml",
+			jobVolumes: map[string]float64{
+				"job": 1,
+			},
+			expected: "build05",
+		},
 	}
 	for _, tc := range testCases {
 		t.Run(tc.name, func(t *testing.T) {
@@ -251,6 +368,53 @@ func TestDispatchJobConfig(t *testing.T) {
 				t.Errorf("%s: actual does not match expected, diff: %s", tc.name, diff)
 			}
 			if diff := cmp.Diff(tc.expectedErr, actualErr, testhelper.EquateErrorMessage); diff != "" {
+				t.Errorf("%s: actual does not match expected, diff: %s", tc.name, diff)
+			}
+		})
+	}
+}
+
+func TestClusterStressScore(t *testing.T) {
+	testCases := []struct {
+		name     string
+		volume   float64
+		info     dispatcher.ClusterInfo
+		maxIP    int
+		expected float64
+	}{
+		{
+			name:     "capacity only when ipCapacity omitted",
+			volume:   75,
+			info:     dispatcher.ClusterInfo{Capacity: 100},
+			maxIP:    743,
+			expected: 0.75,
+		},
+		{
+			name:     "capacity 100 at farm max IP keeps full weight",
+			volume:   50,
+			info:     dispatcher.ClusterInfo{Capacity: 100, IPCapacity: 743},
+			maxIP:    743,
+			expected: 0.5,
+		},
+		{
+			name:     "capacity 50 halves load weight",
+			volume:   50,
+			info:     dispatcher.ClusterInfo{Capacity: 50, IPCapacity: 743},
+			maxIP:    743,
+			expected: 1.0,
+		},
+		{
+			name:     "tight CIDR reduces weight vs roomy maxIP",
+			volume:   50,
+			info:     dispatcher.ClusterInfo{Capacity: 100, IPCapacity: 167},
+			maxIP:    743,
+			expected: 50.0 / (100.0 * 167.0 / 743.0),
+		},
+	}
+	for _, tc := range testCases {
+		t.Run(tc.name, func(t *testing.T) {
+			actual := clusterStressScore(tc.volume, tc.info, tc.maxIP)
+			if diff := cmp.Diff(tc.expected, actual); diff != "" {
 				t.Errorf("%s: actual does not match expected, diff: %s", tc.name, diff)
 			}
 		})

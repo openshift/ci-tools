@@ -3,6 +3,8 @@ package dispatcher
 import (
 	"testing"
 
+	"github.com/google/go-cmp/cmp"
+
 	"k8s.io/apimachinery/pkg/util/sets"
 	prowconfig "sigs.k8s.io/prow/pkg/config"
 )
@@ -81,9 +83,9 @@ func TestFindMostUsedCluster(t *testing.T) {
 
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
-			result := FindMostUsedCluster(&tt.jobConfig)
-			if result != tt.expected {
-				t.Errorf("expected %s, got %s", tt.expected, result)
+			actual := FindMostUsedCluster(&tt.jobConfig)
+			if diff := cmp.Diff(tt.expected, actual); diff != "" {
+				t.Errorf("%s: actual does not match expected, diff: %s", tt.name, diff)
 			}
 		})
 	}
@@ -173,8 +175,9 @@ func TestDetermineTargetCluster(t *testing.T) {
 	}
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
-			if got := DetermineTargetCluster(tt.args.cluster, tt.args.determinedCluster, tt.args.defaultCluster, tt.args.canBeRelocated, tt.fields.blocked); got != tt.want {
-				t.Errorf("clusterVolume.determineCluster() = %v, want %v", got, tt.want)
+			actual := DetermineTargetCluster(tt.args.cluster, tt.args.determinedCluster, tt.args.defaultCluster, tt.args.canBeRelocated, tt.fields.blocked)
+			if diff := cmp.Diff(tt.want, actual); diff != "" {
+				t.Errorf("%s: actual does not match expected, diff: %s", tt.name, diff)
 			}
 		})
 	}
@@ -193,6 +196,7 @@ func TestLoadClusterConfigFromBytes(t *testing.T) {
 aws:
   - name: build01
     capacity: 80
+    ipCapacity: 59
     capabilities:
       - aarch64
       - amd64
@@ -212,6 +216,7 @@ gcp:
 				"build01": {
 					Provider:     "aws",
 					Capacity:     80,
+					IPCapacity:   59,
 					Capabilities: []string{"aarch64", "amd64", "intranet"},
 				},
 				"build03": {
@@ -244,15 +249,39 @@ gcp:
 				"build01": {
 					Provider:     "aws",
 					Capacity:     100,
+					IPCapacity:   0,
 					Capabilities: nil,
 				},
 				"build02": {
 					Provider:     "gcp",
 					Capacity:     100,
+					IPCapacity:   0,
 					Capabilities: []string{"intranet"},
 				},
 			},
 			expectedBlocked: sets.New[string]("build03"),
+		},
+		{
+			name: "omitted ipCapacity is zero and does not fail",
+			yamlData: `
+aws:
+  - name: build01
+    capacity: 50
+gcp:
+  - name: build02
+    capacity: 100
+`,
+			expectedCluster: ClusterMap{
+				"build01": {
+					Provider: "aws",
+					Capacity: 50,
+				},
+				"build02": {
+					Provider: "gcp",
+					Capacity: 100,
+				},
+			},
+			expectedBlocked: sets.New[string](),
 		},
 		{
 			name: "Empty config",
@@ -267,35 +296,15 @@ gcp: []
 
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
-			data := []byte(tt.yamlData)
-
-			clusterMap, blockedClusters, err := loadClusterConfigFromBytes(data)
+			clusterMap, blockedClusters, err := loadClusterConfigFromBytes([]byte(tt.yamlData))
 			if err != nil {
 				t.Fatalf("Failed to load cluster config: %v", err)
 			}
-
-			for clusterName, expectedInfo := range tt.expectedCluster {
-				if info, exists := clusterMap[clusterName]; !exists {
-					t.Errorf("Expected cluster %s to be in clusterMap", clusterName)
-				} else {
-					if info.Provider != expectedInfo.Provider {
-						t.Errorf("Expected provider for %s: %s, got: %s", clusterName, expectedInfo.Provider, info.Provider)
-					}
-					if info.Capacity != expectedInfo.Capacity {
-						t.Errorf("Expected capacity for %s: %d, got: %d", clusterName, expectedInfo.Capacity, info.Capacity)
-					}
-					if len(info.Capabilities) != len(expectedInfo.Capabilities) {
-						t.Errorf("Expected capabilities length for %s: %d, got: %d", clusterName, len(expectedInfo.Capabilities), len(info.Capabilities))
-					}
-					for i, capability := range info.Capabilities {
-						if capability != expectedInfo.Capabilities[i] {
-							t.Errorf("Expected capability %d for %s: %s, got: %s", i, clusterName, expectedInfo.Capabilities[i], capability)
-						}
-					}
-				}
+			if diff := cmp.Diff(tt.expectedCluster, clusterMap); diff != "" {
+				t.Errorf("%s: actual does not match expected, diff: %s", tt.name, diff)
 			}
-			if !blockedClusters.Equal(tt.expectedBlocked) {
-				t.Errorf("Expected blocked clusters: %v, got: %v", tt.expectedBlocked.UnsortedList(), blockedClusters.UnsortedList())
+			if diff := cmp.Diff(sets.List(tt.expectedBlocked), sets.List(blockedClusters)); diff != "" {
+				t.Errorf("%s: actual does not match expected, diff: %s", tt.name, diff)
 			}
 		})
 	}
@@ -345,6 +354,18 @@ func TestHasCapacityOrCapabilitiesChanged(t *testing.T) {
 			expected: true,
 		},
 		{
+			name: "Change in ipCapacity for build01",
+			prev: ClusterMap{
+				"build01": {Provider: "AWS", Capacity: 10, IPCapacity: 40, Capabilities: []string{"aarch64"}},
+				"build02": {Provider: "GCP", Capacity: 20, IPCapacity: 100, Capabilities: []string{"amd64"}},
+			},
+			next: ClusterMap{
+				"build01": {Provider: "AWS", Capacity: 10, IPCapacity: 80, Capabilities: []string{"aarch64"}},
+				"build02": {Provider: "GCP", Capacity: 20, IPCapacity: 100, Capabilities: []string{"amd64"}},
+			},
+			expected: true,
+		},
+		{
 			name: "No corresponding clusters in next map",
 			prev: ClusterMap{
 				"build01": {Provider: "AWS", Capacity: 10, Capabilities: []string{"aarch64", "intranet", "rce", "sshd-bastion"}},
@@ -359,9 +380,9 @@ func TestHasCapacityOrCapabilitiesChanged(t *testing.T) {
 
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
-			result := HasCapacityOrCapabilitiesChanged(tt.prev, tt.next)
-			if result != tt.expected {
-				t.Errorf("Test %s failed: expected %v, got %v", tt.name, tt.expected, result)
+			actual := HasCapacityOrCapabilitiesChanged(tt.prev, tt.next)
+			if diff := cmp.Diff(tt.expected, actual); diff != "" {
+				t.Errorf("%s: actual does not match expected, diff: %s", tt.name, diff)
 			}
 		})
 	}

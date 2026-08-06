@@ -249,7 +249,7 @@ func (r *reconciler) Reconcile(ctx context.Context, req reconcile.Request) (reco
 		if apierrors.IsNotFound(err) {
 			return reconcile.Result{}, nil
 		}
-		return reconcile.Result{}, reconcile.TerminalError(fmt.Errorf("get ephemeral cluster: %w", err))
+		return reconcile.Result{}, fmt.Errorf("get ephemeral cluster: %w", err)
 	}
 
 	if !ec.DeletionTimestamp.IsZero() {

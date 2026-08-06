@@ -283,17 +283,29 @@ func bumpStepEnvVars(env cioperatorapi.TestEnvironment, major int) error {
 
 	for k, v := range env {
 		mm, err := ocplifecycle.ParseMajorMinor(v)
-		// value does not look like a version => nothing to bump
-		if err != nil {
+		if err == nil {
+			// Value is exactly a version string like "5.0"
+			if k == ocpReleaseEnvVarName || mm.Major == major {
+				if err := ReplaceWithNextVersionInPlace(&v, major); err != nil {
+					errs = append(errs, err)
+					continue
+				}
+				env[k] = v
+			}
 			continue
 		}
 
-		if k == ocpReleaseEnvVarName || mm.Major == major {
-			if err := ReplaceWithNextVersionInPlace(&v, major); err != nil {
-				errs = append(errs, err)
-				continue
-			}
-			env[k] = v
+		// Fallback: value is not a bare version but may contain an embedded
+		// version pattern (e.g., "agent-ove-5.0.x86_64.iso",
+		// "prow-ocp-5.0-component-readiness", "template_5_0").
+		// Use ReplaceVersionVariants to bump all variant formats.
+		bumped, bumpErr := ReplaceVersionVariants(v, major)
+		if bumpErr != nil {
+			errs = append(errs, bumpErr)
+			continue
+		}
+		if bumped != v {
+			env[k] = bumped
 		}
 	}
 
@@ -323,15 +335,26 @@ func bumpTestStepEnvVars(multistageTest cioperatorapi.TestStep, major int) error
 		if env.Default == nil {
 			continue
 		}
-		// value does not look like a version => nothing to bump
+
 		mm, err := ocplifecycle.ParseMajorMinor(*env.Default)
-		if err != nil {
+		if err == nil {
+			// Value is exactly a version string like "5.0"
+			if env.Name == ocpReleaseEnvVarName || mm.Major == major {
+				if err := ReplaceWithNextVersionInPlace(env.Default, major); err != nil {
+					return err
+				}
+			}
+			multistageTest.Environment[i] = env
 			continue
 		}
-		if env.Name == ocpReleaseEnvVarName || mm.Major == major {
-			if err := ReplaceWithNextVersionInPlace(env.Default, major); err != nil {
-				return err
-			}
+
+		// Fallback: value contains an embedded version pattern
+		bumped, bumpErr := ReplaceVersionVariants(*env.Default, major)
+		if bumpErr != nil {
+			return bumpErr
+		}
+		if bumped != *env.Default {
+			*env.Default = bumped
 		}
 		multistageTest.Environment[i] = env
 	}

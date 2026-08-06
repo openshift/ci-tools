@@ -269,6 +269,81 @@ func TestBumpStepEnvVars(t *testing.T) {
 			env:     nil,
 			wantEnv: nil,
 		},
+		// Fallback: embedded version in env var values
+		{
+			id:    "Bumps AGENT_ISO with embedded dot version",
+			major: 5,
+			env: cioperatorapi.TestEnvironment{
+				"AGENT_ISO": "agent-ove-5.0.x86_64.iso",
+			},
+			wantEnv: cioperatorapi.TestEnvironment{
+				"AGENT_ISO": "agent-ove-5.1.x86_64.iso",
+			},
+		},
+		{
+			id:    "Bumps TELEMETRY_GROUP with embedded dot version",
+			major: 5,
+			env: cioperatorapi.TestEnvironment{
+				"TELEMETRY_GROUP": "prow-ocp-5.0-component-readiness",
+			},
+			wantEnv: cioperatorapi.TestEnvironment{
+				"TELEMETRY_GROUP": "prow-ocp-5.1-component-readiness",
+			},
+		},
+		{
+			id:    "Bumps JOB_NAME with embedded dot version",
+			major: 5,
+			env: cioperatorapi.TestEnvironment{
+				"JOB_NAME": "periodic-ci-openshift-release-master-nightly-5.0-e2e-aws",
+			},
+			wantEnv: cioperatorapi.TestEnvironment{
+				"JOB_NAME": "periodic-ci-openshift-release-master-nightly-5.1-e2e-aws",
+			},
+		},
+		{
+			id:    "Bumps REPORTER_TEMPLATE_NAME with underscore version",
+			major: 5,
+			env: cioperatorapi.TestEnvironment{
+				"REPORTER_TEMPLATE_NAME": "component_readiness_5_0",
+			},
+			wantEnv: cioperatorapi.TestEnvironment{
+				"REPORTER_TEMPLATE_NAME": "component_readiness_5_1",
+			},
+		},
+		{
+			id:    "Bumps embedded hyphen version",
+			major: 5,
+			env: cioperatorapi.TestEnvironment{
+				"CHANNEL": "cnv-release-5-0-z",
+			},
+			wantEnv: cioperatorapi.TestEnvironment{
+				"CHANNEL": "cnv-release-5-1-z",
+			},
+		},
+		{
+			id:    "Does not bump embedded version with different major",
+			major: 4,
+			env: cioperatorapi.TestEnvironment{
+				"AGENT_ISO": "agent-ove-5.0.x86_64.iso",
+			},
+			wantEnv: cioperatorapi.TestEnvironment{
+				"AGENT_ISO": "agent-ove-5.0.x86_64.iso",
+			},
+		},
+		{
+			id:    "Bumps mix of bare and embedded versions",
+			major: 5,
+			env: cioperatorapi.TestEnvironment{
+				"OCP_VERSION":   "5.0",
+				"AGENT_ISO":     "agent-ove-5.0.x86_64.iso",
+				"UNRELATED_VAR": "hello-world",
+			},
+			wantEnv: cioperatorapi.TestEnvironment{
+				"OCP_VERSION":   "5.1",
+				"AGENT_ISO":     "agent-ove-5.1.x86_64.iso",
+				"UNRELATED_VAR": "hello-world",
+			},
+		},
 	}
 	for _, test := range tests {
 		t.Run(test.id, func(t *testing.T) {
@@ -387,6 +462,101 @@ func TestBumpTestStepEnvVars(t *testing.T) {
 					Environment: []cioperatorapi.StepParameter{
 						{Name: "OCP_VERSION", Default: nil},
 						{Name: "OTHER_VAR", Default: strRef("4.11")},
+					},
+				},
+			},
+		},
+		// Fallback: embedded version in step parameter values
+		{
+			id:    "Bumps AGENT_ISO with embedded version in step param",
+			major: 5,
+			testStep: cioperatorapi.TestStep{
+				LiteralTestStep: &cioperatorapi.LiteralTestStep{
+					Environment: []cioperatorapi.StepParameter{
+						{Name: "AGENT_ISO", Default: strRef("agent-ove-5.0.x86_64.iso")},
+					},
+				},
+			},
+			wantStep: cioperatorapi.TestStep{
+				LiteralTestStep: &cioperatorapi.LiteralTestStep{
+					Environment: []cioperatorapi.StepParameter{
+						{Name: "AGENT_ISO", Default: strRef("agent-ove-5.1.x86_64.iso")},
+					},
+				},
+			},
+		},
+		{
+			id:    "Bumps REPORTER_TEMPLATE_NAME with underscore version in step param",
+			major: 5,
+			testStep: cioperatorapi.TestStep{
+				LiteralTestStep: &cioperatorapi.LiteralTestStep{
+					Environment: []cioperatorapi.StepParameter{
+						{Name: "REPORTER_TEMPLATE_NAME", Default: strRef("component_readiness_5_0")},
+					},
+				},
+			},
+			wantStep: cioperatorapi.TestStep{
+				LiteralTestStep: &cioperatorapi.LiteralTestStep{
+					Environment: []cioperatorapi.StepParameter{
+						{Name: "REPORTER_TEMPLATE_NAME", Default: strRef("component_readiness_5_1")},
+					},
+				},
+			},
+		},
+		{
+			id:    "Bumps TELEMETRY_GROUP with embedded version in step param",
+			major: 5,
+			testStep: cioperatorapi.TestStep{
+				LiteralTestStep: &cioperatorapi.LiteralTestStep{
+					Environment: []cioperatorapi.StepParameter{
+						{Name: "TELEMETRY_GROUP", Default: strRef("prow-ocp-5.0-component-readiness")},
+					},
+				},
+			},
+			wantStep: cioperatorapi.TestStep{
+				LiteralTestStep: &cioperatorapi.LiteralTestStep{
+					Environment: []cioperatorapi.StepParameter{
+						{Name: "TELEMETRY_GROUP", Default: strRef("prow-ocp-5.1-component-readiness")},
+					},
+				},
+			},
+		},
+		{
+			id:    "Does not bump embedded version with different major in step param",
+			major: 4,
+			testStep: cioperatorapi.TestStep{
+				LiteralTestStep: &cioperatorapi.LiteralTestStep{
+					Environment: []cioperatorapi.StepParameter{
+						{Name: "AGENT_ISO", Default: strRef("agent-ove-5.0.x86_64.iso")},
+					},
+				},
+			},
+			wantStep: cioperatorapi.TestStep{
+				LiteralTestStep: &cioperatorapi.LiteralTestStep{
+					Environment: []cioperatorapi.StepParameter{
+						{Name: "AGENT_ISO", Default: strRef("agent-ove-5.0.x86_64.iso")},
+					},
+				},
+			},
+		},
+		{
+			id:    "Bumps mix of bare and embedded versions in step params",
+			major: 5,
+			testStep: cioperatorapi.TestStep{
+				LiteralTestStep: &cioperatorapi.LiteralTestStep{
+					Environment: []cioperatorapi.StepParameter{
+						{Name: "OCP_VERSION", Default: strRef("5.0")},
+						{Name: "AGENT_ISO", Default: strRef("agent-ove-5.0.x86_64.iso")},
+						{Name: "UNRELATED", Default: strRef("hello-world")},
+					},
+				},
+			},
+			wantStep: cioperatorapi.TestStep{
+				LiteralTestStep: &cioperatorapi.LiteralTestStep{
+					Environment: []cioperatorapi.StepParameter{
+						{Name: "OCP_VERSION", Default: strRef("5.1")},
+						{Name: "AGENT_ISO", Default: strRef("agent-ove-5.1.x86_64.iso")},
+						{Name: "UNRELATED", Default: strRef("hello-world")},
 					},
 				},
 			},

@@ -800,6 +800,76 @@ func TestValidateOperator(t *testing.T) {
 				errors.New("operator.bundles[0].skip_building_index: skip_building_index requires 'as' to be set"),
 			},
 		},
+		{
+			name: "run_if_changed can be set on a named bundle",
+			input: &api.OperatorStepConfiguration{
+				Bundles: []api.Bundle{{
+					As:                "my-bundle",
+					DockerfilePath:    "./dockerfile",
+					ContextDir:        ".",
+					SkipBuildingIndex: true,
+					RunIfChanged:      "^(Dockerfile|src/)",
+				}},
+			},
+			withResolvesTo: goodStepLink,
+		},
+		{
+			name: "skip_if_only_changed can be set on a named bundle",
+			input: &api.OperatorStepConfiguration{
+				Bundles: []api.Bundle{{
+					As:                "my-bundle",
+					DockerfilePath:    "./dockerfile",
+					ContextDir:        ".",
+					SkipBuildingIndex: true,
+					SkipIfOnlyChanged: `^(docs/|.*\.md$)`,
+				}},
+			},
+			withResolvesTo: goodStepLink,
+		},
+		{
+			name: "run_if_changed cannot be set on an unnamed bundle",
+			input: &api.OperatorStepConfiguration{
+				Bundles: []api.Bundle{{
+					DockerfilePath: "./dockerfile",
+					ContextDir:     ".",
+					RunIfChanged:   "^(Dockerfile|src/)",
+				}},
+			},
+			withResolvesTo: goodStepLink,
+			output: []error{
+				errors.New("operator.bundles[0].run_if_changed: run_if_changed requires 'as' to be set"),
+			},
+		},
+		{
+			name: "skip_if_only_changed cannot be set on an unnamed bundle",
+			input: &api.OperatorStepConfiguration{
+				Bundles: []api.Bundle{{
+					DockerfilePath:    "./dockerfile",
+					ContextDir:        ".",
+					SkipIfOnlyChanged: `^(docs/|.*\.md$)`,
+				}},
+			},
+			withResolvesTo: goodStepLink,
+			output: []error{
+				errors.New("operator.bundles[0].skip_if_only_changed: skip_if_only_changed requires 'as' to be set"),
+			},
+		},
+		{
+			name: "run_if_changed and skip_if_only_changed are mutually exclusive",
+			input: &api.OperatorStepConfiguration{
+				Bundles: []api.Bundle{{
+					As:                "my-bundle",
+					DockerfilePath:    "./dockerfile",
+					ContextDir:        ".",
+					RunIfChanged:      "^(Dockerfile|src/)",
+					SkipIfOnlyChanged: `^(docs/|.*\.md$)`,
+				}},
+			},
+			withResolvesTo: goodStepLink,
+			output: []error{
+				errors.New("operator.bundles[0]: `run_if_changed`, `skip_if_only_changed`, `pipeline_run_if_changed`, and `pipeline_skip_if_only_changed` are mutually exclusive"),
+			},
+		},
 	}
 	for _, testCase := range testCases {
 		t.Run(testCase.name, func(t *testing.T) {

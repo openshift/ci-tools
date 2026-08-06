@@ -399,6 +399,15 @@ func validateOperator(ctx *configContext, input *api.OperatorStepConfiguration, 
 		if bundle.As == "" && bundle.SkipBuildingIndex {
 			validationErrors = append(validationErrors, ctxN.AddField("skip_building_index").errorf("skip_building_index requires 'as' to be set"))
 		}
+		if bundle.As == "" && bundle.RunIfChanged != "" {
+			validationErrors = append(validationErrors, ctxN.AddField("run_if_changed").errorf("run_if_changed requires 'as' to be set"))
+		}
+		if bundle.As == "" && bundle.SkipIfOnlyChanged != "" {
+			validationErrors = append(validationErrors, ctxN.AddField("skip_if_only_changed").errorf("skip_if_only_changed requires 'as' to be set"))
+		}
+		if err := validateRunIfChangedExclusivity(bundle.RunIfChanged, bundle.SkipIfOnlyChanged, "", ""); err != nil {
+			validationErrors = append(validationErrors, ctxN.errorf("%s", err))
+		}
 		if bundle.UpdateGraph != "" {
 			if bundle.BaseIndex == "" {
 				validationErrors = append(validationErrors, ctxN.AddField("update_graph").errorf("update_graph requires base_index to be set"))

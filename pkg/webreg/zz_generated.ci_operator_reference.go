@@ -280,9 +280,17 @@ const ciOperatorReferenceYaml = "# The list of base images describe\n" +
 	"          dockerfile_path: ' '\n" +
 	"          # Optional indicates that the job's status context, that is generated from the corresponding test, should not be required for merge.\n" +
 	"          optional: true\n" +
+	"          # RunIfChanged is a regex that will cause the auto-generated bundle\n" +
+	"          # presubmit to only run if a file matching the regex is changed.\n" +
+	"          # This field works only for named bundles, i.e., \"as\" is not empty.\n" +
+	"          run_if_changed: ' '\n" +
 	"          # Skip building the index image for this bundle. Default to false.\n" +
 	"          # This field works only for named bundles, i.e., \"as\" is not empty.\n" +
 	"          skip_building_index: true\n" +
+	"          # SkipIfOnlyChanged is a regex that will cause the auto-generated bundle\n" +
+	"          # presubmit to be skipped if all changed files match the regex.\n" +
+	"          # This field works only for named bundles, i.e., \"as\" is not empty.\n" +
+	"          skip_if_only_changed: ' '\n" +
 	"          # UpdateGraph defines the update mode to use when adding the bundle to the base index.\n" +
 	"          # Can be: semver (default), semver-skippatch, or replaces\n" +
 	"          update_graph: ' '\n" +

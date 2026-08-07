@@ -228,6 +228,14 @@ func (s *server) handle(l *logrus.Entry, ic github.IssueCommentEvent) ([]*prowv1
 				err := s.reporter.reportNewProwJob(prowJob, jr, l)
 				if err != nil {
 					l.WithError(err).Error("could not report new prow job")
+					comment := fmt.Sprintf(
+						"@%s, `testwith`: job `%s` was triggered but the status URL was not available in time.\n"+
+							"You can find the job at: https://prow.ci.openshift.org/?job=%s",
+						user, prowJob.Spec.Job, prowJob.Spec.Job,
+					)
+					if err := s.ghc.CreateComment(org, repo, number, comment); err != nil {
+						l.WithError(err).Error("failed to create comment for missing URL")
+					}
 				}
 			}()
 

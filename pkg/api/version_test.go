@@ -22,13 +22,13 @@ func TestGetPreviousVersion(t *testing.T) {
 			expected:          "4.22",
 		},
 		{
-			name:              "5.1 computes previous as 5.0 (natural progression)",
+			name:              "5.1 uses override to 5.0",
 			version:           "5.1",
 			availableVersions: availableVersions,
 			expected:          "5.0",
 		},
 		{
-			name:              "5.2 computes previous as 5.1 (natural progression)",
+			name:              "5.2 uses override to 5.1",
 			version:           "5.2",
 			availableVersions: availableVersions,
 			expected:          "5.1",
@@ -149,12 +149,12 @@ func TestGetPreviousVersionSimple(t *testing.T) {
 			expected: "4.22",
 		},
 		{
-			name:     "5.1 computes previous as 5.0 (natural progression)",
+			name:     "5.1 uses override to 5.0 (cross-major transition)",
 			version:  "5.1",
 			expected: "5.0",
 		},
 		{
-			name:     "5.2 computes previous as 5.1 (natural progression)",
+			name:     "5.2 uses override to 5.1",
 			version:  "5.2",
 			expected: "5.1",
 		},

@@ -1351,15 +1351,15 @@ func TestApplyEnvOverrides(t *testing.T) {
 				"XXX_OVERRIDE_PARAM2":              "VAL3",
 			},
 			expectedParams: map[string]string{
-				"MULTISTAGE_PARAM_OVERRIDE_PARAM1": "VAL1",
-				"MULTISTAGE_PARAM_OVERRIDE_PARAM2": "VAL2",
+				"PARAM1": "VAL1",
+				"PARAM2": "VAL2",
 			},
 			testConfig: []api.TestStepConfiguration{
 				{
 					MultiStageTestConfigurationLiteral: &api.MultiStageTestConfigurationLiteral{
 						Environment: map[string]string{
-							"MULTISTAGE_PARAM_OVERRIDE_PARAM1": "VAL1",
-							"MULTISTAGE_PARAM_OVERRIDE_PARAM2": "VAL2",
+							"PARAM1": "VAL1",
+							"PARAM2": "VAL2",
 						},
 					},
 				},
@@ -1387,17 +1387,17 @@ func TestApplyEnvOverrides(t *testing.T) {
 				"MULTISTAGE_PARAM_OVERRIDE_PARAM3": "VAL2",
 			},
 			expectedParams: map[string]string{
-				"MULTISTAGE_PARAM_OVERRIDE_PARAM1": "VAL2",
-				"MULTISTAGE_PARAM_OVERRIDE_PARAM2": "VAL=2",
-				"MULTISTAGE_PARAM_OVERRIDE_PARAM3": "VAL2",
+				"PARAM1": "VAL2",
+				"PARAM2": "VAL=2",
+				"PARAM3": "VAL2",
 			},
 			testConfig: []api.TestStepConfiguration{
 				{
 					MultiStageTestConfigurationLiteral: &api.MultiStageTestConfigurationLiteral{
 						Environment: map[string]string{
-							"MULTISTAGE_PARAM_OVERRIDE_PARAM1": "VAL2",
-							"MULTISTAGE_PARAM_OVERRIDE_PARAM2": "VAL=2",
-							"MULTISTAGE_PARAM_OVERRIDE_PARAM3": "VAL2",
+							"PARAM1": "VAL2",
+							"PARAM2": "VAL=2",
+							"PARAM3": "VAL2",
 						},
 					},
 				},

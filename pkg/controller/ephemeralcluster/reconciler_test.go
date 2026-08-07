@@ -719,11 +719,12 @@ func TestReconcile(t *testing.T) {
 					Conditions: []metav1.Condition{{
 						Type:               ephemeralclusterv1.ProwJobCreating,
 						Status:             metav1.ConditionFalse,
-						Reason:             ProwJobCreatingDoneReason,
+						Reason:             ephemeralclusterv1.ProwJobProperlyCreatedReason,
 						LastTransitionTime: metav1.NewTime(parseTime(t, "2025-04-02 12:14:12")),
 					}, {
 						Type:               ephemeralclusterv1.ClusterReady,
 						Status:             metav1.ConditionTrue,
+						Reason:             ephemeralclusterv1.CredentialsReadyReason,
 						LastTransitionTime: metav1.NewTime(parseTime(t, "2025-04-02 12:14:12")),
 					}},
 				},
@@ -777,7 +778,7 @@ func TestReconcile(t *testing.T) {
 						{
 							Type:               ephemeralclusterv1.ProwJobCreating,
 							Status:             metav1.ConditionFalse,
-							Reason:             ProwJobCreatingDoneReason,
+							Reason:             ephemeralclusterv1.ProwJobProperlyCreatedReason,
 							LastTransitionTime: metav1.NewTime(fakeNow),
 						}, {
 							Type:               ephemeralclusterv1.ClusterReady,
@@ -834,7 +835,7 @@ func TestReconcile(t *testing.T) {
 					Conditions: []metav1.Condition{{
 						Type:               ephemeralclusterv1.ProwJobCreating,
 						Status:             metav1.ConditionFalse,
-						Reason:             ProwJobCreatingDoneReason,
+						Reason:             ephemeralclusterv1.ProwJobProperlyCreatedReason,
 						LastTransitionTime: metav1.NewTime(fakeNow),
 					}, {
 						Type:               ephemeralclusterv1.ClusterReady,
@@ -894,7 +895,7 @@ func TestReconcile(t *testing.T) {
 					Conditions: []metav1.Condition{{
 						Type:               ephemeralclusterv1.ProwJobCreating,
 						Status:             metav1.ConditionFalse,
-						Reason:             ProwJobCreatingDoneReason,
+						Reason:             ephemeralclusterv1.ProwJobProperlyCreatedReason,
 						LastTransitionTime: metav1.NewTime(fakeNow),
 					}, {
 						Type:               ephemeralclusterv1.ClusterReady,
@@ -940,7 +941,7 @@ func TestReconcile(t *testing.T) {
 					Conditions: []metav1.Condition{{
 						Type:               ephemeralclusterv1.ProwJobCreating,
 						Status:             metav1.ConditionFalse,
-						Reason:             ProwJobCreatingDoneReason,
+						Reason:             ephemeralclusterv1.ProwJobProperlyCreatedReason,
 						LastTransitionTime: metav1.NewTime(fakeNow),
 					}, {
 						Type:               ephemeralclusterv1.ClusterReady,
@@ -993,7 +994,7 @@ func TestReconcile(t *testing.T) {
 					Conditions: []metav1.Condition{{
 						Type:               ephemeralclusterv1.ProwJobCreating,
 						Status:             metav1.ConditionFalse,
-						Reason:             ProwJobCreatingDoneReason,
+						Reason:             ephemeralclusterv1.ProwJobProperlyCreatedReason,
 						LastTransitionTime: metav1.NewTime(fakeNow),
 					}, {
 						Type:               ephemeralclusterv1.ClusterReady,
@@ -1067,11 +1068,12 @@ func TestReconcile(t *testing.T) {
 					Conditions: []metav1.Condition{{
 						Type:               ephemeralclusterv1.ProwJobCreating,
 						Status:             metav1.ConditionFalse,
-						Reason:             ProwJobCreatingDoneReason,
+						Reason:             ephemeralclusterv1.ProwJobProperlyCreatedReason,
 						LastTransitionTime: metav1.NewTime(fakeNow),
 					}, {
 						Type:               ephemeralclusterv1.ClusterReady,
 						Status:             metav1.ConditionTrue,
+						Reason:             ephemeralclusterv1.CredentialsReadyReason,
 						LastTransitionTime: metav1.NewTime(fakeNow),
 					}, {
 						Type:               ephemeralclusterv1.ProwJobCompleted,
@@ -1156,7 +1158,7 @@ func TestReconcile(t *testing.T) {
 					Conditions: []metav1.Condition{{
 						Type:               ephemeralclusterv1.ProwJobCreating,
 						Status:             metav1.ConditionFalse,
-						Reason:             ProwJobCreatingDoneReason,
+						Reason:             ephemeralclusterv1.ProwJobProperlyCreatedReason,
 						LastTransitionTime: metav1.NewTime(fakeNow),
 					}, {
 						Type:               ephemeralclusterv1.ClusterReady,
@@ -1231,15 +1233,17 @@ func TestReconcile(t *testing.T) {
 					Conditions: []metav1.Condition{{
 						Type:               ephemeralclusterv1.ProwJobCreating,
 						Status:             metav1.ConditionFalse,
-						Reason:             ProwJobCreatingDoneReason,
+						Reason:             ephemeralclusterv1.ProwJobProperlyCreatedReason,
 						LastTransitionTime: metav1.NewTime(fakeNow),
 					}, {
 						Type:               ephemeralclusterv1.ClusterReady,
 						Status:             metav1.ConditionTrue,
+						Reason:             ephemeralclusterv1.CredentialsReadyReason,
 						LastTransitionTime: metav1.NewTime(fakeNow),
 					}, {
 						Type:               ephemeralclusterv1.TestCompleted,
 						Status:             metav1.ConditionTrue,
+						Reason:             ephemeralclusterv1.TestDoneReason,
 						LastTransitionTime: metav1.NewTime(fakeNow),
 					}},
 				},
@@ -1295,7 +1299,7 @@ func TestReconcile(t *testing.T) {
 					Conditions: []metav1.Condition{{
 						Type:               ephemeralclusterv1.ProwJobCreating,
 						Status:             metav1.ConditionFalse,
-						Reason:             ProwJobCreatingDoneReason,
+						Reason:             ephemeralclusterv1.ProwJobProperlyCreatedReason,
 						LastTransitionTime: metav1.NewTime(fakeNow),
 					}, {
 						Type:               ephemeralclusterv1.ClusterReady,
@@ -1367,7 +1371,7 @@ func TestReconcile(t *testing.T) {
 					Conditions: []metav1.Condition{{
 						Type:               ephemeralclusterv1.ProwJobCreating,
 						Status:             metav1.ConditionFalse,
-						Reason:             ProwJobCreatingDoneReason,
+						Reason:             ephemeralclusterv1.ProwJobProperlyCreatedReason,
 						LastTransitionTime: metav1.NewTime(fakeNow),
 					}, {
 						Type:               ephemeralclusterv1.ClusterReady,
@@ -1378,6 +1382,7 @@ func TestReconcile(t *testing.T) {
 					}, {
 						Type:               ephemeralclusterv1.TestCompleted,
 						Status:             metav1.ConditionTrue,
+						Reason:             ephemeralclusterv1.TestDoneReason,
 						LastTransitionTime: metav1.NewTime(fakeNow),
 					}},
 				},
@@ -1467,11 +1472,12 @@ func TestReconcile(t *testing.T) {
 					Conditions: []metav1.Condition{{
 						Type:               ephemeralclusterv1.ProwJobCreating,
 						Status:             metav1.ConditionFalse,
-						Reason:             ProwJobCreatingDoneReason,
+						Reason:             ephemeralclusterv1.ProwJobProperlyCreatedReason,
 						LastTransitionTime: metav1.NewTime(parseTime(t, "2025-04-02 13:11:12")),
 					}, {
 						Type:               ephemeralclusterv1.ClusterReady,
 						Status:             metav1.ConditionTrue,
+						Reason:             ephemeralclusterv1.HiveCredentialsReadyReason,
 						LastTransitionTime: metav1.NewTime(parseTime(t, "2025-04-02 13:11:12")),
 					}},
 				},
@@ -1550,7 +1556,7 @@ func TestReconcile(t *testing.T) {
 					Conditions: []metav1.Condition{{
 						Type:               ephemeralclusterv1.ProwJobCreating,
 						Status:             metav1.ConditionFalse,
-						Reason:             ProwJobCreatingDoneReason,
+						Reason:             ephemeralclusterv1.ProwJobProperlyCreatedReason,
 						LastTransitionTime: metav1.NewTime(fakeNow),
 					}, {
 						Type:               ephemeralclusterv1.ClusterReady,
@@ -1640,15 +1646,17 @@ func TestReconcile(t *testing.T) {
 					Conditions: []metav1.Condition{{
 						Type:               ephemeralclusterv1.ProwJobCreating,
 						Status:             metav1.ConditionFalse,
-						Reason:             ProwJobCreatingDoneReason,
+						Reason:             ephemeralclusterv1.ProwJobProperlyCreatedReason,
 						LastTransitionTime: metav1.NewTime(parseTime(t, "2025-04-02 12:45:00")),
 					}, {
 						Type:               ephemeralclusterv1.ClusterReady,
 						Status:             metav1.ConditionTrue,
+						Reason:             ephemeralclusterv1.CredentialsReadyReason,
 						LastTransitionTime: metav1.NewTime(parseTime(t, "2025-04-02 12:45:00")),
 					}, {
 						Type:               ephemeralclusterv1.TestCompleted,
 						Status:             metav1.ConditionTrue,
+						Reason:             ephemeralclusterv1.TestDoneReason,
 						LastTransitionTime: metav1.NewTime(parseTime(t, "2025-04-02 12:45:00")),
 					}, {
 						Type:               ephemeralclusterv1.ProwJobCompleted,
@@ -1662,6 +1670,7 @@ func TestReconcile(t *testing.T) {
 			wantRes: reconcile.Result{},
 			wantEvents: []string{
 				"Normal ClusterReady Cluster credentials are available",
+				"Normal DeprovisioningStarted Deprovisioning signal sent",
 				"Normal ProwJobSucceeded ProwJob pj-123 completed successfully",
 			},
 			wantProvisioningDurationHistogram: []metric{{
@@ -1750,7 +1759,7 @@ func TestReconcile(t *testing.T) {
 					Conditions: []metav1.Condition{{
 						Type:               ephemeralclusterv1.ProwJobCreating,
 						Status:             metav1.ConditionFalse,
-						Reason:             ProwJobCreatingDoneReason,
+						Reason:             ephemeralclusterv1.ProwJobProperlyCreatedReason,
 						LastTransitionTime: metav1.NewTime(fakeNow),
 					}, {
 						Type:               ephemeralclusterv1.ClusterReady,
@@ -1951,6 +1960,7 @@ func TestReconcileDeleteEphemeralCluster(t *testing.T) {
 					Conditions: []metav1.Condition{{
 						Type:               ephemeralclusterv1.TestCompleted,
 						Status:             metav1.ConditionTrue,
+						Reason:             ephemeralclusterv1.TestDoneReason,
 						LastTransitionTime: metav1.NewTime(fakeNow),
 					}},
 				},

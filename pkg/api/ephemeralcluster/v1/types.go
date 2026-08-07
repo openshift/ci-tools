@@ -8,12 +8,18 @@ import (
 
 const (
 	CIOperatorJobsGenerateFailureReason     = "CIOperatorJobsGenerateFailure"
+	EphemeralClusterValidReason             = "EphemeralClusterValid"
 	ProwJobFailureReason                    = "ProwJobFailure"
 	ProwJobCompletedReason                  = "ProwJobCompleted"
+	ProwJobProperlyCreatedReason            = "ProwJobProperlyCreated"
+	OrphanProwJobFoundReason                = "OrphanProwJobFound"
 	TooManyProwJobsBoundReason              = "TooManyProwJobsBound"
 	SecretsFetchFailureReason               = "SecretsFetchFailure"
 	CreateTestCompletedSecretFailureReason  = "CreateTestCompletedSecretFailure"
 	EphemeralClusterValidationFailureReason = "EphemeralClusterValidationFailure"
+	HiveCredentialsReadyReason              = "HiveCredentialsReady"
+	CredentialsReadyReason                  = "CredentialsReady"
+	TestDoneReason                          = "TestDone"
 
 	CIOperatorNSNotFoundMsg = "ci-operator NS not found"
 	KubeconfigNotReadyMsg   = "kubeconfig not ready"
@@ -69,6 +75,8 @@ const (
 // +k8s:deepcopy-gen:interfaces=k8s.io/apimachinery/pkg/runtime.Object
 // +kubebuilder:resource:shortName=ec
 // +kubebuilder:subresource:status
+// +kubebuilder:printcolumn:name="ProwJob_Id",type=string,JSONPath=`.status.prowJobId`
+// +kubebuilder:printcolumn:name="Phase",type=string,JSONPath=`.status.phase`
 type EphemeralCluster struct {
 	metav1.TypeMeta   `json:",inline"`
 	metav1.ObjectMeta `json:"metadata"`

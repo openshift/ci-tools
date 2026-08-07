@@ -56,7 +56,7 @@ const (
 	EphemeralClusterNamespace = "ephemeral-cluster"
 	DependentProwJobFinalizer = "ephemeralcluster.ci.openshift.io/dependent-prowjob"
 	UnresolvedConfigVar       = "UNRESOLVED_CONFIG"
-	ProwJobCreatingDoneReason = "ProwJob has been properly created"
+
 	ProwJobNamePrefix         = "ephemeralcluster"
 	GitHubGUID                = "X-Github-Delivery"
 	TooManyPJsBoundErrMsg     = "Too many ProwJobs bound, this is a bug"
@@ -284,7 +284,7 @@ func (r *reconciler) Reconcile(ctx context.Context, req reconcile.Request) (reco
 		return r.reconcileCreateProwJob(ctx, log, ec, &observedStatus)
 	}
 
-	upsertCondition(&observedStatus, ephemeralclusterv1.ProwJobCreating, metav1.ConditionFalse, ec.Generation, r.now(), ProwJobCreatingDoneReason, "")
+	upsertCondition(&observedStatus, ephemeralclusterv1.ProwJobCreating, metav1.ConditionFalse, ec.Generation, r.now(), ephemeralclusterv1.ProwJobProperlyCreatedReason, "")
 	observedStatus.Phase = ephemeralclusterv1.EphemeralClusterProvisioning
 	observedStatus.ProwJobURL = pj.Status.URL
 
@@ -535,7 +535,7 @@ func (r *reconciler) reconcileCreateProwJob(ctx context.Context, log *logrus.Ent
 	if len(pjsForEC.Items) == 1 {
 		log.Info("ProwJob found but was not bound to the EC, binding now")
 		ec.Finalizers, _ = cislices.UniqueAdd(ec.Finalizers, DependentProwJobFinalizer)
-		upsertCondition(observedStatus, ephemeralclusterv1.ProwJobCreating, metav1.ConditionTrue, ec.Generation, r.now(), "", "")
+		upsertCondition(observedStatus, ephemeralclusterv1.ProwJobCreating, metav1.ConditionTrue, ec.Generation, r.now(), ephemeralclusterv1.OrphanProwJobFoundReason, "")
 		observedStatus.ProwJobID = pjsForEC.Items[0].Name
 		observedStatus.Phase = ephemeralclusterv1.EphemeralClusterProvisioning
 		ec.Status = *observedStatus
@@ -596,7 +596,7 @@ func (r *reconciler) createProwJob(ctx context.Context, log *logrus.Entry, ec *e
 
 	ec.Status.ProwJobID = pj.Name
 	ec.Finalizers, _ = cislices.UniqueAdd(ec.Finalizers, DependentProwJobFinalizer)
-	upsertProvisioningCond(metav1.ConditionTrue, "", "")
+	upsertProvisioningCond(metav1.ConditionTrue, ephemeralclusterv1.EphemeralClusterValidReason, "")
 	ec.Status.Phase = ephemeralclusterv1.EphemeralClusterProvisioning
 	return nil
 }
@@ -764,8 +764,8 @@ func (r *reconciler) fetchHiveSecrets(
 	}
 
 	ecStatus.SecretRef = credentialsSecretName(ec)
-	upsertCondition(ecStatus, ephemeralclusterv1.ClusterReady, metav1.ConditionTrue, ec.Generation, r.now(), "", "")
-	if !hasCondition(oldStatus, ephemeralclusterv1.ClusterReady, metav1.ConditionTrue, r.now(), "", "") {
+	upsertCondition(ecStatus, ephemeralclusterv1.ClusterReady, metav1.ConditionTrue, ec.Generation, r.now(), ephemeralclusterv1.HiveCredentialsReadyReason, "")
+	if !hasCondition(oldStatus, ephemeralclusterv1.ClusterReady, metav1.ConditionTrue, r.now(), ephemeralclusterv1.HiveCredentialsReadyReason, "") {
 		log.Info("Hive secrets fetched, the cluster is ready")
 		r.recorder.Event(ec, corev1.EventTypeNormal, ephemeralclusterv1.EventReasonClusterReady, "Cluster credentials are available")
 	}
@@ -806,8 +806,8 @@ func (r *reconciler) fetchClusterKubeconfig(
 	}
 
 	ecStatus.SecretRef = credentialsSecretName(ec)
-	upsertCondition(ecStatus, ephemeralclusterv1.ClusterReady, metav1.ConditionTrue, ec.Generation, r.now(), "", "")
-	if !hasCondition(oldStatus, ephemeralclusterv1.ClusterReady, metav1.ConditionTrue, r.now(), "", "") {
+	upsertCondition(ecStatus, ephemeralclusterv1.ClusterReady, metav1.ConditionTrue, ec.Generation, r.now(), ephemeralclusterv1.CredentialsReadyReason, "")
+	if !hasCondition(oldStatus, ephemeralclusterv1.ClusterReady, metav1.ConditionTrue, r.now(), ephemeralclusterv1.CredentialsReadyReason, "") {
 		log.Info("Kubeconfig fetched, the cluster is ready")
 		r.recorder.Event(ec, corev1.EventTypeNormal, ephemeralclusterv1.EventReasonClusterReady, "Cluster credentials are available")
 	}
@@ -1051,8 +1051,8 @@ func (r *reconciler) notifyTestComplete(ctx context.Context, log *logrus.Entry, 
 		}
 	}
 
-	upsertCondition(ecStatus, ephemeralclusterv1.TestCompleted, metav1.ConditionTrue, ec.Generation, r.now(), "", "")
-	if !hasCondition(oldECStatus, ephemeralclusterv1.TestCompleted, metav1.ConditionTrue, r.now(), "", "") {
+	upsertCondition(ecStatus, ephemeralclusterv1.TestCompleted, metav1.ConditionTrue, ec.Generation, r.now(), ephemeralclusterv1.TestDoneReason, "")
+	if !hasCondition(oldECStatus, ephemeralclusterv1.TestCompleted, metav1.ConditionTrue, r.now(), ephemeralclusterv1.TestDoneReason, "") {
 		log.Info("Secret to signal deprovisioning procedures created")
 		r.recorder.Event(ec, corev1.EventTypeNormal, ephemeralclusterv1.EventReasonDeprovisioningStarted, "Deprovisioning signal sent")
 	}

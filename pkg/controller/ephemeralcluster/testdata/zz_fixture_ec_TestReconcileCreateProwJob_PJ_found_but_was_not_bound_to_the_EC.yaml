@@ -16,7 +16,7 @@ status:
   conditions:
   - lastTransitionTime: "2025-04-02T12:12:12Z"
     message: ""
-    reason: ""
+    reason: OrphanProwJobFound
     status: "True"
     type: ProwJobCreating
   phase: Provisioning

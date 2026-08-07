@@ -16,7 +16,14 @@ spec:
     singular: ephemeralcluster
   scope: Namespaced
   versions:
-  - name: v1
+  - additionalPrinterColumns:
+    - jsonPath: .status.prowJobId
+      name: ProwJob_Id
+      type: string
+    - jsonPath: .status.phase
+      name: Phase
+      type: string
+    name: v1
     schema:
       openAPIV3Schema:
         properties:

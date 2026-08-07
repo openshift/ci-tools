@@ -122,7 +122,6 @@ func (r *prowJobReconciler) gracefullyTerminateClusterProvisioning(ctx context.C
 	ns, err := findCIOperatorTestNS(ctx, buildClient, pj)
 	if err != nil {
 		if errors.Is(err, &errCIOperatorNSNotFound{}) {
-			r.recorder.Event(pj, corev1.EventTypeNormal, ephemeralclusterv1.EventReasonAborted, "EphemeralCluster deleted before ci-operator namespace was created")
 			return r.abortProwJob(ctx, pj)
 		}
 		log.WithError(err).Error("Unable to retrieve ci-operator namespace")
@@ -161,6 +160,8 @@ func (r *prowJobReconciler) abortProwJob(ctx context.Context, pj *prowv1.ProwJob
 	if err := r.masterClient.Update(ctx, pj); err != nil {
 		return reconcile.Result{}, fmt.Errorf("abort prowjob: %w", err)
 	}
+
+	r.recorder.Event(pj, corev1.EventTypeNormal, ephemeralclusterv1.EventReasonAborted, "EphemeralCluster deleted before ci-operator namespace was created")
 
 	return reconcile.Result{}, nil
 }

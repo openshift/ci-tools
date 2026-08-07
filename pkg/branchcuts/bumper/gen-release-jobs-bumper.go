@@ -147,6 +147,8 @@ func (b *GeneratedReleaseGatingJobsBumper) BumpFilename(
 // .releases.*.{release,candidate}.version
 // .releases.*.prerelease.version_bounds.{lower,upper}
 // .tests[].steps.test[].env[].default
+// .tests[].reporter_config.channel
+// .images[].build_args[].value
 func (b *GeneratedReleaseGatingJobsBumper) BumpContent(dataWithInfo *cioperatorcfg.DataWithInfo) (*cioperatorcfg.DataWithInfo, error) {
 	major := b.mm.Major
 	config := &dataWithInfo.Configuration
@@ -159,6 +161,10 @@ func (b *GeneratedReleaseGatingJobsBumper) BumpContent(dataWithInfo *cioperatorc
 	}
 
 	if err := bumpTests(config, major); err != nil {
+		return nil, err
+	}
+
+	if err := bumpImages(config, major); err != nil {
 		return nil, err
 	}
 	// Bump variant in zz_generated_metadata
@@ -247,6 +253,10 @@ func bumpTests(config *cioperatorapi.ReleaseBuildConfiguration, major int) error
 
 	for i := 0; i < len(config.Tests); i++ {
 		test := config.Tests[i]
+
+		if err := bumpReporterConfig(test.SlackReporterConfig, major); err != nil {
+			return err
+		}
 
 		if test.MultiStageTestConfiguration == nil {
 			continue
@@ -359,6 +369,45 @@ func bumpTestStepEnvVars(multistageTest cioperatorapi.TestStep, major int) error
 		multistageTest.Environment[i] = env
 	}
 	return nil
+}
+
+func bumpReporterConfig(rc *cioperatorapi.SlackReporterConfig, major int) error {
+	if rc == nil {
+		return nil
+	}
+	bumped, err := ReplaceVersionVariants(rc.Channel, major)
+	if err != nil {
+		return err
+	}
+	rc.Channel = bumped
+	return nil
+}
+
+func bumpImages(config *cioperatorapi.ReleaseBuildConfiguration, major int) error {
+	var errs []error
+	for i := range config.Images.Items {
+		for j := range config.Images.Items[i].BuildArgs {
+			v := config.Images.Items[i].BuildArgs[j].Value
+			mm, err := ocplifecycle.ParseMajorMinor(v)
+			if err == nil {
+				if mm.Major == major {
+					if err := ReplaceWithNextVersionInPlace(&config.Images.Items[i].BuildArgs[j].Value, major); err != nil {
+						errs = append(errs, err)
+					}
+				}
+				continue
+			}
+			bumped, bumpErr := ReplaceVersionVariants(v, major)
+			if bumpErr != nil {
+				errs = append(errs, bumpErr)
+				continue
+			}
+			if bumped != v {
+				config.Images.Items[i].BuildArgs[j].Value = bumped
+			}
+		}
+	}
+	return errors.NewAggregate(errs)
 }
 
 func (b *GeneratedReleaseGatingJobsBumper) Marshall(dataWithInfo *cioperatorcfg.DataWithInfo, bumpedFilename, dir string) error {

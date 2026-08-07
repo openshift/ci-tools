@@ -53,11 +53,66 @@ func TestPromotesOfficialImages(t *testing.T) {
 			},
 			expected: true,
 		},
+		{
+			name: "config promoting to ocp-priv is not official for prowgen",
+			configSpec: &ReleaseBuildConfiguration{
+				PromotionConfiguration: &PromotionConfiguration{
+					Targets: []PromotionTarget{{
+						Namespace: "ocp-priv",
+					}},
+				},
+			},
+			expected: false,
+		},
 	}
 	for _, testCase := range testCases {
 		t.Run(testCase.name, func(t *testing.T) {
-			if actual, expected := PromotesOfficialImages(testCase.configSpec, WithOKD), testCase.expected; actual != expected {
-				t.Errorf("%s: did not identify official promotion correctly, expected %v got %v", testCase.name, expected, actual)
+			if diff := cmp.Diff(testCase.expected, PromotesOfficialImages(testCase.configSpec, WithOKD)); diff != "" {
+				t.Errorf("%s: mismatch (-want +got):\n%s", testCase.name, diff)
+			}
+		})
+	}
+}
+
+func TestRefersToOfficialImage(t *testing.T) {
+	testCases := []struct {
+		name       string
+		namespace  string
+		includeOKD OKDInclusion
+		expected   bool
+	}{
+		{name: "ocp", namespace: "ocp", includeOKD: WithoutOKD, expected: true},
+		{name: "ocp-priv", namespace: "ocp-priv", includeOKD: WithoutOKD, expected: false},
+		{name: "origin without OKD", namespace: "origin", includeOKD: WithoutOKD, expected: false},
+		{name: "origin with OKD", namespace: "origin", includeOKD: WithOKD, expected: true},
+		{name: "other ns", namespace: "ci", includeOKD: WithOKD, expected: false},
+	}
+	for _, testCase := range testCases {
+		t.Run(testCase.name, func(t *testing.T) {
+			if diff := cmp.Diff(testCase.expected, RefersToOfficialImage(testCase.namespace, testCase.includeOKD)); diff != "" {
+				t.Errorf("%s: mismatch (-want +got):\n%s", testCase.name, diff)
+			}
+		})
+	}
+}
+
+func TestRefersToQuayReferenceImage(t *testing.T) {
+	testCases := []struct {
+		name       string
+		namespace  string
+		includeOKD OKDInclusion
+		expected   bool
+	}{
+		{name: "ocp", namespace: "ocp", includeOKD: WithoutOKD, expected: true},
+		{name: "ocp-priv", namespace: "ocp-priv", includeOKD: WithoutOKD, expected: true},
+		{name: "origin without OKD", namespace: "origin", includeOKD: WithoutOKD, expected: false},
+		{name: "origin with OKD", namespace: "origin", includeOKD: WithOKD, expected: true},
+		{name: "other ns", namespace: "ci", includeOKD: WithOKD, expected: false},
+	}
+	for _, testCase := range testCases {
+		t.Run(testCase.name, func(t *testing.T) {
+			if diff := cmp.Diff(testCase.expected, RefersToQuayReferenceImage(testCase.namespace, testCase.includeOKD)); diff != "" {
+				t.Errorf("%s: mismatch (-want +got):\n%s", testCase.name, diff)
 			}
 		})
 	}
@@ -310,6 +365,37 @@ func TestQuayCombinedMirrorFunc(t *testing.T) {
 				"quay.io/openshift/ci:ocp_4.22_ovn-kubernetes":                      "registry.build02.ci.openshift.org/ci-op-abc/pipeline:some-tag",
 				"quay.io/openshift/ci:20241024102030_prune_ocp_4.22_ovn-kubernetes": "quay.io/openshift/ci:ocp_4.22_ovn-kubernetes",
 				"ocp/4.22:ovn-kubernetes":                                           "registry.build02.ci.openshift.org/ci-op-abc/pipeline:some-tag",
+			},
+		},
+		{
+			name:   "non-payload namespace quay only",
+			source: "registry.build02.ci.openshift.org/ci-op-abc/pipeline@sha256:bbb",
+			target: "quay.io/openshift/ci:ci_ci_sanitize-prow-jobs",
+			tag: ImageStreamTagReference{
+				Namespace: "ci",
+				Name:      "ci",
+				Tag:       "sanitize-prow-jobs",
+			},
+			time: "20241024102030",
+			expected: map[string]string{
+				"quay.io/openshift/ci:ci_ci_sanitize-prow-jobs":                      "registry.build02.ci.openshift.org/ci-op-abc/pipeline@sha256:bbb",
+				"quay.io/openshift/ci:20241024102030_prune_ci_ci_sanitize-prow-jobs": "quay.io/openshift/ci:ci_ci_sanitize-prow-jobs",
+			},
+		},
+		{
+			name:   "ocp-priv payload gets app.ci ref",
+			source: "registry.build02.ci.openshift.org/ci-op-abc/pipeline@sha256:abc123",
+			target: "quay.io/openshift/ci:ocp-priv_4.23_cli",
+			tag: ImageStreamTagReference{
+				Namespace: "ocp-priv",
+				Name:      "4.23",
+				Tag:       "cli",
+			},
+			time: "20241024102030",
+			expected: map[string]string{
+				"quay.io/openshift/ci:ocp-priv_4.23_cli":                      "registry.build02.ci.openshift.org/ci-op-abc/pipeline@sha256:abc123",
+				"quay.io/openshift/ci:20241024102030_prune_ocp-priv_4.23_cli": "quay.io/openshift/ci:ocp-priv_4.23_cli",
+				"ocp-priv/4.23:cli": "quay-proxy.ci.openshift.org/openshift/ci@sha256:abc123",
 			},
 		},
 	}

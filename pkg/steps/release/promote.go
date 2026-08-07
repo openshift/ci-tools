@@ -339,7 +339,7 @@ func quayProxyTagFromISKey(isTagKey string) (string, bool) {
 	var streamName string
 	if strings.HasSuffix(streamPart, quayStreamSuffix) {
 		streamName = strings.TrimSuffix(streamPart, quayStreamSuffix)
-	} else if api.RefersToOfficialImage(namespace, api.WithOKD) {
+	} else if api.RefersToQuayReferenceImage(namespace, api.WithOKD) {
 		streamName = streamPart
 	} else {
 		return "", false
@@ -460,7 +460,7 @@ func (s *promotionStep) getQuayPromotionShell(imageMirrorTarget map[string]strin
 		}
 		if !strings.Contains(k, api.ComponentFormatReplacement) {
 			if quayProxyTag, ok := quayProxyTagFromISKey(k); ok {
-				if ns := k[:strings.Index(k, "/")]; api.RefersToOfficialImage(ns, api.WithOKD) {
+				if ns := k[:strings.Index(k, "/")]; api.RefersToQuayReferenceImage(ns, api.WithOKD) {
 					resolveAndTagPairs = append(resolveAndTagPairs, [2]string{quayProxyTag, k})
 					continue
 				}

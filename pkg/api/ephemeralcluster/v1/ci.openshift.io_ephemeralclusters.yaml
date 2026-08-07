@@ -505,6 +505,9 @@ spec:
                   - type
                   type: object
                 type: array
+                x-kubernetes-list-map-keys:
+                - type
+                x-kubernetes-list-type: map
               phase:
                 description: Phase is an high level description of where the ephemeral
                   cluster is in its lifecycle

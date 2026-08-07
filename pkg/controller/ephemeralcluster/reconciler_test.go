@@ -1078,7 +1078,7 @@ func TestReconcile(t *testing.T) {
 					}, {
 						Type:               ephemeralclusterv1.ProwJobCompleted,
 						Status:             metav1.ConditionTrue,
-						Reason:             string(ephemeralclusterv1.ProwJobCompleted),
+						Reason:             string(ephemeralclusterv1.ProwJobCompletedReason),
 						Message:            "prowjob state: success",
 						LastTransitionTime: metav1.NewTime(fakeNow),
 					}},

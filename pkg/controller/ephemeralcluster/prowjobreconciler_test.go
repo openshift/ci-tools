@@ -144,7 +144,7 @@ func TestReconcileProwJob(t *testing.T) {
 				},
 			},
 			wantEvents: []string{
-				"Normal Aborted EphemeralCluster deleted before ci-operator namespace was created",
+				"Warning Aborted EphemeralCluster deleted before ci-operator namespace was created",
 			},
 		},
 		{

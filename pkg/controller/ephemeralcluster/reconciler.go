@@ -689,7 +689,7 @@ func (r *reconciler) fetchSecrets(ctx context.Context, log *logrus.Entry, ec *ep
 	if err != nil {
 		if errors.Is(err, &errCIOperatorNSNotFound{}) {
 			upsertCondition(ecStatus, ephemeralclusterv1.ClusterReady, metav1.ConditionFalse, ec.Generation, r.now(), ephemeralclusterv1.SecretsFetchFailureReason, ephemeralclusterv1.CIOperatorNSNotFoundMsg)
-			if !hasCondition(oldStatus, ephemeralclusterv1.ClusterReady, metav1.ConditionFalse, r.now(), ephemeralclusterv1.SecretsFetchFailureReason, ephemeralclusterv1.CIOperatorNSNotFoundMsg) {
+			if !hasCondition(oldStatus, ephemeralclusterv1.ClusterReady, metav1.ConditionFalse, ephemeralclusterv1.SecretsFetchFailureReason, ephemeralclusterv1.CIOperatorNSNotFoundMsg) {
 				log.Info("Fetching cluster credentials but ci-operator NS didn't show up yet")
 			}
 			return nil
@@ -765,7 +765,7 @@ func (r *reconciler) fetchHiveSecrets(
 
 	ecStatus.SecretRef = credentialsSecretName(ec)
 	upsertCondition(ecStatus, ephemeralclusterv1.ClusterReady, metav1.ConditionTrue, ec.Generation, r.now(), ephemeralclusterv1.HiveCredentialsReadyReason, "")
-	if !hasCondition(oldStatus, ephemeralclusterv1.ClusterReady, metav1.ConditionTrue, r.now(), ephemeralclusterv1.HiveCredentialsReadyReason, "") {
+	if !hasCondition(oldStatus, ephemeralclusterv1.ClusterReady, metav1.ConditionTrue, ephemeralclusterv1.HiveCredentialsReadyReason, "") {
 		log.Info("Hive secrets fetched, the cluster is ready")
 		r.recorder.Event(ec, corev1.EventTypeNormal, ephemeralclusterv1.EventReasonClusterReady, "Cluster credentials are available")
 	}
@@ -807,7 +807,7 @@ func (r *reconciler) fetchClusterKubeconfig(
 
 	ecStatus.SecretRef = credentialsSecretName(ec)
 	upsertCondition(ecStatus, ephemeralclusterv1.ClusterReady, metav1.ConditionTrue, ec.Generation, r.now(), ephemeralclusterv1.CredentialsReadyReason, "")
-	if !hasCondition(oldStatus, ephemeralclusterv1.ClusterReady, metav1.ConditionTrue, r.now(), ephemeralclusterv1.CredentialsReadyReason, "") {
+	if !hasCondition(oldStatus, ephemeralclusterv1.ClusterReady, metav1.ConditionTrue, ephemeralclusterv1.CredentialsReadyReason, "") {
 		log.Info("Kubeconfig fetched, the cluster is ready")
 		r.recorder.Event(ec, corev1.EventTypeNormal, ephemeralclusterv1.EventReasonClusterReady, "Cluster credentials are available")
 	}
@@ -1052,7 +1052,7 @@ func (r *reconciler) notifyTestComplete(ctx context.Context, log *logrus.Entry, 
 	}
 
 	upsertCondition(ecStatus, ephemeralclusterv1.TestCompleted, metav1.ConditionTrue, ec.Generation, r.now(), ephemeralclusterv1.TestDoneReason, "")
-	if !hasCondition(oldECStatus, ephemeralclusterv1.TestCompleted, metav1.ConditionTrue, r.now(), ephemeralclusterv1.TestDoneReason, "") {
+	if !hasCondition(oldECStatus, ephemeralclusterv1.TestCompleted, metav1.ConditionTrue, ephemeralclusterv1.TestDoneReason, "") {
 		log.Info("Secret to signal deprovisioning procedures created")
 		r.recorder.Event(ec, corev1.EventTypeNormal, ephemeralclusterv1.EventReasonDeprovisioningStarted, "Deprovisioning signal sent")
 	}
@@ -1111,13 +1111,12 @@ func upsertCondition(ecStatus *ephemeralclusterv1.EphemeralClusterStatus, t stri
 	apimeta.SetStatusCondition(&ecStatus.Conditions, newCond)
 }
 
-func hasCondition(ecStatus *ephemeralclusterv1.EphemeralClusterStatus, t string, status metav1.ConditionStatus, now time.Time, reason, msg string) bool {
+func hasCondition(ecStatus *ephemeralclusterv1.EphemeralClusterStatus, t string, status metav1.ConditionStatus, reason, msg string) bool {
 	newCond := metav1.Condition{
-		Type:               t,
-		Status:             status,
-		LastTransitionTime: metav1.NewTime(now),
-		Reason:             reason,
-		Message:            msg,
+		Type:    t,
+		Status:  status,
+		Reason:  reason,
+		Message: msg,
 	}
 
 	for i := range ecStatus.Conditions {

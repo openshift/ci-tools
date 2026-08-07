@@ -149,10 +149,15 @@ type TestSpec struct {
 
 type EphemeralClusterStatus struct {
 	// Phase is an high level description of where the ephemeral cluster is in its lifecycle
-	Phase      EphemeralClusterPhase `json:"phase"`
-	Conditions []metav1.Condition    `json:"conditions,omitempty"`
-	ProwJobID  string                `json:"prowJobId,omitempty"`
-	ProwJobURL string                `json:"prowJobURL,omitempty"`
+	Phase EphemeralClusterPhase `json:"phase"`
+	// +optional
+	// +patchMergeKey=type
+	// +patchStrategy=merge
+	// +listType=map
+	// +listMapKey=type
+	Conditions []metav1.Condition `json:"conditions,omitempty"`
+	ProwJobID  string             `json:"prowJobId,omitempty"`
+	ProwJobURL string             `json:"prowJobURL,omitempty"`
 	// SecretRef is the name of the Secret containing credentials to access the
 	// ephemeral cluster. The Secret is in the same namespace as the EphemeralCluster
 	// and contains a "kubeconfig" key and optionally a "kubeAdminPassword" key.

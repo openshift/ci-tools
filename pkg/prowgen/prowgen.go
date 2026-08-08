@@ -201,6 +201,8 @@ func GenerateJobs(configSpec *cioperatorapi.ReleaseBuildConfiguration, info *cio
 			presubmits[orgrepo] = append(presubmits[orgrepo], *generatePresubmitForTest(jobBaseGen, testName, info, func(options *generatePresubmitOptions) {
 				options.optional = bundle.Optional
 				options.Capabilities = bundle.Capabilities
+				options.runIfChanged = bundle.RunIfChanged
+				options.skipIfOnlyChanged = bundle.SkipIfOnlyChanged
 			}))
 		}
 		if containsUnnamedBundle {

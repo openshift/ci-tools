@@ -1538,6 +1538,14 @@ type Bundle struct {
 	Optional bool `json:"optional,omitempty"`
 	// Capabilities is the list of strings that define additional capabilities needed by the bundle build job
 	Capabilities []string `json:"capabilities,omitempty"`
+	// RunIfChanged is a regex that will cause the auto-generated bundle
+	// presubmit to only run if a file matching the regex is changed.
+	// This field works only for named bundles, i.e., "as" is not empty.
+	RunIfChanged string `json:"run_if_changed,omitempty"`
+	// SkipIfOnlyChanged is a regex that will cause the auto-generated bundle
+	// presubmit to be skipped if all changed files match the regex.
+	// This field works only for named bundles, i.e., "as" is not empty.
+	SkipIfOnlyChanged string `json:"skip_if_only_changed,omitempty"`
 }
 
 // IndexGeneratorStepConfiguration describes a step that creates an index database and

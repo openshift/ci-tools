@@ -303,22 +303,52 @@ func validateBuildRootImageStreamTag(ctx *configContext, buildRoot api.ImageStre
 	return validationErrors
 }
 
-func validateRunIfChangedExclusivity(runIfChanged, skipIfOnlyChanged, pipelineRunIfChanged, pipelineSkipIfOnlyChanged string) error {
+// runIfChangedField pairs a config field's YAML name with its configured value, so that
+// validateRunIfChangedExclusivity can report an error that only mentions fields that are
+// actually valid for the caller.
+type runIfChangedField struct {
+	name  string
+	value string
+}
+
+// joinFieldNamesWithAnd renders a slice of already-formatted field names as an
+// Oxford-comma-separated English list, e.g. "a, b, and c" or "a and b".
+func joinFieldNamesWithAnd(names []string) string {
+	switch len(names) {
+	case 0:
+		return ""
+	case 1:
+		return names[0]
+	case 2:
+		return names[0] + " and " + names[1]
+	default:
+		return strings.Join(names[:len(names)-1], ", ") + ", and " + names[len(names)-1]
+	}
+}
+
+func validateRunIfChangedExclusivity(fields ...runIfChangedField) error {
 	set := 0
-	for _, f := range []string{runIfChanged, skipIfOnlyChanged, pipelineRunIfChanged, pipelineSkipIfOnlyChanged} {
-		if f != "" {
+	names := make([]string, 0, len(fields))
+	for _, f := range fields {
+		names = append(names, fmt.Sprintf("`%s`", f.name))
+		if f.value != "" {
 			set++
 		}
 	}
 	if set > 1 {
-		return fmt.Errorf("`run_if_changed`, `skip_if_only_changed`, `pipeline_run_if_changed`, and `pipeline_skip_if_only_changed` are mutually exclusive")
+		return fmt.Errorf("%s are mutually exclusive", joinFieldNamesWithAnd(names))
 	}
 	return nil
 }
 
 func validateImageConfiguration(ctx *configContext, images api.ImageConfiguration) []error {
 	var validationErrors []error
-	if err := validateRunIfChangedExclusivity(images.RunIfChanged, images.SkipIfOnlyChanged, images.PipelineRunIfChanged, images.PipelineSkipIfOnlyChanged); err != nil {
+	if err := validateRunIfChangedExclusivity(
+		runIfChangedField{"run_if_changed", images.RunIfChanged},
+		runIfChangedField{"skip_if_only_changed", images.SkipIfOnlyChanged},
+		runIfChangedField{"pipeline_run_if_changed", images.PipelineRunIfChanged},
+		runIfChangedField{"pipeline_skip_if_only_changed", images.PipelineSkipIfOnlyChanged},
+	); err != nil {
 		validationErrors = append(validationErrors, ctx.errorf("%s", err))
 	}
 	validationErrors = append(validationErrors, ValidateImages(ctx, images.Items)...)
@@ -398,6 +428,18 @@ func validateOperator(ctx *configContext, input *api.OperatorStepConfiguration, 
 		}
 		if bundle.As == "" && bundle.SkipBuildingIndex {
 			validationErrors = append(validationErrors, ctxN.AddField("skip_building_index").errorf("skip_building_index requires 'as' to be set"))
+		}
+		if bundle.As == "" && bundle.RunIfChanged != "" {
+			validationErrors = append(validationErrors, ctxN.AddField("run_if_changed").errorf("run_if_changed requires 'as' to be set"))
+		}
+		if bundle.As == "" && bundle.SkipIfOnlyChanged != "" {
+			validationErrors = append(validationErrors, ctxN.AddField("skip_if_only_changed").errorf("skip_if_only_changed requires 'as' to be set"))
+		}
+		if err := validateRunIfChangedExclusivity(
+			runIfChangedField{"run_if_changed", bundle.RunIfChanged},
+			runIfChangedField{"skip_if_only_changed", bundle.SkipIfOnlyChanged},
+		); err != nil {
+			validationErrors = append(validationErrors, ctxN.errorf("%s", err))
 		}
 		if bundle.UpdateGraph != "" {
 			if bundle.BaseIndex == "" {

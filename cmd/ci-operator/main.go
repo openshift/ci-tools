@@ -466,7 +466,7 @@ func bindOptions(flag *flag.FlagSet) *options {
 	flag.BoolVar(&opt.givePrAuthorAccessToNamespace, "give-pr-author-access-to-namespace", true, "Give view access to the temporarily created namespace to the PR author.")
 	flag.StringVar(&opt.impersonateUser, "as", "", "Username to impersonate")
 	flag.BoolVar(&opt.restrictNetworkAccess, "restrict-network-access", false, "Restrict network access to 10.0.0.0/8 (RedHat intranet).")
-	flag.BoolVar(&opt.enableSecretsStoreCSIDriver, "enable-secrets-store-csi-driver", false, "Use Secrets Store CSI driver for accessing multi-stage credentials.")
+	flag.BoolVar(&opt.enableSecretsStoreCSIDriver, "enable-secrets-store-csi-driver", true, "Use Secrets Store CSI driver for accessing multi-stage credentials.")
 
 	// Google Secret Manager flags
 	flag.StringVar(&opt.gsmConfigPath, "gsm-config", "", "Path to the gsm secrets config file.")
@@ -536,10 +536,6 @@ func (o *options) Complete() error {
 	}
 	if o.unresolvedConfigPath != "" && o.resolverAddress == "" {
 		return errors.New("cannot request resolved config with --unresolved-config unless providing --resolver-address")
-	}
-
-	if o.enableSecretsStoreCSIDriver && o.gsmConfigPath == "" {
-		return fmt.Errorf("--gsm-config is required when --enable-secrets-store-csi-driver is enabled")
 	}
 
 	injectTest, err := o.getInjectTest()
@@ -705,7 +701,7 @@ func (o *options) Complete() error {
 	handleTargetAdditionalSuffix(o)
 	setDisablePodScalerFromTarget(o)
 
-	if o.enableSecretsStoreCSIDriver {
+	if o.gsmConfigPath != "" {
 		if err := api.LoadGSMConfigFromFile(o.gsmConfigPath, &o.gsmConfig); err != nil {
 			return err
 		}
@@ -1012,7 +1008,7 @@ func (o *options) Run() (errs []error) {
 	}
 
 	var gsmConfig *csi_secrets.GSMConfiguration
-	if o.enableSecretsStoreCSIDriver {
+	if o.gsmConfigPath != "" {
 		var opts []option.ClientOption
 		if o.gsmCredentialsFile != "" {
 			opts = append(opts, option.WithCredentialsFile(o.gsmCredentialsFile))

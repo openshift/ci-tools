@@ -34,18 +34,6 @@ data:
     if [ "${_OLD_EXISTS}" = "true" ]; then
       mirror 5 2 /etc/push-secret/.dockerconfigjson quay.io/openshift/ci:ci_c_latest=quay.io/openshift/ci:ci_c_latest__post1
     fi
-    for r in {1..2}; do
-    echo "Tag attempt $r"
-
-    while read tag; do
-    oc tag --source=docker --loglevel=2 --reference-policy='source' --import-mode='PreserveOriginal' --reference $tag || break
-    done <<'EOF'
-    quay-proxy.ci.openshift.org/openshift/ci@sha256:ddd ci/${component}-quay:c
-    quay-proxy.ci.openshift.org/openshift/ci@sha256:bbb ci/ci-quay:${component}
-    EOF
-    [[ $? -ne 0 ]] && break
-    :
-    done
 metadata:
   creationTimestamp: null
   name: promotion-quay-script

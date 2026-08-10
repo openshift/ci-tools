@@ -12,8 +12,9 @@ import (
 type OKDInclusion bool
 
 const (
-	okdPromotionNamespace = "origin"
-	ocpPromotionNamespace = "ocp"
+	okdPromotionNamespace     = "origin"
+	ocpPromotionNamespace     = "ocp"
+	ocpPrivPromotionNamespace = "ocp-priv"
 
 	WithOKD    OKDInclusion = true
 	WithoutOKD OKDInclusion = false
@@ -103,6 +104,11 @@ func BuildsAnyOfficialImages(configSpec *ReleaseBuildConfiguration, includeOKD O
 // RefersToOfficialImage determines if an image is official
 func RefersToOfficialImage(namespace string, includeOKD OKDInclusion) bool {
 	return (bool(includeOKD) && namespace == okdPromotionNamespace) || namespace == ocpPromotionNamespace
+}
+
+// RefersToQuayReferenceImage is true for namespaces that get app.ci IS source-refs to QCI.
+func RefersToQuayReferenceImage(namespace string, includeOKD OKDInclusion) bool {
+	return RefersToOfficialImage(namespace, includeOKD) || namespace == ocpPrivPromotionNamespace
 }
 
 // QuayImage returns the image in quay.io for an image stream tag which is used to push the image
@@ -204,6 +210,9 @@ var (
 			mirror[quayImageWithTime(time, tag)] = t
 		}
 
+		if !RefersToQuayReferenceImage(tag.Namespace, WithOKD) {
+			return
+		}
 		proxyTarget := getQuayProxyTarget(target, tag)
 		mirror[proxyTarget] = source
 		if proxySrc, ok := qciPullSpec(source); ok {

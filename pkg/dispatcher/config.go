@@ -22,11 +22,37 @@ import (
 type ClusterInfo struct {
 	Provider     string
 	Capacity     int
+	IPCapacity   int // max usable node IPs (0=omit); with Capacity forms load weight
 	Capabilities []string
 }
 
 // ClusterMap maps a cluster name to its corresponding ClusterInfo.
 type ClusterMap map[string]ClusterInfo
+
+// MaxIPCapacity returns the largest IPCapacity in m.
+func MaxIPCapacity(m ClusterMap) int {
+	max := 0
+	for _, info := range m {
+		if info.IPCapacity > max {
+			max = info.IPCapacity
+		}
+	}
+	return max
+}
+
+// LoadWeight is Capacity scaled by ipCapacity/maxIP when any cluster sets ipCapacity.
+// Omitted ipCapacity uses maxIP as baseline so weights stay stable across partial config.
+func LoadWeight(info ClusterInfo, maxIP int) float64 {
+	w := float64(info.Capacity)
+	if maxIP <= 0 {
+		return w
+	}
+	ip := info.IPCapacity
+	if ip <= 0 {
+		ip = maxIP
+	}
+	return w * float64(ip) / float64(maxIP)
+}
 
 // Config is the configuration file of this tools, which defines the cluster parameter for each Prow job, i.e., where it runs
 type Config struct {

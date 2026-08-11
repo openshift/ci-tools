@@ -57,6 +57,10 @@ func (config *ReleaseBuildConfiguration) Default() {
 	for i := range config.Tests {
 		defTest(&config.Tests[i])
 	}
+
+	if config.BuildType == "" {
+		config.BuildType = BuildTypeOpenshift
+	}
 }
 
 // ImageStreamFor guesses at the ImageStream that will hold a tag.

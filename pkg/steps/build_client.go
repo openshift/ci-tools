@@ -21,6 +21,7 @@ type BuildClient interface {
 	ManifestToolDockerCfg() string
 	LocalRegistryDNS() string
 	MetricsAgent() *metrics.MetricsAgent
+	BuildType() string
 }
 
 type buildClient struct {
@@ -30,9 +31,10 @@ type buildClient struct {
 	manifestToolDockerCfg string
 	localRegistryDNS      string
 	metricsAgent          *metrics.MetricsAgent
+	buildType             string
 }
 
-func NewBuildClient(client loggingclient.LoggingClient, restClient rest.Interface, nodeArchitectures []string, manifestToolDockerCfg, localRegistryDNS string, metricsAgent *metrics.MetricsAgent) BuildClient {
+func NewBuildClient(client loggingclient.LoggingClient, buildType string, restClient rest.Interface, nodeArchitectures []string, manifestToolDockerCfg, localRegistryDNS string, metricsAgent *metrics.MetricsAgent) BuildClient {
 	return &buildClient{
 		LoggingClient:         client,
 		client:                restClient,
@@ -40,6 +42,7 @@ func NewBuildClient(client loggingclient.LoggingClient, restClient rest.Interfac
 		manifestToolDockerCfg: manifestToolDockerCfg,
 		localRegistryDNS:      localRegistryDNS,
 		metricsAgent:          metricsAgent,
+		buildType:             buildType,
 	}
 }
 
@@ -71,4 +74,8 @@ func (c *buildClient) MetricsAgent() *metrics.MetricsAgent {
 
 func (c *buildClient) Client() loggingclient.LoggingClient {
 	return c.LoggingClient
+}
+
+func (c *buildClient) BuildType() string {
+	return c.buildType
 }

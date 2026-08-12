@@ -651,6 +651,62 @@ func TestGenerateJobs(t *testing.T) {
 				Branch: "branch",
 			},
 		}, {
+			id:   "operator section creates ci-bundle-my-bundle presubmit job with skip_if_only_changed",
+			keep: true,
+			config: &ciop.ReleaseBuildConfiguration{
+				Tests: []ciop.TestStepConfiguration{},
+				Operator: &ciop.OperatorStepConfiguration{
+					Bundles: []ciop.Bundle{{
+						As:                "my-bundle",
+						DockerfilePath:    "bundle.Dockerfile",
+						ContextDir:        "manifests",
+						SkipBuildingIndex: true,
+						SkipIfOnlyChanged: `^(docs/|.*\.md$)`,
+					}},
+				},
+			},
+			repoInfo: &ciop.Metadata{
+				Org:    "organization",
+				Repo:   "repository",
+				Branch: "branch",
+			},
+		}, {
+			id: "operator bundle job with skip_if_only_changed propagated to presubmit",
+			config: &ciop.ReleaseBuildConfiguration{
+				Tests: []ciop.TestStepConfiguration{},
+				Operator: &ciop.OperatorStepConfiguration{
+					Bundles: []ciop.Bundle{{
+						As:                "my-bundle",
+						DockerfilePath:    "bundle.Dockerfile",
+						ContextDir:        "manifests",
+						SkipIfOnlyChanged: `^(docs/|.*\.md$)`,
+					}},
+				},
+			},
+			repoInfo: &ciop.Metadata{
+				Org:    "organization",
+				Repo:   "repository",
+				Branch: "branch",
+			},
+		}, {
+			id: "operator bundle job with run_if_changed propagated to presubmit",
+			config: &ciop.ReleaseBuildConfiguration{
+				Tests: []ciop.TestStepConfiguration{},
+				Operator: &ciop.OperatorStepConfiguration{
+					Bundles: []ciop.Bundle{{
+						As:             "my-bundle",
+						DockerfilePath: "bundle.Dockerfile",
+						ContextDir:     "manifests",
+						RunIfChanged:   `^(Dockerfile|src/)`,
+					}},
+				},
+			},
+			repoInfo: &ciop.Metadata{
+				Org:    "organization",
+				Repo:   "repository",
+				Branch: "branch",
+			},
+		}, {
 			id: "skip operator presubmits via ci-operator config",
 			config: &ciop.ReleaseBuildConfiguration{
 				Prowgen: &ciop.ProwgenOverrides{SkipOperatorPresubmits: true},

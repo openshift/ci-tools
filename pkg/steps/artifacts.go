@@ -664,12 +664,12 @@ func gatherContainerLogsOutput(podClient kubernetes.PodClient, artifactDir, name
 	return utilerrors.NewAggregate(validationErrors)
 }
 
-// for gathering successful build logs to the artifacts, there is no way to augment the pod spec
+// for gathering build logs (successful or failed) to the artifacts, there is no way to augment the pod spec
 // created by the build controller to add the artifacts container; this method cherry picks elements
 // from downloadArtifacts and gatherContainerLogsOutput and munges them in conjunction with the build
 // api logging capabilities; also, without needing to inject an artifacts container, some of the complexities
 // around download/copy from the artifacts container's volume mount and multiple pods are avoided.
-func gatherSuccessfulBuildLog(buildClient BuildClient, namespace, buildName string) error {
+func gatherBuildLog(buildClient BuildClient, namespace, buildName string) error {
 	artifactDir, set := api.Artifacts()
 	if !set {
 		return nil

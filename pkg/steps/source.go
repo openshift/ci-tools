@@ -590,7 +590,7 @@ func handleBuild(ctx context.Context, client BuildClient, podClient kubernetes.P
 			errs = append(errs, err)
 			return false, handleFailedBuild(ctx, client, ns, name, err)
 		}
-		if err := gatherSuccessfulBuildLog(client, ns, name); err != nil {
+		if err := gatherBuildLog(client, ns, name); err != nil {
 			// log error but do not fail successful build
 			logrus.WithError(err).Warnf("Failed gathering successful build %s logs into artifacts.", name)
 		}
@@ -659,7 +659,9 @@ func hintsAtInfraReason(logSnippet string) bool {
 		strings.Contains(logSnippet, "Could not resolve host: ") ||
 		strings.Contains(logSnippet, "net/http: TLS handshake timeout") ||
 		strings.Contains(logSnippet, "All mirrors were tried") ||
-		strings.Contains(logSnippet, "connection reset by peer")
+		strings.Contains(logSnippet, "connection reset by peer") ||
+		strings.Contains(logSnippet, "network is unreachable") ||
+		strings.Contains(logSnippet, "no route to host")
 }
 
 func waitForBuildOrTimeout(
@@ -746,6 +748,9 @@ func waitForBuild(
 			case buildapi.BuildPhaseFailed, buildapi.BuildPhaseCancelled, buildapi.BuildPhaseError:
 				logrus.Infof("Build %s failed, printing logs:", build.Name)
 				printBuildLogs(buildClient, build.Namespace, build.Name)
+				if err := gatherBuildLog(buildClient, build.Namespace, build.Name); err != nil {
+					logrus.WithError(err).Warnf("Failed gathering failed build %s logs into artifacts.", build.Name)
+				}
 				podClient.MetricsAgent().StorePodLifecycleMetrics(buildPodName, build.Namespace, corev1.PodFailed)
 				podClient.MetricsAgent().StoreMachinesSnapshot(build)
 				return true, util.AppendLogToError(fmt.Errorf("the build %s failed after %s with reason %s: %s", build.Name, buildDuration(build).Truncate(time.Second), build.Status.Reason, build.Status.Message), build.Status.LogSnippet)

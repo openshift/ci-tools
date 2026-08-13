@@ -30,14 +30,14 @@ operator:
     skip_building_index: true
   substitutions:
   - pullspec: quay.io/openshift/origin-metering-reporting-operator:4.6
-    with: metering-reporting-operator # another `images:` list item
+    with: cli # OCP component, replaces a pullspec present in the bundle manifests
   - pullspec: quay.io/openshift/origin-oauth-proxy:4.6
-    with: oauth-proxy # OCP component
-  - pullspec: quay.io/openshift/origin-hive:4.6
-    with: metering-hive # operand image, must be present in `stable` imagestream
+    with: oauth-proxy # OCP component, replaces a pullspec present in the bundle manifests
+  - pullspec: quay.io/openshift/substitution-not-in-manifests:1.0 # intentionally matches nothing in test/manifests: this substitution only exercises resolving `with` from the stable imagestream (and that the resulting sed is a harmless no-op)
+    with: machine-config-operator # operand image, must be present in `stable` imagestream
 tag_specification:
   namespace: ocp
-  name: "4.6"
+  name: "4.20"
 tests:
 - as: verify-db-unnamed
   literal_steps:

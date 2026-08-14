@@ -1,9 +1,11 @@
 package dispatcher
 
 import (
+	"fmt"
 	"os"
 	"reflect"
 
+	utilerrors "k8s.io/apimachinery/pkg/util/errors"
 	"k8s.io/apimachinery/pkg/util/sets"
 	prowconfig "sigs.k8s.io/prow/pkg/config"
 	"sigs.k8s.io/yaml"
@@ -13,6 +15,7 @@ func loadClusterConfigFromBytes(data []byte) (ClusterMap, sets.Set[string], erro
 	var clusters map[string][]struct {
 		Name         string   `yaml:"name"`
 		Capacity     int      `yaml:"capacity"`
+		IPCapacity   int      `yaml:"ipCapacity,omitempty"`
 		Capabilities []string `yaml:"capabilities"`
 		Blocked      bool     `yaml:"blocked"`
 	}
@@ -36,12 +39,27 @@ func loadClusterConfigFromBytes(data []byte) (ClusterMap, sets.Set[string], erro
 			clusterMap[cluster.Name] = ClusterInfo{
 				Provider:     provider,
 				Capacity:     cluster.Capacity,
+				IPCapacity:   cluster.IPCapacity,
 				Capabilities: cluster.Capabilities,
 			}
 		}
 	}
 
+	if err := validateClusterMapIPCapacity(clusterMap); err != nil {
+		return nil, nil, err
+	}
+
 	return clusterMap, blockedClusters, nil
+}
+
+func validateClusterMapIPCapacity(clusterMap ClusterMap) error {
+	var errs []error
+	for name, info := range clusterMap {
+		if info.IPCapacity < 0 {
+			errs = append(errs, fmt.Errorf("cluster %q has negative ipCapacity: %d", name, info.IPCapacity))
+		}
+	}
+	return utilerrors.NewAggregate(errs)
 }
 
 // LoadClusterConfig loads cluster configuration from a YAML file, returning a ClusterMap and a set of blocked clusters.
@@ -107,6 +125,9 @@ func HasCapacityOrCapabilitiesChanged(prev, next ClusterMap) bool {
 			continue
 		}
 		if info1.Capacity != info2.Capacity {
+			return true
+		}
+		if info1.IPCapacity != info2.IPCapacity {
 			return true
 		}
 		if !reflect.DeepEqual(info1.Capabilities, info2.Capabilities) {

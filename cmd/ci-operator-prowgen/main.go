@@ -8,8 +8,8 @@ import (
 	"path/filepath"
 	"strings"
 
-	"sigs.k8s.io/yaml"
 	"github.com/sirupsen/logrus"
+	"sigs.k8s.io/yaml"
 
 	prowconfig "sigs.k8s.io/prow/pkg/config"
 	"sigs.k8s.io/prow/pkg/flagutil"
@@ -134,7 +134,7 @@ func (o *options) generateJobsFromFile() error {
 		configSpec = resolved
 	}
 	configSpec.UnresolvedConfigPath = o.fromFile
-	generated, err := prowgen.GenerateJobs(&configSpec, &info)
+	generated, err := prowgen.GenerateJobs(&configSpec, &info, nil)
 	if err != nil {
 		return err
 	}

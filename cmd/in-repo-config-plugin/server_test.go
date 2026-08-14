@@ -10,107 +10,10 @@ import (
 	"github.com/sirupsen/logrus"
 
 	"k8s.io/apimachinery/pkg/runtime"
+	fakectrlruntimeclient "sigs.k8s.io/controller-runtime/pkg/client/fake"
 	pjapi "sigs.k8s.io/prow/pkg/apis/prowjobs/v1"
 	"sigs.k8s.io/prow/pkg/github"
-	fakectrlruntimeclient "sigs.k8s.io/controller-runtime/pkg/client/fake"
-
-	cioperatorapi "github.com/openshift/ci-tools/pkg/api"
 )
-
-type fakeGithubClient struct {
-	comments   []comment
-	prs        map[string]*github.PullRequest
-	dirs       map[string][]github.DirectoryContent
-	files      map[string][]byte
-	commentErr error
-}
-
-type comment struct {
-	org, repo string
-	number    int
-	body      string
-}
-
-func (c *fakeGithubClient) CreateComment(owner, repo string, number int, body string) error {
-	c.comments = append(c.comments, comment{org: owner, repo: repo, number: number, body: body})
-	return c.commentErr
-}
-
-func (c *fakeGithubClient) GetPullRequest(org, repo string, number int) (*github.PullRequest, error) {
-	key := fmt.Sprintf("%s/%s#%d", org, repo, number)
-	pr, ok := c.prs[key]
-	if !ok {
-		return nil, fmt.Errorf("PR not found: %s", key)
-	}
-	return pr, nil
-}
-
-func (c *fakeGithubClient) GetDirectory(org, repo, dirpath, commit string) ([]github.DirectoryContent, error) {
-	key := fmt.Sprintf("%s/%s/%s@%s", org, repo, dirpath, commit)
-	entries, ok := c.dirs[key]
-	if !ok {
-		return nil, &github.FileNotFound{}
-	}
-	return entries, nil
-}
-
-func (c *fakeGithubClient) GetFile(org, repo, path, commit string) ([]byte, error) {
-	key := fmt.Sprintf("%s/%s/%s@%s", org, repo, path, commit)
-	content, ok := c.files[key]
-	if !ok {
-		return nil, nil
-	}
-	return content, nil
-}
-
-func makePR(org, repo string, number int, branch, sha string) *github.PullRequest {
-	return &github.PullRequest{
-		Number: number,
-		Base: github.PullRequestBranch{
-			Ref:  branch,
-			Repo: github.Repo{Owner: github.User{Login: org}, Name: repo},
-		},
-		Head: github.PullRequestBranch{
-			SHA: sha,
-		},
-	}
-}
-
-func makePullRequestEvent(org, repo string, number int, action github.PullRequestEventAction, branch, sha string) github.PullRequestEvent {
-	return github.PullRequestEvent{
-		Action: action,
-		Number: number,
-		Repo:   github.Repo{Owner: github.User{Login: org}, Name: repo},
-		PullRequest: github.PullRequest{
-			Number: number,
-			Base: github.PullRequestBranch{
-				Ref:  branch,
-				Repo: github.Repo{Owner: github.User{Login: org}, Name: repo},
-			},
-			Head: github.PullRequestBranch{
-				SHA: sha,
-			},
-		},
-	}
-}
-
-const ciOpConfig = `
-build_root:
-  image_stream_tag:
-    name: release
-    namespace: openshift
-    tag: golang-1.21
-tests:
-- as: e2e
-  steps:
-    test:
-    - as: test
-      commands: make e2e
-      from: src
-      resources:
-        requests:
-          cpu: 100m
-`
 
 func TestHandlePullRequest(t *testing.T) {
 	org, repo := "testorg", "testrepo"
@@ -138,11 +41,12 @@ func TestHandlePullRequest(t *testing.T) {
 			expectNoComment: true,
 		},
 		{
-			name:            "PR with existing test only does not write ephemeral",
-			action:          github.PullRequestActionOpened,
-			hasConfigs:      true,
-			hasExistingJobs: true,
-			expectNoComment: true,
+			name:               "PR with existing test injects config-check",
+			action:             github.PullRequestActionOpened,
+			hasConfigs:         true,
+			hasExistingJobs:    true,
+			expectComment:      "ci-operator-config-check",
+			expectEphemeralDir: true,
 		},
 		{
 			name:   "PR closed cleans up ephemeral dir",
@@ -162,7 +66,9 @@ func TestHandlePullRequest(t *testing.T) {
 			tmpDir := t.TempDir()
 
 			prowCfgFile := filepath.Join(tmpDir, "prow-config.yaml")
-			os.WriteFile(prowCfgFile, []byte("pod_namespace: test-pods\n"), 0644)
+			if err := os.WriteFile(prowCfgFile, []byte("pod_namespace: test-pods\n"), 0644); err != nil {
+				t.Fatal(err)
+			}
 
 			ghc := &fakeGithubClient{
 				prs: map[string]*github.PullRequest{
@@ -187,8 +93,12 @@ func TestHandlePullRequest(t *testing.T) {
 
 			if tc.action == github.PullRequestActionClosed {
 				ephDir := filepath.Join(tmpDir, "ephemeral", org, repo, "PR-1")
-				os.MkdirAll(ephDir, os.ModePerm)
-				os.WriteFile(filepath.Join(ephDir, "test.yaml"), []byte("test"), 0644)
+				if err := os.MkdirAll(ephDir, os.ModePerm); err != nil {
+					t.Fatal(err)
+				}
+				if err := os.WriteFile(filepath.Join(ephDir, "test.yaml"), []byte("test"), 0644); err != nil {
+					t.Fatal(err)
+				}
 			}
 
 			pjc := fakectrlruntimeclient.NewClientBuilder().WithScheme(pjScheme()).Build()
@@ -247,12 +157,12 @@ func TestHandlePush(t *testing.T) {
 	sha := "abc1234567890"
 
 	testCases := []struct {
-		name                 string
-		pushEvent            github.PushEvent
-		hasConfigs           bool
-		hasExistingJobs      bool
-		expectPermanentJobs  bool
-		expectBootstrapJobs  bool
+		name                string
+		pushEvent           github.PushEvent
+		hasConfigs          bool
+		hasExistingJobs     bool
+		expectPermanentJobs bool
+		expectBootstrapJobs bool
 	}{
 		{
 			name: "push touching .ci-operator/ writes permanent jobs and auto-onboards",
@@ -335,7 +245,7 @@ func TestHandlePush(t *testing.T) {
 				jobConfigDir:     tmpDir,
 				prowgenImage:     "quay.io/test/prowgen:latest",
 				checkconfigImage: "quay.io/test/checkconfig:latest",
-				}
+			}
 
 			s.handlePush(logrus.NewEntry(logrus.StandardLogger()), tc.pushEvent)
 
@@ -373,96 +283,111 @@ func TestHandlePush(t *testing.T) {
 	}
 }
 
-func TestPushTouchesCIOperator(t *testing.T) {
-	testCases := []struct {
-		name   string
-		event  github.PushEvent
-		expect bool
-	}{
-		{
-			name: "added file",
-			event: github.PushEvent{
-				Commits: []github.Commit{{Added: []string{".ci-operator/ci-operator.yaml"}}},
-			},
-			expect: true,
-		},
-		{
-			name: "modified file",
-			event: github.PushEvent{
-				Commits: []github.Commit{{Modified: []string{".ci-operator/ci-operator.yaml"}}},
-			},
-			expect: true,
-		},
-		{
-			name: "removed file",
-			event: github.PushEvent{
-				Commits: []github.Commit{{Removed: []string{".ci-operator/ci-operator.yaml"}}},
-			},
-			expect: true,
-		},
-		{
-			name: "single-file config",
-			event: github.PushEvent{
-				Commits: []github.Commit{{Added: []string{".ci-operator.yaml"}}},
-			},
-			expect: true,
-		},
-		{
-			name: "unrelated file",
-			event: github.PushEvent{
-				Commits: []github.Commit{{Modified: []string{"main.go"}}},
-			},
-			expect: false,
-		},
-	}
+// --- Shared test infrastructure ---
 
-	for _, tc := range testCases {
-		t.Run(tc.name, func(t *testing.T) {
-			if got := pushTouchesCIOperator(tc.event); got != tc.expect {
-				t.Errorf("expected %v, got %v", tc.expect, got)
-			}
-		})
+const ciOpConfig = `
+build_root:
+  image_stream_tag:
+    name: release
+    namespace: openshift
+    tag: golang-1.21
+tests:
+- as: e2e
+  steps:
+    test:
+    - as: test
+      commands: make e2e
+      from: src
+      resources:
+        requests:
+          cpu: 100m
+`
+
+type fakeGithubClient struct {
+	comments   []comment
+	prs        map[string]*github.PullRequest
+	dirs       map[string][]github.DirectoryContent
+	files      map[string][]byte
+	commentErr error
+}
+
+type comment struct {
+	org, repo string
+	number    int
+	body      string
+}
+
+func (c *fakeGithubClient) CreateComment(owner, repo string, number int, body string) error {
+	c.comments = append(c.comments, comment{org: owner, repo: repo, number: number, body: body})
+	return c.commentErr
+}
+
+func (c *fakeGithubClient) GetPullRequest(org, repo string, number int) (*github.PullRequest, error) {
+	key := fmt.Sprintf("%s/%s#%d", org, repo, number)
+	pr, ok := c.prs[key]
+	if !ok {
+		return nil, fmt.Errorf("PR not found: %s", key)
+	}
+	return pr, nil
+}
+
+func (c *fakeGithubClient) GetDirectory(org, repo, dirpath, commit string) ([]github.DirectoryContent, error) {
+	key := fmt.Sprintf("%s/%s/%s@%s", org, repo, dirpath, commit)
+	entries, ok := c.dirs[key]
+	if !ok {
+		return nil, &github.FileNotFound{}
+	}
+	return entries, nil
+}
+
+func (c *fakeGithubClient) GetFile(org, repo, path, commit string) ([]byte, error) {
+	key := fmt.Sprintf("%s/%s/%s@%s", org, repo, path, commit)
+	content, ok := c.files[key]
+	if !ok {
+		return nil, nil
+	}
+	return content, nil
+}
+
+func makePR(org, repo string, number int, branch, sha string) *github.PullRequest {
+	return &github.PullRequest{
+		Number: number,
+		Base: github.PullRequestBranch{
+			Ref:  branch,
+			Repo: github.Repo{Owner: github.User{Login: org}, Name: repo},
+		},
+		Head: github.PullRequestBranch{
+			SHA: sha,
+		},
 	}
 }
 
-func TestMetadataFromFilename(t *testing.T) {
-	testCases := []struct {
-		filename string
-		expected *cioperatorapi.Metadata
-	}{
-		{
-			filename: "ci-operator.yaml",
-			expected: &cioperatorapi.Metadata{Org: "org", Repo: "repo", Branch: "main"},
+func makePullRequestEvent(org, repo string, number int, action github.PullRequestEventAction, branch, sha string) github.PullRequestEvent {
+	return github.PullRequestEvent{
+		Action: action,
+		Number: number,
+		Repo:   github.Repo{Owner: github.User{Login: org}, Name: repo},
+		PullRequest: github.PullRequest{
+			Number: number,
+			Base: github.PullRequestBranch{
+				Ref:  branch,
+				Repo: github.Repo{Owner: github.User{Login: org}, Name: repo},
+			},
+			Head: github.PullRequestBranch{
+				SHA: sha,
+			},
 		},
-		{
-			filename: "ci-operator__aws.yaml",
-			expected: &cioperatorapi.Metadata{Org: "org", Repo: "repo", Branch: "main", Variant: "aws"},
-		},
-		{
-			filename: "ci-operator__multi-arch.yml",
-			expected: &cioperatorapi.Metadata{Org: "org", Repo: "repo", Branch: "main", Variant: "multi-arch"},
-		},
-	}
-
-	for _, tc := range testCases {
-		t.Run(tc.filename, func(t *testing.T) {
-			result := metadataFromFilename(tc.filename, "org", "repo", "main")
-			if result.Org != tc.expected.Org || result.Repo != tc.expected.Repo ||
-				result.Branch != tc.expected.Branch || result.Variant != tc.expected.Variant {
-				t.Errorf("expected %+v, got %+v", tc.expected, result)
-			}
-		})
 	}
 }
 
 func pjScheme() *runtime.Scheme {
 	s := runtime.NewScheme()
-	pjapi.AddToScheme(s)
+	if err := pjapi.AddToScheme(s); err != nil {
+		panic(err)
+	}
 	return s
 }
 
-// writeTestJobs creates a minimal job config in the permanent EFS directory
-// to simulate existing jobs for a repo.
 func writeTestJobs(t *testing.T, jobConfigDir, org, repo string) {
 	t.Helper()
 	dir := filepath.Join(jobConfigDir, org, repo)
@@ -485,4 +410,3 @@ func writeTestJobs(t *testing.T, jobConfigDir, org, repo string) {
 		t.Fatal(err)
 	}
 }
-

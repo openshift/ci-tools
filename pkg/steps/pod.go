@@ -457,7 +457,7 @@ func (s *podStep) resolveAndCreateGSMSecrets(ctx context.Context) error {
 	}
 
 	if s.config.GSMConfig == nil || s.config.GSMConfig.Client == nil {
-		return fmt.Errorf("GSM client was not initialized - credentials file may be missing")
+		return fmt.Errorf("gsm client was not initialized - ensure --gsm-config and --gsm-credentials-file are provided")
 	}
 
 	resolved, err := csi_secrets.ResolveCredentialReferences(

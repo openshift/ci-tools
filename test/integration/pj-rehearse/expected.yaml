@@ -2,6 +2,81 @@
   kind: ProwJob
   metadata:
     annotations:
+      prow.k8s.io/context: ci/rehearse/periodic-ci-openshift-release-master-e2e
+      prow.k8s.io/job: rehearse-1234-periodic-ci-openshift-release-master-e2e
+    creationTimestamp: null
+    labels:
+      ci.openshift.io/rehearse: "1234"
+      ci.openshift.io/rehearse.context: periodic-ci-openshift-release-master-e2e
+      created-by-prow: "true"
+      pj-rehearse.openshift.io/can-be-rehearsed: "true"
+      pj-rehearse.openshift.io/source-type: changedPeriodic
+      prow.k8s.io/context: periodic-ci-openshift-release-master-e2e
+      prow.k8s.io/job: rehearse-1234-periodic-ci-openshift-release-master-e2e
+      prow.k8s.io/refs.base_ref: master
+      prow.k8s.io/refs.org: openshift
+      prow.k8s.io/refs.pull: "1234"
+      prow.k8s.io/refs.repo: release
+      prow.k8s.io/type: presubmit
+    name: test-prowjob
+    namespace: test-namespace
+    resourceVersion: "1"
+  spec:
+    agent: kubernetes
+    cluster: default
+    context: ci/rehearse/periodic-ci-openshift-release-master-e2e
+    decoration_config:
+      gcs_configuration:
+        bucket: test-platform-results
+        default_org: openshift
+        default_repo: origin
+        job_url_prefix: https://openshift-gce-devel.appspot.com/build/
+        path_strategy: single
+      gcs_credentials_secret: gce-sa-credentials-gcs-publisher
+      grace_period: 15s
+      timeout: 4h0m0s
+      utility_images:
+        clonerefs: gcr.io/k8s-prow/clonerefs:v20190129-0a3c54c
+        entrypoint: gcr.io/k8s-prow/entrypoint:v20190129-0a3c54c
+        initupload: gcr.io/k8s-prow/initupload:v20190129-0a3c54c
+        sidecar: gcr.io/k8s-prow/sidecar:v20190129-0a3c54c
+    job: rehearse-1234-periodic-ci-openshift-release-master-e2e
+    namespace: test-namespace
+    pod_spec:
+      containers:
+      - args:
+        - --no-ci-op-args
+        - --CHANGED
+        command:
+        - no-ci-op
+        image: quay-proxy.ci.openshift.org/openshift/ci:ci_ci-operator_latest
+        imagePullPolicy: Always
+        name: ""
+        resources:
+          requests:
+            cpu: 10m
+      serviceAccountName: ci-operator
+    prowjob_defaults:
+      tenant_id: GlobalDefaultID
+    refs:
+      base_ref: master
+      base_sha: test_sha
+      org: openshift
+      pulls:
+      - author: username
+        number: 1234
+        sha: test_sha
+      repo: release
+    report: true
+    rerun_command: /pj-rehearse periodic-ci-openshift-release-master-e2e
+    type: presubmit
+  status:
+    startTime: 2020-06-22T22:25:00Z
+    state: triggered
+- apiVersion: prow.k8s.io/v1
+  kind: ProwJob
+  metadata:
+    annotations:
       prow.k8s.io/context: ci/rehearse/periodic-ci-super-duper-e2e
       prow.k8s.io/job: rehearse-1234-periodic-ci-super-duper-e2e
     creationTimestamp: null

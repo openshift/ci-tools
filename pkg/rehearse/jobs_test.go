@@ -1111,6 +1111,98 @@ func TestFilterPeriodics(t *testing.T) {
 	}
 }
 
+func TestConvertPeriodicsToPresubmits(t *testing.T) {
+	refs := &pjapi.Refs{
+		Org:     "openshift",
+		Repo:    "release",
+		BaseRef: "main",
+		Pulls:   []pjapi.Pull{{Number: 123}},
+	}
+	jc := &JobConfigurer{refs: refs}
+
+	periodic := func(name string, extraRefs []pjapi.Refs) prowconfig.Periodic {
+		return prowconfig.Periodic{
+			JobBase: prowconfig.JobBase{
+				Name: name,
+				UtilityConfig: prowconfig.UtilityConfig{
+					ExtraRefs: extraRefs,
+				},
+			},
+		}
+	}
+
+	testCases := []struct {
+		description string
+		periodics   []prowconfig.Periodic
+		expected    [][]pjapi.Refs
+	}{
+		{
+			description: "periodic for a different repo keeps extra_refs with workdir",
+			periodics: []prowconfig.Periodic{
+				periodic("periodic-ci-super-duper-e2e", []pjapi.Refs{{Org: "super", Repo: "duper", BaseRef: "main"}}),
+			},
+			expected: [][]pjapi.Refs{
+				{{Org: "super", Repo: "duper", BaseRef: "main", WorkDir: true}},
+			},
+		},
+		{
+			description: "periodic for openshift/release drops extra_refs that duplicate the rehearsal PR",
+			periodics: []prowconfig.Periodic{
+				periodic("periodic-ci-openshift-release-e2e", []pjapi.Refs{{Org: "openshift", Repo: "release", BaseRef: "main"}}),
+			},
+			expected: [][]pjapi.Refs{nil},
+		},
+		{
+			description: "duplicate openshift/release extra_ref is dropped while other extra_refs are kept",
+			periodics: []prowconfig.Periodic{
+				periodic("periodic-multi-ref", []pjapi.Refs{
+					{Org: "openshift", Repo: "installer", BaseRef: "main"},
+					{Org: "openshift", Repo: "release", BaseRef: "main"},
+				}),
+			},
+			expected: [][]pjapi.Refs{
+				{{Org: "openshift", Repo: "installer", BaseRef: "main", WorkDir: true}},
+			},
+		},
+		{
+			description: "when openshift/release is the primary extra_ref, remaining extra_refs do not get workdir",
+			periodics: []prowconfig.Periodic{
+				periodic("periodic-release-with-other", []pjapi.Refs{
+					{Org: "openshift", Repo: "release", BaseRef: "main"},
+					{Org: "openshift", Repo: "installer", BaseRef: "main"},
+				}),
+			},
+			expected: [][]pjapi.Refs{
+				{{Org: "openshift", Repo: "installer", BaseRef: "main"}},
+			},
+		},
+		{
+			description: "periodic with no extra_refs stays that way",
+			periodics: []prowconfig.Periodic{
+				periodic("periodic-no-refs", nil),
+			},
+			expected: [][]pjapi.Refs{nil},
+		},
+	}
+
+	for _, tc := range testCases {
+		t.Run(tc.description, func(t *testing.T) {
+			presubmits, err := jc.ConvertPeriodicsToPresubmits(tc.periodics)
+			if err != nil {
+				t.Fatalf("ConvertPeriodicsToPresubmits failed: %v", err)
+			}
+			if len(presubmits) != len(tc.expected) {
+				t.Fatalf("got %d presubmits, expected %d", len(presubmits), len(tc.expected))
+			}
+			for i, p := range presubmits {
+				if diff := cmp.Diff(tc.expected[i], p.ExtraRefs); diff != "" {
+					t.Errorf("ExtraRefs mismatch for %s: %s", p.Name, diff)
+				}
+			}
+		})
+	}
+}
+
 func makePeriodic(extraLabels map[string]string, hidden bool) *prowconfig.Periodic {
 	labels := make(map[string]string)
 	if len(extraLabels) > 0 {

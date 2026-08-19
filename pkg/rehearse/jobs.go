@@ -581,18 +581,32 @@ func (jc *JobConfigurer) ConvertPeriodicsToPresubmits(periodics []prowconfig.Per
 			p.DecorationConfig.SparseCheckoutFiles = nil
 		}
 
-		if len(p.ExtraRefs) > 0 {
-			// we aren't injecting this as we do for presubmits, but we need it to be set
-			p.ExtraRefs[0].WorkDir = true
-		} else if len(p.ExtraRefs) > 1 {
-			// converted periodics already have a ref that should be removed to
-			// avoid conflicts with clonerefs
-			p.ExtraRefs = p.ExtraRefs[1:]
-		}
+		p.ExtraRefs = rehearsalExtraRefs(p.ExtraRefs, jc.refs)
 
 		presubmits = append(presubmits, p)
 	}
 	return presubmits, nil
+}
+
+// rehearsalExtraRefs drops extra_refs that clone the same org/repo as the
+// rehearsal PR. Periodics generated for a repo already include that repo as
+// extra_refs; when the rehearsal itself is a PR against that repo (typically
+// openshift/release), clonerefs would otherwise fail because both the primary
+// refs and extra_refs target the same checkout path.
+// Remaining extra_refs keep ExtraRefs[0] as the workdir so the job still runs
+// from the repo it was defined for.
+func rehearsalExtraRefs(extraRefs []pjapi.Refs, refs *pjapi.Refs) []pjapi.Refs {
+	var filtered []pjapi.Refs
+	for i, ref := range extraRefs {
+		if refs != nil && ref.Org == refs.Org && ref.Repo == refs.Repo {
+			continue
+		}
+		if i == 0 {
+			ref.WorkDir = true
+		}
+		filtered = append(filtered, ref)
+	}
+	return filtered
 }
 
 // Generic Prow periodics are not related to a repo, but in OpenShift CI many of them

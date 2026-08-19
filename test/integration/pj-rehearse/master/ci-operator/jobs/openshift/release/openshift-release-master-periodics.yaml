@@ -1,0 +1,24 @@
+periodics:
+- agent: kubernetes
+  decorate: true
+  extra_refs:
+  - base_ref: master
+    org: openshift
+    repo: release
+  interval: 24h
+  labels:
+    pj-rehearse.openshift.io/can-be-rehearsed: "true"
+  name: periodic-ci-openshift-release-master-e2e
+  spec:
+    containers:
+    - args:
+      - --no-ci-op-args
+      command:
+      - no-ci-op
+      image: quay-proxy.ci.openshift.org/openshift/ci:ci_ci-operator_latest
+      imagePullPolicy: Always
+      name: ""
+      resources:
+        requests:
+          cpu: 10m
+    serviceAccountName: ci-operator

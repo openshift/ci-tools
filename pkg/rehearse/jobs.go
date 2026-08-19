@@ -593,15 +593,15 @@ func (jc *JobConfigurer) ConvertPeriodicsToPresubmits(periodics []prowconfig.Per
 // extra_refs; when the rehearsal itself is a PR against that repo (typically
 // openshift/release), clonerefs would otherwise fail because both the primary
 // refs and extra_refs target the same checkout path.
-// Remaining extra_refs keep ExtraRefs[0] as the workdir so the job still runs
-// from the repo it was defined for.
+// The first remaining extra_ref is the workdir so the job still runs from the
+// repo it was defined for.
 func rehearsalExtraRefs(extraRefs []pjapi.Refs, refs *pjapi.Refs) []pjapi.Refs {
 	var filtered []pjapi.Refs
-	for i, ref := range extraRefs {
+	for _, ref := range extraRefs {
 		if refs != nil && ref.Org == refs.Org && ref.Repo == refs.Repo {
 			continue
 		}
-		if i == 0 {
+		if len(filtered) == 0 {
 			ref.WorkDir = true
 		}
 		filtered = append(filtered, ref)

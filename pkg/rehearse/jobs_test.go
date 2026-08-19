@@ -1165,7 +1165,7 @@ func TestConvertPeriodicsToPresubmits(t *testing.T) {
 			},
 		},
 		{
-			description: "when openshift/release is the primary extra_ref, remaining extra_refs do not get workdir",
+			description: "when openshift/release is the primary extra_ref, the first remaining extra_ref gets workdir",
 			periodics: []prowconfig.Periodic{
 				periodic("periodic-release-with-other", []pjapi.Refs{
 					{Org: "openshift", Repo: "release", BaseRef: "main"},
@@ -1173,7 +1173,7 @@ func TestConvertPeriodicsToPresubmits(t *testing.T) {
 				}),
 			},
 			expected: [][]pjapi.Refs{
-				{{Org: "openshift", Repo: "installer", BaseRef: "main"}},
+				{{Org: "openshift", Repo: "installer", BaseRef: "main", WorkDir: true}},
 			},
 		},
 		{

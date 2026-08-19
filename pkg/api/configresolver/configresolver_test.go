@@ -32,6 +32,12 @@ var ocp415Stream = &imagev1.ImageStream{
 			{Tag: "foo"},
 		},
 	},
+	Spec: imagev1.ImageStreamSpec{
+		Tags: []imagev1.TagReference{
+			{Name: "bar"},
+			{Name: "foo"},
+		},
+	},
 }
 
 func init() {
@@ -45,6 +51,12 @@ func TestIntegratedStream(t *testing.T) {
 		ObjectMeta: metav1.ObjectMeta{
 			Name:      "5.1",
 			Namespace: "ocp",
+		},
+		Spec: imagev1.ImageStreamSpec{
+			Tags: []imagev1.TagReference{
+				{Name: "bar"},
+				{Name: "foo"},
+			},
 		},
 		Status: imagev1.ImageStreamStatus{
 			Tags: []imagev1.NamedTagEventList{
@@ -82,6 +94,30 @@ func TestIntegratedStream(t *testing.T) {
 			isName:   "5.1",
 			client:   fakeclient.NewClientBuilder().WithRuntimeObjects(ocp51Stream.DeepCopy()).Build(),
 			expected: &IntegratedStream{Tags: []string{"bar", "foo"}, ReleaseControllerConfigName: ""},
+		},
+		{
+			name:   "tags sourced from spec instead of status",
+			isNS:   "ocp",
+			isName: "5.2",
+			client: fakeclient.NewClientBuilder().WithRuntimeObjects(&imagev1.ImageStream{
+				ObjectMeta: metav1.ObjectMeta{
+					Name:      "5.2",
+					Namespace: "ocp",
+				},
+				Spec: imagev1.ImageStreamSpec{
+					Tags: []imagev1.TagReference{
+						{Name: "spec-only"},
+						{Name: "common"},
+					},
+				},
+				Status: imagev1.ImageStreamStatus{
+					Tags: []imagev1.NamedTagEventList{
+						{Tag: "status-only"},
+						{Tag: "common"},
+					},
+				},
+			}).Build(),
+			expected: &IntegratedStream{Tags: []string{"spec-only", "common"}, ReleaseControllerConfigName: ""},
 		},
 	}
 

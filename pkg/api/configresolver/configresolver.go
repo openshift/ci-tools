@@ -50,8 +50,8 @@ func LocalIntegratedStream(ctx context.Context, client ctrlruntimeclient.Client,
 		return nil, fmt.Errorf("failed to get image stream %s/%s: %w", ns, name, err)
 	}
 	var tags []string
-	for _, tag := range is.Status.Tags {
-		tags = append(tags, tag.Tag)
+	for _, tag := range is.Spec.Tags {
+		tags = append(tags, tag.Name)
 	}
 	var releaseControllerConfigName string
 	if raw, ok := is.ObjectMeta.Annotations[api.ReleaseConfigAnnotation]; ok {

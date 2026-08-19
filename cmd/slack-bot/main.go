@@ -34,6 +34,7 @@ import (
 
 	userv1 "github.com/openshift/api/user/v1"
 
+	"github.com/openshift/ci-tools/pkg/chaibot"
 	"github.com/openshift/ci-tools/pkg/jira"
 	"github.com/openshift/ci-tools/pkg/pagerdutyutil"
 	eventhandler "github.com/openshift/ci-tools/pkg/slack/events"
@@ -66,6 +67,9 @@ type options struct {
 	requireWorkflowsInForum bool
 	supportRequestChannelID string
 	supportRequestThreshold int
+
+	enableTriage     bool
+	triageConfigPath string
 }
 
 func (o *options) Validate() error {
@@ -117,6 +121,8 @@ func gatherOptions(fs *flag.FlagSet, args ...string) options {
 	fs.BoolVar(&o.requireWorkflowsInForum, "require-workflows-in-forum", true, "Require the use of workflows in the designated forum channel")
 	fs.StringVar(&o.supportRequestChannelID, "support-request-channel-id", "CBN38N3MW", "Channel ID where support request mode watches long threads (defaults to #forum-ocp-testplatform)")
 	fs.IntVar(&o.supportRequestThreshold, "support-request-threshold", 12, "Create a support-request Jira when a thread has more than this many messages (total count includes the root message)")
+	fs.BoolVar(&o.enableTriage, "enable-triage", false, "Enable Chaibot automatic test failure triage")
+	fs.StringVar(&o.triageConfigPath, "triage-config-path", "", "Path to triage configuration file")
 
 	if err := fs.Parse(args); err != nil {
 		logrus.WithError(err).Fatal("Could not parse args.")
@@ -198,6 +204,57 @@ func main() {
 		}
 	}
 
+	// Initialize Chaibot if enabled
+	var chaibotAnalyzer *chaibot.Analyzer
+	var chaibotChannels []string
+	if o.enableTriage {
+		// Fail fast if required config is missing
+		if o.triageConfigPath == "" {
+			logrus.Fatal("--enable-triage requires --triage-config-path to be set")
+		}
+
+		mcpURL := os.Getenv("SHIP_HELP_MCP_URL")
+		mcpToken := os.Getenv("SHIP_HELP_MCP_TOKEN")
+
+		// Fail fast if required env vars are missing
+		if mcpURL == "" || mcpToken == "" {
+			logrus.Fatal("--enable-triage requires both SHIP_HELP_MCP_URL and SHIP_HELP_MCP_TOKEN environment variables")
+		}
+
+		type triageConfig struct {
+			Enabled           bool `yaml:"enabled"`
+			MonitoredChannels []struct {
+				Name      string `yaml:"name"`
+				ChannelID string `yaml:"channel_id"`
+			} `yaml:"monitored_channels"`
+			Analysis struct {
+				AIProvider     string `yaml:"ai_provider"`
+				PromptTemplate string `yaml:"prompt_template"`
+			} `yaml:"analysis"`
+		}
+
+		configData, err := os.ReadFile(o.triageConfigPath)
+		if err != nil {
+			logrus.WithError(err).Fatal("Failed to read triage config")
+		}
+
+		var cfg triageConfig
+		if err := yaml.Unmarshal(configData, &cfg); err != nil {
+			logrus.WithError(err).Fatal("Failed to parse triage config")
+		}
+
+		chaibotAnalyzer = chaibot.NewAnalyzer(mcpURL, mcpToken, cfg.Analysis.PromptTemplate)
+
+		for _, ch := range cfg.MonitoredChannels {
+			chaibotChannels = append(chaibotChannels, ch.ChannelID)
+		}
+
+		logrus.WithFields(logrus.Fields{
+			"channels": len(chaibotChannels),
+			"provider": cfg.Analysis.AIProvider,
+		}).Info("Chaibot triage enabled")
+	}
+
 	metrics.ExposeMetrics("slack-bot", config.PushGateway{}, o.instrumentationOptions.MetricsPort)
 	simplifier := simplifypath.NewSimplifier(l("", // shadow element mimicing the root
 		l(""), // for black-box health checks
@@ -215,7 +272,7 @@ func main() {
 	// handle the root to allow for a simple uptime probe
 	mux.Handle("/", handler(http.HandlerFunc(func(writer http.ResponseWriter, request *http.Request) { writer.WriteHeader(http.StatusOK) })))
 	mux.Handle("/slack/interactive-endpoint", handler(handleInteraction(secret.GetTokenGenerator(o.slackSigningSecretPath), interactionrouter.ForModals(issueFiler, slackClient))))
-	mux.Handle("/slack/events-endpoint", handler(handleEvent(secret.GetTokenGenerator(o.slackSigningSecretPath), eventrouter.ForEvents(slackClient, issueFiler, kubeClient, configAgent.Config, gcsClient, keywordsConfig, o.helpdeskAlias, o.forumChannelId, o.reviewRequestWorkflowID, o.namespace, o.supportRequestChannelID, o.supportRequestThreshold, o.requireWorkflowsInForum))))
+	mux.Handle("/slack/events-endpoint", handler(handleEvent(secret.GetTokenGenerator(o.slackSigningSecretPath), eventrouter.ForEvents(slackClient, issueFiler, kubeClient, configAgent.Config, gcsClient, keywordsConfig, o.helpdeskAlias, o.forumChannelId, o.reviewRequestWorkflowID, o.namespace, o.supportRequestChannelID, o.supportRequestThreshold, o.requireWorkflowsInForum, chaibotAnalyzer, chaibotChannels))))
 	server := &http.Server{Addr: ":" + strconv.Itoa(o.port), Handler: mux}
 
 	health.ServeReady()

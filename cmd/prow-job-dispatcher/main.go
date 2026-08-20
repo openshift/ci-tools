@@ -1,8 +1,12 @@
 package main
 
 import (
+	"crypto/sha256"
+	"encoding/hex"
+	"encoding/json"
 	"flag"
 	"fmt"
+	"hash/fnv"
 	"io/fs"
 	"net/http"
 	"os"
@@ -40,12 +44,13 @@ import (
 )
 
 const (
-	githubOrg      = "openshift"
-	githubRepo     = "release"
-	githubLogin    = "openshift-bot"
-	matchTitle     = "Automate prow job dispatcher"
-	upstreamBranch = "master"
-	listURL        = "https://github.com/openshift/release/pulls?q=is%3Apr+author%3Aopenshift-bot+prow+job+dispatcher+in%3Atitle+is%3Aopen"
+	githubOrg              = "openshift"
+	githubRepo             = "release"
+	githubLogin            = "openshift-bot"
+	matchTitle             = "Automate prow job dispatcher"
+	upstreamBranch         = "master"
+	listURL                = "https://github.com/openshift/release/pulls?q=is%3Apr+author%3Aopenshift-bot+prow+job+dispatcher+in%3Atitle+is%3Aopen"
+	inventoryDigestVersion = 1
 )
 
 var blockedClusterRelocationJobExceptions = []*regexp.Regexp{
@@ -206,6 +211,23 @@ type clusterVolume struct {
 	blocked            sets.Set[string]
 	volumeDistribution map[string]float64
 	clusterMap         dispatcher.ClusterMap
+	prowJobConfigDir   string
+}
+
+func sortedStringKeys[T any](values map[string]T) []string {
+	keys := make([]string, 0, len(values))
+	for key := range values {
+		keys = append(keys, key)
+	}
+	sort.Strings(keys)
+	return keys
+}
+
+type projectedJob struct {
+	determinedCluster string
+	canBeRelocated    bool
+	blocked           sets.Set[string]
+	volume            float64
 }
 
 // findClusterForJobConfig finds a cluster running on a preferred cloud provider for the jobs in a Prow job config.
@@ -216,28 +238,69 @@ func (cv *clusterVolume) findClusterForJobConfig(cloudProvider string, jc *prowc
 		cloudProvider = ""
 	}
 	var cluster string
-	var totalVolume float64
-	for _, volume := range jobVolumes {
-		totalVolume += volume
+	projectedVolumes := make(map[string]float64)
+	var jobsForProjection []projectedJob
+	var jobsForProjectionErr error
+	jobsClassified := false
+	projectedVolume := func(candidate string) (float64, error) {
+		if volume, exists := projectedVolumes[candidate]; exists {
+			return volume, nil
+		}
+		if !jobsClassified {
+			jobsClassified = true
+			jobsForProjection, jobsForProjectionErr = cv.classifyJobsForProjection(jc, path, config, jobVolumes)
+		}
+		if jobsForProjectionErr != nil {
+			return 0, jobsForProjectionErr
+		}
+		volume := projectedVolumeForCandidate(candidate, string(config.Default), jobsForProjection)
+		projectedVolumes[candidate] = volume
+		return volume, nil
 	}
 
 	mostUsedCluster := dispatcher.FindMostUsedCluster(jc)
 	// TODO: 75% as we still have manual assignments and these are affecting even distribution, re-evaluate when manual assignments are gone
 	if determinedCloudProvider := config.IsInBuildFarm(api.Cluster(mostUsedCluster)); determinedCloudProvider != "" &&
-		cv.clusterVolumeMap[string(determinedCloudProvider)][mostUsedCluster] < cv.volumeDistribution[mostUsedCluster]*0.75 {
-		cluster = mostUsedCluster
-	} else {
-		min := float64(-1)
+		(cloudProvider == "" || cloudProvider == string(determinedCloudProvider)) {
+		volume, err := projectedVolume(mostUsedCluster)
+		if err != nil {
+			return "", err
+		}
+		if cv.clusterVolumeMap[string(determinedCloudProvider)][mostUsedCluster]+volume < cv.volumeDistribution[mostUsedCluster]*0.75 {
+			cluster = mostUsedCluster
+		}
+	}
+	if cluster == "" {
+		tieBreakPath, err := repositoryRelativeTieBreakPath(cv.prowJobConfigDir, path)
+		if err != nil {
+			return "", err
+		}
+		minScore := float64(-1)
+		var minTieBreak uint64
 		for _, cp := range sets.List(cv.cloudProviders) {
 			m := cv.clusterVolumeMap[cp]
-			for c, v := range m {
-				if cv.clusterMap[c].Capacity != 100 {
+			clusters := make([]string, 0, len(m))
+			for candidate := range m {
+				clusters = append(clusters, candidate)
+			}
+			sort.Strings(clusters)
+			for _, candidate := range clusters {
+				clusterInfo, exists := cv.clusterMap[candidate]
+				if !exists || clusterInfo.Capacity <= 0 {
 					continue
 				}
 				if cloudProvider == "" || cloudProvider == cp {
-					if min < 0 || min > v {
-						min = v
-						cluster = c
+					candidateVolume, err := projectedVolume(candidate)
+					if err != nil {
+						return "", err
+					}
+					score := (m[candidate] + candidateVolume) / float64(clusterInfo.Capacity)
+					tieBreak := stableClusterTieBreak(tieBreakPath, candidate)
+					if minScore < 0 || score < minScore ||
+						score == minScore && (tieBreak < minTieBreak || tieBreak == minTieBreak && candidate < cluster) {
+						minScore = score
+						minTieBreak = tieBreak
+						cluster = candidate
 					}
 				}
 			}
@@ -245,7 +308,7 @@ func (cv *clusterVolume) findClusterForJobConfig(cloudProvider string, jc *prowc
 	}
 
 	var errs []error
-	for k := range jc.PresubmitsStatic {
+	for _, k := range sortedStringKeys(jc.PresubmitsStatic) {
 		for _, job := range jc.PresubmitsStatic[k] {
 			if err := cv.addToVolume(cluster, job.JobBase, path, config, jobVolumes); err != nil {
 				errs = append(errs, err)
@@ -253,7 +316,7 @@ func (cv *clusterVolume) findClusterForJobConfig(cloudProvider string, jc *prowc
 		}
 	}
 
-	for k := range jc.PostsubmitsStatic {
+	for _, k := range sortedStringKeys(jc.PostsubmitsStatic) {
 		for _, job := range jc.PostsubmitsStatic[k] {
 			if err := cv.addToVolume(cluster, job.JobBase, path, config, jobVolumes); err != nil {
 				errs = append(errs, err)
@@ -269,6 +332,74 @@ func (cv *clusterVolume) findClusterForJobConfig(cloudProvider string, jc *prowc
 	return cluster, utilerrors.NewAggregate(errs)
 }
 
+func (cv *clusterVolume) classifyJobsForProjection(jc *prowconfig.JobConfig, path string, config *dispatcher.Config, jobVolumes map[string]float64) ([]projectedJob, error) {
+	var jobsForProjection []projectedJob
+	addProjectedJob := func(jobBase prowconfig.JobBase) error {
+		determinedCluster, canBeRelocated, err := config.DetermineClusterForJob(jobBase, path, cv.clusterMap)
+		if err != nil {
+			return fmt.Errorf("failed to determine projected cluster for job %s in path %q: %w", jobBase.Name, path, err)
+		}
+		jobsForProjection = append(jobsForProjection, projectedJob{
+			determinedCluster: string(determinedCluster),
+			canBeRelocated:    canBeRelocated,
+			blocked:           blockedClustersForJob(jobBase.Name, string(determinedCluster), cv.blocked),
+			volume:            jobVolumes[jobBase.Name],
+		})
+		return nil
+	}
+
+	for _, k := range sortedStringKeys(jc.PresubmitsStatic) {
+		for _, job := range jc.PresubmitsStatic[k] {
+			if err := addProjectedJob(job.JobBase); err != nil {
+				return nil, err
+			}
+		}
+	}
+	for _, k := range sortedStringKeys(jc.PostsubmitsStatic) {
+		for _, job := range jc.PostsubmitsStatic[k] {
+			if err := addProjectedJob(job.JobBase); err != nil {
+				return nil, err
+			}
+		}
+	}
+	for _, job := range jc.Periodics {
+		if err := addProjectedJob(job.JobBase); err != nil {
+			return nil, err
+		}
+	}
+	return jobsForProjection, nil
+}
+
+func projectedVolumeForCandidate(candidate, defaultCluster string, jobsForProjection []projectedJob) float64 {
+	var volume float64
+	for _, job := range jobsForProjection {
+		target := dispatcher.DetermineTargetCluster(candidate, job.determinedCluster, defaultCluster, job.canBeRelocated, job.blocked)
+		if target == candidate {
+			volume += job.volume
+		}
+	}
+	return volume
+}
+
+func stableClusterTieBreak(path, cluster string) uint64 {
+	h := fnv.New64a()
+	_, _ = h.Write([]byte(path))
+	_, _ = h.Write([]byte{0})
+	_, _ = h.Write([]byte(cluster))
+	return h.Sum64()
+}
+
+func repositoryRelativeTieBreakPath(prowJobConfigDir, path string) (string, error) {
+	if prowJobConfigDir == "" {
+		return filepath.ToSlash(path), nil
+	}
+	relativePath, err := filepath.Rel(prowJobConfigDir, path)
+	if err != nil {
+		return "", fmt.Errorf("failed to derive tie-break path for %q: %w", path, err)
+	}
+	return filepath.ToSlash(relativePath), nil
+}
+
 func extractCapabilities(labels map[string]string) []string {
 	var capabilities []string
 	prefix := "capability/"
@@ -278,6 +409,7 @@ func extractCapabilities(labels map[string]string) []string {
 			capabilities = append(capabilities, value)
 		}
 	}
+	sort.Strings(capabilities)
 
 	return capabilities
 }
@@ -392,6 +524,252 @@ type fileSizeInfo struct {
 	size int64
 }
 
+type clusterConfigReconciler struct {
+	observedClusterMap       dispatcher.ClusterMap
+	observedBlocked          sets.Set[string]
+	hasObserved              bool
+	publishedInventoryDigest string
+}
+
+// reconcile publishes a changed cluster configuration and advances observed
+// state only after publication succeeds.
+func (r *clusterConfigReconciler) reconcile(clusterMap dispatcher.ClusterMap, blocked sets.Set[string], dispatch func(bool) error) (bool, error) {
+	currentInventoryDigest, err := clusterInventoryDigest(clusterMap, blocked)
+	if err != nil {
+		return false, fmt.Errorf("failed to calculate cluster inventory digest: %w", err)
+	}
+	if r.hasObserved && reflect.DeepEqual(clusterMap, r.observedClusterMap) && reflect.DeepEqual(blocked, r.observedBlocked) &&
+		currentInventoryDigest == r.publishedInventoryDigest {
+		return false, nil
+	}
+
+	forceDispatch := currentInventoryDigest != r.publishedInventoryDigest ||
+		r.hasObserved && dispatcher.HasCapacityOrCapabilitiesChanged(r.observedClusterMap, clusterMap)
+	if err := dispatch(forceDispatch); err != nil {
+		return true, err
+	}
+
+	r.observedClusterMap = clusterMap
+	r.observedBlocked = blocked
+	r.hasObserved = true
+	r.publishedInventoryDigest = currentInventoryDigest
+	return true, nil
+}
+
+type inventoryDigestCluster struct {
+	Name         string   `json:"name"`
+	Provider     string   `json:"provider"`
+	Capacity     int      `json:"capacity"`
+	Capabilities []string `json:"capabilities"`
+}
+
+type inventoryDigestInput struct {
+	Version  int                      `json:"version"`
+	Clusters []inventoryDigestCluster `json:"clusters"`
+	Blocked  []string                 `json:"blocked"`
+}
+
+func clusterInventoryDigest(clusterMap dispatcher.ClusterMap, blocked sets.Set[string]) (string, error) {
+	return clusterInventoryDigestForVersion(clusterMap, blocked, inventoryDigestVersion)
+}
+
+func clusterInventoryDigestForVersion(clusterMap dispatcher.ClusterMap, blocked sets.Set[string], version int) (string, error) {
+	clusterNames := make([]string, 0, len(clusterMap))
+	for clusterName := range clusterMap {
+		clusterNames = append(clusterNames, clusterName)
+	}
+	sort.Strings(clusterNames)
+
+	clusters := make([]inventoryDigestCluster, 0, len(clusterNames))
+	for _, clusterName := range clusterNames {
+		clusterInfo := clusterMap[clusterName]
+		capabilities := append([]string(nil), clusterInfo.Capabilities...)
+		sort.Strings(capabilities)
+		clusters = append(clusters, inventoryDigestCluster{
+			Name:         clusterName,
+			Provider:     clusterInfo.Provider,
+			Capacity:     clusterInfo.Capacity,
+			Capabilities: capabilities,
+		})
+	}
+
+	blockedClusters := sets.List(blocked)
+	if blockedClusters == nil {
+		blockedClusters = []string{}
+	}
+	input, err := json.Marshal(inventoryDigestInput{Version: version, Clusters: clusters, Blocked: blockedClusters})
+	if err != nil {
+		return "", err
+	}
+	digest := sha256.Sum256(input)
+	return hex.EncodeToString(digest[:]), nil
+}
+
+func publishedInventoryDigestPath(jobsStoragePath string) string {
+	return jobsStoragePath + ".inventory-digest"
+}
+
+func readPublishedInventoryDigest(path string) (string, bool, error) {
+	data, err := os.ReadFile(path)
+	if err != nil {
+		if os.IsNotExist(err) {
+			return "", false, nil
+		}
+		return "", false, fmt.Errorf("failed to read published inventory digest: %w", err)
+	}
+	digest := strings.TrimSpace(string(data))
+	decoded, err := hex.DecodeString(digest)
+	if err != nil || len(decoded) != sha256.Size {
+		return "", false, nil
+	}
+	return digest, true, nil
+}
+
+func writePublishedInventoryDigest(path, digest string) error {
+	directory := filepath.Dir(path)
+	temporary, err := os.CreateTemp(directory, "."+filepath.Base(path)+".tmp-")
+	if err != nil {
+		return fmt.Errorf("failed to create temporary inventory digest: %w", err)
+	}
+	temporaryName := temporary.Name()
+	closed := false
+	defer func() {
+		if !closed {
+			_ = temporary.Close()
+		}
+		_ = os.Remove(temporaryName)
+	}()
+
+	if err := temporary.Chmod(0o644); err != nil {
+		return fmt.Errorf("failed to set permissions on temporary inventory digest: %w", err)
+	}
+	if _, err := temporary.WriteString(digest + "\n"); err != nil {
+		return fmt.Errorf("failed to write temporary inventory digest: %w", err)
+	}
+	if err := temporary.Sync(); err != nil {
+		return fmt.Errorf("failed to sync temporary inventory digest: %w", err)
+	}
+	if err := temporary.Close(); err != nil {
+		return fmt.Errorf("failed to close temporary inventory digest: %w", err)
+	}
+	closed = true
+	if err := os.Rename(temporaryName, path); err != nil {
+		return fmt.Errorf("failed to atomically replace inventory digest: %w", err)
+	}
+	if err := syncDirectory(directory); err != nil {
+		return fmt.Errorf("failed to sync inventory digest directory: %w", err)
+	}
+	return nil
+}
+
+func invalidatePublishedInventoryDigest(path string) error {
+	if err := os.Remove(path); err != nil {
+		if os.IsNotExist(err) {
+			return nil
+		}
+		return fmt.Errorf("failed to remove published inventory digest: %w", err)
+	}
+	if err := syncDirectory(filepath.Dir(path)); err != nil {
+		return fmt.Errorf("failed to sync published inventory digest directory: %w", err)
+	}
+	return nil
+}
+
+func writeFullDispatchAssignments(jobsStoragePath string, pjs map[string]dispatcher.ProwJobData, writeGob func(string, interface{}) error) error {
+	if err := invalidatePublishedInventoryDigest(publishedInventoryDigestPath(jobsStoragePath)); err != nil {
+		return fmt.Errorf("failed to invalidate cluster inventory digest: %w", err)
+	}
+	return writeGob(jobsStoragePath, pjs)
+}
+
+// fullDispatchController serializes complete generations and remembers a failed
+// generation regardless of whether it was triggered by config reconciliation,
+// the weekly cron, or the manual event endpoint.
+type fullDispatchController struct {
+	mu           sync.Mutex
+	dispatch     func(bool) error
+	retryPending bool
+}
+
+func (c *fullDispatchController) reconcile(force bool) error {
+	c.mu.Lock()
+	defer c.mu.Unlock()
+
+	err := c.dispatch(force || c.retryPending)
+	c.retryPending = err != nil
+	return err
+}
+
+func (c *fullDispatchController) hasPendingRetry() bool {
+	c.mu.Lock()
+	defer c.mu.Unlock()
+	return c.retryPending
+}
+
+func fallbackPublicationMarkerPath(jobsStoragePath string) string {
+	return jobsStoragePath + ".fallback-pending"
+}
+
+func fallbackPublicationPending(path string) (bool, error) {
+	if _, err := os.Stat(path); err != nil {
+		if os.IsNotExist(err) {
+			return false, nil
+		}
+		return false, fmt.Errorf("failed to inspect fallback publication marker: %w", err)
+	}
+	return true, nil
+}
+
+func markFallbackPublicationPending(path string) error {
+	marker, err := os.OpenFile(path, os.O_CREATE|os.O_WRONLY|os.O_TRUNC, 0o644)
+	if err != nil {
+		return fmt.Errorf("failed to create fallback publication marker: %w", err)
+	}
+	closed := false
+	defer func() {
+		if !closed {
+			_ = marker.Close()
+		}
+	}()
+
+	if _, err := marker.WriteString(time.Now().UTC().Format(time.RFC3339Nano) + "\n"); err != nil {
+		return fmt.Errorf("failed to write fallback publication marker: %w", err)
+	}
+	if err := marker.Sync(); err != nil {
+		return fmt.Errorf("failed to sync fallback publication marker: %w", err)
+	}
+	if err := marker.Close(); err != nil {
+		return fmt.Errorf("failed to close fallback publication marker: %w", err)
+	}
+	closed = true
+	if err := syncDirectory(filepath.Dir(path)); err != nil {
+		return fmt.Errorf("failed to sync fallback publication marker directory: %w", err)
+	}
+	return nil
+}
+
+func clearFallbackPublicationPending(path string) error {
+	if err := os.Remove(path); err != nil {
+		if os.IsNotExist(err) {
+			return nil
+		}
+		return fmt.Errorf("failed to remove fallback publication marker: %w", err)
+	}
+	if err := syncDirectory(filepath.Dir(path)); err != nil {
+		return fmt.Errorf("failed to sync fallback publication marker directory: %w", err)
+	}
+	return nil
+}
+
+func syncDirectory(path string) error {
+	directory, err := os.Open(path)
+	if err != nil {
+		return err
+	}
+	defer directory.Close()
+	return directory.Sync()
+}
+
 // dispatchJobs loads the Prow jobs and chooses a cluster in the build farm if possible.
 // The current implementation walks through the Prow Job config files.
 // For each file, it tries to assign all jobs in it to a cluster in the build farm.
@@ -411,7 +789,8 @@ func dispatchJobs(prowJobConfigDir string, config *dispatcher.Config, jobVolumes
 		blocked:            blocked,
 		specialClusters:    map[string]float64{},
 		volumeDistribution: volumeDistribution,
-		clusterMap:         cm}
+		clusterMap:         cm,
+		prowJobConfigDir:   prowJobConfigDir}
 	for cloudProvider, v := range config.BuildFarm {
 		for cluster := range v {
 			cloudProviderString := string(cloudProvider)
@@ -449,7 +828,12 @@ func dispatchJobs(prowJobConfigDir string, config *dispatcher.Config, jobVolumes
 		return nil, fmt.Errorf("failed to dispatch all Prow jobs: %w", err)
 	}
 
-	sort.Slice(fileList, func(i, j int) bool { return fileList[i].size > fileList[j].size })
+	sort.Slice(fileList, func(i, j int) bool {
+		if fileList[i].size != fileList[j].size {
+			return fileList[i].size > fileList[j].size
+		}
+		return fileList[i].path < fileList[j].path
+	})
 	if err := dispatchEveryFile(fileList, dispatch); err != nil {
 		errs = append(errs, err)
 	}
@@ -484,7 +868,12 @@ func dispatchDeltaJobs(prowJobConfigDir string, config *dispatcher.Config, block
 		return fmt.Errorf("failed to dispatch all Prow jobs: %w", err)
 	}
 
-	sort.Slice(fileList, func(i, j int) bool { return fileList[i].size > fileList[j].size })
+	sort.Slice(fileList, func(i, j int) bool {
+		if fileList[i].size != fileList[j].size {
+			return fileList[i].size > fileList[j].size
+		}
+		return fileList[i].path < fileList[j].path
+	})
 	if err := dispatchEveryFile(fileList, dispatch); err != nil {
 		errs = append(errs, err)
 	}
@@ -544,66 +933,6 @@ func composeFileInfoList(prowJobConfigDir string) ([]fileSizeInfo, error) {
 	return fileList, utilerrors.NewAggregate(errs)
 }
 
-// removeDisabledClusters removes disabled clusters from BuildFarm and BuildFarmConfig
-func removeDisabledClusters(config *dispatcher.Config, disabled sets.Set[string]) {
-	for provider := range config.BuildFarm {
-		for cluster := range config.BuildFarm[provider] {
-			if disabled.Has(string(cluster)) {
-				delete(config.BuildFarm[provider], cluster)
-				if clusters, ok := config.BuildFarmCloud[provider]; ok {
-					c := sets.New[string](clusters...)
-					c = c.Delete(string(cluster))
-					config.BuildFarmCloud[provider] = sets.List(c)
-				}
-			}
-		}
-	}
-}
-
-type clusterProviderGetter func(cluster string) (api.Cloud, error)
-
-// addEnabledClusters adds enabled clusters to the BuildFarm and BuildFarmConfig
-func addEnabledClusters(config *dispatcher.Config, enabled sets.Set[string], getter clusterProviderGetter) {
-	if len(enabled) > 0 && config.BuildFarm == nil {
-		config.BuildFarm = make(map[api.Cloud]map[api.Cluster]*dispatcher.BuildFarmConfig)
-	}
-	for cluster := range enabled {
-		provider, err := getter(cluster)
-		if err != nil {
-			logrus.WithError(err).Fatal("Failed to get cluster cloud provider information")
-		}
-		if _, exists := config.BuildFarm[provider][api.Cluster(cluster)]; !exists {
-			if config.BuildFarm[provider] == nil {
-				config.BuildFarm[provider] = make(map[api.Cluster]*dispatcher.BuildFarmConfig)
-			}
-			config.BuildFarm[provider][api.Cluster(cluster)] = &dispatcher.BuildFarmConfig{FilenamesRaw: []string{}, Filenames: sets.New[string]()}
-		}
-		if clusters, ok := config.BuildFarmCloud[provider]; ok {
-			clusters = append(clusters, cluster)
-			config.BuildFarmCloud[provider] = clusters
-		} else {
-			if config.BuildFarmCloud == nil {
-				config.BuildFarmCloud = make(map[api.Cloud][]string)
-			}
-			config.BuildFarmCloud[provider] = []string{cluster}
-		}
-	}
-}
-
-func getEnabledClusters(config *dispatcher.Config) sets.Set[string] {
-	enabled := sets.New[string]()
-	for _, clusters := range config.BuildFarm {
-		for cluster := range clusters {
-			enabled.Insert(string(cluster))
-		}
-	}
-	return enabled
-}
-
-func getDiffClusters(enabledClusters, clustersFromConfig sets.Set[string]) (clustersToAdd, clustersToRemove sets.Set[string]) {
-	return clustersFromConfig.Difference(enabledClusters), enabledClusters.Difference(clustersFromConfig)
-}
-
 func clustersMapToSet(clusterMap dispatcher.ClusterMap) sets.Set[string] {
 	clusterSet := sets.Set[string]{}
 	for cluster := range clusterMap {
@@ -612,8 +941,9 @@ func clustersMapToSet(clusterMap dispatcher.ClusterMap) sets.Set[string] {
 	return clusterSet
 }
 
-func gitCloneRelease() error {
+func gitCloneRelease(targetDir string) error {
 	cmd := exec.Command("git", "clone", "--depth", "1", "--single-branch", "https://github.com/openshift/release.git")
+	cmd.Dir = targetDir
 
 	output, err := cmd.CombinedOutput()
 	if err != nil {
@@ -631,34 +961,46 @@ func cleanup(directory string) {
 	logrus.WithField("directory", directory).Info("Successfully removed directory")
 }
 
-// createPR creates PR with config changes and sanitizer changes, it causes app to exit in
-// case of failure to trigger re-run of logic
-func createPR(o options, config *dispatcher.Config, pjs map[string]dispatcher.ProwJobData, cm dispatcher.ClusterMap) {
+func withRestoredWorkingDirectory(operation func() error) (retErr error) {
+	workingDirectory, err := os.Getwd()
+	if err != nil {
+		return fmt.Errorf("failed to determine current working directory: %w", err)
+	}
+	defer func() {
+		if err := os.Chdir(workingDirectory); err != nil {
+			retErr = utilerrors.NewAggregate([]error{retErr, fmt.Errorf("failed to restore working directory %q: %w", workingDirectory, err)})
+		}
+	}()
+
+	return operation()
+}
+
+// createPR creates or updates the fallback assignment PR. Errors are returned to
+// reconciliation so the same generation can be retried without terminating the service.
+func createPR(o options, config *dispatcher.Config, pjs map[string]dispatcher.ProwJobData, cm dispatcher.ClusterMap) error {
 	targetDirWithRelease := filepath.Join(o.targetDir, "/release")
 	cleanup(targetDirWithRelease)
 	defer cleanup(targetDirWithRelease)
 
-	logrus.WithField("targetDir", o.targetDir).Info("Changing working directory ...")
-	if err := os.Chdir(o.targetDir); err != nil {
-		logrus.WithError(err).Fatal("failed to change to root dir")
-	}
-
-	if err := gitCloneRelease(); err != nil {
-		logrus.WithError(err).Fatal("failed to clone release repository")
+	if err := gitCloneRelease(o.targetDir); err != nil {
+		return fmt.Errorf("failed to clone release repository: %w", err)
 	}
 
 	if err := dispatcher.SaveConfig(config, filepath.Join(targetDirWithRelease, "/core-services/sanitize-prow-jobs/_config.yaml")); err != nil {
-		logrus.WithError(err).WithField("configPath", o.configPath).Fatal("failed to save config file")
+		return fmt.Errorf("failed to save config file %q: %w", o.configPath, err)
 	}
 
 	if err := sanitizer.DeterminizeJobs(filepath.Join(targetDirWithRelease, "/ci-operator/jobs"), config, pjs, make(sets.Set[string]), cm); err != nil {
-		logrus.WithError(err).Fatal("failed to determinize")
+		return fmt.Errorf("failed to determinize jobs: %w", err)
 	}
 
 	title := fmt.Sprintf("%s at %s", matchTitle, time.Now().Format(time.RFC1123))
-	if err := o.PRCreationOptions.UpsertPR(targetDirWithRelease, githubOrg, githubRepo, o.upstreamBranch, title, prcreation.PrAssignee(o.assign), prcreation.MatchTitle(matchTitle), prcreation.AdditionalLabels([]string{rehearse.RehearsalsAckLabel, "priority/ci-critical"}), prcreation.PrBody(o.prBody)); err != nil {
-		logrus.WithError(err).Fatal("failed to upsert PR")
+	if err := withRestoredWorkingDirectory(func() error {
+		return o.PRCreationOptions.UpsertPR(targetDirWithRelease, githubOrg, githubRepo, o.upstreamBranch, title, prcreation.PrAssignee(o.assign), prcreation.MatchTitle(matchTitle), prcreation.AdditionalLabels([]string{rehearse.RehearsalsAckLabel, "priority/ci-critical"}), prcreation.PrBody(o.prBody))
+	}); err != nil {
+		return fmt.Errorf("failed to upsert PR: %w", err)
 	}
+	return nil
 }
 
 func sendSlackMessage(slackClient slackClient, channelId string) error {
@@ -725,6 +1067,7 @@ func main() {
 
 	var dispatchWrapper func(forceDispatch bool)
 	var dispatchDeltaWrapper func()
+	var fullDispatch *fullDispatchController
 	prowjobs := dispatcher.NewProwjobs(o.jobsStoragePath)
 	c := cron.New()
 
@@ -736,88 +1079,137 @@ func main() {
 		var mu sync.Mutex
 		slackClient := slack.New(string(secret.GetSecret(o.slackTokenPath)))
 
-		dispatchDeltaWrapper = func() {
+		dispatchDelta := func() error {
 			mu.Lock()
 			defer mu.Unlock()
 			config, err := dispatcher.LoadConfig(o.configPath)
 			if err != nil {
-				logrus.WithError(err).Errorf("failed to load config from %q", o.configPath)
-				return
+				return fmt.Errorf("failed to load config from %q: %w", o.configPath, err)
 			}
 			cm, blocked, err := dispatcher.LoadClusterConfig(o.clusterConfigPath)
 			if err != nil {
-				logrus.WithError(err).Error("failed to load cluster config")
-				return
+				return fmt.Errorf("failed to load cluster config: %w", err)
+			}
+			if _, err := config.SynchronizeBuildFarm(cm); err != nil {
+				return fmt.Errorf("failed to synchronize build farm: %w", err)
 			}
 
 			pjs := prowjobs.GetDataCopy()
 
 			if err := dispatchDeltaJobs(o.prowJobConfigDir, config, blocked, pjs, cm); err != nil {
-				logrus.WithError(err).Error("failed to dispatch")
-				return
+				return fmt.Errorf("failed to dispatch delta jobs: %w", err)
+			}
+			if err := dispatcher.WriteGob(o.jobsStoragePath, pjs); err != nil {
+				if !dispatcher.IsGobWriteCommitted(err) {
+					return fmt.Errorf("failed to persist delta job assignments: %w", err)
+				}
+				prowjobs.Regenerate(pjs)
+				return fmt.Errorf("delta job assignments were replaced but their directory sync failed: %w", err)
 			}
 			prowjobs.Regenerate(pjs)
+			return nil
 		}
 
-		dispatchWrapper = func(forceDispatch bool) {
+		dispatch := func(forceDispatch bool) error {
 			mu.Lock()
 			defer mu.Unlock()
 
 			config, err := dispatcher.LoadConfig(o.configPath)
 			if err != nil {
-				logrus.WithError(err).Errorf("failed to load config from %q", o.configPath)
-				return
+				return fmt.Errorf("failed to load config from %q: %w", o.configPath, err)
 			}
 
 			configClusterMap, blocked, err := dispatcher.LoadClusterConfig(o.clusterConfigPath)
 			if err != nil {
-				logrus.WithError(err).Error("failed to load cluster config")
-				return
+				return fmt.Errorf("failed to load cluster config: %w", err)
+			}
+			inventoryDigest, err := clusterInventoryDigest(configClusterMap, blocked)
+			if err != nil {
+				return fmt.Errorf("failed to calculate cluster inventory digest: %w", err)
 			}
 			clustersFromConfig := clustersMapToSet(configClusterMap)
-
-			enabled, disabled := getDiffClusters(getEnabledClusters(config), clustersFromConfig)
-			if len(disabled) > 0 {
-				removeDisabledClusters(config, disabled)
+			inventoryChanged, err := config.SynchronizeBuildFarm(configClusterMap)
+			if err != nil {
+				return fmt.Errorf("failed to synchronize build farm: %w", err)
 			}
 
 			newBlockedClusters := prowjobs.HasAnyOfClusters(blocked)
+			missingAssignments := len(prowjobs.GetDataCopy()) == 0
 
-			if (!forceDispatch && enabled.Len() == 0 && disabled.Len() == 0) && !newBlockedClusters {
-				return
+			if !forceDispatch && !inventoryChanged && !newBlockedClusters && !missingAssignments {
+				// The ephemeral scheduler is not persisted in the Gob cache, so it still
+				// needs initialization after a restart when no generation is necessary.
+				ecd.Reset(sets.List(clustersFromConfig))
+				return nil
 			}
 
 			jobVolumes, err := promVolumes.GetJobVolumes()
 			if err != nil {
-				logrus.WithError(err).Fatal("failed to get job volumes")
+				return fmt.Errorf("failed to get job volumes: %w", err)
 			}
 
-			addEnabledClusters(config, enabled,
-				func(cluster string) (api.Cloud, error) {
-					info, exists := configClusterMap[cluster]
-					if !exists {
-						return "", fmt.Errorf("have not found provider for cluster %s", cluster)
-					}
-					return api.Cloud(info.Provider), nil
-				})
 			pjs, err := dispatchJobs(o.prowJobConfigDir, config, jobVolumes, blocked, promVolumes.CalculateVolumeDistribution(configClusterMap), configClusterMap)
 			if err != nil {
-				logrus.WithError(err).Error("failed to dispatch")
-				return
+				return fmt.Errorf("failed to dispatch jobs: %w", err)
+			}
+
+			markerPath := fallbackPublicationMarkerPath(o.jobsStoragePath)
+			if o.createPR {
+				if err := markFallbackPublicationPending(markerPath); err != nil {
+					return err
+				}
+			}
+
+			var committedWriteErr error
+			if err := writeFullDispatchAssignments(o.jobsStoragePath, pjs, dispatcher.WriteGob); err != nil {
+				if !dispatcher.IsGobWriteCommitted(err) {
+					return fmt.Errorf("failed to persist job assignments: %w", err)
+				}
+				committedWriteErr = fmt.Errorf("job assignments were replaced but their directory sync failed: %w", err)
 			}
 			prowjobs.Regenerate(pjs)
-
-			ecd.Reset(clustersFromConfig.UnsortedList())
-
-			if err := dispatcher.WriteGob(o.jobsStoragePath, pjs); err != nil {
-				logrus.WithError(err).Errorf("continuing on cache memory, error writing Gob file")
+			ecd.Reset(sets.List(clustersFromConfig))
+			if committedWriteErr == nil {
+				if err := writePublishedInventoryDigest(publishedInventoryDigestPath(o.jobsStoragePath), inventoryDigest); err != nil {
+					return fmt.Errorf("failed to publish cluster inventory digest: %w", err)
+				}
 			}
 
 			if o.createPR {
-				createPR(o, config, pjs, configClusterMap)
+				if err := createPR(o, config, pjs, configClusterMap); err != nil {
+					return utilerrors.NewAggregate([]error{committedWriteErr, err})
+				}
+				if err := clearFallbackPublicationPending(markerPath); err != nil {
+					return utilerrors.NewAggregate([]error{committedWriteErr, err})
+				}
 				if err := sendSlackMessage(slackClient, o.opsChannelId); err != nil {
 					logrus.WithError(err).Error("Failed to post message in ops channel")
 				}
+			}
+			return committedWriteErr
+		}
+
+		fallbackPending := false
+		if o.createPR {
+			var err error
+			fallbackPending, err = fallbackPublicationPending(fallbackPublicationMarkerPath(o.jobsStoragePath))
+			if err != nil {
+				logrus.WithError(err).Fatal("failed to determine fallback publication state")
+			}
+			if fallbackPending {
+				logrus.Warn("found an incomplete fallback publication; forcing a full dispatch")
+			}
+		}
+		fullDispatch = &fullDispatchController{dispatch: dispatch, retryPending: fallbackPending}
+
+		dispatchWrapper = func(forceDispatch bool) {
+			if err := fullDispatch.reconcile(forceDispatch); err != nil {
+				logrus.WithError(err).Error("failed to reconcile job assignments")
+			}
+		}
+		dispatchDeltaWrapper = func() {
+			if err := dispatchDelta(); err != nil {
+				logrus.WithError(err).Error("failed to reconcile delta job assignments")
 			}
 		}
 	}
@@ -843,30 +1235,43 @@ func main() {
 		deltaTicker := time.NewTicker(5 * time.Minute)
 		defer deltaTicker.Stop()
 
-		prevConfigClusterMap, prevBlocked, err := dispatcher.LoadClusterConfig(config)
+		publishedInventoryDigest, validPublishedInventoryDigest, err := readPublishedInventoryDigest(publishedInventoryDigestPath(o.jobsStoragePath))
 		if err != nil {
-			logrus.WithError(err).Fatal("failed to load initial cluster config")
-			return
+			logrus.WithError(err).Error("failed to load published cluster inventory digest; forcing a full dispatch")
+		} else if !validPublishedInventoryDigest {
+			logrus.Warn("published cluster inventory digest is missing or invalid; forcing a full dispatch")
 		}
-		// Run dispatch for the first time
-		dispatchWrapper(false)
+		clusterConfigState := &clusterConfigReconciler{publishedInventoryDigest: publishedInventoryDigest}
+
+		reconcileClusterConfig := func() {
+			currentConfigClusterMap, currentBlocked, err := dispatcher.LoadClusterConfig(config)
+			if err != nil {
+				logrus.WithError(err).Error("failed to load cluster config")
+				return
+			}
+			attempted, err := clusterConfigState.reconcile(currentConfigClusterMap, currentBlocked, func(forceDispatch bool) error {
+				logrus.WithField("prevConfigClusterMap", clusterConfigState.observedClusterMap).WithField("prevBlocked", clusterConfigState.observedBlocked).
+					WithField("currentConfigClusterMap", currentConfigClusterMap).WithField("currentBlocked", currentBlocked).Info("reconciling cluster config")
+				return fullDispatch.reconcile(forceDispatch)
+			})
+			if err != nil {
+				logrus.WithError(err).Error("failed to reconcile cluster config; the generation will be retried")
+				return
+			}
+			if !attempted && fullDispatch.hasPendingRetry() {
+				if err := fullDispatch.reconcile(true); err != nil {
+					logrus.WithError(err).Error("failed to retry full job assignment generation")
+				}
+			}
+		}
+
+		// Run dispatch for the first time. A failure is retried by the same loop.
+		reconcileClusterConfig()
 
 		for {
 			select {
 			case <-configTicker.C:
-				currentConfigClusterMap, currentBlocked, err := dispatcher.LoadClusterConfig(config)
-				if err != nil {
-					logrus.WithError(err).Error("failed to load cluster config")
-					continue
-				}
-
-				if !reflect.DeepEqual(currentConfigClusterMap, prevConfigClusterMap) || !reflect.DeepEqual(currentBlocked, prevBlocked) {
-					logrus.WithField("prevConfigClusterMap", prevConfigClusterMap).WithField("prevBlocked", prevBlocked).
-						WithField("currentConfigClusterMap", currentConfigClusterMap).WithField("currentBlocked", currentBlocked).Info("new dispatch")
-					dispatchWrapper(dispatcher.HasCapacityOrCapabilitiesChanged(prevConfigClusterMap, currentConfigClusterMap))
-					prevConfigClusterMap = currentConfigClusterMap
-					prevBlocked = currentBlocked
-				}
+				reconcileClusterConfig()
 
 			case <-deltaTicker.C:
 				dispatchDeltaWrapper()

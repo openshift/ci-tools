@@ -55,6 +55,7 @@ func TestDetermineClusterPreservesValidBuildFarmCluster(t *testing.T) {
 		jobCluster      string
 		blocked         sets.Set[string]
 		buildFarm       map[api.Cloud]map[api.Cluster]*dispatcher.BuildFarmConfig
+		manualClusters  []api.Cluster
 		groups          dispatcher.JobGroups
 		expectedCluster string
 	}{
@@ -69,6 +70,20 @@ func TestDetermineClusterPreservesValidBuildFarmCluster(t *testing.T) {
 				},
 			},
 			expectedCluster: "build01",
+		},
+		{
+			name:            "preserves existing manual cluster",
+			jobCluster:      "app.ci",
+			blocked:         sets.New[string](),
+			manualClusters:  []api.Cluster{"app.ci"},
+			expectedCluster: "app.ci",
+		},
+		{
+			name:            "does not preserve blocked manual cluster",
+			jobCluster:      "app.ci",
+			blocked:         sets.New[string]("app.ci"),
+			manualClusters:  []api.Cluster{"app.ci"},
+			expectedCluster: "api.ci",
 		},
 		{
 			name:       "uses algorithm when cluster is blocked",
@@ -121,9 +136,10 @@ func TestDetermineClusterPreservesValidBuildFarmCluster(t *testing.T) {
 			}
 
 			cfg := &dispatcher.Config{
-				Default:   "api.ci",
-				BuildFarm: tc.buildFarm,
-				Groups:    tc.groups,
+				Default:        "api.ci",
+				BuildFarm:      tc.buildFarm,
+				ManualClusters: tc.manualClusters,
+				Groups:         tc.groups,
 			}
 
 			if err := defaultJobConfig(jc, "org/repo/test.yaml", cfg, nil, tc.blocked, dispatcher.ClusterMap{}); err != nil {

@@ -57,6 +57,9 @@ func main() {
 	if err != nil {
 		logrus.WithError(err).Fatalf("Failed to load cluster config from %q", opt.configPath)
 	}
+	if _, err := config.SynchronizeBuildFarm(cm); err != nil {
+		logrus.WithError(err).Fatal("Failed to synchronize dispatcher config with cluster inventory")
+	}
 	if err := config.Validate(); err != nil {
 		logrus.WithError(err).Fatal("Failed to validate the config")
 	}

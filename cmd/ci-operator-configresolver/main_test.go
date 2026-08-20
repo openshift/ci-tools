@@ -135,6 +135,12 @@ var (
 					"release.openshift.io/config": `{"name":"4.15.0-0.ci","to":"release","message":"This release contains CI image builds of all code in release-4.15 (master) branches, and is updated each time someone merges.","mirrorPrefix":"4.15","expires":"72h","maxUnreadyReleases":1,"minCreationIntervalSeconds":21600,"pullSecretName":"source","check":{},"publish":{"tag":{"tagRef":{"name":"4.15-ci"}}},"verify":{"aws-sdn-serial":{"maxRetries":3,"prowJob":{"name":"periodic-ci-openshift-release-master-ci-4.15-e2e-aws-sdn-serial"}},"gcp-sdn":{"optional":true,"prowJob":{"name":"periodic-ci-openshift-release-master-ci-4.15-e2e-gcp-sdn"}},"hypershift-e2e":{"maxRetries":3,"prowJob":{"name":"periodic-ci-openshift-hypershift-release-4.15-periodics-e2e-aws-ovn"},"upgrade":true},"upgrade":{"optional":true,"prowJob":{"name":"periodic-ci-openshift-release-master-ci-4.15-e2e-gcp-sdn-upgrade"},"disabled":true,"upgrade":true},"upgrade-minor-aws-ovn":{"optional":true,"prowJob":{"name":"periodic-ci-openshift-release-master-ci-4.15-upgrade-from-stable-4.14-e2e-aws-ovn-upgrade"},"disabled":true,"upgrade":true,"upgradeFromRelease":{"candidate":{"stream":"ci","version":"4.14"}}},"upgrade-minor-sdn":{"optional":true,"prowJob":{"name":"periodic-ci-openshift-release-master-ci-4.15-upgrade-from-stable-4.14-e2e-aws-sdn-upgrade"},"upgrade":true,"upgradeFromRelease":{"candidate":{"stream":"ci","version":"4.14"}}},"aws-ovn-upgrade-4.15-minor":{"maxRetries":3,"prowJob":{"name":"periodic-ci-openshift-release-master-ci-4.15-upgrade-from-stable-4.14-e2e-aws-ovn-upgrade"},"upgrade":true,"upgradeFromRelease":{"candidate":{"stream":"ci","version":"4.14"}}},"azure-sdn-upgrade-4.15-minor":{"maxRetries":3,"prowJob":{"name":"periodic-ci-openshift-release-master-ci-4.15-upgrade-from-stable-4.14-e2e-azure-sdn-upgrade"},"upgrade":true,"upgradeFromRelease":{"candidate":{"stream":"ci","version":"4.14"}}},"gcp-ovn-upgrade-4.15-micro":{"maxRetries":3,"prowJob":{"name":"periodic-ci-openshift-release-master-ci-4.15-e2e-gcp-ovn-upgrade"},"upgrade":true}}}`,
 				},
 			},
+			Spec: imagev1.ImageStreamSpec{
+				Tags: []imagev1.TagReference{
+					{Name: "bar"},
+					{Name: "foo"},
+				},
+			},
 			Status: imagev1.ImageStreamStatus{
 				Tags: []imagev1.NamedTagEventList{
 					{Tag: "bar"},
@@ -148,6 +154,12 @@ var (
 				Namespace: "ocp",
 				Annotations: map[string]string{
 					"release.openshift.io/config": `{"name":"5.0.0-0.ci","to":"release-5","message":"This release contains CI image builds of all code in release-5.0 (main) branches, and is updated each time someone merges.","mirrorPrefix":"5.0","expires":"72h","maxUnreadyReleases":1,"minCreationIntervalSeconds":21600,"pullSecretName":"source","alternateImageRepository":"quay.io/openshift-release-dev/dev-release","alternateImageRepositorySecretName":"release-controller-quay-mirror-secret","check":{},"publish":{"tag":{"tagRef":{"name":"5.0-ci"}}},"verify":{}}`,
+				},
+			},
+			Spec: imagev1.ImageStreamSpec{
+				Tags: []imagev1.TagReference{
+					{Name: "bar"},
+					{Name: "foo"},
 				},
 			},
 			Status: imagev1.ImageStreamStatus{

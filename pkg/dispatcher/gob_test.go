@@ -4,6 +4,7 @@ import (
 	"errors"
 	"path/filepath"
 	"reflect"
+	"strings"
 	"testing"
 )
 
@@ -68,5 +69,15 @@ func TestWriteGobKeepsLastGoodFileWhenEncodingFails(t *testing.T) {
 	}
 	if !reflect.DeepEqual(got, want) {
 		t.Fatalf("failed write changed last good data: got %#v, want %#v", got, want)
+	}
+}
+
+func TestGobFilesystemErrorsIncludeOperationContext(t *testing.T) {
+	missingDirectory := filepath.Join(t.TempDir(), "missing")
+	if err := WriteGob(filepath.Join(missingDirectory, "assignments.gob"), map[string]string{}); err == nil || !strings.Contains(err.Error(), "create temporary Gob file") {
+		t.Fatalf("temporary-file creation error lacks context: %v", err)
+	}
+	if err := syncGobDirectory(missingDirectory); err == nil || !strings.Contains(err.Error(), "open Gob directory for sync") {
+		t.Fatalf("directory-open error lacks context: %v", err)
 	}
 }

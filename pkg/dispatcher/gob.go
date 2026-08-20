@@ -56,7 +56,7 @@ func writeGob(filename string, data interface{}, syncDirectory func(string) erro
 	directory := filepath.Dir(filename)
 	temporary, err := os.CreateTemp(directory, "."+filepath.Base(filename)+".tmp-")
 	if err != nil {
-		return err
+		return fmt.Errorf("failed to create temporary Gob file: %w", err)
 	}
 	temporaryName := temporary.Name()
 	closed := false
@@ -94,7 +94,7 @@ func writeGob(filename string, data interface{}, syncDirectory func(string) erro
 func syncGobDirectory(directory string) error {
 	directoryHandle, err := os.Open(directory)
 	if err != nil {
-		return err
+		return fmt.Errorf("failed to open Gob directory for sync: %w", err)
 	}
 	defer directoryHandle.Close()
 	return directoryHandle.Sync()

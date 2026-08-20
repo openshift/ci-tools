@@ -1,13 +1,16 @@
 package main
 
 import (
+	"context"
 	"crypto/sha256"
 	"encoding/hex"
 	"encoding/json"
+	"errors"
 	"flag"
 	"fmt"
 	"hash/fnv"
 	"io/fs"
+	"math"
 	"net/http"
 	"os"
 	"os/exec"
@@ -22,12 +25,15 @@ import (
 	"syscall"
 	"time"
 
+	"github.com/prometheus/client_golang/prometheus/promhttp"
 	"github.com/robfig/cron/v3"
 	"github.com/sirupsen/logrus"
 	"github.com/slack-go/slack"
 
+	"k8s.io/apimachinery/pkg/runtime"
 	utilerrors "k8s.io/apimachinery/pkg/util/errors"
 	"k8s.io/apimachinery/pkg/util/sets"
+	ctrlruntimeclient "sigs.k8s.io/controller-runtime/pkg/client"
 	"sigs.k8s.io/prow/cmd/generic-autobumper/bumper"
 	prowconfig "sigs.k8s.io/prow/pkg/config"
 	"sigs.k8s.io/prow/pkg/config/secret"
@@ -36,10 +42,12 @@ import (
 	"sigs.k8s.io/yaml"
 
 	"github.com/openshift/ci-tools/pkg/api"
+	dispatcherv1 "github.com/openshift/ci-tools/pkg/api/dispatcher/v1"
 	"github.com/openshift/ci-tools/pkg/dispatcher"
 	"github.com/openshift/ci-tools/pkg/github/prcreation"
 	"github.com/openshift/ci-tools/pkg/rehearse"
 	"github.com/openshift/ci-tools/pkg/sanitizer"
+	"github.com/openshift/ci-tools/pkg/util"
 	"github.com/openshift/ci-tools/pkg/util/gzip"
 )
 
@@ -58,12 +66,15 @@ var blockedClusterRelocationJobExceptions = []*regexp.Regexp{
 }
 
 type options struct {
-	prowJobConfigDir  string
-	configPath        string
-	clusterConfigPath string
-	jobsStoragePath   string
+	prowJobConfigDir    string
+	configPath          string
+	clusterConfigPath   string
+	jobsStoragePath     string
+	snapshotStoragePath string
 
-	prometheusDaysBefore int
+	prometheusDaysBefore       int
+	rebalanceHysteresisPercent float64
+	movementBudgetPercent      float64
 
 	upstreamBranch string
 	createPR       bool
@@ -82,6 +93,21 @@ type options struct {
 
 	slackTokenPath string
 	opsChannelId   string
+
+	overrideNamespace               string
+	controlAPITokenPath             string
+	fallbackObserverTokenPath       string
+	dispatchCommandChannelID        string
+	enableRuntimeCapacity           bool
+	enableRuntimeDrain              bool
+	enableRuntimeCapabilityScope    bool
+	maxOverrideTTL                  time.Duration
+	maxDrainTTL                     time.Duration
+	planTTL                         time.Duration
+	affectedDemandApprovalThreshold float64
+	schedulerPropagationBound       time.Duration
+	prowSchedulerConfigPath         string
+	legacyEventEndpoint             bool
 }
 
 type slackClient interface {
@@ -96,7 +122,10 @@ func gatherOptions() options {
 	fs.StringVar(&o.configPath, "config-path", "", "Path to the config file (core-services/sanitize-prow-jobs/_config.yaml in openshift/release)")
 	fs.StringVar(&o.clusterConfigPath, "cluster-config-path", "core-services/sanitize-prow-jobs/_clusters.yaml", "Path to the config file (core-services/sanitize-prow-jobs/_clusters.yaml in openshift/release)")
 	fs.StringVar(&o.jobsStoragePath, "jobs-storage-path", "", "Path to the file holding only job assignments in Gob format")
-	fs.IntVar(&o.prometheusDaysBefore, "prometheus-days-before", 14, "Number [1,15] of days before. Time 00-00-00 of that day will be used as time to query Prometheus. E.g., 1 means 00-00-00 of yesterday.")
+	fs.StringVar(&o.snapshotStoragePath, "snapshot-storage-path", "", "Path to the atomic versioned policy snapshot cache. Defaults beside --jobs-storage-path.")
+	fs.IntVar(&o.prometheusDaysBefore, "prometheus-days-before", 0, "Number [0,15] of days before the current time at which the seven-day demand query is evaluated. Zero uses the most recent seven days.")
+	fs.Float64Var(&o.rebalanceHysteresisPercent, "rebalance-hysteresis-percent", 10, "Keep an eligible prior baseline placement when its normalized score is within this percentage of the best candidate.")
+	fs.Float64Var(&o.movementBudgetPercent, "movement-budget-percent", 10, "Maximum percentage of observed demand moved by one routine baseline generation. Forced moves from blocked or ineligible clusters are exempt.")
 
 	fs.BoolVar(&o.createPR, "create-pr", false, "Create a pull request to the change made with this tool.")
 	fs.StringVar(&o.upstreamBranch, "upstream-branch", upstreamBranch, "Upstream branch where the PR should be created")
@@ -110,6 +139,20 @@ func gatherOptions() options {
 	fs.StringVar(&o.defaultCluster, "default-cluster", "", "If passed, changes the default cluster to the specified value.")
 	fs.StringVar(&o.slackTokenPath, "slack-token-path", "", "Path to the file containing the Slack token to use.")
 	fs.StringVar(&o.opsChannelId, "ops-channel-id", "CHY2E1BL4", "Channel ID for #ops-testplatform")
+	fs.StringVar(&o.overrideNamespace, "dispatch-override-namespace", "", "Namespace containing DispatchOverride resources. Empty disables the runtime control plane.")
+	fs.StringVar(&o.controlAPITokenPath, "control-api-token-path", "", "Path to the bearer token accepted from the DPTP bot control client.")
+	fs.StringVar(&o.fallbackObserverTokenPath, "fallback-observer-token-path", "", "Path to the separate bearer token accepted from the Prow fallback-state observer.")
+	fs.StringVar(&o.dispatchCommandChannelID, "dispatch-command-channel-id", "", "Immutable Slack channel ID for #team-dp-testplatform.")
+	fs.BoolVar(&o.enableRuntimeCapacity, "enable-runtime-capacity", false, "Allow whole-cluster capacity overrides to be applied.")
+	fs.BoolVar(&o.enableRuntimeDrain, "enable-runtime-drain", false, "Allow whole-cluster drains to be applied.")
+	fs.BoolVar(&o.enableRuntimeCapabilityScope, "enable-runtime-capability-scope", false, "Allow capability-scoped runtime controls.")
+	fs.DurationVar(&o.maxOverrideTTL, "max-runtime-override-ttl", 24*time.Hour, "Maximum TTL for a runtime capacity override.")
+	fs.DurationVar(&o.maxDrainTTL, "max-runtime-drain-ttl", 2*time.Hour, "Maximum TTL for a runtime drain.")
+	fs.DurationVar(&o.planTTL, "runtime-plan-ttl", 15*time.Minute, "How long an unapplied runtime plan remains valid.")
+	fs.Float64Var(&o.affectedDemandApprovalThreshold, "runtime-second-approval-demand", 0, "Affected demand at or above this value requires a distinct second approver. A positive value is required before writes can be enabled.")
+	fs.DurationVar(&o.schedulerPropagationBound, "scheduler-propagation-bound", 0, "Measured upper bound from dispatcher publication through the Prow external-scheduler cache. Required and at most 30s before writes can be enabled.")
+	fs.StringVar(&o.prowSchedulerConfigPath, "prow-scheduler-config-path", "", "Path to the live Prow configuration mounted from the same source used by the scheduler. Required before runtime writes can be enabled.")
+	fs.BoolVar(&o.legacyEventEndpoint, "enable-legacy-event-endpoint", false, "Expose the unauthenticated legacy /event dispatch endpoint. Disabled for the next-generation control plane.")
 
 	o.GitAuthorOptions.AddFlags(fs)
 	o.PrometheusOptions.AddFlags(fs)
@@ -130,8 +173,14 @@ func (o *options) validate() error {
 		return fmt.Errorf("mandatory argument --config-path wasn't set")
 	}
 
-	if o.prometheusDaysBefore < 1 || o.prometheusDaysBefore > 15 {
-		return fmt.Errorf("--prometheus-days-before must be between 1 and 15")
+	if o.prometheusDaysBefore < 0 || o.prometheusDaysBefore > 15 {
+		return fmt.Errorf("--prometheus-days-before must be between 0 and 15")
+	}
+	if o.rebalanceHysteresisPercent < 0 || o.rebalanceHysteresisPercent > 100 {
+		return fmt.Errorf("--rebalance-hysteresis-percent must be between 0 and 100")
+	}
+	if o.movementBudgetPercent < 0 || o.movementBudgetPercent > 100 {
+		return fmt.Errorf("--movement-budget-percent must be between 0 and 100")
 	}
 
 	if o.clusterConfigPath == "" {
@@ -141,9 +190,41 @@ func (o *options) validate() error {
 	if o.jobsStoragePath == "" {
 		logrus.Fatal("mandatory argument --jobs-storage-path wasn't set")
 	}
+	if o.snapshotStoragePath == "" {
+		o.snapshotStoragePath = o.jobsStoragePath + ".snapshot.json"
+	}
 
 	if o.slackTokenPath == "" {
 		logrus.Fatal("mandatory argument --slack-token-path wasn't set")
+	}
+	controlConfigured := o.overrideNamespace != "" || o.controlAPITokenPath != "" || o.fallbackObserverTokenPath != "" || o.dispatchCommandChannelID != "" ||
+		o.enableRuntimeCapacity || o.enableRuntimeDrain || o.enableRuntimeCapabilityScope
+	if controlConfigured && (o.overrideNamespace == "" || o.controlAPITokenPath == "" || o.dispatchCommandChannelID == "") {
+		return fmt.Errorf("--dispatch-override-namespace, --control-api-token-path, and --dispatch-command-channel-id are all required for runtime controls")
+	}
+	if o.enableRuntimeDrain && !o.enableRuntimeCapacity {
+		return fmt.Errorf("--enable-runtime-drain requires --enable-runtime-capacity")
+	}
+	if o.enableRuntimeDrain && o.fallbackObserverTokenPath == "" {
+		return fmt.Errorf("--enable-runtime-drain requires --fallback-observer-token-path")
+	}
+	if o.fallbackObserverTokenPath != "" && o.fallbackObserverTokenPath == o.controlAPITokenPath {
+		return fmt.Errorf("--fallback-observer-token-path must use a token distinct from --control-api-token-path")
+	}
+	if o.enableRuntimeCapabilityScope && !o.enableRuntimeCapacity {
+		return fmt.Errorf("--enable-runtime-capability-scope requires --enable-runtime-capacity")
+	}
+	controlOptions := dispatcher.ControlOptions{
+		AllowedChannelID: o.dispatchCommandChannelID, MaxTTL: o.maxOverrideTTL, MaxDrainTTL: o.maxDrainTTL,
+		PlanTTL: o.planTTL, AffectedDemandApproval: o.affectedDemandApprovalThreshold,
+		EnableCapacity: o.enableRuntimeCapacity, EnableDrain: o.enableRuntimeDrain, EnableCapabilityScope: o.enableRuntimeCapabilityScope,
+		SchedulerPropagationBound: o.schedulerPropagationBound,
+		WriteSafetyCheck:          o.schedulerWriteSafetyCheck(),
+	}
+	if controlConfigured {
+		if err := controlOptions.Validate(); err != nil {
+			return fmt.Errorf("invalid runtime control options: %w", err)
+		}
 	}
 
 	enabled := o.enableClusters.StringSet()
@@ -176,6 +257,42 @@ func (o *options) validate() error {
 	return o.PrometheusOptions.Validate()
 }
 
+func (o *options) schedulerWriteSafetyCheck() func() error {
+	if !o.enableRuntimeCapacity {
+		return nil
+	}
+	return func() error {
+		return verifyProwSchedulerCacheBound(o.prowSchedulerConfigPath, o.schedulerPropagationBound)
+	}
+}
+
+func verifyProwSchedulerCacheBound(path string, propagationBound time.Duration) error {
+	if path == "" {
+		return errors.New("--prow-scheduler-config-path is required before runtime writes can be enabled")
+	}
+	data, err := os.ReadFile(path)
+	if err != nil {
+		return fmt.Errorf("read Prow scheduler configuration: %w", err)
+	}
+	var config struct {
+		Scheduler prowconfig.Scheduler `json:"scheduler"`
+	}
+	if err := yaml.Unmarshal(data, &config); err != nil {
+		return fmt.Errorf("parse Prow scheduler configuration: %w", err)
+	}
+	if !config.Scheduler.Enabled || config.Scheduler.External == nil {
+		return errors.New("Prow external scheduling is not enabled")
+	}
+	entryTimeout := config.Scheduler.External.Cache.EntryTimeoutInterval
+	if entryTimeout == nil || entryTimeout.Duration <= 0 {
+		return errors.New("Prow external scheduler cache entry_timeout_interval must be positive")
+	}
+	if entryTimeout.Duration > propagationBound {
+		return fmt.Errorf("Prow external scheduler cache entry_timeout_interval %s exceeds propagation bound %s", entryTimeout.Duration, propagationBound)
+	}
+	return nil
+}
+
 // getCloudProvidersForE2ETests returns a set of cloud providers where a cluster is hosted for an e2e test defined in the given Prow job config.
 func getCloudProvidersForE2ETests(jc *prowconfig.JobConfig) sets.Set[string] {
 	cloudProviders := sets.New[string]()
@@ -206,12 +323,17 @@ type clusterVolume struct {
 	clusterVolumeMap map[string]map[string]float64
 	specialClusters  map[string]float64
 	// only needed for stable tests: traverse the above map by sorted key list
-	cloudProviders     sets.Set[string]
-	pjs                map[string]dispatcher.ProwJobData
-	blocked            sets.Set[string]
-	volumeDistribution map[string]float64
-	clusterMap         dispatcher.ClusterMap
-	prowJobConfigDir   string
+	cloudProviders      sets.Set[string]
+	pjs                 map[string]dispatcher.ProwJobData
+	blocked             sets.Set[string]
+	volumeDistribution  map[string]float64
+	clusterMap          dispatcher.ClusterMap
+	prowJobConfigDir    string
+	previousAssignments map[string]dispatcher.ProwJobData
+	hysteresis          float64
+	movementBudget      float64
+	movedDemand         float64
+	minimumJobDemand    float64
 }
 
 func sortedStringKeys[T any](values map[string]T) []string {
@@ -223,11 +345,38 @@ func sortedStringKeys[T any](values map[string]T) []string {
 	return keys
 }
 
+func previousClusterForProjectedJobs(jobs []projectedJob) string {
+	counts := make(map[string]int)
+	for _, job := range jobs {
+		if job.canBeRelocated && job.previousCluster != "" {
+			counts[job.previousCluster]++
+		}
+	}
+	selected, selectedCount := "", 0
+	for cluster, count := range counts {
+		if count > selectedCount || count == selectedCount && (selected == "" || cluster < selected) {
+			selected, selectedCount = cluster, count
+		}
+	}
+	return selected
+}
+
 type projectedJob struct {
 	determinedCluster string
 	canBeRelocated    bool
 	blocked           sets.Set[string]
 	volume            float64
+	previousCluster   string
+}
+
+func demandForJob(jobVolumes map[string]float64, jobName string, minimumJobDemand float64) float64 {
+	if demand := jobVolumes[jobName]; demand > 0 {
+		return demand
+	}
+	if minimumJobDemand > 0 {
+		return minimumJobDemand
+	}
+	return 1
 }
 
 // findClusterForJobConfig finds a cluster running on a preferred cloud provider for the jobs in a Prow job config.
@@ -307,6 +456,50 @@ func (cv *clusterVolume) findClusterForJobConfig(cloudProvider string, jc *prowc
 		}
 	}
 
+	classifiedJobs, err := func() ([]projectedJob, error) {
+		if !jobsClassified {
+			jobsClassified = true
+			jobsForProjection, jobsForProjectionErr = cv.classifyJobsForProjection(jc, path, config, jobVolumes)
+		}
+		return jobsForProjection, jobsForProjectionErr
+	}()
+	if err != nil {
+		return "", err
+	}
+	previousCluster := previousClusterForProjectedJobs(classifiedJobs)
+	if previousCluster != "" && previousCluster != cluster {
+		previousInfo, previousExists := cv.clusterMap[previousCluster]
+		previousProviderVolumes, previousProviderExists := cv.clusterVolumeMap[previousInfo.Provider]
+		_, previousTracked := previousProviderVolumes[previousCluster]
+		previousEligible := previousExists && previousProviderExists && previousTracked && previousInfo.Capacity > 0 && !cv.blocked.Has(previousCluster) &&
+			(cloudProvider == "" || cloudProvider == previousInfo.Provider)
+		if previousEligible {
+			previousVolume, err := projectedVolume(previousCluster)
+			if err != nil {
+				return "", err
+			}
+			selectedInfo, selectedExists := cv.clusterMap[cluster]
+			selectedProviderVolumes, selectedProviderExists := cv.clusterVolumeMap[selectedInfo.Provider]
+			_, selectedTracked := selectedProviderVolumes[cluster]
+			if selectedExists && selectedProviderExists && selectedTracked && selectedInfo.Capacity > 0 {
+				selectedVolume, err := projectedVolume(cluster)
+				if err != nil {
+					return "", err
+				}
+				previousScore := (previousProviderVolumes[previousCluster] + previousVolume) / float64(previousInfo.Capacity)
+				selectedScore := (selectedProviderVolumes[cluster] + selectedVolume) / float64(selectedInfo.Capacity)
+				withinHysteresis := previousScore <= selectedScore*(1+cv.hysteresis)
+				movedDemand := movedDemandForCandidate(cluster, string(config.Default), classifiedJobs)
+				withinMovementBudget := cv.movementBudget < 0 || cv.movedDemand+movedDemand <= cv.movementBudget
+				if withinHysteresis || !withinMovementBudget {
+					cluster = previousCluster
+				} else {
+					cv.movedDemand += movedDemand
+				}
+			}
+		}
+	}
+
 	var errs []error
 	for _, k := range sortedStringKeys(jc.PresubmitsStatic) {
 		for _, job := range jc.PresubmitsStatic[k] {
@@ -343,8 +536,11 @@ func (cv *clusterVolume) classifyJobsForProjection(jc *prowconfig.JobConfig, pat
 			determinedCluster: string(determinedCluster),
 			canBeRelocated:    canBeRelocated,
 			blocked:           blockedClustersForJob(jobBase.Name, string(determinedCluster), cv.blocked),
-			volume:            jobVolumes[jobBase.Name],
+			volume:            demandForJob(jobVolumes, jobBase.Name, cv.minimumJobDemand),
 		})
+		if previous, exists := cv.previousAssignments[jobBase.Name]; exists {
+			jobsForProjection[len(jobsForProjection)-1].previousCluster = previous.Cluster
+		}
 		return nil
 	}
 
@@ -381,6 +577,20 @@ func projectedVolumeForCandidate(candidate, defaultCluster string, jobsForProjec
 	return volume
 }
 
+func movedDemandForCandidate(candidate, defaultCluster string, jobsForProjection []projectedJob) float64 {
+	var volume float64
+	for _, job := range jobsForProjection {
+		if !job.canBeRelocated || job.previousCluster == "" {
+			continue
+		}
+		target := dispatcher.DetermineTargetCluster(candidate, job.determinedCluster, defaultCluster, job.canBeRelocated, job.blocked)
+		if target != job.previousCluster {
+			volume += job.volume
+		}
+	}
+	return volume
+}
+
 func stableClusterTieBreak(path, cluster string) uint64 {
 	h := fnv.New64a()
 	_, _ = h.Write([]byte(path))
@@ -405,7 +615,7 @@ func extractCapabilities(labels map[string]string) []string {
 	prefix := "capability/"
 
 	for key, value := range labels {
-		if strings.HasPrefix(key, prefix) {
+		if strings.HasPrefix(key, prefix) && strings.TrimPrefix(key, prefix) == value {
 			capabilities = append(capabilities, value)
 		}
 	}
@@ -433,8 +643,12 @@ func blockedClustersForJob(jobName string, determinedCluster string, blocked set
 	return filteredBlocked
 }
 
-func findClusterAssigmentsForJobs(jc *prowconfig.JobConfig, path string, config *dispatcher.Config, pjs map[string]dispatcher.ProwJobData, blocked sets.Set[string], cm dispatcher.ClusterMap) error {
+func findClusterAssigmentsForJobs(jc *prowconfig.JobConfig, prowJobConfigDir, path string, config *dispatcher.Config, pjs map[string]dispatcher.ProwJobData, blocked sets.Set[string], cm dispatcher.ClusterMap, minimumJobDemand float64) error {
 	mostUsedCluster := dispatcher.FindMostUsedCluster(jc)
+	group, err := repositoryRelativeTieBreakPath(prowJobConfigDir, path)
+	if err != nil {
+		return err
+	}
 
 	getClusterForMissingJob := func(cluster string, jobBase prowconfig.JobBase, pjs map[string]dispatcher.ProwJobData) error {
 		determinedCluster, canBeRelocated, err := config.DetermineClusterForJob(jobBase, path, cm)
@@ -444,7 +658,17 @@ func findClusterAssigmentsForJobs(jc *prowconfig.JobConfig, path string, config 
 
 		blockedForJob := blockedClustersForJob(jobBase.Name, string(determinedCluster), blocked)
 		c := dispatcher.DetermineTargetCluster(cluster, string(determinedCluster), string(config.Default), canBeRelocated, blockedForJob)
-		pjs[jobBase.Name] = dispatcher.ProwJobData{Cluster: c, Capabilities: extractCapabilities(jobBase.Labels)}
+		demand := demandForJob(nil, jobBase.Name, minimumJobDemand)
+		jobGroup := group
+		if existing, exists := pjs[jobBase.Name]; exists {
+			if existing.Demand > 0 && !math.IsNaN(existing.Demand) && !math.IsInf(existing.Demand, 0) {
+				demand = existing.Demand
+			}
+			if existing.Group != "" {
+				jobGroup = existing.Group
+			}
+		}
+		pjs[jobBase.Name] = dispatcher.ProwJobData{Cluster: c, Capabilities: extractCapabilities(jobBase.Labels), Demand: demand, Group: jobGroup}
 		logrus.WithField("job", jobBase.Name).WithField("cluster", c).Info("found cluster for job")
 		return nil
 	}
@@ -489,12 +713,17 @@ func (cv *clusterVolume) addToVolume(cluster string, jobBase prowconfig.JobBase,
 
 	blockedForJob := blockedClustersForJob(jobBase.Name, string(determinedCluster), cv.blocked)
 	c := dispatcher.DetermineTargetCluster(cluster, string(determinedCluster), string(config.Default), canBeRelocated, blockedForJob)
-	cv.pjs[jobBase.Name] = dispatcher.ProwJobData{Cluster: c, Capabilities: extractCapabilities(jobBase.Labels)}
+	group, err := repositoryRelativeTieBreakPath(cv.prowJobConfigDir, path)
+	if err != nil {
+		return err
+	}
+	demand := demandForJob(jobVolumes, jobBase.Name, cv.minimumJobDemand)
+	cv.pjs[jobBase.Name] = dispatcher.ProwJobData{Cluster: c, Capabilities: extractCapabilities(jobBase.Labels), Demand: demand, Group: group}
 	if determinedCloudProvider := config.IsInBuildFarm(api.Cluster(c)); determinedCloudProvider != "" {
-		cv.clusterVolumeMap[string(determinedCloudProvider)][c] = cv.clusterVolumeMap[string(determinedCloudProvider)][c] + jobVolumes[jobBase.Name]
+		cv.clusterVolumeMap[string(determinedCloudProvider)][c] = cv.clusterVolumeMap[string(determinedCloudProvider)][c] + demand
 		return nil
 	}
-	cv.specialClusters[c] = cv.specialClusters[c] + jobVolumes[jobBase.Name]
+	cv.specialClusters[c] = cv.specialClusters[c] + demand
 	return nil
 }
 
@@ -777,20 +1006,29 @@ func syncDirectory(path string) error {
 //   - When the e2e tests are targeting different cloud providers, or there is no e2e tests at all, we can run the tests
 //     on any cluster in the build farm. Those jobs are used to load balance the workload of clusters in the build farm.
 func dispatchJobs(prowJobConfigDir string, config *dispatcher.Config, jobVolumes map[string]float64, blocked sets.Set[string], volumeDistribution map[string]float64, cm dispatcher.ClusterMap) (map[string]dispatcher.ProwJobData, error) {
+	return dispatchJobsWithPolicy(prowJobConfigDir, config, jobVolumes, blocked, volumeDistribution, cm, nil, 0, -1, 1)
+}
+
+func dispatchJobsWithPolicy(prowJobConfigDir string, config *dispatcher.Config, jobVolumes map[string]float64, blocked sets.Set[string], volumeDistribution map[string]float64, cm dispatcher.ClusterMap, previous map[string]dispatcher.ProwJobData, hysteresisPercent, movementBudgetPercent, minimumJobDemand float64) (map[string]dispatcher.ProwJobData, error) {
 	if config == nil {
 		return nil, fmt.Errorf("config is nil")
 	}
 
 	// cv stores the volume for each cluster in the build farm
 	cv := &clusterVolume{
-		clusterVolumeMap:   map[string]map[string]float64{},
-		cloudProviders:     sets.New[string](),
-		pjs:                map[string]dispatcher.ProwJobData{},
-		blocked:            blocked,
-		specialClusters:    map[string]float64{},
-		volumeDistribution: volumeDistribution,
-		clusterMap:         cm,
-		prowJobConfigDir:   prowJobConfigDir}
+		clusterVolumeMap:    map[string]map[string]float64{},
+		cloudProviders:      sets.New[string](),
+		pjs:                 map[string]dispatcher.ProwJobData{},
+		blocked:             blocked,
+		specialClusters:     map[string]float64{},
+		volumeDistribution:  volumeDistribution,
+		clusterMap:          cm,
+		prowJobConfigDir:    prowJobConfigDir,
+		previousAssignments: previous,
+		hysteresis:          hysteresisPercent / 100,
+		movementBudget:      -1,
+		minimumJobDemand:    minimumJobDemand,
+	}
 	for cloudProvider, v := range config.BuildFarm {
 		for cluster := range v {
 			cloudProviderString := string(cloudProvider)
@@ -834,6 +1072,13 @@ func dispatchJobs(prowJobConfigDir string, config *dispatcher.Config, jobVolumes
 		}
 		return fileList[i].path < fileList[j].path
 	})
+	if movementBudgetPercent >= 0 {
+		movementBudget, err := movementBudgetForConfiguredJobFiles(fileList, jobVolumes, movementBudgetPercent, minimumJobDemand)
+		if err != nil {
+			return nil, fmt.Errorf("failed to calculate movement budget from configured jobs: %w", err)
+		}
+		cv.movementBudget = movementBudget
+	}
 	if err := dispatchEveryFile(fileList, dispatch); err != nil {
 		errs = append(errs, err)
 	}
@@ -856,10 +1101,10 @@ func dispatchJobs(prowJobConfigDir string, config *dispatcher.Config, jobVolumes
 	return cv.pjs, utilerrors.NewAggregate(errs)
 }
 
-func dispatchDeltaJobs(prowJobConfigDir string, config *dispatcher.Config, blocked sets.Set[string], pjs map[string]dispatcher.ProwJobData, cm dispatcher.ClusterMap) error {
+func dispatchDeltaJobs(prowJobConfigDir string, config *dispatcher.Config, blocked sets.Set[string], pjs map[string]dispatcher.ProwJobData, cm dispatcher.ClusterMap, minimumJobDemand float64) error {
 	var errs []error
 	dispatch := func(jobConfig *prowconfig.JobConfig, path string, info fs.DirEntry) {
-		if err := findClusterAssigmentsForJobs(jobConfig, path, config, pjs, blocked, cm); err != nil {
+		if err := findClusterAssigmentsForJobs(jobConfig, prowJobConfigDir, path, config, pjs, blocked, cm, minimumJobDemand); err != nil {
 			errs = append(errs, err)
 		}
 	}
@@ -880,6 +1125,15 @@ func dispatchDeltaJobs(prowJobConfigDir string, config *dispatcher.Config, block
 	return utilerrors.NewAggregate(errs)
 }
 
+func assignmentsRequireMetadataMigration(assignments map[string]dispatcher.ProwJobData) bool {
+	for _, assignment := range assignments {
+		if assignment.Demand <= 0 || math.IsNaN(assignment.Demand) || math.IsInf(assignment.Demand, 0) || assignment.Group == "" {
+			return true
+		}
+	}
+	return false
+}
+
 func dispatchEveryFile(fileList []fileSizeInfo, dispatch func(jobConfig *prowconfig.JobConfig, path string, info fs.DirEntry)) error {
 	var errs []error
 	for _, file := range fileList {
@@ -893,14 +1147,46 @@ func dispatchEveryFile(fileList []fileSizeInfo, dispatch func(jobConfig *prowcon
 			jobConfig := &prowconfig.JobConfig{}
 			if err := yaml.Unmarshal(data, jobConfig); err != nil {
 				errs = append(errs, fmt.Errorf("failed to unmarshal file %q: %w", path, err))
-
 				return
 			}
 			dispatch(jobConfig, path, info)
-
 		}(file.path, file.info)
 	}
 	return utilerrors.NewAggregate(errs)
+}
+
+func addConfiguredJobNames(jobConfig *prowconfig.JobConfig, jobNames sets.Set[string]) {
+	for _, jobs := range jobConfig.PresubmitsStatic {
+		for _, job := range jobs {
+			jobNames.Insert(job.Name)
+		}
+	}
+	for _, jobs := range jobConfig.PostsubmitsStatic {
+		for _, job := range jobs {
+			jobNames.Insert(job.Name)
+		}
+	}
+	for _, job := range jobConfig.Periodics {
+		jobNames.Insert(job.Name)
+	}
+}
+
+func movementBudgetForConfiguredJobFiles(fileList []fileSizeInfo, jobVolumes map[string]float64, movementBudgetPercent, minimumJobDemand float64) (float64, error) {
+	jobNames := sets.New[string]()
+	if err := dispatchEveryFile(fileList, func(jobConfig *prowconfig.JobConfig, _ string, _ fs.DirEntry) {
+		addConfiguredJobNames(jobConfig, jobNames)
+	}); err != nil {
+		return 0, err
+	}
+	return movementBudgetForConfiguredJobs(jobNames, jobVolumes, movementBudgetPercent, minimumJobDemand), nil
+}
+
+func movementBudgetForConfiguredJobs(jobNames sets.Set[string], jobVolumes map[string]float64, movementBudgetPercent, minimumJobDemand float64) float64 {
+	var totalDemand float64
+	for _, jobName := range sets.List(jobNames) {
+		totalDemand += demandForJob(jobVolumes, jobName, minimumJobDemand)
+	}
+	return totalDemand * movementBudgetPercent / 100
 }
 
 func composeFileInfoList(prowJobConfigDir string) ([]fileSizeInfo, error) {
@@ -1053,7 +1339,14 @@ func main() {
 		logrus.WithError(err).Fatal("failed to create prometheus volumes")
 	}
 
-	if err := secret.Add(o.slackTokenPath); err != nil {
+	secretPaths := []string{o.slackTokenPath}
+	if o.controlAPITokenPath != "" {
+		secretPaths = append(secretPaths, o.controlAPITokenPath)
+	}
+	if o.fallbackObserverTokenPath != "" {
+		secretPaths = append(secretPaths, o.fallbackObserverTokenPath)
+	}
+	if err := secret.Add(secretPaths...); err != nil {
 		logrus.WithError(err).Fatal("failed to start secrets agent")
 	}
 
@@ -1069,6 +1362,59 @@ func main() {
 	var dispatchDeltaWrapper func()
 	var fullDispatch *fullDispatchController
 	prowjobs := dispatcher.NewProwjobs(o.jobsStoragePath)
+	snapshots := dispatcher.NewSnapshotManager(o.snapshotStoragePath)
+	if err := snapshots.Load(); err != nil {
+		if !os.IsNotExist(err) {
+			logrus.WithError(err).Warn("ignoring invalid local policy snapshot; it will be rebuilt from durable inputs")
+		}
+	}
+
+	var controlPlane *dispatcher.ControlPlane
+	if o.overrideNamespace != "" {
+		restConfig, err := util.LoadClusterConfig()
+		if err != nil {
+			logrus.WithError(err).Fatal("failed to load Kubernetes configuration for DispatchOverride storage")
+		}
+		scheme := runtime.NewScheme()
+		if err := dispatcherv1.AddToScheme(scheme); err != nil {
+			logrus.WithError(err).Fatal("failed to register DispatchOverride API")
+		}
+		kubeClient, err := ctrlruntimeclient.New(restConfig, ctrlruntimeclient.Options{Scheme: scheme})
+		if err != nil {
+			logrus.WithError(err).Fatal("failed to create DispatchOverride client")
+		}
+		controlPlane, err = dispatcher.NewControlPlane(snapshots, dispatcher.NewKubernetesOverrideStore(kubeClient, o.overrideNamespace), dispatcher.ControlOptions{
+			AllowedChannelID: o.dispatchCommandChannelID, MaxTTL: o.maxOverrideTTL, MaxDrainTTL: o.maxDrainTTL,
+			PlanTTL: o.planTTL, AffectedDemandApproval: o.affectedDemandApprovalThreshold,
+			EnableCapacity: o.enableRuntimeCapacity, EnableDrain: o.enableRuntimeDrain, EnableCapabilityScope: o.enableRuntimeCapabilityScope,
+			SchedulerPropagationBound: o.schedulerPropagationBound,
+			WriteSafetyCheck:          o.schedulerWriteSafetyCheck(),
+		})
+		if err != nil {
+			logrus.WithError(err).Fatal("failed to initialize dispatcher control plane")
+		}
+		go controlPlane.Run(context.Background())
+	}
+
+	publishSnapshot := func(baseline map[string]dispatcher.ProwJobData, clusterMap dispatcher.ClusterMap, blocked sets.Set[string]) error {
+		if controlPlane != nil {
+			controlPlane.UpdateBaseline(baseline, clusterMap, blocked)
+			return controlPlane.Reconcile(context.Background())
+		}
+		generation := uint64(1)
+		current := snapshots.Current()
+		if current != nil {
+			generation = current.Generation + 1
+		}
+		snapshot, _, err := dispatcher.CompileSnapshot(dispatcher.CompileInput{Baseline: baseline, Inventory: clusterMap, Blocked: blocked, Generation: generation, Now: time.Now().UTC()})
+		if err != nil {
+			return err
+		}
+		if current != nil && current.InputDigest == snapshot.InputDigest && snapshots.Ready() {
+			return nil
+		}
+		return snapshots.Publish(snapshot)
+	}
 	c := cron.New()
 
 	// Pass an empty cluster list to it. This works as long as it's guaranteed that the
@@ -1096,7 +1442,7 @@ func main() {
 
 			pjs := prowjobs.GetDataCopy()
 
-			if err := dispatchDeltaJobs(o.prowJobConfigDir, config, blocked, pjs, cm); err != nil {
+			if err := dispatchDeltaJobs(o.prowJobConfigDir, config, blocked, pjs, cm, o.MinimumJobDemand); err != nil {
 				return fmt.Errorf("failed to dispatch delta jobs: %w", err)
 			}
 			if err := dispatcher.WriteGob(o.jobsStoragePath, pjs); err != nil {
@@ -1104,10 +1450,13 @@ func main() {
 					return fmt.Errorf("failed to persist delta job assignments: %w", err)
 				}
 				prowjobs.Regenerate(pjs)
-				return fmt.Errorf("delta job assignments were replaced but their directory sync failed: %w", err)
+				return utilerrors.NewAggregate([]error{
+					fmt.Errorf("delta job assignments were replaced but their directory sync failed: %w", err),
+					publishSnapshot(pjs, cm, blocked),
+				})
 			}
 			prowjobs.Regenerate(pjs)
-			return nil
+			return publishSnapshot(pjs, cm, blocked)
 		}
 
 		dispatch := func(forceDispatch bool) error {
@@ -1134,13 +1483,15 @@ func main() {
 			}
 
 			newBlockedClusters := prowjobs.HasAnyOfClusters(blocked)
-			missingAssignments := len(prowjobs.GetDataCopy()) == 0
+			currentAssignments := prowjobs.GetDataCopy()
+			missingAssignments := len(currentAssignments) == 0
+			metadataMigrationRequired := assignmentsRequireMetadataMigration(currentAssignments)
 
-			if !forceDispatch && !inventoryChanged && !newBlockedClusters && !missingAssignments {
+			if !forceDispatch && !inventoryChanged && !newBlockedClusters && !missingAssignments && !metadataMigrationRequired {
 				// The ephemeral scheduler is not persisted in the Gob cache, so it still
 				// needs initialization after a restart when no generation is necessary.
 				ecd.Reset(sets.List(clustersFromConfig))
-				return nil
+				return publishSnapshot(currentAssignments, configClusterMap, blocked)
 			}
 
 			jobVolumes, err := promVolumes.GetJobVolumes()
@@ -1148,7 +1499,10 @@ func main() {
 				return fmt.Errorf("failed to get job volumes: %w", err)
 			}
 
-			pjs, err := dispatchJobs(o.prowJobConfigDir, config, jobVolumes, blocked, promVolumes.CalculateVolumeDistribution(configClusterMap), configClusterMap)
+			pjs, err := dispatchJobsWithPolicy(
+				o.prowJobConfigDir, config, jobVolumes, blocked, promVolumes.CalculateVolumeDistribution(configClusterMap), configClusterMap,
+				currentAssignments, o.rebalanceHysteresisPercent, o.movementBudgetPercent, o.MinimumJobDemand,
+			)
 			if err != nil {
 				return fmt.Errorf("failed to dispatch jobs: %w", err)
 			}
@@ -1169,6 +1523,9 @@ func main() {
 			}
 			prowjobs.Regenerate(pjs)
 			ecd.Reset(sets.List(clustersFromConfig))
+			if err := publishSnapshot(pjs, configClusterMap, blocked); err != nil {
+				return utilerrors.NewAggregate([]error{committedWriteErr, fmt.Errorf("failed to publish policy snapshot: %w", err)})
+			}
 			if committedWriteErr == nil {
 				if err := writePublishedInventoryDigest(publishedInventoryDigestPath(o.jobsStoragePath), inventoryDigest); err != nil {
 					return fmt.Errorf("failed to publish cluster inventory digest: %w", err)
@@ -1279,8 +1636,28 @@ func main() {
 		}
 	}(o.clusterConfigPath)
 
-	server := dispatcher.NewServer(prowjobs, ecd, dispatchWrapper)
-	http.HandleFunc("/", server.RequestHandler)
-	http.HandleFunc("/event", server.EventHandler)
-	logrus.Fatal(http.ListenAndServe(":8080", nil))
+	dispatchServer := dispatcher.NewSnapshotServer(prowjobs, ecd, dispatchWrapper, snapshots)
+	mux := http.NewServeMux()
+	mux.HandleFunc("/", dispatchServer.RequestHandler)
+	mux.HandleFunc("/healthz", dispatchServer.HealthHandler)
+	mux.HandleFunc("/readyz", dispatchServer.ReadyHandler)
+	mux.Handle("/metrics", promhttp.Handler())
+	if o.legacyEventEndpoint {
+		mux.HandleFunc("/event", dispatchServer.EventHandler)
+	}
+	if controlPlane != nil {
+		mux.Handle("/control/v1/", dispatcher.NewControlServer(controlPlane, secret.GetTokenGenerator(o.controlAPITokenPath)))
+		if o.fallbackObserverTokenPath != "" {
+			mux.Handle("/fallback-observer/v1/protection", dispatcher.NewFallbackObservationServer(controlPlane, secret.GetTokenGenerator(o.fallbackObserverTokenPath)))
+		}
+	}
+	httpServer := &http.Server{
+		Addr:              ":8080",
+		Handler:           mux,
+		ReadHeaderTimeout: 5 * time.Second,
+		ReadTimeout:       15 * time.Second,
+		WriteTimeout:      30 * time.Second,
+		IdleTimeout:       90 * time.Second,
+	}
+	logrus.Fatal(httpServer.ListenAndServe())
 }

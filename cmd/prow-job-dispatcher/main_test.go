@@ -7,7 +7,9 @@ import (
 	"path/filepath"
 	"reflect"
 	"regexp"
+	"strings"
 	"testing"
+	"time"
 
 	"github.com/google/go-cmp/cmp"
 	"github.com/slack-go/slack"
@@ -73,6 +75,57 @@ var (
 		},
 	}
 )
+
+func TestVerifyProwSchedulerCacheBound(t *testing.T) {
+	for _, tc := range []struct {
+		name      string
+		config    string
+		wantError string
+	}{
+		{
+			name: "within bound",
+			config: `scheduler:
+  enabled: true
+  external:
+    url: http://prow-job-dispatcher
+    cache:
+      entry_timeout_interval: 10s
+`,
+		},
+		{
+			name: "cache exceeds bound",
+			config: `scheduler:
+  enabled: true
+  external:
+    cache:
+      entry_timeout_interval: 1m
+`,
+			wantError: "exceeds propagation bound",
+		},
+		{
+			name: "missing cache duration",
+			config: `scheduler:
+  enabled: true
+  external: {}
+`,
+			wantError: "must be positive",
+		},
+	} {
+		t.Run(tc.name, func(t *testing.T) {
+			path := filepath.Join(t.TempDir(), "prow-config.yaml")
+			if err := os.WriteFile(path, []byte(tc.config), 0o600); err != nil {
+				t.Fatal(err)
+			}
+			err := verifyProwSchedulerCacheBound(path, 30*time.Second)
+			if tc.wantError == "" && err != nil {
+				t.Fatal(err)
+			}
+			if tc.wantError != "" && (err == nil || !strings.Contains(err.Error(), tc.wantError)) {
+				t.Fatalf("expected error containing %q, got %v", tc.wantError, err)
+			}
+		})
+	}
+}
 
 func TestDispatchJobs(t *testing.T) {
 	testCases := []struct {
@@ -256,6 +309,95 @@ func TestDispatchJobConfig(t *testing.T) {
 				t.Errorf("%s: actual does not match expected, diff: %s", tc.name, diff)
 			}
 		})
+	}
+}
+
+func TestFindClusterForJobConfigRespectsHysteresisAndMovementBudget(t *testing.T) {
+	config := &dispatcher.Config{
+		Default: "build01",
+		BuildFarm: map[api.Cloud]map[api.Cluster]*dispatcher.BuildFarmConfig{
+			api.CloudAWS: {"build01": {}, "build02": {}},
+		},
+		BuildFarmCloud: map[api.Cloud][]string{api.CloudAWS: {"build01", "build02"}},
+	}
+	jobConfig := &prowconfig.JobConfig{Periodics: []prowconfig.Periodic{{JobBase: prowconfig.JobBase{Name: "job", Agent: "kubernetes"}}}}
+	newVolume := func(load01, load02, hysteresis, budget float64) *clusterVolume {
+		return &clusterVolume{
+			clusterVolumeMap: map[string]map[string]float64{"aws": {"build01": load01, "build02": load02}},
+			cloudProviders:   sets.New[string]("aws"), pjs: map[string]dispatcher.ProwJobData{}, blocked: sets.New[string](),
+			volumeDistribution: map[string]float64{"build01": 1, "build02": 1},
+			clusterMap: dispatcher.ClusterMap{
+				"build01": {Provider: "aws", Capacity: 100},
+				"build02": {Provider: "aws", Capacity: 100},
+			},
+			previousAssignments: map[string]dispatcher.ProwJobData{"job": {Cluster: "build01"}},
+			hysteresis:          hysteresis, movementBudget: budget,
+		}
+	}
+
+	t.Run("hysteresis keeps near-optimal prior placement", func(t *testing.T) {
+		cv := newVolume(10, 9, .10, -1)
+		cluster, err := cv.findClusterForJobConfig("", jobConfig, "periodics.yaml", config, map[string]float64{"job": 1})
+		if err != nil {
+			t.Fatal(err)
+		}
+		if cluster != "build01" {
+			t.Fatalf("expected prior cluster within hysteresis, got %q", cluster)
+		}
+	})
+
+	t.Run("movement budget prevents routine churn", func(t *testing.T) {
+		cv := newVolume(100, 0, 0, 0)
+		cluster, err := cv.findClusterForJobConfig("", jobConfig, "periodics.yaml", config, map[string]float64{"job": 10})
+		if err != nil {
+			t.Fatal(err)
+		}
+		if cluster != "build01" {
+			t.Fatalf("expected movement budget to preserve prior cluster, got %q", cluster)
+		}
+	})
+
+	t.Run("unlimited budget permits meaningful rebalance", func(t *testing.T) {
+		cv := newVolume(100, 0, 0, -1)
+		cluster, err := cv.findClusterForJobConfig("", jobConfig, "periodics.yaml", config, map[string]float64{"job": 10})
+		if err != nil {
+			t.Fatal(err)
+		}
+		if cluster != "build02" {
+			t.Fatalf("expected rebalance to build02, got %q", cluster)
+		}
+	})
+}
+
+func TestPreviousClusterAndMovementUseOnlyExistingRelocatableJobs(t *testing.T) {
+	jobs := []projectedJob{
+		{determinedCluster: "build02", previousCluster: "build02", volume: 100},
+		{determinedCluster: "build02", previousCluster: "build02", volume: 100},
+		{determinedCluster: "build01", previousCluster: "build01", canBeRelocated: true, blocked: sets.New[string](), volume: 3},
+		{determinedCluster: "build01", canBeRelocated: true, blocked: sets.New[string](), volume: 50},
+	}
+	if actual := previousClusterForProjectedJobs(jobs); actual != "build01" {
+		t.Fatalf("previous relocatable cluster = %q, expected build01", actual)
+	}
+	if actual := movedDemandForCandidate("build02", "build01", jobs); actual != 3 {
+		t.Fatalf("moved demand = %v, expected only the existing relocatable demand 3", actual)
+	}
+}
+
+func TestMovementBudgetUsesConfiguredJobs(t *testing.T) {
+	jobConfig := &prowconfig.JobConfig{Periodics: []prowconfig.Periodic{
+		{JobBase: prowconfig.JobBase{Name: "sampled"}},
+		{JobBase: prowconfig.JobBase{Name: "without-samples"}},
+		{JobBase: prowconfig.JobBase{Name: "sampled"}},
+	}}
+	jobNames := sets.New[string]()
+	addConfiguredJobNames(jobConfig, jobNames)
+	jobVolumes := map[string]float64{
+		"sampled": 9,
+		"deleted": 100,
+	}
+	if actual := movementBudgetForConfiguredJobs(jobNames, jobVolumes, 10, 5); actual != 1.4 {
+		t.Fatalf("movement budget = %v, expected 1.4", actual)
 	}
 }
 
@@ -1166,7 +1308,7 @@ func TestDispatchDeltaJobs(t *testing.T) {
 				config:           &c,
 				blocked:          sets.New[string](),
 				pjs: map[string]dispatcher.ProwJobData{
-					"pull-ci-openshift-cluster-api-provider-gcp-master-e2e-gcp":          {Cluster: "build02"},
+					"pull-ci-openshift-cluster-api-provider-gcp-master-e2e-gcp":          {Cluster: "build02", Demand: 7, Group: "preserved-group.yaml"},
 					"pull-ci-openshift-cluster-api-provider-gcp-master-govet":            {Cluster: "build02"},
 					"pull-ci-openshift-cluster-api-provider-gcp-master-e2e-gcp-operator": {Cluster: "build02"},
 					"pull-ci-openshift-cluster-api-provider-gcp-master-goimports":        {Cluster: "build02"},
@@ -1174,20 +1316,40 @@ func TestDispatchDeltaJobs(t *testing.T) {
 			},
 			wantErr: false,
 			expectedPjs: map[string]dispatcher.ProwJobData{
-				"pull-ci-openshift-cluster-api-provider-gcp-master-e2e-gcp":          {Cluster: "build01", Capabilities: []string{"intranet"}},
+				"pull-ci-openshift-cluster-api-provider-gcp-master-e2e-gcp":          {Cluster: "build01", Capabilities: []string{"intranet"}, Demand: 7, Group: "preserved-group.yaml"},
 				"pull-ci-openshift-cluster-api-provider-gcp-master-govet":            {Cluster: "build02"},
-				"pull-ci-openshift-cluster-api-provider-gcp-master-e2e-gcp-operator": {Cluster: "build01", Capabilities: []string{"intranet"}},
+				"pull-ci-openshift-cluster-api-provider-gcp-master-e2e-gcp-operator": {Cluster: "build01", Capabilities: []string{"intranet"}, Demand: 5, Group: "capabilities/cluster-api-provider-gcp-presubmits.yaml"},
 				"pull-ci-openshift-cluster-api-provider-gcp-master-goimports":        {Cluster: "build02"},
 			},
 		},
 	}
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
-			if err := dispatchDeltaJobs(tt.args.prowJobConfigDir, tt.args.config, tt.args.blocked, tt.args.pjs, tt.args.cm); (err != nil) != tt.wantErr {
+			if err := dispatchDeltaJobs(tt.args.prowJobConfigDir, tt.args.config, tt.args.blocked, tt.args.pjs, tt.args.cm, 5); (err != nil) != tt.wantErr {
 				t.Errorf("dispatchDeltaJobs() error = %v, wantErr %v", err, tt.wantErr)
 			}
 			if !reflect.DeepEqual(tt.expectedPjs, tt.args.pjs) {
 				t.Errorf("Maps are not equal. Expected: %v, Got: %v", tt.expectedPjs, tt.args.pjs)
+			}
+		})
+	}
+}
+
+func TestAssignmentsRequireMetadataMigration(t *testing.T) {
+	testCases := []struct {
+		name        string
+		assignments map[string]dispatcher.ProwJobData
+		expected    bool
+	}{
+		{name: "empty", assignments: map[string]dispatcher.ProwJobData{}},
+		{name: "complete", assignments: map[string]dispatcher.ProwJobData{"job": {Cluster: "build01", Demand: 2, Group: "jobs.yaml"}}},
+		{name: "missing demand", assignments: map[string]dispatcher.ProwJobData{"job": {Cluster: "build01", Group: "jobs.yaml"}}, expected: true},
+		{name: "missing group", assignments: map[string]dispatcher.ProwJobData{"job": {Cluster: "build01", Demand: 2}}, expected: true},
+	}
+	for _, tc := range testCases {
+		t.Run(tc.name, func(t *testing.T) {
+			if actual := assignmentsRequireMetadataMigration(tc.assignments); actual != tc.expected {
+				t.Fatalf("assignmentsRequireMetadataMigration() = %t, expected %t", actual, tc.expected)
 			}
 		})
 	}

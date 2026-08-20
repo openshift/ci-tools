@@ -16,10 +16,12 @@ type prometheusVolumes struct {
 	timestamp            time.Time
 	promClient           promapi.Client
 	prometheusDaysBefore int
+	options              PrometheusOptions
 	m                    sync.Mutex
 }
 
 func NewPrometheusVolumes(promOptions PrometheusOptions, prometheusDaysBefore int) (prometheusVolumes, error) {
+	promOptions.demandDefaults()
 	promClient, err := promOptions.NewPrometheusClient(secret.GetSecret)
 	if err != nil {
 		return prometheusVolumes{}, err
@@ -28,6 +30,7 @@ func NewPrometheusVolumes(promOptions PrometheusOptions, prometheusDaysBefore in
 		promClient:           promClient,
 		jobVolumes:           map[string]float64{},
 		prometheusDaysBefore: prometheusDaysBefore,
+		options:              promOptions,
 		m:                    sync.Mutex{},
 	}, nil
 }
@@ -41,9 +44,8 @@ func (pv *prometheusVolumes) GetJobVolumes() (map[string]float64, error) {
 	v1api := prometheusapi.NewAPI(pv.promClient)
 	ctx, cancel := context.WithTimeout(context.Background(), 30*time.Second)
 	defer cancel()
-	y, m, d := time.Now().Add(-time.Duration(24*pv.prometheusDaysBefore) * time.Hour).Date()
-	ts := time.Date(y, m, d, 0, 0, 0, 0, time.UTC)
-	jv, err := GetJobVolumesFromPrometheus(ctx, v1api, ts)
+	ts := time.Now().UTC().Add(-time.Duration(24*pv.prometheusDaysBefore) * time.Hour)
+	jv, err := GetWeightedJobDemandFromPrometheus(ctx, v1api, ts, pv.options)
 	if err != nil {
 		return nil, err
 	}

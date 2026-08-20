@@ -1,6 +1,7 @@
 package sanitizer
 
 import (
+	"bytes"
 	"fmt"
 	"io/fs"
 	"os"
@@ -61,6 +62,10 @@ func DeterminizeJobs(prowJobConfigDir string, config *dispatcher.Config, pjs map
 			serialized, err := yaml.Marshal(jobConfig)
 			if err != nil {
 				errCh <- fmt.Errorf("failed to marshal file %q: %w", path, err)
+				continue
+			}
+
+			if bytes.Equal(data, serialized) {
 				continue
 			}
 

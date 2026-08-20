@@ -17,6 +17,11 @@ type Prowjobs struct {
 type ProwJobData struct {
 	Cluster      string
 	Capabilities []string
+	// Demand is the estimated scheduling load for this job. A non-positive value
+	// is treated as one so jobs with no historical runs still participate in plans.
+	Demand float64
+	// Group is the repository-relative job configuration path used for impact summaries.
+	Group string
 }
 
 func NewProwjobs(jobsStoragePath string) *Prowjobs {

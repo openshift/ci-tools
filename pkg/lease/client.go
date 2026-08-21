@@ -85,7 +85,7 @@ func NewClient(owner, url, username string, passwordGetter func() []byte, retrie
 		return nil, err
 	}
 	c.DistinguishNotFoundVsTypeNotFound = true
-	return newClient(c, retries, acquireTimeout, opts...), nil
+	return newClient(withRetry(c, defaultRetryConfig()), retries, acquireTimeout, opts...), nil
 }
 
 func newClient(boskos boskosClient, retries int, acquireTimeout time.Duration, opts ...ClientOptions) Client {

@@ -21,3 +21,7 @@ go run sigs.k8s.io/controller-tools/cmd/controller-gen crd:crdVersions=v1 object
 go run sigs.k8s.io/controller-tools/cmd/controller-gen crd:crdVersions=v1 object \
     paths=./pkg/api/ephemeralcluster/v1 \
     output:dir=./pkg/api/ephemeralcluster/v1
+
+go run sigs.k8s.io/controller-tools/cmd/controller-gen crd:crdVersions=v1 object \
+    paths=./pkg/api/dispatcher/v1 \
+    output:dir=./pkg/api/dispatcher/v1

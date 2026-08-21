@@ -1,8 +1,10 @@
 package dispatcher
 
 import (
+	"fmt"
 	"os"
 	"reflect"
+	"sort"
 
 	"k8s.io/apimachinery/pkg/util/sets"
 	prowconfig "sigs.k8s.io/prow/pkg/config"
@@ -22,8 +24,27 @@ func loadClusterConfigFromBytes(data []byte) (ClusterMap, sets.Set[string], erro
 	blockedClusters := sets.New[string]()
 	clusterMap := make(ClusterMap)
 
-	for provider, clusterList := range clusters {
+	providers := make([]string, 0, len(clusters))
+	for provider := range clusters {
+		providers = append(providers, provider)
+	}
+	sort.Strings(providers)
+
+	seenClusters := make(map[string]string)
+	for _, provider := range providers {
+		if !knownCloudProviders.Has(provider) {
+			return nil, nil, fmt.Errorf("unsupported cloud provider %q", provider)
+		}
+		clusterList := clusters[provider]
 		for _, cluster := range clusterList {
+			if cluster.Name == "" {
+				return nil, nil, fmt.Errorf("provider %q contains a cluster with an empty name", provider)
+			}
+			if previousProvider, exists := seenClusters[cluster.Name]; exists {
+				return nil, nil, fmt.Errorf("cluster %q is defined more than once under providers %q and %q", cluster.Name, previousProvider, provider)
+			}
+			seenClusters[cluster.Name] = provider
+
 			if cluster.Capacity == 0 || cluster.Capacity > 100 {
 				cluster.Capacity = 100
 			} else if cluster.Capacity < 0 {
@@ -36,7 +57,7 @@ func loadClusterConfigFromBytes(data []byte) (ClusterMap, sets.Set[string], erro
 			clusterMap[cluster.Name] = ClusterInfo{
 				Provider:     provider,
 				Capacity:     cluster.Capacity,
-				Capabilities: cluster.Capabilities,
+				Capabilities: sets.List(sets.New[string](cluster.Capabilities...)),
 			}
 		}
 	}
@@ -72,10 +93,15 @@ func FindMostUsedCluster(jc *prowconfig.JobConfig) string {
 	}
 	cluster := ""
 	value := 0
+	selected := false
 	for c, v := range clusters {
-		if v > value {
+		if c == "" {
+			continue
+		}
+		if !selected || v > value || v == value && c < cluster {
 			cluster = c
 			value = v
+			selected = true
 		}
 	}
 	return cluster
@@ -107,6 +133,9 @@ func HasCapacityOrCapabilitiesChanged(prev, next ClusterMap) bool {
 			continue
 		}
 		if info1.Capacity != info2.Capacity {
+			return true
+		}
+		if info1.Provider != info2.Provider {
 			return true
 		}
 		if !reflect.DeepEqual(info1.Capabilities, info2.Capabilities) {

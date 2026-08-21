@@ -4,6 +4,7 @@ import (
 	"fmt"
 	"os"
 	"path/filepath"
+	"reflect"
 	"regexp"
 	"sort"
 	"strings"
@@ -43,6 +44,8 @@ type Config struct {
 	KVM []api.Cluster `json:"kvm"`
 	// the cluster names for no-builds jobs
 	NoBuilds []api.Cluster `json:"noBuilds,omitempty"`
+	// ManualClusters contains valid assignment targets that must never participate in automatic build-farm scheduling.
+	ManualClusters []api.Cluster `json:"manualClusters,omitempty"`
 	// Groups maps a group of jobs to a cluster
 	Groups JobGroups `json:"groups"`
 	// BuildFarm maps groups of jobs to a cloud provider, like GCP
@@ -54,6 +57,62 @@ type Config struct {
 type BuildFarmConfig struct {
 	FilenamesRaw []string         `json:"filenames,omitempty"`
 	Filenames    sets.Set[string] `json:"-"`
+}
+
+// SynchronizeBuildFarm makes the cluster inventory authoritative for which
+// build-farm clusters exist and which provider owns each cluster. Existing
+// generated filename assignments are preserved when a cluster moves between
+// providers. The returned boolean reports whether synchronization changed the
+// loaded dispatcher configuration.
+func (config *Config) SynchronizeBuildFarm(clusterMap ClusterMap) (bool, error) {
+	existingAssignments := make(map[api.Cluster]*BuildFarmConfig)
+	providers := make([]string, 0, len(config.BuildFarm))
+	for provider := range config.BuildFarm {
+		providers = append(providers, string(provider))
+	}
+	sort.Strings(providers)
+	for _, providerName := range providers {
+		provider := api.Cloud(providerName)
+		for cluster, assignment := range config.BuildFarm[provider] {
+			if _, exists := existingAssignments[cluster]; exists {
+				return false, fmt.Errorf("cluster %q is assigned to more than one provider in dispatcher config", cluster)
+			}
+			existingAssignments[cluster] = assignment
+		}
+	}
+
+	nextBuildFarm := make(map[api.Cloud]map[api.Cluster]*BuildFarmConfig)
+	nextBuildFarmCloud := make(map[api.Cloud][]string)
+	clusters := make([]string, 0, len(clusterMap))
+	for cluster := range clusterMap {
+		clusters = append(clusters, cluster)
+	}
+	sort.Strings(clusters)
+	for _, clusterName := range clusters {
+		if config.IsManualCluster(api.Cluster(clusterName)) {
+			return false, fmt.Errorf("manual cluster %q is present in the active cluster inventory", clusterName)
+		}
+		clusterInfo := clusterMap[clusterName]
+		provider := api.Cloud(clusterInfo.Provider)
+		if provider == "" {
+			return false, fmt.Errorf("cluster %q has an empty provider", clusterName)
+		}
+		if nextBuildFarm[provider] == nil {
+			nextBuildFarm[provider] = make(map[api.Cluster]*BuildFarmConfig)
+		}
+		cluster := api.Cluster(clusterName)
+		assignment := existingAssignments[cluster]
+		if assignment == nil {
+			assignment = &BuildFarmConfig{Filenames: sets.New[string]()}
+		}
+		nextBuildFarm[provider][cluster] = assignment
+		nextBuildFarmCloud[provider] = append(nextBuildFarmCloud[provider], clusterName)
+	}
+
+	changed := !reflect.DeepEqual(config.BuildFarm, nextBuildFarm) || !reflect.DeepEqual(config.BuildFarmCloud, nextBuildFarmCloud)
+	config.BuildFarm = nextBuildFarm
+	config.BuildFarmCloud = nextBuildFarmCloud
+	return changed, nil
 }
 
 // JobGroups maps a group of jobs to a cluster
@@ -146,6 +205,9 @@ func matchesAllCapabilities(clusterCapabilities, requiredCapabilities []string) 
 func (config *Config) DetermineClusterForJob(jobBase prowconfig.JobBase, path string, cm ClusterMap) (clusterName api.Cluster, mayBeRelocated bool, _ error) {
 	if jobBase.Agent != "kubernetes" && jobBase.Agent != "" {
 		return "", false, nil
+	}
+	if jobBase.Cluster != "" && config.IsManualCluster(api.Cluster(jobBase.Cluster)) {
+		return api.Cluster(jobBase.Cluster), false, nil
 	}
 
 	if strings.Contains(jobBase.Name, "vsphere") && !isApplyConfigJob(jobBase) {
@@ -303,6 +365,16 @@ func (config *Config) IsInBuildFarm(clusterName api.Cluster) api.Cloud {
 	return ""
 }
 
+// IsManualCluster reports whether clusterName is an allowed manual-only assignment target.
+func (config *Config) IsManualCluster(clusterName api.Cluster) bool {
+	for _, cluster := range config.ManualClusters {
+		if cluster == clusterName {
+			return true
+		}
+	}
+	return false
+}
+
 // MatchingPathRegEx returns true if the given path matches a path regular expression defined in a config's group
 func (config *Config) MatchingPathRegEx(path string) bool {
 	for _, group := range config.Groups {
@@ -368,6 +440,19 @@ func LoadConfig(configPath string) (*Config, error) {
 func (config *Config) Validate() error {
 	if config.Default == "" {
 		return fmt.Errorf("the default cluster must be set in the config")
+	}
+	manualClusters := sets.New[api.Cluster]()
+	for _, cluster := range config.ManualClusters {
+		if cluster == "" {
+			return fmt.Errorf("manualClusters must not contain an empty cluster name")
+		}
+		if manualClusters.Has(cluster) {
+			return fmt.Errorf("manual cluster %q is listed more than once", cluster)
+		}
+		if config.IsInBuildFarm(cluster) != "" {
+			return fmt.Errorf("manual cluster %q is also an automatic build-farm cluster", cluster)
+		}
+		manualClusters.Insert(cluster)
 	}
 	records := map[string]int{}
 	for _, group := range config.Groups {

@@ -77,6 +77,29 @@ func TestFindMostUsedCluster(t *testing.T) {
 			},
 			expected: build01,
 		},
+		{
+			name: "equal usage chooses lexical cluster",
+			jobConfig: prowconfig.JobConfig{
+				PresubmitsStatic: map[string][]prowconfig.Presubmit{
+					"repo1": {{JobBase: prowconfig.JobBase{Cluster: build02}}},
+					"repo2": {{JobBase: prowconfig.JobBase{Cluster: build01}}},
+				},
+			},
+			expected: build01,
+		},
+		{
+			name: "empty cluster does not win a named tie",
+			jobConfig: prowconfig.JobConfig{
+				PresubmitsStatic: map[string][]prowconfig.Presubmit{
+					"repo1": {
+						{JobBase: prowconfig.JobBase{}},
+						{JobBase: prowconfig.JobBase{Cluster: build02}},
+						{JobBase: prowconfig.JobBase{Cluster: build01}},
+					},
+				},
+			},
+			expected: build01,
+		},
 	}
 
 	for _, tt := range tests {
@@ -301,6 +324,38 @@ gcp: []
 	}
 }
 
+func TestLoadClusterConfigFromBytesRejectsDuplicateClusters(t *testing.T) {
+	data := []byte(`
+aws:
+- name: build01
+gcp:
+- name: build01
+`)
+	if _, _, err := loadClusterConfigFromBytes(data); err == nil {
+		t.Fatal("expected duplicate cluster definition to be rejected")
+	}
+}
+
+func TestLoadClusterConfigFromBytesRejectsEmptyClusterName(t *testing.T) {
+	data := []byte(`
+aws:
+- capacity: 100
+`)
+	if _, _, err := loadClusterConfigFromBytes(data); err == nil {
+		t.Fatal("expected empty cluster name to be rejected")
+	}
+}
+
+func TestLoadClusterConfigFromBytesRejectsUnsupportedProvider(t *testing.T) {
+	data := []byte(`
+awss:
+- name: build01
+`)
+	if _, _, err := loadClusterConfigFromBytes(data); err == nil {
+		t.Fatal("expected unsupported provider to be rejected")
+	}
+}
+
 func TestHasCapacityOrCapabilitiesChanged(t *testing.T) {
 	tests := []struct {
 		name     string
@@ -341,6 +396,16 @@ func TestHasCapacityOrCapabilitiesChanged(t *testing.T) {
 			next: ClusterMap{
 				"build01": {Provider: "AWS", Capacity: 10, Capabilities: []string{"aarch64", "intranet", "rce", "sshd-bastion"}},
 				"build02": {Provider: "GCP", Capacity: 20, Capabilities: []string{"aarch64", "intranet", "rce", "sshd-bastion"}},
+			},
+			expected: true,
+		},
+		{
+			name: "Change in provider for build01",
+			prev: ClusterMap{
+				"build01": {Provider: "AWS", Capacity: 10, Capabilities: []string{"amd64"}},
+			},
+			next: ClusterMap{
+				"build01": {Provider: "GCP", Capacity: 10, Capabilities: []string{"amd64"}},
 			},
 			expected: true,
 		},

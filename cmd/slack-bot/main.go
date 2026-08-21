@@ -7,11 +7,14 @@ import (
 	"fmt"
 	"io"
 	"net/http"
+	"net/url"
 	"os"
 	"strconv"
+	"strings"
 	"time"
 
 	"cloud.google.com/go/storage"
+	"github.com/prometheus/client_golang/prometheus"
 	"github.com/sirupsen/logrus"
 	"github.com/slack-go/slack"
 	"github.com/slack-go/slack/slackevents"
@@ -34,8 +37,10 @@ import (
 
 	userv1 "github.com/openshift/api/user/v1"
 
+	"github.com/openshift/ci-tools/pkg/dispatcher"
 	"github.com/openshift/ci-tools/pkg/jira"
 	"github.com/openshift/ci-tools/pkg/pagerdutyutil"
+	dispatchcommand "github.com/openshift/ci-tools/pkg/slack/dispatcher"
 	eventhandler "github.com/openshift/ci-tools/pkg/slack/events"
 	"github.com/openshift/ci-tools/pkg/slack/events/helpdesk"
 	eventrouter "github.com/openshift/ci-tools/pkg/slack/events/router"
@@ -66,6 +71,35 @@ type options struct {
 	requireWorkflowsInForum bool
 	supportRequestChannelID string
 	supportRequestThreshold int
+
+	dispatcherControlURL          string
+	dispatcherControlTokenPath    string
+	dispatchCommandChannelID      string
+	enableDispatchCapacity        bool
+	enableDispatchDrain           bool
+	enableDispatchCapabilityScope bool
+}
+
+func validateDispatcherControlURL(value string) error {
+	parsed, err := url.ParseRequestURI(value)
+	if err != nil || !parsed.IsAbs() || parsed.Host == "" {
+		return fmt.Errorf("must be an absolute URL: %q", value)
+	}
+	switch strings.ToLower(parsed.Scheme) {
+	case "https":
+		return nil
+	case "http":
+		host := strings.ToLower(strings.TrimSuffix(parsed.Hostname(), "."))
+		labels := strings.Split(host, ".")
+		inClusterService := len(labels) >= 3 && strings.HasSuffix(host, ".svc") ||
+			len(labels) >= 5 && strings.HasSuffix(host, ".svc.cluster.local")
+		if inClusterService {
+			return nil
+		}
+		return fmt.Errorf("HTTP is allowed only for Kubernetes service DNS names: %q", value)
+	default:
+		return fmt.Errorf("scheme must be HTTPS, or HTTP for an in-cluster Kubernetes service: %q", value)
+	}
 }
 
 func (o *options) Validate() error {
@@ -83,6 +117,25 @@ func (o *options) Validate() error {
 	}
 	if o.supportRequestChannelID != "" && o.supportRequestThreshold < 1 {
 		return fmt.Errorf("--support-request-threshold must be >= 1")
+	}
+	if o.dispatcherControlURL != "" {
+		if err := validateDispatcherControlURL(o.dispatcherControlURL); err != nil {
+			return fmt.Errorf("invalid --dispatcher-control-url: %w", err)
+		}
+		if o.dispatcherControlTokenPath == "" {
+			return fmt.Errorf("--dispatcher-control-token-path is required when dispatcher mentions are configured")
+		}
+		if o.dispatchCommandChannelID == "" {
+			return fmt.Errorf("--dispatch-command-channel-id is required when dispatcher mentions are configured")
+		}
+	} else if o.dispatcherControlTokenPath != "" || o.dispatchCommandChannelID != "" || o.enableDispatchCapacity || o.enableDispatchDrain || o.enableDispatchCapabilityScope {
+		return fmt.Errorf("--dispatcher-control-url is required when any dispatcher mention option is set")
+	}
+	if o.enableDispatchDrain && !o.enableDispatchCapacity {
+		return fmt.Errorf("--enable-dispatch-drain requires --enable-dispatch-capacity")
+	}
+	if o.enableDispatchCapabilityScope && !o.enableDispatchCapacity {
+		return fmt.Errorf("--enable-dispatch-capability-scope requires --enable-dispatch-capacity")
 	}
 
 	for _, group := range []flagutil.OptionGroup{&o.instrumentationOptions, &o.jiraOptions, &o.pagerDutyOptions, &o.prowconfig} {
@@ -117,6 +170,12 @@ func gatherOptions(fs *flag.FlagSet, args ...string) options {
 	fs.BoolVar(&o.requireWorkflowsInForum, "require-workflows-in-forum", true, "Require the use of workflows in the designated forum channel")
 	fs.StringVar(&o.supportRequestChannelID, "support-request-channel-id", "CBN38N3MW", "Channel ID where support request mode watches long threads (defaults to #forum-ocp-testplatform)")
 	fs.IntVar(&o.supportRequestThreshold, "support-request-threshold", 12, "Create a support-request Jira when a thread has more than this many messages (total count includes the root message)")
+	fs.StringVar(&o.dispatcherControlURL, "dispatcher-control-url", "", "Base URL of the authenticated dispatcher control API. Empty disables @dptp-bot tp-dispatch mentions.")
+	fs.StringVar(&o.dispatcherControlTokenPath, "dispatcher-control-token-path", "", "Path to the bearer token used only for the dispatcher control API.")
+	fs.StringVar(&o.dispatchCommandChannelID, "dispatch-command-channel-id", "", "Immutable Slack channel ID for #team-dp-testplatform. Required when @dptp-bot tp-dispatch is enabled.")
+	fs.BoolVar(&o.enableDispatchCapacity, "enable-dispatch-capacity", false, "Enable applying and cancelling whole-cluster capacity overrides after shadow validation.")
+	fs.BoolVar(&o.enableDispatchDrain, "enable-dispatch-drain", false, "Enable whole-cluster drains after capacity operations meet their SLO.")
+	fs.BoolVar(&o.enableDispatchCapabilityScope, "enable-dispatch-capability-scope", false, "Enable capability-scoped controls after metadata coverage is audited.")
 
 	if err := fs.Parse(args); err != nil {
 		logrus.WithError(err).Fatal("Could not parse args.")
@@ -130,8 +189,16 @@ func l(fragment string, children ...simplifypath.Node) simplifypath.Node {
 }
 
 var (
-	promMetrics = metrics.NewMetrics("slack_bot")
+	promMetrics            = metrics.NewMetrics("slack_bot")
+	dispatchCommandDenials = prometheus.NewCounter(prometheus.CounterOpts{
+		Name: "slack_bot_dispatch_command_denials_total",
+		Help: "Number of tp-dispatch mentions rejected at the Slack channel boundary.",
+	})
 )
+
+func init() {
+	prometheus.MustRegister(dispatchCommandDenials)
+}
 
 func addSchemes() error {
 	if err := userv1.AddToScheme(scheme.Scheme); err != nil {
@@ -167,7 +234,11 @@ func main() {
 		logrus.WithError(err).Fatal("couldn't add schemes")
 	}
 
-	if err := secret.Add(o.slackTokenPath, o.slackSigningSecretPath); err != nil {
+	secretPaths := []string{o.slackTokenPath, o.slackSigningSecretPath}
+	if o.dispatcherControlTokenPath != "" {
+		secretPaths = append(secretPaths, o.dispatcherControlTokenPath)
+	}
+	if err := secret.Add(secretPaths...); err != nil {
 		logrus.WithError(err).Fatal("Error starting secrets agent.")
 	}
 
@@ -198,6 +269,25 @@ func main() {
 		}
 	}
 
+	eventRoutes := eventrouter.ForEvents(slackClient, issueFiler, kubeClient, configAgent.Config, gcsClient, keywordsConfig, o.helpdeskAlias, o.forumChannelId, o.reviewRequestWorkflowID, o.namespace, o.supportRequestChannelID, o.supportRequestThreshold, o.requireWorkflowsInForum)
+	if o.dispatcherControlURL != "" {
+		controlClient := dispatcher.NewControlClient(o.dispatcherControlURL, secret.GetTokenGenerator(o.dispatcherControlTokenPath))
+		dispatchHandler, err := dispatchcommand.NewHandler(controlClient, dispatchcommand.Options{
+			ChannelID:   o.dispatchCommandChannelID,
+			EnableApply: o.enableDispatchCapacity || o.enableDispatchDrain || o.enableDispatchCapabilityScope,
+			Messenger:   slackClient,
+			OnDenial: func(command dispatchcommand.Command) {
+				dispatchCommandDenials.Inc()
+				logrus.WithFields(logrus.Fields{"channel_id": command.ChannelID, "user_id": command.UserID, "route": "tp-dispatch"}).Warn("denied dispatcher Slack mention outside the configured channel")
+			},
+		})
+		if err != nil {
+			logrus.WithError(err).Fatal("Failed to configure dispatcher Slack mentions")
+		}
+		go dispatchHandler.Run(interrupts.Context())
+		eventRoutes = eventhandler.MultiHandler(dispatchHandler.MentionHandler(), eventhandler.PartialFromHandler(eventRoutes))
+	}
+
 	metrics.ExposeMetrics("slack-bot", config.PushGateway{}, o.instrumentationOptions.MetricsPort)
 	simplifier := simplifypath.NewSimplifier(l("", // shadow element mimicing the root
 		l(""), // for black-box health checks
@@ -215,7 +305,7 @@ func main() {
 	// handle the root to allow for a simple uptime probe
 	mux.Handle("/", handler(http.HandlerFunc(func(writer http.ResponseWriter, request *http.Request) { writer.WriteHeader(http.StatusOK) })))
 	mux.Handle("/slack/interactive-endpoint", handler(handleInteraction(secret.GetTokenGenerator(o.slackSigningSecretPath), interactionrouter.ForModals(issueFiler, slackClient))))
-	mux.Handle("/slack/events-endpoint", handler(handleEvent(secret.GetTokenGenerator(o.slackSigningSecretPath), eventrouter.ForEvents(slackClient, issueFiler, kubeClient, configAgent.Config, gcsClient, keywordsConfig, o.helpdeskAlias, o.forumChannelId, o.reviewRequestWorkflowID, o.namespace, o.supportRequestChannelID, o.supportRequestThreshold, o.requireWorkflowsInForum))))
+	mux.Handle("/slack/events-endpoint", handler(handleEvent(secret.GetTokenGenerator(o.slackSigningSecretPath), eventRoutes)))
 	server := &http.Server{Addr: ":" + strconv.Itoa(o.port), Handler: mux}
 
 	health.ServeReady()

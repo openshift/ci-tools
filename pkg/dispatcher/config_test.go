@@ -258,6 +258,21 @@ func TestLoadConfig(t *testing.T) {
 	}
 }
 
+func TestManualClustersConfigRoundTrip(t *testing.T) {
+	path := filepath.Join(t.TempDir(), "config.yaml")
+	want := &Config{Default: "api.ci", ManualClusters: []api.Cluster{"app.ci"}}
+	if err := SaveConfig(want, path); err != nil {
+		t.Fatalf("SaveConfig() returned an error: %v", err)
+	}
+	got, err := LoadConfig(path)
+	if err != nil {
+		t.Fatalf("LoadConfig() returned an error: %v", err)
+	}
+	if diff := cmp.Diff(want, got); diff != "" {
+		t.Fatalf("manual cluster config differs after round trip (-want +got):\n%s", diff)
+	}
+}
+
 var (
 	EquateRegexp = cmp.Comparer(func(x, y regexp.Regexp) bool {
 		return x.String() == y.String()
@@ -415,6 +430,15 @@ func TestDetermineClusterForJob(t *testing.T) {
 			jobBase:  config.JobBase{Name: "no-agent-job"},
 			path:     "ci-operator/jobs/openshift-s2i/s2i-wildfly/openshift-s2i-s2i-wildfly-master-postsubmits.yaml",
 			expected: "api.ci",
+		},
+		{
+			name: "existing manual cluster assignment",
+			config: &Config{
+				Default:        "api.ci",
+				ManualClusters: []api.Cluster{"app.ci"},
+			},
+			jobBase:  config.JobBase{Name: "manual-job", Cluster: "app.ci"},
+			expected: "app.ci",
 		},
 		{
 			name:                   "some job in build farm",
@@ -720,6 +744,40 @@ func TestValidate(t *testing.T) {
 			},
 			expected: fmt.Errorf("there are job names occurring more than once: [b c]"),
 		},
+		{
+			name: "valid manual cluster",
+			config: &Config{
+				Default:        "api.ci",
+				ManualClusters: []api.Cluster{"app.ci"},
+			},
+		},
+		{
+			name: "empty manual cluster",
+			config: &Config{
+				Default:        "api.ci",
+				ManualClusters: []api.Cluster{""},
+			},
+			expected: fmt.Errorf("manualClusters must not contain an empty cluster name"),
+		},
+		{
+			name: "duplicate manual cluster",
+			config: &Config{
+				Default:        "api.ci",
+				ManualClusters: []api.Cluster{"app.ci", "app.ci"},
+			},
+			expected: fmt.Errorf("manual cluster %q is listed more than once", "app.ci"),
+		},
+		{
+			name: "manual cluster overlaps build farm",
+			config: &Config{
+				Default:        "api.ci",
+				ManualClusters: []api.Cluster{"app.ci"},
+				BuildFarm: map[api.Cloud]map[api.Cluster]*BuildFarmConfig{
+					api.CloudAWS: {"app.ci": {}},
+				},
+			},
+			expected: fmt.Errorf("manual cluster %q is also an automatic build-farm cluster", "app.ci"),
+		},
 	}
 	for _, tc := range testCases {
 		t.Run(tc.name, func(t *testing.T) {
@@ -728,6 +786,24 @@ func TestValidate(t *testing.T) {
 				t.Errorf("%s: actual does not match expected, diff: %s", tc.name, diff)
 			}
 		})
+	}
+}
+
+func TestSynchronizeBuildFarmKeepsManualClustersOutOfAutomaticInventory(t *testing.T) {
+	config := &Config{ManualClusters: []api.Cluster{"app.ci"}}
+	if _, err := config.SynchronizeBuildFarm(ClusterMap{"build01": {Provider: "aws", Capacity: 100}}); err != nil {
+		t.Fatalf("SynchronizeBuildFarm() returned an error: %v", err)
+	}
+	if config.IsInBuildFarm("app.ci") != "" {
+		t.Fatal("manual cluster app.ci was added to the automatic build farm")
+	}
+
+	_, err := config.SynchronizeBuildFarm(ClusterMap{
+		"app.ci":  {Provider: "aws", Capacity: 100},
+		"build01": {Provider: "aws", Capacity: 100},
+	})
+	if diff := cmp.Diff(fmt.Errorf("manual cluster %q is present in the active cluster inventory", "app.ci"), err, testhelper.EquateErrorMessage); diff != "" {
+		t.Fatalf("unexpected overlap error (-want +got):\n%s", diff)
 	}
 }
 

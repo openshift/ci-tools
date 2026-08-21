@@ -60,22 +60,25 @@ func sendCommentWithMode(
 	prNumber := prowJob.Spec.Refs.Pulls[0].Number
 	headSHA := prowJob.Spec.Refs.Pulls[0].SHA
 
-	// Gather /test commands for conditionally-required presubmits.
-	conditionalCommands, conditionalMsg := acquireConditionalContexts(
-		ctx, logger, lister, conditionalPresubmits, org, repo, prNumber, headSHA, namespace,
-	)
-
-	// Gather /test commands for protected presubmits.
-	// When this is an explicit /pipeline required command, trigger all protected tests
+	// Gather /test commands for protected and conditionally-required presubmits.
+	// When this is an explicit /pipeline required command, trigger ALL tests
 	// unconditionally. Otherwise, deduplicate against existing ProwJobs at the same SHA.
 	var protectedCommands []string
+	var conditionalCommands []string
 	var protectedAlreadyExist []string
+	var conditionalMsg string
 
 	if isExplicitCommand {
 		for _, ps := range protectedPresubmits {
 			protectedCommands = append(protectedCommands, fmt.Sprintf("/test %s", ps.Name))
 		}
+		for _, ps := range conditionalPresubmits {
+			conditionalCommands = append(conditionalCommands, fmt.Sprintf("/test %s", ps.Name))
+		}
 	} else {
+		conditionalCommands, conditionalMsg = acquireConditionalContexts(
+			ctx, logger, lister, conditionalPresubmits, org, repo, prNumber, headSHA, namespace,
+		)
 		for _, ps := range protectedPresubmits {
 			exists, err := prowJobExistsForSHA(ctx, lister, ps.Name, org, repo, prNumber, headSHA, namespace)
 			if err != nil {

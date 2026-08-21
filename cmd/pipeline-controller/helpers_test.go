@@ -141,16 +141,17 @@ func TestSendCommentWithMode_ProtectedDedup(t *testing.T) {
 			wantNoComment:     true,
 		},
 		{
-			name: "explicit command bypasses dedup for protected tests",
+			name: "explicit command bypasses dedup for all tests",
 			existingPJs: []runtime.Object{
 				prowJobForPR("pull-ci-openshift-installer-e2e-aws", sha),
 				prowJobForPR("pull-ci-openshift-installer-e2e-gcp", sha),
+				prowJobForPR("pull-ci-openshift-installer-e2e-azure", sha),
 			},
 			isExplicitCommand: true,
 			wantComments:      1,
-			// Explicit command triggers all protected tests unconditionally,
-			// but conditional tests still get deduped
-			wantTriggered: []string{"pull-ci-openshift-installer-e2e-aws", "pull-ci-openshift-installer-e2e-gcp"},
+			// Explicit command triggers all tests unconditionally,
+			// bypassing dedup for both protected and conditional presubmits
+			wantTriggered: []string{"pull-ci-openshift-installer-e2e-aws", "pull-ci-openshift-installer-e2e-gcp", "pull-ci-openshift-installer-e2e-azure"},
 		},
 		{
 			name: "ProwJob exists at different SHA: triggers it",

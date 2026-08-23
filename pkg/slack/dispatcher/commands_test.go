@@ -23,6 +23,12 @@ type fakeControlClient struct {
 	planRequest    coredispatcher.PlanRequest
 	applyRequests  []coredispatcher.ApplyRequest
 	cancelRequests []coredispatcher.CancelRequest
+	overrides      []dispatcherv1.DispatchOverride
+	getPlan        coredispatcher.DispatchPlan
+	getPlanErr     error
+	explain        coredispatcher.Decision
+	explainErr     error
+	explainJob     string
 }
 
 func (f *fakeControlClient) Status(context.Context, string) (coredispatcher.ControlStatus, error) {
@@ -32,7 +38,30 @@ func (f *fakeControlClient) Status(context.Context, string) (coredispatcher.Cont
 
 func (f *fakeControlClient) Overrides(context.Context) ([]dispatcherv1.DispatchOverride, error) {
 	f.calls++
-	return nil, nil
+	return f.overrides, nil
+}
+
+func (f *fakeControlClient) GetPlan(_ context.Context, id string) (coredispatcher.DispatchPlan, error) {
+	f.calls++
+	if f.getPlanErr != nil {
+		return coredispatcher.DispatchPlan{}, f.getPlanErr
+	}
+	if f.getPlan.ID != "" || f.getPlan.Request.Kind != "" {
+		return f.getPlan, nil
+	}
+	return coredispatcher.DispatchPlan{ID: id, Request: coredispatcher.PlanRequest{Kind: dispatcherv1.OverrideKindCapacity, Cluster: "build01"}}, nil
+}
+
+func (f *fakeControlClient) Explain(_ context.Context, job string) (coredispatcher.Decision, error) {
+	f.calls++
+	f.explainJob = job
+	if f.explainErr != nil {
+		return coredispatcher.Decision{}, f.explainErr
+	}
+	if f.explain.Cluster != "" {
+		return f.explain, nil
+	}
+	return coredispatcher.Decision{Cluster: "build01", Source: "baseline", PolicyGeneration: 3, Explanation: "assigned from Git baseline"}, nil
 }
 
 func (f *fakeControlClient) Plan(_ context.Context, request coredispatcher.PlanRequest) (coredispatcher.DispatchPlan, error) {
@@ -147,6 +176,10 @@ func TestReadOnlyShadowModeAllowsPlanButRejectsMutations(t *testing.T) {
 	if !strings.Contains(result.Text, "disabled") || client.calls != 1 {
 		t.Fatalf("apply was not held in shadow mode: %#v, calls=%d", result, client.calls)
 	}
+	result = handler.Handle(context.Background(), Command{ChannelID: "C-team", UserID: "U1", Text: "approve plan-1"})
+	if !strings.Contains(result.Text, "disabled") || client.calls != 1 {
+		t.Fatalf("approve was not held in shadow mode: %#v, calls=%d", result, client.calls)
+	}
 	result = handler.Handle(context.Background(), Command{ChannelID: "C-team", UserID: "U1", Text: "cancel override-1"})
 	if !strings.Contains(result.Text, "disabled") || client.calls != 1 {
 		t.Fatalf("cancel was not held in shadow mode: %#v, calls=%d", result, client.calls)
@@ -171,7 +204,7 @@ func TestUnknownOptionIsRejectedBeforeDispatcherCall(t *testing.T) {
 func TestMentionRetryIsIdempotentAndApplyUsesOriginatingThread(t *testing.T) {
 	client := &fakeControlClient{}
 	messenger := &fakeMessenger{}
-	handler, err := NewHandler(client, Options{ChannelID: "C-team", EnableApply: true, Messenger: messenger})
+	handler, err := NewHandler(client, Options{ChannelID: "C-team", EnableApply: true, EnableCapacity: true, Messenger: messenger})
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -183,7 +216,7 @@ func TestMentionRetryIsIdempotentAndApplyUsesOriginatingThread(t *testing.T) {
 			t.Fatalf("apply mention was not handled: handled=%t err=%v", handled, err)
 		}
 	}
-	if client.calls != 1 || len(client.applyRequests) != 1 || len(messenger.posts) != 1 {
+	if client.calls != 2 || len(client.applyRequests) != 1 || len(messenger.posts) != 1 {
 		t.Fatalf("Slack retry was not deduplicated: calls=%d apply=%d posts=%d", client.calls, len(client.applyRequests), len(messenger.posts))
 	}
 	request := client.applyRequests[0]
@@ -197,7 +230,7 @@ func TestMentionRetryIsIdempotentAndApplyUsesOriginatingThread(t *testing.T) {
 
 func TestMutatingCommandsUseEventIdentity(t *testing.T) {
 	client := &fakeControlClient{}
-	handler, err := NewHandler(client, Options{ChannelID: "C-team", EnableApply: true})
+	handler, err := NewHandler(client, Options{ChannelID: "C-team", EnableApply: true, EnableCapacity: true})
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -205,16 +238,197 @@ func TestMutatingCommandsUseEventIdentity(t *testing.T) {
 	if !strings.Contains(result.Text, "Active") {
 		t.Fatalf("apply failed: %#v", result)
 	}
+	result = handler.Handle(context.Background(), Command{ChannelID: "C-team", UserID: "U2", RequestID: "Ev-approve", ThreadTS: "100.1", Text: "approve plan-1 --confirm-fallback"})
+	if !strings.Contains(result.Text, "Recorded approval") || !strings.Contains(result.Text, "1/1") || len(client.applyRequests) != 2 || client.applyRequests[1].IdempotencyKey != "approve:Ev-approve" {
+		t.Fatalf("approve failed: %#v, apply=%#v", result, client.applyRequests)
+	}
 	result = handler.Handle(context.Background(), Command{ChannelID: "C-team", UserID: "U2", RequestID: "Ev-cancel", Text: "cancel override-1"})
-	if !strings.Contains(result.Text, "Revoked") || client.calls != 2 || client.cancelRequests[0].IdempotencyKey != "cancel:Ev-cancel" {
+	if !strings.Contains(result.Text, "Revoked") || client.calls != 5 || client.cancelRequests[0].IdempotencyKey != "cancel:Ev-cancel" {
 		t.Fatalf("cancel failed: %#v, calls=%d", result, client.calls)
 	}
 }
 
 func TestFormatOverridesIncludesExpiry(t *testing.T) {
-	override := dispatcherv1.DispatchOverride{Spec: dispatcherv1.DispatchOverrideSpec{ID: "o1", Kind: dispatcherv1.OverrideKindDrain, Cluster: "build01", ExpiresAt: metav1.NewTime(time.Date(2026, 8, 20, 14, 0, 0, 0, time.UTC))}, Status: dispatcherv1.DispatchOverrideStatus{State: dispatcherv1.OverrideStatePending}}
+	override := dispatcherv1.DispatchOverride{
+		Spec: dispatcherv1.DispatchOverrideSpec{
+			ID: "o1", Kind: dispatcherv1.OverrideKindDrain, Cluster: "build01", CreatedBy: "U9",
+			Reason: "INC-123 API outage", IncidentURL: "https://issues.example/INC-123",
+			RequiredApprovals: 2, Approvals: []dispatcherv1.DispatchApproval{{UserID: "U9"}},
+			ExpiresAt: metav1.NewTime(time.Date(2026, 8, 20, 14, 0, 0, 0, time.UTC)),
+		},
+		Status: dispatcherv1.DispatchOverrideStatus{State: dispatcherv1.OverrideStatePending, PolicyGeneration: 7, FallbackProtected: true},
+	}
 	formatted := formatOverrides([]dispatcherv1.DispatchOverride{override})
-	if !strings.Contains(formatted, "o1") || !strings.Contains(formatted, "Pending") || !strings.Contains(formatted, "2026-08-20T14:00:00Z") {
-		t.Fatalf("unexpected override presentation: %s", formatted)
+	for _, want := range []string{"o1", "Pending", "2026-08-20T14:00:00Z", "INC-123 API outage", "U9", "1/2", "generation 7", "fallback protected: *true*", "https://issues.example/INC-123"} {
+		if !strings.Contains(formatted, want) {
+			t.Fatalf("override presentation missing %q: %s", want, formatted)
+		}
+	}
+	withoutIncident := override
+	withoutIncident.Spec.IncidentURL = ""
+	withoutIncident.Spec.FallbackProtected = true
+	withoutIncident.Status.FallbackProtected = false
+	withoutIncident.Status.State = dispatcherv1.OverrideStatePending
+	formatted = formatOverrides([]dispatcherv1.DispatchOverride{withoutIncident})
+	if strings.Contains(formatted, "incident") {
+		t.Fatalf("empty incident URL was included: %s", formatted)
+	}
+	if !strings.Contains(formatted, "fallback protected: *false*") {
+		t.Fatalf("status fallback protection was not preferred: %s", formatted)
+	}
+}
+
+func TestHistoryFoundAndMissing(t *testing.T) {
+	client := &fakeControlClient{
+		overrides: []dispatcherv1.DispatchOverride{{
+			Spec: dispatcherv1.DispatchOverrideSpec{ID: "o1"},
+			Status: dispatcherv1.DispatchOverrideStatus{History: []dispatcherv1.DispatchAuditEvent{{
+				At:    metav1.NewTime(time.Date(2026, 8, 20, 14, 0, 0, 0, time.UTC)),
+				State: dispatcherv1.OverrideStateActive, Actor: "U1", Message: "active", Generation: 4,
+			}}},
+		}},
+	}
+	handler, err := NewHandler(client, Options{ChannelID: "C-team"})
+	if err != nil {
+		t.Fatal(err)
+	}
+	result := handler.Handle(context.Background(), Command{ChannelID: "C-team", UserID: "U1", Text: "history o1"})
+	for _, want := range []string{"o1", "Active", "U1", "active", "generation 4", "2026-08-20T14:00:00Z"} {
+		if !strings.Contains(result.Text, want) {
+			t.Fatalf("history missing %q: %#v", want, result)
+		}
+	}
+	result = handler.Handle(context.Background(), Command{ChannelID: "C-team", UserID: "U1", Text: "history missing"})
+	if strings.Contains(result.Text, "Dispatcher request failed") || !strings.Contains(result.Text, "not found") {
+		t.Fatalf("missing override was not a human error: %#v", result)
+	}
+	client.overrides[0].Status.History = nil
+	result = handler.Handle(context.Background(), Command{ChannelID: "C-team", UserID: "U1", Text: "history o1"})
+	if !strings.Contains(result.Text, "no recorded history") {
+		t.Fatalf("empty history was not described: %#v", result)
+	}
+}
+
+func TestPlanShowAndExplain(t *testing.T) {
+	client := &fakeControlClient{
+		getPlan: coredispatcher.DispatchPlan{
+			ID: "plan-9", Request: coredispatcher.PlanRequest{Kind: dispatcherv1.OverrideKindCapacity, Cluster: "build01", DurationSeconds: 3600},
+			RequiredApprovals: 1, CurrentEffectiveCapacity: 100, RequestedEffectiveCapacity: 25,
+		},
+		explain: coredispatcher.Decision{
+			Cluster: "build02", Source: "runtime-override", PolicyGeneration: 8, OverrideID: "o1",
+			ValidUntil: time.Date(2026, 8, 20, 16, 0, 0, 0, time.UTC), Explanation: "moved by capacity override",
+		},
+	}
+	handler, err := NewHandler(client, Options{ChannelID: "C-team"})
+	if err != nil {
+		t.Fatal(err)
+	}
+	result := handler.Handle(context.Background(), Command{ChannelID: "C-team", UserID: "U1", Text: "plan show plan-9"})
+	if !strings.Contains(result.Text, "plan-9") || !strings.Contains(result.Text, "Capacity") || client.calls != 1 {
+		t.Fatalf("plan show failed: %#v, calls=%d", result, client.calls)
+	}
+	result = handler.Handle(context.Background(), Command{ChannelID: "C-team", UserID: "U1", Text: "explain pull-ci-openshift-ci-tools-master-e2e"})
+	for _, want := range []string{"build02", "runtime-override", "8", "o1", "2026-08-20T16:00:00Z", "moved by capacity override"} {
+		if !strings.Contains(result.Text, want) {
+			t.Fatalf("explain missing %q: %#v", want, result)
+		}
+	}
+	if client.explainJob != "pull-ci-openshift-ci-tools-master-e2e" {
+		t.Fatalf("explain job was not forwarded: %q", client.explainJob)
+	}
+}
+
+func TestApplyRefusesDisabledDrainBeforeApply(t *testing.T) {
+	client := &fakeControlClient{getPlan: coredispatcher.DispatchPlan{
+		ID: "plan-drain", Request: coredispatcher.PlanRequest{Kind: dispatcherv1.OverrideKindDrain, Cluster: "build01"},
+	}}
+	handler, err := NewHandler(client, Options{ChannelID: "C-team", EnableApply: true})
+	if err != nil {
+		t.Fatal(err)
+	}
+	result := handler.Handle(context.Background(), Command{ChannelID: "C-team", UserID: "U1", Text: "apply plan-drain"})
+	if client.calls != 1 || len(client.applyRequests) != 0 || !strings.Contains(result.Text, "drain operations are disabled") {
+		t.Fatalf("drain apply was not refused locally: %#v, calls=%d apply=%d", result, client.calls, len(client.applyRequests))
+	}
+	result = handler.Handle(context.Background(), Command{ChannelID: "C-team", UserID: "U1", Text: "approve plan-drain"})
+	if client.calls != 2 || len(client.applyRequests) != 0 || !strings.Contains(result.Text, "drain operations are disabled") {
+		t.Fatalf("drain approve was not refused locally: %#v, calls=%d apply=%d", result, client.calls, len(client.applyRequests))
+	}
+}
+
+func TestApplyIsFailClosedWhenGetPlanErrors(t *testing.T) {
+	client := &fakeControlClient{getPlanErr: fmt.Errorf("plan lookup failed")}
+	handler, err := NewHandler(client, Options{ChannelID: "C-team", EnableApply: true})
+	if err != nil {
+		t.Fatal(err)
+	}
+	result := handler.Handle(context.Background(), Command{ChannelID: "C-team", UserID: "U1", Text: "apply plan-1"})
+	if len(client.applyRequests) != 0 || !strings.Contains(result.Text, "plan lookup failed") {
+		t.Fatalf("apply was not fail-closed on GetPlan error: %#v, apply=%d", result, len(client.applyRequests))
+	}
+	result = handler.Handle(context.Background(), Command{ChannelID: "C-team", UserID: "U1", Text: "approve plan-1"})
+	if len(client.applyRequests) != 0 || !strings.Contains(result.Text, "plan lookup failed") {
+		t.Fatalf("approve was not fail-closed on GetPlan error: %#v, apply=%d", result, len(client.applyRequests))
+	}
+}
+
+func TestApplyRefusesDisabledCapabilityScopeBeforeApply(t *testing.T) {
+	client := &fakeControlClient{getPlan: coredispatcher.DispatchPlan{
+		ID: "plan-cap", Request: coredispatcher.PlanRequest{Kind: dispatcherv1.OverrideKindCapacity, Cluster: "build01", Capability: "intranet"},
+	}}
+	handler, err := NewHandler(client, Options{ChannelID: "C-team", EnableApply: true})
+	if err != nil {
+		t.Fatal(err)
+	}
+	result := handler.Handle(context.Background(), Command{ChannelID: "C-team", UserID: "U1", Text: "apply plan-cap"})
+	if client.calls != 1 || len(client.applyRequests) != 0 || !strings.Contains(result.Text, "capability-scoped operations are disabled") {
+		t.Fatalf("capability apply was not refused locally: %#v, calls=%d apply=%d", result, client.calls, len(client.applyRequests))
+	}
+	result = handler.Handle(context.Background(), Command{ChannelID: "C-team", UserID: "U1", Text: "approve plan-cap"})
+	if client.calls != 2 || len(client.applyRequests) != 0 || !strings.Contains(result.Text, "capability-scoped operations are disabled") {
+		t.Fatalf("capability approve was not refused locally: %#v, calls=%d apply=%d", result, client.calls, len(client.applyRequests))
+	}
+}
+
+func TestDisabledPlanKindFeatureFlagCombinations(t *testing.T) {
+	plans := []struct {
+		name       string
+		kind       dispatcherv1.OverrideKind
+		capability string
+	}{
+		{name: "capacity", kind: dispatcherv1.OverrideKindCapacity},
+		{name: "drain", kind: dispatcherv1.OverrideKindDrain},
+		{name: "capability capacity", kind: dispatcherv1.OverrideKindCapacity, capability: "intranet"},
+		{name: "capability drain", kind: dispatcherv1.OverrideKindDrain, capability: "intranet"},
+	}
+
+	for mask := 0; mask < 8; mask++ {
+		options := Options{
+			EnableCapacity:        mask&1 != 0,
+			EnableDrain:           mask&2 != 0,
+			EnableCapabilityScope: mask&4 != 0,
+		}
+		for _, plan := range plans {
+			plan := plan
+			t.Run(fmt.Sprintf("flags_%03b/%s", mask, plan.name), func(t *testing.T) {
+				want := ""
+				switch {
+				case plan.capability != "" && !options.EnableCapabilityScope:
+					want = "capability-scoped operations are disabled"
+				case plan.kind == dispatcherv1.OverrideKindCapacity && !options.EnableCapacity:
+					want = "capacity operations are disabled"
+				case plan.kind == dispatcherv1.OverrideKindDrain && !options.EnableDrain:
+					want = "drain operations are disabled"
+				}
+				handler := &Handler{options: options}
+				got := handler.disabledPlanKind(coredispatcher.DispatchPlan{Request: coredispatcher.PlanRequest{
+					Kind: plan.kind, Capability: plan.capability,
+				}})
+				if got != want {
+					t.Fatalf("disabledPlanKind() = %q, want %q with options %#v", got, want, options)
+				}
+			})
+		}
 	}
 }

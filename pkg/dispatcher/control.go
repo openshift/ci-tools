@@ -674,6 +674,28 @@ func (c *ControlPlane) getPlan(id string) (DispatchPlan, bool) {
 	return plan, exists
 }
 
+// GetPlan returns a live plan or an error matching apply for missing or expired IDs.
+func (c *ControlPlane) GetPlan(id string) (DispatchPlan, error) {
+	plan, exists := c.getPlan(id)
+	if !exists || !c.now().Before(plan.ExpiresAt) {
+		return DispatchPlan{}, errors.New("plan is missing or expired; create a new plan")
+	}
+	return plan, nil
+}
+
+// Explain returns the current scheduling decision for a job.
+func (c *ControlPlane) Explain(job string) (Decision, error) {
+	snapshot := c.manager.Current()
+	if snapshot == nil || !c.manager.Ready() {
+		return Decision{}, errors.New("dispatcher has no ready policy generation")
+	}
+	decision, found := c.manager.Lookup(job, c.now().UTC())
+	if !found {
+		return Decision{}, fmt.Errorf("unknown job %q", job)
+	}
+	return decision, nil
+}
+
 func featureEnabled(options ControlOptions, request PlanRequest) error {
 	if request.Capability != "" && !options.EnableCapabilityScope {
 		return errors.New("capability-scoped operations are disabled")
@@ -979,6 +1001,34 @@ func (s *ControlServer) ServeHTTP(writer http.ResponseWriter, request *http.Requ
 			return
 		}
 		writeJSON(writer, http.StatusOK, plan)
+	case request.Method == http.MethodGet && strings.HasPrefix(path, "/plans/"):
+		planID := strings.TrimPrefix(path, "/plans/")
+		if planID == "" || strings.Contains(planID, "/") {
+			writeControlError(writer, http.StatusNotFound, errors.New("not found"))
+			return
+		}
+		plan, err := s.control.GetPlan(planID)
+		if err != nil {
+			writeControlError(writer, http.StatusNotFound, err)
+			return
+		}
+		writeJSON(writer, http.StatusOK, plan)
+	case request.Method == http.MethodGet && path == "/jobs":
+		job := request.URL.Query().Get("name")
+		if job == "" {
+			writeControlError(writer, http.StatusBadRequest, errors.New("job name is required"))
+			return
+		}
+		decision, err := s.control.Explain(job)
+		if err != nil {
+			status := http.StatusBadRequest
+			if strings.Contains(err.Error(), "unknown job") {
+				status = http.StatusNotFound
+			}
+			writeControlError(writer, status, err)
+			return
+		}
+		writeJSON(writer, http.StatusOK, decision)
 	case request.Method == http.MethodPost && strings.HasPrefix(path, "/plans/") && strings.HasSuffix(path, "/apply"):
 		planID := strings.TrimSuffix(strings.TrimPrefix(path, "/plans/"), "/apply")
 		var applyRequest ApplyRequest
@@ -1133,6 +1183,20 @@ func (c *ControlClient) Plan(ctx context.Context, request PlanRequest) (Dispatch
 	var plan DispatchPlan
 	err := c.request(ctx, http.MethodPost, "/control/v1/plans", request, &plan)
 	return plan, err
+}
+
+// GetPlan returns a previously created plan.
+func (c *ControlClient) GetPlan(ctx context.Context, id string) (DispatchPlan, error) {
+	var plan DispatchPlan
+	err := c.request(ctx, http.MethodGet, "/control/v1/plans/"+id, nil, &plan)
+	return plan, err
+}
+
+// Explain returns the current scheduling decision for a job.
+func (c *ControlClient) Explain(ctx context.Context, job string) (Decision, error) {
+	var decision Decision
+	err := c.request(ctx, http.MethodGet, "/control/v1/jobs?name="+url.QueryEscape(job), nil, &decision)
+	return decision, err
 }
 
 // Apply applies or approves a plan.

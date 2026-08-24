@@ -1404,6 +1404,11 @@ type Secret struct {
 	// Secret name, used inside test containers.
 	// Mutually exclusive with Bundle and Collection/Group.
 	Name string `json:"name,omitempty"`
+	// Namespace is where the source secret exists. Only relevant when
+	// Bundle references a bundle with sync_to_cluster: true, in which case
+	// the underlying Kubernetes secret is fetched from this namespace
+	// instead of GSM.
+	Namespace string `json:"namespace,omitempty"`
 	// Secret mount path. Defaults to /usr/test-secrets for first
 	// secret. /usr/test-secrets-2 for second, and so on.
 	MountPath string `json:"mount_path"`

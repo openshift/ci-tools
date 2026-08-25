@@ -27,7 +27,10 @@ import (
 	dispatcherv1 "github.com/openshift/ci-tools/pkg/api/dispatcher/v1"
 )
 
-const maxAuditHistory = 50
+const (
+	maxAuditHistory              = 50
+	maxSchedulerPropagationBound = 5 * time.Minute
+)
 
 var controlIDPattern = regexp.MustCompile(`^[a-z0-9][a-z0-9-]{0,62}$`)
 
@@ -82,8 +85,8 @@ func (o *ControlOptions) Validate() error {
 	if o.EnableCapabilityScope && !o.EnableCapacity {
 		return errors.New("capability-scoped operations require capacity operations to be enabled")
 	}
-	if o.EnableCapacity && (o.SchedulerPropagationBound <= 0 || o.SchedulerPropagationBound > 30*time.Second) {
-		return errors.New("write operations require a measured scheduler propagation bound no greater than 30 seconds")
+	if o.EnableCapacity && (o.SchedulerPropagationBound <= 0 || o.SchedulerPropagationBound > maxSchedulerPropagationBound) {
+		return fmt.Errorf("write operations require a measured scheduler propagation bound no greater than %s", maxSchedulerPropagationBound)
 	}
 	if o.EnableCapacity && o.AffectedDemandApproval <= 0 {
 		return errors.New("write operations require a positive affected-demand threshold for second approval")

@@ -150,7 +150,7 @@ func gatherOptions() options {
 	fs.DurationVar(&o.maxDrainTTL, "max-runtime-drain-ttl", 2*time.Hour, "Maximum TTL for a runtime drain.")
 	fs.DurationVar(&o.planTTL, "runtime-plan-ttl", 15*time.Minute, "How long an unapplied runtime plan remains valid.")
 	fs.Float64Var(&o.affectedDemandApprovalThreshold, "runtime-second-approval-demand", 0, "Affected demand at or above this value requires a distinct second approver. A positive value is required before writes can be enabled.")
-	fs.DurationVar(&o.schedulerPropagationBound, "scheduler-propagation-bound", 0, "Measured upper bound from dispatcher publication through the Prow external-scheduler cache. Required and at most 30s before writes can be enabled.")
+	fs.DurationVar(&o.schedulerPropagationBound, "scheduler-propagation-bound", 0, "Measured upper bound from dispatcher publication through the Prow external-scheduler cache. Required and at most 5m before writes can be enabled.")
 	fs.StringVar(&o.prowSchedulerConfigPath, "prow-scheduler-config-path", "", "Path to the live Prow configuration mounted from the same source used by the scheduler. Required before runtime writes can be enabled.")
 	fs.BoolVar(&o.legacyEventEndpoint, "enable-legacy-event-endpoint", false, "Expose the unauthenticated legacy /event dispatch endpoint. Disabled for the next-generation control plane.")
 

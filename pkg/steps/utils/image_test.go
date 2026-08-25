@@ -1,6 +1,7 @@
 package utils
 
 import (
+	"bytes"
 	"context"
 	"errors"
 	"fmt"
@@ -9,6 +10,7 @@ import (
 	"time"
 
 	"github.com/google/go-cmp/cmp"
+	"github.com/sirupsen/logrus"
 
 	coreapi "k8s.io/api/core/v1"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
@@ -263,6 +265,78 @@ func TestReimportTag(t *testing.T) {
 	}
 }
 
+func TestImportTagWithRetryDelaysRecoversAfterVirtualTwoMinuteOutage(t *testing.T) {
+	const namespace = "release-import"
+	var elapsed time.Duration
+	client := &outageImageImportClient{
+		Client: fakectrlruntimeclient.NewClientBuilder().Build(),
+		now:    func() time.Duration { return elapsed },
+	}
+	delays := exponentialImageImportRetryDelays(9)
+	var logs bytes.Buffer
+	logger := logrus.StandardLogger()
+	originalOutput := logger.Out
+	logger.SetOutput(&logs)
+	defer logger.SetOutput(originalOutput)
+
+	pullSpec, err := importTagWithRetryDelays(context.Background(), client, namespace, "release", "latest", "quay.io/openshift/release:latest", 9, delays, func(_ context.Context, delay time.Duration) error {
+		elapsed += delay
+		return nil
+	}, true, nil)
+	if err != nil {
+		t.Fatalf("expected import to recover: %v", err)
+	}
+	if pullSpec != "quay.io/openshift/release@sha256:resolved" {
+		t.Fatalf("unexpected resolved pull spec %q", pullSpec)
+	}
+	if client.attempts != 8 {
+		t.Fatalf("expected 8 import attempts, got %d", client.attempts)
+	}
+	if elapsed != 127*time.Second {
+		t.Fatalf("expected virtual recovery after 127s, got %s", elapsed)
+	}
+	if !strings.Contains(logs.String(), "Image stream import did not succeed, retrying") {
+		t.Fatalf("expected retry log evidence, got %q", logs.String())
+	}
+}
+
+func TestImportTagWithRetryDelaysDoesNotRetryPermanentErrors(t *testing.T) {
+	permanentErr := errors.New("malformed source")
+	client := &outageImageImportClient{
+		Client:       fakectrlruntimeclient.NewClientBuilder().Build(),
+		permanentErr: permanentErr,
+	}
+	_, err := ImportTagWithRetryDelays(context.Background(), client, "ns", "release", "latest", "not a valid source", exponentialImageImportRetryDelays(9), nil)
+	if !errors.Is(err, permanentErr) {
+		t.Fatalf("expected permanent error, got %v", err)
+	}
+	if client.attempts != 1 {
+		t.Fatalf("expected permanent error after one attempt, got %d", client.attempts)
+	}
+}
+
+type outageImageImportClient struct {
+	ctrlruntimeclient.Client
+	now          func() time.Duration
+	permanentErr error
+	attempts     int
+}
+
+func (c *outageImageImportClient) Create(ctx context.Context, obj ctrlruntimeclient.Object, opts ...ctrlruntimeclient.CreateOption) error {
+	streamImport, ok := obj.(*imagev1.ImageStreamImport)
+	if !ok {
+		return c.Client.Create(ctx, obj, opts...)
+	}
+	c.attempts++
+	if c.permanentErr != nil {
+		return c.permanentErr
+	}
+	if c.now() >= 2*time.Minute {
+		streamImport.Status.Images = []imagev1.ImageImportStatus{{Image: &imagev1.Image{DockerImageReference: "quay.io/openshift/release@sha256:resolved"}}}
+	}
+	return nil
+}
+
 func bcc(upstream ctrlruntimeclient.Client) ctrlruntimeclient.Client {
 	c := &imageStreamImportStatusSettingClient{
 		Client: upstream,
@@ -379,7 +453,7 @@ func TestGetEvaluator(t *testing.T) {
 			expected: false,
 		},
 		{
-			name:   "reimport with error",
+			name:   "transient reimport failure keeps waiting",
 			client: bcc(fakectrlruntimeclient.NewClientBuilder().Build()),
 			obj: &imagev1.ImageStream{
 				ObjectMeta: metav1.ObjectMeta{
@@ -406,7 +480,6 @@ func TestGetEvaluator(t *testing.T) {
 				},
 			},
 			expected:      false,
-			expectedErr:   fmt.Errorf("failed to reimport the tag some error/is:cli: unable to import tag some error/is:cli at import (0): some error"),
 			expectedCount: 1,
 		},
 		{
@@ -680,6 +753,79 @@ func TestWaitForImportingISTagSpecTimeout(t *testing.T) {
 	if !strings.Contains(err.Error(), "timed out waiting for the condition") {
 		t.Fatalf("expected bounded wait timeout, got: %v", err)
 	}
+}
+
+func TestImportEvaluatorContinuesAfterTransientReimportFailure(t *testing.T) {
+	const (
+		namespace  = "test-namespace"
+		streamName = "stable"
+	)
+	from := &coreapi.ObjectReference{Kind: "DockerImage", Name: "quay.io/openshift/release:latest"}
+	failing := &imagev1.ImageStream{
+		ObjectMeta: metav1.ObjectMeta{Namespace: namespace, Name: streamName},
+		Spec: imagev1.ImageStreamSpec{Tags: []imagev1.TagReference{{
+			Name: "cli",
+			From: from,
+		}}},
+		Status: imagev1.ImageStreamStatus{Tags: []imagev1.NamedTagEventList{{
+			Tag: "cli",
+			Conditions: []imagev1.TagEventCondition{{
+				Message: "Internal error occurred: registry unavailable",
+			}},
+		}}},
+	}
+	recovered := failing.DeepCopy()
+	recovered.Status.PublicDockerImageRepository = "registry.example.com/test-namespace/stable"
+	recovered.Status.Tags = []imagev1.NamedTagEventList{{
+		Tag: "cli",
+		Items: []imagev1.TagEvent{{
+			Image:                "sha256:resolved",
+			DockerImageReference: "quay.io/openshift/release@sha256:resolved",
+		}},
+	}}
+	client := &transientReimportClient{
+		Client: fakectrlruntimeclient.NewClientBuilder().WithScheme(scheme.Scheme).WithRuntimeObjects(failing).Build(),
+	}
+	var logs bytes.Buffer
+	logger := logrus.StandardLogger()
+	originalOutput := logger.Out
+	logger.SetOutput(&logs)
+	defer logger.SetOutput(originalOutput)
+
+	evaluate := getEvaluator(context.Background(), client, namespace, streamName, sets.New("cli"), false, nil)
+	done, err := evaluate(failing)
+	if err != nil {
+		t.Fatalf("expected transient failure to remain retryable: %v", err)
+	}
+	if done {
+		t.Fatal("expected evaluator to continue polling after transient reimport failure")
+	}
+	if client.importAttempts != 1 {
+		t.Fatalf("expected one failed reimport attempt, got %d", client.importAttempts)
+	}
+	if !strings.Contains(logs.String(), "continuing to wait") {
+		t.Fatalf("expected transient reimport warning, got %q", logs.String())
+	}
+	done, err = evaluate(recovered)
+	if err != nil {
+		t.Fatalf("expected recovered import to succeed: %v", err)
+	}
+	if !done {
+		t.Fatal("expected evaluator to finish after the import recovered")
+	}
+}
+
+type transientReimportClient struct {
+	ctrlruntimeclient.Client
+	importAttempts int
+}
+
+func (c *transientReimportClient) Create(ctx context.Context, obj ctrlruntimeclient.Object, opts ...ctrlruntimeclient.CreateOption) error {
+	if _, ok := obj.(*imagev1.ImageStreamImport); ok {
+		c.importAttempts++
+		return errors.New("registry unavailable")
+	}
+	return c.Client.Create(ctx, obj, opts...)
 }
 
 func TestImageDigestForSpecTagWithoutFrom(t *testing.T) {

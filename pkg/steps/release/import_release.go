@@ -68,6 +68,58 @@ type importReleaseStep struct {
 	originalPullSpec string
 }
 
+type releaseImportSleep func(context.Context, time.Duration) error
+
+func releaseImportRetryDelays() []time.Duration {
+	return []time.Duration{
+		time.Second,
+		2 * time.Second,
+		4 * time.Second,
+		8 * time.Second,
+		16 * time.Second,
+		32 * time.Second,
+		64 * time.Second,
+		128 * time.Second,
+	}
+}
+
+func sleepForReleaseImportRetry(ctx context.Context, duration time.Duration) error {
+	timer := time.NewTimer(duration)
+	defer timer.Stop()
+	select {
+	case <-ctx.Done():
+		return ctx.Err()
+	case <-timer.C:
+		return nil
+	}
+}
+
+func retryReleaseExtraction(ctx context.Context, name string, retryDelays []time.Duration, sleep releaseImportSleep, run func(context.Context) error) error {
+	for attempt := 0; ; attempt++ {
+		if err := ctx.Err(); err != nil {
+			return err
+		}
+		err := run(ctx)
+		if err == nil {
+			return nil
+		}
+		if ctxErr := ctx.Err(); ctxErr != nil {
+			return ctxErr
+		}
+		if attempt == len(retryDelays) {
+			return err
+		}
+		delay := retryDelays[attempt]
+		logrus.WithError(err).WithFields(logrus.Fields{
+			"attempt": attempt + 1,
+			"delay":   delay,
+		}).Warnf("Release extraction pod %s failed, retrying", name)
+		if err := sleep(ctx, delay); err != nil {
+			return err
+		}
+	}
+}
+
 func (s *importReleaseStep) Inputs() (api.InputDefinition, error) {
 	input, err := s.source.Input(context.Background())
 	return api.InputDefinition{input}, err
@@ -113,9 +165,10 @@ func (s *importReleaseStep) run(ctx context.Context) error {
 	}
 	logrus.WithField("name", s.name).Debugf("setting originalPullSpec to: %s for multi-stage steps to reference", pullSpec)
 	s.originalPullSpec = pullSpec
-	// retry importing the image a few times because we might race against establishing credentials/roles
-	// and be unable to import images on the same cluster
-	if newPullSpec, err := utils.ImportTagWithRetries(ctx, s.client, s.jobSpec.Namespace(), "release", s.name, pullSpec, api.ImageStreamImportRetries, s.client.MetricsAgent()); err != nil {
+	// Retry importing for several minutes because we might race against establishing
+	// credentials/roles or a transient registry outage.
+	retryDelays := releaseImportRetryDelays()
+	if newPullSpec, err := utils.ImportTagWithRetryDelays(ctx, s.client, s.jobSpec.Namespace(), "release", s.name, pullSpec, retryDelays, s.client.MetricsAgent()); err != nil {
 		return fmt.Errorf("unable to import %s release image: %w", s.name, err)
 	} else {
 		logrus.WithField("pullSpec", pullSpec).WithField("newPullSpec", newPullSpec).WithField("name", s.name).
@@ -186,7 +239,7 @@ oc create configmap release-%s --from-file=%s.yaml=${ARTIFACT_DIR}/%s
 		resources = copied
 	}
 	step := steps.PodStep("release", podConfig, resources, s.client, s.jobSpec, nil)
-	if err := step.Run(ctx); err != nil {
+	if err := retryReleaseExtraction(ctx, target, retryDelays, sleepForReleaseImportRetry, step.Run); err != nil {
 		return err
 	}
 

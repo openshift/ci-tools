@@ -1,9 +1,14 @@
 package release
 
 import (
+	"bytes"
 	"context"
+	"errors"
+	"strings"
 	"testing"
 	"time"
+
+	"github.com/sirupsen/logrus"
 
 	corev1 "k8s.io/api/core/v1"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
@@ -20,6 +25,98 @@ import (
 )
 
 const testCLIImage = "quay.io/test/cli:latest"
+
+func TestRetryReleaseExtractionRecoversAfterVirtualTwoMinuteOutage(t *testing.T) {
+	retryDelays := releaseImportRetryDelays()
+	var elapsed time.Duration
+	var attempts int
+	var logs bytes.Buffer
+	logger := logrus.StandardLogger()
+	originalOutput := logger.Out
+	logger.SetOutput(&logs)
+	defer logger.SetOutput(originalOutput)
+
+	err := retryReleaseExtraction(context.Background(), "release-images-latest", retryDelays, func(_ context.Context, delay time.Duration) error {
+		elapsed += delay
+		return nil
+	}, func(context.Context) error {
+		attempts++
+		if elapsed < 2*time.Minute {
+			return errors.New("registry unavailable")
+		}
+		return nil
+	})
+	if err != nil {
+		t.Fatalf("expected extraction to recover: %v", err)
+	}
+	if attempts != 8 {
+		t.Fatalf("expected 8 extraction attempts, got %d", attempts)
+	}
+	if elapsed != 127*time.Second {
+		t.Fatalf("expected virtual recovery after 127s, got %s", elapsed)
+	}
+	if !strings.Contains(logs.String(), "Release extraction pod release-images-latest failed, retrying") {
+		t.Fatalf("expected retry log evidence, got %q", logs.String())
+	}
+}
+
+func TestRetryReleaseExtractionIsBoundedAndContextAware(t *testing.T) {
+	t.Run("bounded", func(t *testing.T) {
+		var elapsed time.Duration
+		var attempts int
+		expectedErr := errors.New("extract failed")
+		err := retryReleaseExtraction(context.Background(), "release-images-latest", releaseImportRetryDelays(), func(_ context.Context, delay time.Duration) error {
+			elapsed += delay
+			return nil
+		}, func(context.Context) error {
+			attempts++
+			return expectedErr
+		})
+		if !errors.Is(err, expectedErr) {
+			t.Fatalf("expected final extraction error, got %v", err)
+		}
+		if attempts != 9 {
+			t.Fatalf("expected 9 bounded attempts, got %d", attempts)
+		}
+		if elapsed != 255*time.Second {
+			t.Fatalf("expected a 255s retry budget, got %s", elapsed)
+		}
+	})
+
+	t.Run("cancellation during backoff", func(t *testing.T) {
+		ctx, cancel := context.WithCancel(context.Background())
+		var attempts int
+		err := retryReleaseExtraction(ctx, "release-images-latest", releaseImportRetryDelays(), func(ctx context.Context, _ time.Duration) error {
+			cancel()
+			return ctx.Err()
+		}, func(context.Context) error {
+			attempts++
+			return errors.New("extract failed")
+		})
+		if !errors.Is(err, context.Canceled) {
+			t.Fatalf("expected cancellation, got %v", err)
+		}
+		if attempts != 1 {
+			t.Fatalf("expected one attempt before cancellation, got %d", attempts)
+		}
+	})
+
+	t.Run("expired deadline", func(t *testing.T) {
+		ctx, cancel := context.WithDeadline(context.Background(), time.Now().Add(-time.Second))
+		defer cancel()
+		var attempts int
+		err := retryReleaseExtraction(ctx, "release-images-latest", releaseImportRetryDelays(), sleepForReleaseImportRetry, func(context.Context) error {
+			attempts++
+			return nil
+		})
+		if !errors.Is(err, context.DeadlineExceeded) {
+			t.Fatalf("expected deadline error, got %v", err)
+		}
+		if attempts != 0 {
+			t.Fatalf("expected no attempt after deadline, got %d", attempts)
+		}
+	})
+}
 
 func TestResolveCLIImageFromStreamWaitsForSpecVisibility(t *testing.T) {
 	const (

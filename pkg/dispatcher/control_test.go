@@ -148,6 +148,34 @@ func TestControlPlaneRejectsWritesWithoutMeasuredPropagationBound(t *testing.T) 
 	}
 }
 
+func TestControlOptionsSchedulerPropagationBound(t *testing.T) {
+	for _, tc := range []struct {
+		name    string
+		bound   time.Duration
+		wantErr bool
+	}{
+		{name: "maximum", bound: 5 * time.Minute},
+		{name: "above maximum", bound: 5*time.Minute + time.Nanosecond, wantErr: true},
+	} {
+		t.Run(tc.name, func(t *testing.T) {
+			options := ControlOptions{
+				AllowedChannelID:          "C-team",
+				EnableCapacity:            true,
+				SchedulerPropagationBound: tc.bound,
+				AffectedDemandApproval:    1,
+				WriteSafetyCheck:          func() error { return nil },
+			}
+			err := options.Validate()
+			if tc.wantErr && err == nil {
+				t.Fatal("expected propagation bound validation to fail")
+			}
+			if !tc.wantErr && err != nil {
+				t.Fatalf("expected propagation bound validation to pass: %v", err)
+			}
+		})
+	}
+}
+
 func TestControlPlaneRechecksWriteSafety(t *testing.T) {
 	var safetyErr error
 	control, _, _, _ := testControlPlane(t, ControlOptions{

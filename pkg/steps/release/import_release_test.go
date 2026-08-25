@@ -22,12 +22,26 @@ import (
 	"github.com/openshift/ci-tools/pkg/api"
 	"github.com/openshift/ci-tools/pkg/steps/loggingclient"
 	testhelperkube "github.com/openshift/ci-tools/pkg/testhelper/kubernetes"
+	ciutil "github.com/openshift/ci-tools/pkg/util"
 )
 
 const testCLIImage = "quay.io/test/cli:latest"
 
+func deterministicReleaseImportRetryDelays() []time.Duration {
+	return []time.Duration{
+		time.Second,
+		2 * time.Second,
+		4 * time.Second,
+		8 * time.Second,
+		16 * time.Second,
+		32 * time.Second,
+		64 * time.Second,
+		128 * time.Second,
+	}
+}
+
 func TestRetryReleaseExtractionRecoversAfterVirtualTwoMinuteOutage(t *testing.T) {
-	retryDelays := releaseImportRetryDelays()
+	retryDelays := deterministicReleaseImportRetryDelays()
 	var elapsed time.Duration
 	var attempts int
 	var logs bytes.Buffer
@@ -42,7 +56,7 @@ func TestRetryReleaseExtractionRecoversAfterVirtualTwoMinuteOutage(t *testing.T)
 	}, func(context.Context) error {
 		attempts++
 		if elapsed < 2*time.Minute {
-			return errors.New("registry unavailable")
+			return &transientReleaseExtractionError{err: errors.New("registry unavailable")}
 		}
 		return nil
 	})
@@ -58,19 +72,27 @@ func TestRetryReleaseExtractionRecoversAfterVirtualTwoMinuteOutage(t *testing.T)
 	if !strings.Contains(logs.String(), "Release extraction pod release-images-latest failed, retrying") {
 		t.Fatalf("expected retry log evidence, got %q", logs.String())
 	}
+	if !strings.Contains(logs.String(), "Release extraction recovered after retry") || !strings.Contains(logs.String(), "attempts=8") {
+		t.Fatalf("expected recovery log with attempt count, got %q", logs.String())
+	}
 }
 
 func TestRetryReleaseExtractionIsBoundedAndContextAware(t *testing.T) {
 	t.Run("bounded", func(t *testing.T) {
 		var elapsed time.Duration
 		var attempts int
+		var logs bytes.Buffer
+		logger := logrus.StandardLogger()
+		originalOutput := logger.Out
+		logger.SetOutput(&logs)
+		defer logger.SetOutput(originalOutput)
 		expectedErr := errors.New("extract failed")
-		err := retryReleaseExtraction(context.Background(), "release-images-latest", releaseImportRetryDelays(), func(_ context.Context, delay time.Duration) error {
+		err := retryReleaseExtraction(context.Background(), "release-images-latest", deterministicReleaseImportRetryDelays(), func(_ context.Context, delay time.Duration) error {
 			elapsed += delay
 			return nil
 		}, func(context.Context) error {
 			attempts++
-			return expectedErr
+			return &transientReleaseExtractionError{err: expectedErr}
 		})
 		if !errors.Is(err, expectedErr) {
 			t.Fatalf("expected final extraction error, got %v", err)
@@ -81,17 +103,51 @@ func TestRetryReleaseExtractionIsBoundedAndContextAware(t *testing.T) {
 		if elapsed != 255*time.Second {
 			t.Fatalf("expected a 255s retry budget, got %s", elapsed)
 		}
+		if !strings.Contains(logs.String(), "Release extraction retry attempts exhausted") ||
+			!strings.Contains(logs.String(), "attempts=9") ||
+			!strings.Contains(logs.String(), "retry_budget=4m15s") ||
+			!strings.Contains(err.Error(), "retry budget 4m15s") {
+			t.Fatalf("expected terminal exhaustion log with attempt count, got %q", logs.String())
+		}
+	})
+
+	t.Run("permanent failure", func(t *testing.T) {
+		var attempts int
+		expectedErr := errors.New("malformed release payload")
+		err := retryReleaseExtraction(context.Background(), "release-images-latest", deterministicReleaseImportRetryDelays(), func(context.Context, time.Duration) error {
+			t.Fatal("permanent failure must not sleep")
+			return nil
+		}, func(context.Context) error {
+			attempts++
+			return expectedErr
+		})
+		if !errors.Is(err, expectedErr) || attempts != 1 {
+			t.Fatalf("expected one permanent attempt, got err=%v attempts=%d", err, attempts)
+		}
+	})
+
+	t.Run("pre-canceled", func(t *testing.T) {
+		ctx, cancel := context.WithCancel(context.Background())
+		cancel()
+		var attempts int
+		err := retryReleaseExtraction(ctx, "release-images-latest", deterministicReleaseImportRetryDelays(), sleepForReleaseImportRetry, func(context.Context) error {
+			attempts++
+			return nil
+		})
+		if !errors.Is(err, context.Canceled) || attempts != 0 || !strings.Contains(err.Error(), "release extraction pod") {
+			t.Fatalf("expected contextual pre-cancellation, got err=%v attempts=%d", err, attempts)
+		}
 	})
 
 	t.Run("cancellation during backoff", func(t *testing.T) {
 		ctx, cancel := context.WithCancel(context.Background())
 		var attempts int
-		err := retryReleaseExtraction(ctx, "release-images-latest", releaseImportRetryDelays(), func(ctx context.Context, _ time.Duration) error {
+		err := retryReleaseExtraction(ctx, "release-images-latest", deterministicReleaseImportRetryDelays(), func(ctx context.Context, _ time.Duration) error {
 			cancel()
 			return ctx.Err()
 		}, func(context.Context) error {
 			attempts++
-			return errors.New("extract failed")
+			return &transientReleaseExtractionError{err: errors.New("extract failed")}
 		})
 		if !errors.Is(err, context.Canceled) {
 			t.Fatalf("expected cancellation, got %v", err)
@@ -105,7 +161,7 @@ func TestRetryReleaseExtractionIsBoundedAndContextAware(t *testing.T) {
 		ctx, cancel := context.WithDeadline(context.Background(), time.Now().Add(-time.Second))
 		defer cancel()
 		var attempts int
-		err := retryReleaseExtraction(ctx, "release-images-latest", releaseImportRetryDelays(), sleepForReleaseImportRetry, func(context.Context) error {
+		err := retryReleaseExtraction(ctx, "release-images-latest", deterministicReleaseImportRetryDelays(), sleepForReleaseImportRetry, func(context.Context) error {
 			attempts++
 			return nil
 		})
@@ -116,6 +172,112 @@ func TestRetryReleaseExtractionIsBoundedAndContextAware(t *testing.T) {
 			t.Fatalf("expected no attempt after deadline, got %d", attempts)
 		}
 	})
+}
+
+type transientThenSuccessfulPodClient struct {
+	*testhelperkube.FakePodClient
+}
+
+func (c *transientThenSuccessfulPodClient) Get(ctx context.Context, key ctrlruntimeclient.ObjectKey, obj ctrlruntimeclient.Object, opts ...ctrlruntimeclient.GetOption) error {
+	return c.FakePodExecutor.LoggingClient.Get(ctx, key, obj, opts...)
+}
+
+func TestRetryReleaseExtractionRecreatesTransientFailedPod(t *testing.T) {
+	const (
+		namespace = "test-namespace"
+		podName   = "release-images-latest"
+	)
+	scheme := runtime.NewScheme()
+	if err := corev1.AddToScheme(scheme); err != nil {
+		t.Fatalf("add core API to scheme: %v", err)
+	}
+	loggingClient := loggingclient.New(fakectrlruntimeclient.NewClientBuilder().
+		WithScheme(scheme).
+		WithIndex(&corev1.Pod{}, "metadata.name", func(obj ctrlruntimeclient.Object) []string { return []string{obj.GetName()} }).
+		Build(), nil)
+	client := &transientThenSuccessfulPodClient{FakePodClient: &testhelperkube.FakePodClient{
+		FakePodExecutor: &testhelperkube.FakePodExecutor{LoggingClient: loggingClient, AutoSchedule: true},
+		PendingTimeout:  time.Minute,
+	}}
+	pod := &corev1.Pod{
+		ObjectMeta: metav1.ObjectMeta{Namespace: namespace, Name: podName},
+		Spec: corev1.PodSpec{
+			RestartPolicy: corev1.RestartPolicyNever,
+			Containers:    []corev1.Container{{Name: releaseExtractionContainerName, Image: "stable:cli"}},
+		},
+	}
+
+	ctx, cancel := context.WithCancel(context.Background())
+	defer cancel()
+	var attempts int
+	err := retryReleaseExtraction(ctx, podName, []time.Duration{0}, func(context.Context, time.Duration) error { return nil }, func(ctx context.Context) error {
+		attempts++
+		created, err := ciutil.CreateOrRestartPod(ctx, client, pod.DeepCopy())
+		if err != nil {
+			return err
+		}
+		if attempts > 1 {
+			return nil
+		}
+		created.Status.Phase = corev1.PodFailed
+		created.Status.ContainerStatuses = []corev1.ContainerStatus{{
+			Name: releaseExtractionContainerName,
+			State: corev1.ContainerState{Terminated: &corev1.ContainerStateTerminated{
+				ExitCode: transientReleaseExtractionExitCode,
+			}},
+		}}
+		if err := client.FakePodExecutor.LoggingClient.Status().Update(ctx, created); err != nil {
+			return err
+		}
+		return transientReleaseExtractionPodError(ctx, client, namespace, podName, errors.New("transient registry outage"))
+	})
+	if err != nil {
+		t.Fatalf("expected recreated extraction pod to succeed: %v", err)
+	}
+	if len(client.CreatedPods) != 2 {
+		t.Fatalf("expected two real pod creations, got %d", len(client.CreatedPods))
+	}
+	if len(client.DeletedPods) != 1 || client.DeletedPods[0].Status.Phase != corev1.PodFailed {
+		t.Fatalf("expected the transient failed pod to be deleted once, got %#v", client.DeletedPods)
+	}
+}
+
+func TestTransientReleaseExtractionPodErrorClassification(t *testing.T) {
+	testCases := []struct {
+		name      string
+		phase     corev1.PodPhase
+		exitCode  int32
+		transient bool
+	}{
+		{name: "explicit transient exit", phase: corev1.PodFailed, exitCode: transientReleaseExtractionExitCode, transient: true},
+		{name: "permanent container failure", phase: corev1.PodFailed, exitCode: 1},
+		{name: "pending timeout", phase: corev1.PodPending, exitCode: transientReleaseExtractionExitCode},
+		{name: "successful pod", phase: corev1.PodSucceeded},
+	}
+	for _, testCase := range testCases {
+		t.Run(testCase.name, func(t *testing.T) {
+			pod := &corev1.Pod{
+				ObjectMeta: metav1.ObjectMeta{Namespace: "ns", Name: "extract"},
+				Status: corev1.PodStatus{
+					Phase: testCase.phase,
+					ContainerStatuses: []corev1.ContainerStatus{{
+						Name:  releaseExtractionContainerName,
+						State: corev1.ContainerState{Terminated: &corev1.ContainerStateTerminated{ExitCode: testCase.exitCode}},
+					}},
+				},
+			}
+			client := fakectrlruntimeclient.NewClientBuilder().WithObjects(pod).Build()
+			original := errors.New("pod failed")
+			err := transientReleaseExtractionPodError(context.Background(), client, "ns", "extract", original)
+			var transientErr *transientReleaseExtractionError
+			if got := errors.As(err, &transientErr); got != testCase.transient {
+				t.Fatalf("transient classification = %t, want %t (err=%v)", got, testCase.transient, err)
+			}
+			if !errors.Is(err, original) {
+				t.Fatalf("classification must preserve original error, got %v", err)
+			}
+		})
+	}
 }
 
 func TestResolveCLIImageFromStreamWaitsForSpecVisibility(t *testing.T) {

@@ -13,9 +13,12 @@ import (
 	"github.com/sirupsen/logrus"
 
 	coreapi "k8s.io/api/core/v1"
+	kerrors "k8s.io/apimachinery/pkg/api/errors"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/apimachinery/pkg/runtime"
+	"k8s.io/apimachinery/pkg/runtime/schema"
 	"k8s.io/apimachinery/pkg/util/sets"
+	"k8s.io/apimachinery/pkg/util/wait"
 	"k8s.io/client-go/kubernetes/scheme"
 	ctrlruntimeclient "sigs.k8s.io/controller-runtime/pkg/client"
 	fakectrlruntimeclient "sigs.k8s.io/controller-runtime/pkg/client/fake"
@@ -23,6 +26,7 @@ import (
 	imagev1 "github.com/openshift/api/image/v1"
 
 	"github.com/openshift/ci-tools/pkg/api"
+	"github.com/openshift/ci-tools/pkg/metrics"
 	"github.com/openshift/ci-tools/pkg/testhelper"
 )
 
@@ -279,10 +283,10 @@ func TestImportTagWithRetryDelaysRecoversAfterVirtualTwoMinuteOutage(t *testing.
 	logger.SetOutput(&logs)
 	defer logger.SetOutput(originalOutput)
 
-	pullSpec, err := importTagWithRetryDelays(context.Background(), client, namespace, "release", "latest", "quay.io/openshift/release:latest", 9, delays, func(_ context.Context, delay time.Duration) error {
+	pullSpec, err := importTagWithRetryDelays(context.Background(), client, namespace, "release", "latest", "quay.io/openshift/release:latest", delays, func(_ context.Context, delay time.Duration) error {
 		elapsed += delay
 		return nil
-	}, true, nil)
+	}, true, nil, len(delays)+1)
 	if err != nil {
 		t.Fatalf("expected import to recover: %v", err)
 	}
@@ -320,6 +324,182 @@ type outageImageImportClient struct {
 	now          func() time.Duration
 	permanentErr error
 	attempts     int
+}
+
+type scriptedImageImportClient struct {
+	ctrlruntimeclient.Client
+	create   func(context.Context, int, *imagev1.ImageStreamImport) error
+	attempts int
+}
+
+func (c *scriptedImageImportClient) Create(ctx context.Context, obj ctrlruntimeclient.Object, _ ...ctrlruntimeclient.CreateOption) error {
+	streamImport, ok := obj.(*imagev1.ImageStreamImport)
+	if !ok {
+		return c.Client.Create(ctx, obj)
+	}
+	c.attempts++
+	return c.create(ctx, c.attempts, streamImport)
+}
+
+func TestImportTagWithRetryDelaysClassifiesTypedAPIErrors(t *testing.T) {
+	resource := schema.GroupResource{Group: "image.openshift.io", Resource: "imagestreamimports"}
+	testCases := []struct {
+		name      string
+		err       error
+		retryable bool
+	}{
+		{name: "conflict", err: kerrors.NewConflict(resource, "release", errors.New("conflict")), retryable: true},
+		{name: "too many requests", err: kerrors.NewTooManyRequests("busy", 0), retryable: true},
+		{name: "server timeout", err: kerrors.NewServerTimeout(resource, "create", 0), retryable: true},
+		{name: "timeout", err: kerrors.NewTimeoutError("timeout", 0), retryable: true},
+		{name: "internal error", err: kerrors.NewInternalError(errors.New("internal")), retryable: true},
+		{name: "service unavailable", err: kerrors.NewServiceUnavailable("unavailable"), retryable: true},
+		{name: "forbidden", err: kerrors.NewForbidden(resource, "release", errors.New("denied"))},
+		{name: "unauthorized", err: kerrors.NewUnauthorized("unauthorized")},
+		{name: "bad request", err: kerrors.NewBadRequest("malformed source")},
+		{name: "generic", err: errors.New("generic client failure")},
+	}
+
+	for _, testCase := range testCases {
+		t.Run(testCase.name, func(t *testing.T) {
+			client := &scriptedImageImportClient{
+				Client: fakectrlruntimeclient.NewClientBuilder().Build(),
+				create: func(_ context.Context, attempt int, streamImport *imagev1.ImageStreamImport) error {
+					if attempt == 1 {
+						return testCase.err
+					}
+					streamImport.Status.Images = []imagev1.ImageImportStatus{{Image: &imagev1.Image{DockerImageReference: "registry/release@sha256:resolved"}}}
+					return nil
+				},
+			}
+			pullSpec, err := ImportTagWithRetryDelays(context.Background(), client, "ns", "release", "latest", "registry/release:latest", []time.Duration{0}, nil)
+			if testCase.retryable {
+				if err != nil {
+					t.Fatalf("expected retryable error to recover: %v", err)
+				}
+				if pullSpec != "registry/release@sha256:resolved" || client.attempts != 2 {
+					t.Fatalf("exported retry wiring got pull spec %q after %d attempts", pullSpec, client.attempts)
+				}
+				return
+			}
+			if !errors.Is(err, testCase.err) {
+				t.Fatalf("expected permanent error %v, got %v", testCase.err, err)
+			}
+			if client.attempts != 1 {
+				t.Fatalf("expected permanent error after one attempt, got %d", client.attempts)
+			}
+		})
+	}
+}
+
+func TestImportTagWithRetryDelaysClassifiesImportStatus(t *testing.T) {
+	testCases := []struct {
+		name      string
+		reason    metav1.StatusReason
+		retryable bool
+	}{
+		{name: "service unavailable", reason: metav1.StatusReasonServiceUnavailable, retryable: true},
+		{name: "too many requests", reason: metav1.StatusReasonTooManyRequests, retryable: true},
+		{name: "forbidden", reason: metav1.StatusReasonForbidden},
+		{name: "invalid malformed source", reason: metav1.StatusReasonInvalid},
+	}
+	for _, testCase := range testCases {
+		t.Run(testCase.name, func(t *testing.T) {
+			client := &scriptedImageImportClient{
+				Client: fakectrlruntimeclient.NewClientBuilder().Build(),
+				create: func(_ context.Context, attempt int, streamImport *imagev1.ImageStreamImport) error {
+					if attempt == 1 {
+						streamImport.Status.Images = []imagev1.ImageImportStatus{{Status: metav1.Status{Status: metav1.StatusFailure, Reason: testCase.reason, Message: "import failed"}}}
+						return nil
+					}
+					streamImport.Status.Images = []imagev1.ImageImportStatus{{Image: &imagev1.Image{DockerImageReference: "registry/release@sha256:resolved"}}}
+					return nil
+				},
+			}
+			_, err := ImportTagWithRetryDelays(context.Background(), client, "ns", "release", "latest", "registry/release:latest", []time.Duration{0}, nil)
+			if testCase.retryable {
+				if err != nil || client.attempts != 2 {
+					t.Fatalf("expected transient status to recover on attempt 2, got err=%v attempts=%d", err, client.attempts)
+				}
+				return
+			}
+			if err == nil || client.attempts != 1 {
+				t.Fatalf("expected permanent status to fail once, got err=%v attempts=%d", err, client.attempts)
+			}
+		})
+	}
+}
+
+func TestImportTagWithRetryDelaysCancellation(t *testing.T) {
+	t.Run("pre-canceled", func(t *testing.T) {
+		ctx, cancel := context.WithCancel(context.Background())
+		cancel()
+		client := &scriptedImageImportClient{Client: fakectrlruntimeclient.NewClientBuilder().Build(), create: func(context.Context, int, *imagev1.ImageStreamImport) error { return nil }}
+		_, err := ImportTagWithRetryDelays(ctx, client, "ns", "release", "latest", "registry/release:latest", nil, nil)
+		if !errors.Is(err, context.Canceled) || client.attempts != 0 {
+			t.Fatalf("expected pre-cancellation before any attempt, got err=%v attempts=%d", err, client.attempts)
+		}
+	})
+
+	t.Run("during backoff", func(t *testing.T) {
+		ctx, cancel := context.WithCancel(context.Background())
+		client := &scriptedImageImportClient{
+			Client: fakectrlruntimeclient.NewClientBuilder().Build(),
+			create: func(context.Context, int, *imagev1.ImageStreamImport) error {
+				return kerrors.NewTooManyRequests("busy", 0)
+			},
+		}
+		_, err := importTagWithRetryDelays(ctx, client, "ns", "release", "latest", "registry/release:latest", []time.Duration{time.Second}, func(ctx context.Context, _ time.Duration) error {
+			cancel()
+			return ctx.Err()
+		}, true, nil, 2)
+		if !errors.Is(err, context.Canceled) || client.attempts != 1 {
+			t.Fatalf("expected cancellation during backoff, got err=%v attempts=%d", err, client.attempts)
+		}
+	})
+
+	t.Run("on final attempt", func(t *testing.T) {
+		ctx, cancel := context.WithCancel(context.Background())
+		client := &scriptedImageImportClient{
+			Client: fakectrlruntimeclient.NewClientBuilder().Build(),
+			create: func(_ context.Context, attempt int, _ *imagev1.ImageStreamImport) error {
+				if attempt == 2 {
+					cancel()
+				}
+				return nil
+			},
+		}
+		_, err := importTagWithRetryDelays(ctx, client, "ns", "release", "latest", "registry/release:latest", []time.Duration{0}, func(context.Context, time.Duration) error { return nil }, true, nil, 2)
+		if !errors.Is(err, context.Canceled) || errors.Is(err, wait.ErrWaitTimeout) {
+			t.Fatalf("expected final-attempt cancellation, got %v", err)
+		}
+		if client.attempts != 2 {
+			t.Fatalf("expected cancellation on second attempt, got %d attempts", client.attempts)
+		}
+	})
+}
+
+func TestImageImportRetryPolicyValidationAndJitter(t *testing.T) {
+	client := &scriptedImageImportClient{Client: fakectrlruntimeclient.NewClientBuilder().Build(), create: func(context.Context, int, *imagev1.ImageStreamImport) error { return nil }}
+	_, err := importTagWithRetryDelays(context.Background(), client, "ns", "release", "latest", "registry/release:latest", []time.Duration{time.Second}, func(context.Context, time.Duration) error { return nil }, false, nil, 3)
+	if err == nil || !strings.Contains(err.Error(), "invalid image import retry policy") || client.attempts != 0 {
+		t.Fatalf("expected inconsistent policy to fail before attempts, got err=%v attempts=%d", err, client.attempts)
+	}
+	_, err = ImportTagWithRetryDelays(context.Background(), client, "ns", "release", "latest", "registry/release:latest", []time.Duration{-time.Second}, nil)
+	if err == nil || !strings.Contains(err.Error(), "must not be negative") || client.attempts != 0 {
+		t.Fatalf("expected negative delay to fail before attempts, got err=%v attempts=%d", err, client.attempts)
+	}
+
+	got := ReleaseImportRetryDelays()
+	wantBase := exponentialImageImportRetryDelays(9)
+	if len(got) != len(wantBase) {
+		t.Fatalf("release retry schedule has %d delays, want %d", len(got), len(wantBase))
+	}
+	for i := range got {
+		if got[i] < wantBase[i] || got[i] > wantBase[i]+wantBase[i]/10 {
+			t.Fatalf("jittered delay %d = %s, want within [%s,%s]", i, got[i], wantBase[i], wantBase[i]+wantBase[i]/10)
+		}
+	}
 }
 
 func (c *outageImageImportClient) Create(ctx context.Context, obj ctrlruntimeclient.Object, opts ...ctrlruntimeclient.CreateOption) error {
@@ -453,7 +633,7 @@ func TestGetEvaluator(t *testing.T) {
 			expected: false,
 		},
 		{
-			name:   "transient reimport failure keeps waiting",
+			name:   "permanent reimport failure is returned",
 			client: bcc(fakectrlruntimeclient.NewClientBuilder().Build()),
 			obj: &imagev1.ImageStream{
 				ObjectMeta: metav1.ObjectMeta{
@@ -480,6 +660,7 @@ func TestGetEvaluator(t *testing.T) {
 				},
 			},
 			expected:      false,
+			expectedErr:   fmt.Errorf("failed to reimport the tag some error/is:cli: unable to import tag some error/is:cli at import (0): some error"),
 			expectedCount: 1,
 		},
 		{
@@ -783,16 +964,18 @@ func TestImportEvaluatorContinuesAfterTransientReimportFailure(t *testing.T) {
 			DockerImageReference: "quay.io/openshift/release@sha256:resolved",
 		}},
 	}}
-	client := &transientReimportClient{
-		Client: fakectrlruntimeclient.NewClientBuilder().WithScheme(scheme.Scheme).WithRuntimeObjects(failing).Build(),
-	}
+	client := fakectrlruntimeclient.NewClientBuilder().WithScheme(scheme.Scheme).WithRuntimeObjects(failing).Build()
+	var importAttempts int
 	var logs bytes.Buffer
 	logger := logrus.StandardLogger()
 	originalOutput := logger.Out
 	logger.SetOutput(&logs)
 	defer logger.SetOutput(originalOutput)
 
-	evaluate := getEvaluator(context.Background(), client, namespace, streamName, sets.New("cli"), false, nil)
+	evaluate := getEvaluatorWithImporter(context.Background(), client, namespace, streamName, sets.New("cli"), false, nil, func(context.Context, ctrlruntimeclient.Client, string, string, string, string, int, *metrics.MetricsAgent) (string, error) {
+		importAttempts++
+		return "", &transientImageImportError{err: wait.ErrWaitTimeout}
+	})
 	done, err := evaluate(failing)
 	if err != nil {
 		t.Fatalf("expected transient failure to remain retryable: %v", err)
@@ -800,8 +983,8 @@ func TestImportEvaluatorContinuesAfterTransientReimportFailure(t *testing.T) {
 	if done {
 		t.Fatal("expected evaluator to continue polling after transient reimport failure")
 	}
-	if client.importAttempts != 1 {
-		t.Fatalf("expected one failed reimport attempt, got %d", client.importAttempts)
+	if importAttempts != 1 {
+		t.Fatalf("expected one failed reimport attempt, got %d", importAttempts)
 	}
 	if !strings.Contains(logs.String(), "continuing to wait") {
 		t.Fatalf("expected transient reimport warning, got %q", logs.String())
@@ -815,17 +998,51 @@ func TestImportEvaluatorContinuesAfterTransientReimportFailure(t *testing.T) {
 	}
 }
 
-type transientReimportClient struct {
-	ctrlruntimeclient.Client
-	importAttempts int
-}
-
-func (c *transientReimportClient) Create(ctx context.Context, obj ctrlruntimeclient.Object, opts ...ctrlruntimeclient.CreateOption) error {
-	if _, ok := obj.(*imagev1.ImageStreamImport); ok {
-		c.importAttempts++
-		return errors.New("registry unavailable")
+func TestImportEvaluatorPreservesPermanentAndContextErrors(t *testing.T) {
+	resource := schema.GroupResource{Group: "image.openshift.io", Resource: "imagestreamimports"}
+	testCases := []struct {
+		name      string
+		importErr error
+		transient bool
+	}{
+		{name: "transient exhaustion", importErr: &transientImageImportError{err: wait.ErrWaitTimeout}, transient: true},
+		{name: "forbidden", importErr: kerrors.NewForbidden(resource, "release", errors.New("denied"))},
+		{name: "unauthorized", importErr: kerrors.NewUnauthorized("unauthorized")},
+		{name: "generic", importErr: errors.New("client failure")},
+		{name: "canceled", importErr: context.Canceled},
 	}
-	return c.Client.Create(ctx, obj, opts...)
+	stream := &imagev1.ImageStream{
+		ObjectMeta: metav1.ObjectMeta{Namespace: "ns", Name: "release"},
+		Spec: imagev1.ImageStreamSpec{Tags: []imagev1.TagReference{{
+			Name: "latest",
+			From: &coreapi.ObjectReference{Kind: "DockerImage", Name: "registry/release:latest"},
+		}}},
+		Status: imagev1.ImageStreamStatus{Tags: []imagev1.NamedTagEventList{{
+			Tag:        "latest",
+			Conditions: []imagev1.TagEventCondition{{Message: "Internal error occurred: registry unavailable"}},
+		}}},
+	}
+
+	for _, testCase := range testCases {
+		t.Run(testCase.name, func(t *testing.T) {
+			evaluate := getEvaluatorWithImporter(context.Background(), fakectrlruntimeclient.NewClientBuilder().Build(), "ns", "release", sets.New("latest"), false, nil, func(context.Context, ctrlruntimeclient.Client, string, string, string, string, int, *metrics.MetricsAgent) (string, error) {
+				return "", testCase.importErr
+			})
+			done, err := evaluate(stream)
+			if done {
+				t.Fatal("expected evaluator not to complete")
+			}
+			if testCase.transient {
+				if err != nil {
+					t.Fatalf("expected transient error to continue polling: %v", err)
+				}
+				return
+			}
+			if !errors.Is(err, testCase.importErr) {
+				t.Fatalf("expected permanent/context error %v, got %v", testCase.importErr, err)
+			}
+		})
+	}
 }
 
 func TestImageDigestForSpecTagWithoutFrom(t *testing.T) {

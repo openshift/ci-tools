@@ -1159,6 +1159,11 @@ const ciOperatorReferenceYaml = "# The list of base images describe\n" +
 	"            # Secret name, used inside test containers.\n" +
 	"            # Mutually exclusive with Bundle and Collection/Group.\n" +
 	"            name: ' '\n" +
+	"            # Namespace is where the source secret exists. Only relevant when\n" +
+	"            # Bundle references a bundle with sync_to_cluster: true, in which case\n" +
+	"            # the underlying Kubernetes secret is fetched from this namespace\n" +
+	"            # instead of GSM.\n" +
+	"            namespace: ' '\n" +
 	"        # Secrets is an optional array of secret objects\n" +
 	"        # which will be mounted inside the test container.\n" +
 	"        # You cannot set the Secret and Secrets attributes\n" +
@@ -1186,6 +1191,11 @@ const ciOperatorReferenceYaml = "# The list of base images describe\n" +
 	"              # Secret name, used inside test containers.\n" +
 	"              # Mutually exclusive with Bundle and Collection/Group.\n" +
 	"              name: ' '\n" +
+	"              # Namespace is where the source secret exists. Only relevant when\n" +
+	"              # Bundle references a bundle with sync_to_cluster: true, in which case\n" +
+	"              # the underlying Kubernetes secret is fetched from this namespace\n" +
+	"              # instead of GSM.\n" +
+	"              namespace: ' '\n" +
 	"        # ShardCount describes the number of jobs that should be generated as shards for this test\n" +
 	"        # Each generated job will be a duplication, but contain a suffix and the necessary SHARD_ARGS will be passed to the steps\n" +
 	"        # Only applicable to presubmits and periodics\n" +
@@ -2140,6 +2150,11 @@ const ciOperatorReferenceYaml = "# The list of base images describe\n" +
 	"        # Secret name, used inside test containers.\n" +
 	"        # Mutually exclusive with Bundle and Collection/Group.\n" +
 	"        name: ' '\n" +
+	"        # Namespace is where the source secret exists. Only relevant when\n" +
+	"        # Bundle references a bundle with sync_to_cluster: true, in which case\n" +
+	"        # the underlying Kubernetes secret is fetched from this namespace\n" +
+	"        # instead of GSM.\n" +
+	"        namespace: ' '\n" +
 	"      # Secrets is an optional array of secret objects\n" +
 	"      # which will be mounted inside the test container.\n" +
 	"      # You cannot set the Secret and Secrets attributes\n" +
@@ -2167,6 +2182,11 @@ const ciOperatorReferenceYaml = "# The list of base images describe\n" +
 	"          # Secret name, used inside test containers.\n" +
 	"          # Mutually exclusive with Bundle and Collection/Group.\n" +
 	"          name: ' '\n" +
+	"          # Namespace is where the source secret exists. Only relevant when\n" +
+	"          # Bundle references a bundle with sync_to_cluster: true, in which case\n" +
+	"          # the underlying Kubernetes secret is fetched from this namespace\n" +
+	"          # instead of GSM.\n" +
+	"          namespace: ' '\n" +
 	"      # ShardCount describes the number of jobs that should be generated as shards for this test\n" +
 	"      # Each generated job will be a duplication, but contain a suffix and the necessary SHARD_ARGS will be passed to the steps\n" +
 	"      # Only applicable to presubmits and periodics\n" +

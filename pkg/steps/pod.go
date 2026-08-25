@@ -448,6 +448,7 @@ func (s *podStep) resolveAndCreateGSMSecrets(ctx context.Context) error {
 			Field:      secret.Field,
 			Group:      secret.Group,
 			Bundle:     secret.Bundle,
+			Namespace:  secret.Namespace,
 			MountPath:  mountPath,
 		})
 	}

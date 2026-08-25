@@ -906,3 +906,91 @@ func fakeInvolvedObjectUIDEventIndex(object client.Object) []string {
 	}
 	return []string{string(p.InvolvedObject.UID)}
 }
+
+func TestHintsAtInfraReason(t *testing.T) {
+	testCases := []struct {
+		name       string
+		logSnippet string
+		expected   bool
+	}{
+		{
+			name:       "empty log snippet",
+			logSnippet: "",
+			expected:   false,
+		},
+		{
+			name:       "unrelated error",
+			logSnippet: "error: something went wrong",
+			expected:   false,
+		},
+		{
+			name:       "no such image",
+			logSnippet: "error: build error: no such image",
+			expected:   true,
+		},
+		{
+			name:       "no more mirrors",
+			logSnippet: "[Errno 256] No more mirrors to try.",
+			expected:   true,
+		},
+		{
+			name:       "failed to synchronize cache",
+			logSnippet: "Error: Failed to synchronize cache for repo",
+			expected:   true,
+		},
+		{
+			name:       "could not resolve host",
+			logSnippet: "Could not resolve host: registry.example.com",
+			expected:   true,
+		},
+		{
+			name:       "TLS handshake timeout",
+			logSnippet: "net/http: TLS handshake timeout",
+			expected:   true,
+		},
+		{
+			name:       "all mirrors tried",
+			logSnippet: "All mirrors were tried",
+			expected:   true,
+		},
+		{
+			name:       "connection reset by peer",
+			logSnippet: "connection reset by peer",
+			expected:   true,
+		},
+		{
+			name:       "network is unreachable",
+			logSnippet: "network is unreachable",
+			expected:   true,
+		},
+		{
+			name:       "no route to host",
+			logSnippet: "no route to host",
+			expected:   true,
+		},
+		{
+			name:       "DNS resolution failure - name not known",
+			logSnippet: "fatal: unable to access 'https://github.com/org/repo/': Could not resolve 'github.com': Name or service not known",
+			expected:   true,
+		},
+		{
+			name:       "DNS resolution failure - temporary failure",
+			logSnippet: "getaddrinfo: Temporary failure in name resolution",
+			expected:   true,
+		},
+		{
+			name:       "DNS failure in build log context",
+			logSnippet: "Step 3/10 : RUN dnf install -y pkg\nName or service not known",
+			expected:   true,
+		},
+	}
+
+	for _, tc := range testCases {
+		t.Run(tc.name, func(t *testing.T) {
+			result := hintsAtInfraReason(tc.logSnippet)
+			if result != tc.expected {
+				t.Errorf("hintsAtInfraReason(%q) = %v, want %v", tc.logSnippet, result, tc.expected)
+			}
+		})
+	}
+}

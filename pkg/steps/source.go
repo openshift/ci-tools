@@ -661,7 +661,9 @@ func hintsAtInfraReason(logSnippet string) bool {
 		strings.Contains(logSnippet, "All mirrors were tried") ||
 		strings.Contains(logSnippet, "connection reset by peer") ||
 		strings.Contains(logSnippet, "network is unreachable") ||
-		strings.Contains(logSnippet, "no route to host")
+		strings.Contains(logSnippet, "no route to host") ||
+		strings.Contains(logSnippet, "Name or service not known") ||
+		strings.Contains(logSnippet, "Temporary failure in name resolution")
 }
 
 func waitForBuildOrTimeout(

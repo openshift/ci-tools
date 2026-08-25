@@ -273,9 +273,12 @@ func main() {
 	if o.dispatcherControlURL != "" {
 		controlClient := dispatcher.NewControlClient(o.dispatcherControlURL, secret.GetTokenGenerator(o.dispatcherControlTokenPath))
 		dispatchHandler, err := dispatchcommand.NewHandler(controlClient, dispatchcommand.Options{
-			ChannelID:   o.dispatchCommandChannelID,
-			EnableApply: o.enableDispatchCapacity || o.enableDispatchDrain || o.enableDispatchCapabilityScope,
-			Messenger:   slackClient,
+			ChannelID:             o.dispatchCommandChannelID,
+			EnableApply:           o.enableDispatchCapacity || o.enableDispatchDrain || o.enableDispatchCapabilityScope,
+			EnableCapacity:        o.enableDispatchCapacity,
+			EnableDrain:           o.enableDispatchDrain,
+			EnableCapabilityScope: o.enableDispatchCapabilityScope,
+			Messenger:             slackClient,
 			OnDenial: func(command dispatchcommand.Command) {
 				dispatchCommandDenials.Inc()
 				logrus.WithFields(logrus.Fields{"channel_id": command.ChannelID, "user_id": command.UserID, "route": "tp-dispatch"}).Warn("denied dispatcher Slack mention outside the configured channel")

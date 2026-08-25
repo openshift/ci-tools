@@ -542,6 +542,120 @@ func TestControlServerAuthenticationAndPlan(t *testing.T) {
 	}
 }
 
+func TestControlPlaneGetPlanAndHTTPGet(t *testing.T) {
+	control, _, _, now := testControlPlane(t, ControlOptions{EnableCapacity: true})
+	plan, err := control.Plan(context.Background(), capacityPlanRequest())
+	if err != nil {
+		t.Fatal(err)
+	}
+	got, err := control.GetPlan(plan.ID)
+	if err != nil || got.ID != plan.ID {
+		t.Fatalf("live plan was not returned: %#v, %v", got, err)
+	}
+	if _, err := control.GetPlan("missing-plan"); err == nil || !strings.Contains(err.Error(), "missing or expired") {
+		t.Fatalf("missing plan error: %v", err)
+	}
+	control.now = func() time.Time { return now.Add(16 * time.Minute) }
+	if _, err := control.GetPlan(plan.ID); err == nil || !strings.Contains(err.Error(), "missing or expired") {
+		t.Fatalf("expired plan error: %v", err)
+	}
+	control.now = func() time.Time { return now }
+
+	server := NewControlServer(control, func() []byte { return []byte("secret") })
+	get := httptest.NewRequest(http.MethodGet, "/control/v1/plans/"+plan.ID, nil)
+	get.Header.Set("Authorization", "Bearer secret")
+	gotResponse := httptest.NewRecorder()
+	server.ServeHTTP(gotResponse, get)
+	if gotResponse.Code != http.StatusOK {
+		t.Fatalf("expected GET plan success, got %d: %s", gotResponse.Code, gotResponse.Body.String())
+	}
+	var decoded DispatchPlan
+	if err := json.Unmarshal(gotResponse.Body.Bytes(), &decoded); err != nil || decoded.ID != plan.ID {
+		t.Fatalf("GET plan body: %#v, %v", decoded, err)
+	}
+
+	getApply := httptest.NewRequest(http.MethodGet, "/control/v1/plans/"+plan.ID+"/apply", nil)
+	getApply.Header.Set("Authorization", "Bearer secret")
+	getApplyResponse := httptest.NewRecorder()
+	server.ServeHTTP(getApplyResponse, getApply)
+	if getApplyResponse.Code == http.StatusOK {
+		t.Fatalf("GET plan apply path was treated as GetPlan: %d %s", getApplyResponse.Code, getApplyResponse.Body.String())
+	}
+
+	applyBody, err := json.Marshal(ApplyRequest{UserID: "U1", ChannelID: "C-team", IdempotencyKey: "apply"})
+	if err != nil {
+		t.Fatal(err)
+	}
+	apply := httptest.NewRequest(http.MethodPost, "/control/v1/plans/"+plan.ID+"/apply", bytes.NewReader(applyBody))
+	apply.Header.Set("Authorization", "Bearer secret")
+	applied := httptest.NewRecorder()
+	server.ServeHTTP(applied, apply)
+	if applied.Code != http.StatusOK {
+		t.Fatalf("POST apply route broke after GET plan: %d %s", applied.Code, applied.Body.String())
+	}
+
+	missing := httptest.NewRequest(http.MethodGet, "/control/v1/plans/missing-plan", nil)
+	missing.Header.Set("Authorization", "Bearer secret")
+	missingResponse := httptest.NewRecorder()
+	server.ServeHTTP(missingResponse, missing)
+	if missingResponse.Code != http.StatusNotFound || !strings.Contains(missingResponse.Body.String(), "missing or expired") {
+		t.Fatalf("missing GET plan: %d %s", missingResponse.Code, missingResponse.Body.String())
+	}
+
+	control.now = func() time.Time { return now.Add(16 * time.Minute) }
+	expired := httptest.NewRequest(http.MethodGet, "/control/v1/plans/"+plan.ID, nil)
+	expired.Header.Set("Authorization", "Bearer secret")
+	expiredResponse := httptest.NewRecorder()
+	server.ServeHTTP(expiredResponse, expired)
+	if expiredResponse.Code != http.StatusNotFound || !strings.Contains(expiredResponse.Body.String(), "missing or expired") {
+		t.Fatalf("expired GET plan: %d %s", expiredResponse.Code, expiredResponse.Body.String())
+	}
+}
+
+func TestControlPlaneExplainHitAndMiss(t *testing.T) {
+	control, _, _, _ := testControlPlane(t, ControlOptions{})
+	decision, err := control.Explain("job-a")
+	if err != nil || decision.Cluster != "build01" || decision.Source != "baseline" || decision.PolicyGeneration == 0 {
+		t.Fatalf("explain hit: %#v, %v", decision, err)
+	}
+	if _, err := control.Explain("missing-job"); err == nil || !strings.Contains(err.Error(), "unknown job") {
+		t.Fatalf("explain miss: %v", err)
+	}
+
+	server := NewControlServer(control, func() []byte { return []byte("secret") })
+	hit := httptest.NewRequest(http.MethodGet, "/control/v1/jobs?name=job-a", nil)
+	hit.Header.Set("Authorization", "Bearer secret")
+	hitResponse := httptest.NewRecorder()
+	server.ServeHTTP(hitResponse, hit)
+	if hitResponse.Code != http.StatusOK {
+		t.Fatalf("expected explain success, got %d: %s", hitResponse.Code, hitResponse.Body.String())
+	}
+	var decoded Decision
+	if err := json.Unmarshal(hitResponse.Body.Bytes(), &decoded); err != nil || decoded.Cluster != "build01" {
+		t.Fatalf("explain body: %#v, %v", decoded, err)
+	}
+
+	miss := httptest.NewRequest(http.MethodGet, "/control/v1/jobs?name=missing-job", nil)
+	miss.Header.Set("Authorization", "Bearer secret")
+	missResponse := httptest.NewRecorder()
+	server.ServeHTTP(missResponse, miss)
+	if missResponse.Code == http.StatusInternalServerError || missResponse.Code != http.StatusNotFound || !strings.Contains(missResponse.Body.String(), "unknown job") {
+		t.Fatalf("explain miss HTTP: %d %s", missResponse.Code, missResponse.Body.String())
+	}
+
+	control.manager = NewSnapshotManager("")
+	if _, err := control.Explain("job-a"); err == nil || !strings.Contains(err.Error(), "ready") {
+		t.Fatalf("explain without a ready snapshot: %v", err)
+	}
+	unready := httptest.NewRequest(http.MethodGet, "/control/v1/jobs?name=job-a", nil)
+	unready.Header.Set("Authorization", "Bearer secret")
+	unreadyResponse := httptest.NewRecorder()
+	server.ServeHTTP(unreadyResponse, unready)
+	if unreadyResponse.Code != http.StatusBadRequest || !strings.Contains(unreadyResponse.Body.String(), "ready") {
+		t.Fatalf("unready explain HTTP: %d %s", unreadyResponse.Code, unreadyResponse.Body.String())
+	}
+}
+
 func TestFallbackObservationServerAuthenticationAndDigestBinding(t *testing.T) {
 	control, _, manager, now := testControlPlane(t, ControlOptions{})
 	server := NewFallbackObservationServer(control, func() []byte { return []byte("observer-secret") })

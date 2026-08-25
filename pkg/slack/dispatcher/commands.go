@@ -22,6 +22,8 @@ import (
 type ControlClient interface {
 	Status(context.Context, string) (coredispatcher.ControlStatus, error)
 	Overrides(context.Context) ([]dispatcherv1.DispatchOverride, error)
+	GetPlan(context.Context, string) (coredispatcher.DispatchPlan, error)
+	Explain(context.Context, string) (coredispatcher.Decision, error)
 	Plan(context.Context, coredispatcher.PlanRequest) (coredispatcher.DispatchPlan, error)
 	Apply(context.Context, string, coredispatcher.ApplyRequest) (*dispatcherv1.DispatchOverride, error)
 	Cancel(context.Context, string, coredispatcher.CancelRequest) (*dispatcherv1.DispatchOverride, error)
@@ -37,10 +39,13 @@ type Options struct {
 	ChannelID string
 	Timeout   time.Duration
 	// EnableApply gates all mutating commands while status, overrides, and plan remain available.
-	EnableApply  bool
-	Messenger    Messenger
-	PollInterval time.Duration
-	OnDenial     func(Command)
+	EnableApply           bool
+	EnableCapacity        bool
+	EnableDrain           bool
+	EnableCapabilityScope bool
+	Messenger             Messenger
+	PollInterval          time.Duration
+	OnDenial              func(Command)
 }
 
 // Command is a dispatcher operation derived from a signed Slack event.
@@ -177,7 +182,17 @@ func formatOverrides(overrides []dispatcherv1.DispatchOverride) string {
 		if overrides[i].Spec.Scope.Capability != "" {
 			scope += "/capability:" + overrides[i].Spec.Scope.Capability
 		}
-		lines = append(lines, fmt.Sprintf("• `%s` %s %s — %s, expires %s", overrides[i].Spec.ID, overrides[i].Spec.Kind, scope, overrides[i].Status.State, overrides[i].Spec.ExpiresAt.Time.UTC().Format(time.RFC3339)))
+		fallbackProtected := overrides[i].Spec.FallbackProtected
+		if overrides[i].Status.State != "" {
+			fallbackProtected = overrides[i].Status.FallbackProtected
+		}
+		detail := fmt.Sprintf("reason %s; created by %s; approvals %d/%d; generation %d; fallback protected: *%t*",
+			overrides[i].Spec.Reason, overrides[i].Spec.CreatedBy, len(overrides[i].Spec.Approvals), overrides[i].Spec.RequiredApprovals,
+			overrides[i].Status.PolicyGeneration, fallbackProtected)
+		if overrides[i].Spec.IncidentURL != "" {
+			detail += "; incident " + overrides[i].Spec.IncidentURL
+		}
+		lines = append(lines, fmt.Sprintf("• `%s` %s %s — %s, expires %s\n  %s", overrides[i].Spec.ID, overrides[i].Spec.Kind, scope, overrides[i].Status.State, overrides[i].Spec.ExpiresAt.Time.UTC().Format(time.RFC3339), detail))
 	}
 	return strings.Join(lines, "\n")
 }
@@ -234,8 +249,46 @@ func fallbackSuffix(plan coredispatcher.DispatchPlan) string {
 	return ""
 }
 
+func formatHistory(override dispatcherv1.DispatchOverride) string {
+	if len(override.Status.History) == 0 {
+		return fmt.Sprintf("Override `%s` has no recorded history.", override.Spec.ID)
+	}
+	lines := []string{fmt.Sprintf("History for override `%s`:", override.Spec.ID)}
+	for _, event := range override.Status.History {
+		lines = append(lines, fmt.Sprintf("• %s %s by %s — %s (generation %d)", event.At.Time.UTC().Format(time.RFC3339), event.State, event.Actor, event.Message, event.Generation))
+	}
+	return strings.Join(lines, "\n")
+}
+
+func formatDecision(job string, decision coredispatcher.Decision) string {
+	text := fmt.Sprintf("Job `%s` is on `%s` (%s), generation `%d`.", job, decision.Cluster, decision.Source, decision.PolicyGeneration)
+	if decision.OverrideID != "" {
+		text += fmt.Sprintf(" Override `%s`.", decision.OverrideID)
+	}
+	if !decision.ValidUntil.IsZero() {
+		text += fmt.Sprintf(" Valid until %s.", decision.ValidUntil.UTC().Format(time.RFC3339))
+	}
+	if decision.Explanation != "" {
+		text += " " + decision.Explanation
+	}
+	return text
+}
+
+func (h *Handler) disabledPlanKind(plan coredispatcher.DispatchPlan) string {
+	if plan.Request.Capability != "" && !h.options.EnableCapabilityScope {
+		return "capability-scoped operations are disabled"
+	}
+	if plan.Request.Kind == dispatcherv1.OverrideKindCapacity && !h.options.EnableCapacity {
+		return "capacity operations are disabled"
+	}
+	if plan.Request.Kind == dispatcherv1.OverrideKindDrain && !h.options.EnableDrain {
+		return "drain operations are disabled"
+	}
+	return ""
+}
+
 func usage() string {
-	return "Usage: `@dptp-bot tp-dispatch status [cluster]`, `overrides`, `plan capacity CLUSTER VALUE --for DURATION --reason REASON`, `plan drain CLUSTER --for DURATION --reason REASON`, `apply PLAN_ID`, or `cancel OVERRIDE_ID`. Add `--capability NAME` to scope a plan."
+	return "Usage: `@dptp-bot tp-dispatch status [cluster]`, `overrides`, `history OVERRIDE_ID`, `explain JOB`, `plan show PLAN_ID`, `plan capacity CLUSTER VALUE --for DURATION --reason REASON`, `plan drain CLUSTER --for DURATION --reason REASON`, `apply PLAN_ID`, `approve PLAN_ID`, or `cancel OVERRIDE_ID`. Add `--capability NAME` to scope a plan."
 }
 
 // DeniedResponse records and formats a channel-boundary denial without calling the dispatcher.
@@ -347,9 +400,51 @@ func (h *Handler) Handle(parent context.Context, command Command) Response {
 		if err == nil {
 			text = formatOverrides(overrides)
 		}
+	case "history":
+		positionals, _, parseErr := parseOptions(tokens[1:], 1)
+		if parseErr != nil {
+			return response(parseErr.Error() + ". " + usage())
+		}
+		var overrides []dispatcherv1.DispatchOverride
+		overrides, err = h.client.Overrides(ctx)
+		if err == nil {
+			found := false
+			for i := range overrides {
+				if overrides[i].Spec.ID == positionals[0] {
+					text = formatHistory(overrides[i])
+					found = true
+					break
+				}
+			}
+			if !found {
+				return response(fmt.Sprintf("Override `%s` was not found.", positionals[0]))
+			}
+		}
+	case "explain":
+		positionals, _, parseErr := parseOptions(tokens[1:], 1)
+		if parseErr != nil {
+			return response(parseErr.Error() + ". " + usage())
+		}
+		var decision coredispatcher.Decision
+		decision, err = h.client.Explain(ctx, positionals[0])
+		if err == nil {
+			text = formatDecision(positionals[0], decision)
+		}
 	case "plan":
 		if len(tokens) < 2 {
 			return response(usage())
+		}
+		if tokens[1] == "show" {
+			positionals, _, parseErr := parseOptions(tokens[2:], 1)
+			if parseErr != nil {
+				return response(parseErr.Error() + ". " + usage())
+			}
+			var shown coredispatcher.DispatchPlan
+			shown, err = h.client.GetPlan(ctx, positionals[0])
+			if err == nil {
+				text = formatPlan(shown)
+			}
+			break
 		}
 		kind := dispatcherv1.OverrideKind(strings.ToUpper(tokens[1][:1]) + strings.ToLower(tokens[1][1:]))
 		positionalCount := 1
@@ -385,22 +480,34 @@ func (h *Handler) Handle(parent context.Context, command Command) Response {
 		if err == nil {
 			text = formatPlan(plan)
 		}
-	case "apply":
+	case "apply", "approve":
 		if !h.options.EnableApply {
-			return response("Dispatcher apply is disabled while the command is in read-only shadow mode.")
+			return response(fmt.Sprintf("Dispatcher %s is disabled while the command is in read-only shadow mode.", tokens[0]))
 		}
 		positionals, options, parseErr := parseOptions(tokens[1:], 1, "confirm-fallback")
 		if parseErr != nil {
 			return response(parseErr.Error() + ". " + usage())
 		}
+		var preview coredispatcher.DispatchPlan
+		preview, err = h.client.GetPlan(ctx, positionals[0])
+		if err != nil {
+			break
+		}
+		if refusal := h.disabledPlanKind(preview); refusal != "" {
+			return response(refusal)
+		}
 		var override *dispatcherv1.DispatchOverride
 		override, err = h.client.Apply(ctx, positionals[0], coredispatcher.ApplyRequest{
-			UserID: command.UserID, ChannelID: command.ChannelID, IdempotencyKey: idempotencyKey(command, "apply"),
+			UserID: command.UserID, ChannelID: command.ChannelID, IdempotencyKey: idempotencyKey(command, tokens[0]),
 			FallbackConfirmed: options["confirm-fallback"] == "true", SlackThreadTS: command.ThreadTS,
 		})
 		if err == nil {
 			resultingOverride = override
-			text = fmt.Sprintf("Override `%s` is %s with %d/%d approvals. Policy generation: %d.", override.Spec.ID, override.Status.State, len(override.Spec.Approvals), override.Spec.RequiredApprovals, override.Status.PolicyGeneration)
+			if tokens[0] == "approve" {
+				text = fmt.Sprintf("Recorded approval for override `%s`; it is %s with %d/%d approvals. Policy generation: %d.", override.Spec.ID, override.Status.State, len(override.Spec.Approvals), override.Spec.RequiredApprovals, override.Status.PolicyGeneration)
+			} else {
+				text = fmt.Sprintf("Override `%s` is %s with %d/%d approvals. Policy generation: %d.", override.Spec.ID, override.Status.State, len(override.Spec.Approvals), override.Spec.RequiredApprovals, override.Status.PolicyGeneration)
+			}
 		}
 	case "cancel":
 		if !h.options.EnableApply {

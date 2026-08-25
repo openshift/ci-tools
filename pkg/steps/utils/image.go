@@ -14,6 +14,7 @@ import (
 	kerrors "k8s.io/apimachinery/pkg/api/errors"
 	meta "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/apimachinery/pkg/runtime"
+	utilnet "k8s.io/apimachinery/pkg/util/net"
 	"k8s.io/apimachinery/pkg/util/sets"
 	"k8s.io/apimachinery/pkg/util/wait"
 	ctrlruntimeclient "sigs.k8s.io/controller-runtime/pkg/client"
@@ -218,7 +219,7 @@ func getEvaluatorWithImporter(ctx context.Context, client ctrlruntimeclient.Clie
 						}
 						if _, err := importer(ctx, client, ns, name, tag.Name, tag.From.Name, api.ImageStreamImportRetries, metricsAgent); err != nil {
 							if isTransientImageImportError(err) {
-								logrus.WithError(err).Warnf("Failed to reimport tag %s/%s:%s after a transient registry error, continuing to wait", stream.Namespace, stream.Name, tag.Name)
+								logrus.WithField("error_class", "transient_import_exhausted").Warnf("Failed to reimport tag %s/%s:%s after a transient registry error, continuing to wait", stream.Namespace, stream.Name, tag.Name)
 								return false, nil
 							}
 							return false, fmt.Errorf("failed to reimport the tag %s/%s:%s: %w", stream.Namespace, stream.Name, tag.Name, err)
@@ -347,13 +348,35 @@ func isTransientImageImportError(err error) bool {
 }
 
 func isRetryableImageImportAPIError(err error) bool {
-	return kerrors.IsConflict(err) ||
+	return utilnet.IsConnectionReset(err) ||
+		utilnet.IsProbableEOF(err) ||
+		utilnet.IsTimeout(err) ||
+		kerrors.IsConflict(err) ||
 		kerrors.IsTooManyRequests(err) ||
 		kerrors.IsServerTimeout(err) ||
 		kerrors.IsTimeout(err) ||
 		kerrors.IsInternalError(err) ||
 		kerrors.IsServiceUnavailable(err) ||
 		kerrors.IsUnexpectedServerError(err)
+}
+
+func imageImportRetryErrorClass(err error) string {
+	switch {
+	case err == nil:
+		return "status_not_ready"
+	case utilnet.IsConnectionReset(err):
+		return "connection_reset"
+	case utilnet.IsProbableEOF(err):
+		return "connection_closed"
+	case utilnet.IsTimeout(err):
+		return "network_timeout"
+	default:
+		reason := kerrors.ReasonForError(err)
+		if reason == meta.StatusReasonUnknown {
+			return "api_error"
+		}
+		return string(reason)
+	}
 }
 
 func imageImportRetryDelay(err error, configured time.Duration) time.Duration {
@@ -395,7 +418,7 @@ func importTagWithRetryDelays(ctx context.Context, client ctrlruntimeclient.Clie
 	var pullSpec string
 	step := 0
 	retryCount := 0
-	logger := logrus.WithField("tag", fmt.Sprintf(" %s/%s:%s", ns, name, tag)).WithField("sourcePullSpec", sourcePullSpec)
+	logger := logrus.WithField("tag", fmt.Sprintf(" %s/%s:%s", ns, name, tag))
 	var importErr error
 	if attempts < 1 {
 		importErr = wait.ErrWaitTimeout
@@ -437,7 +460,7 @@ func importTagWithRetryDelays(ctx context.Context, client ctrlruntimeclient.Clie
 			if !isRetryableImageImportAPIError(attemptErr) {
 				return "", fmt.Errorf("unable to import tag %s/%s:%s at import (%d): %w", ns, name, tag, step-1, attemptErr)
 			}
-			logger.WithError(attemptErr).WithField("step", step-1).Debug("Transient image stream import API error")
+			logger.WithFields(logrus.Fields{"error_class": imageImportRetryErrorClass(attemptErr), "step": step - 1}).Debug("Transient image stream import API error")
 		} else if len(streamImport.Status.Images) == 0 {
 			logger.WithField("step", step-1).Debug("Imports' status has no images")
 		} else {
@@ -462,17 +485,14 @@ func importTagWithRetryDelays(ctx context.Context, client ctrlruntimeclient.Clie
 			return "", fmt.Errorf("unable to import tag %s/%s:%s after import (%d): %w", ns, name, tag, step-1, ctxErr)
 		}
 		if step == attempts {
-			exhaustionErr := error(wait.ErrWaitTimeout)
-			if attemptErr != nil {
-				exhaustionErr = fmt.Errorf("%w; last transient import error: %w", wait.ErrWaitTimeout, attemptErr)
-			}
+			exhaustionErr := errors.Join(wait.ErrWaitTimeout, attemptErr)
 			importErr = &transientImageImportError{err: exhaustionErr}
-			logger.WithError(attemptErr).WithField("attempts", step).Error("Image stream import retry attempts exhausted")
+			logger.WithFields(logrus.Fields{"attempts": step, "error_class": imageImportRetryErrorClass(attemptErr)}).Error("Image stream import retry attempts exhausted")
 			break
 		}
 		delay := imageImportRetryDelay(attemptErr, retryDelays[step-1])
 		if logRetries {
-			logger.WithError(attemptErr).WithFields(logrus.Fields{"attempt": step, "delay": delay}).Warn("Image stream import did not succeed, retrying")
+			logger.WithFields(logrus.Fields{"attempt": step, "delay": delay, "error_class": imageImportRetryErrorClass(attemptErr)}).Warn("Image stream import did not succeed, retrying")
 		}
 		if err := sleep(ctx, delay); err != nil {
 			return "", fmt.Errorf("unable to import tag %s/%s:%s while waiting to retry import (%d): %w", ns, name, tag, step-1, err)

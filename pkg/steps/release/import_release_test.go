@@ -4,6 +4,7 @@ import (
 	"bytes"
 	"context"
 	"errors"
+	"regexp"
 	"strings"
 	"testing"
 	"time"
@@ -172,6 +173,47 @@ func TestRetryReleaseExtractionIsBoundedAndContextAware(t *testing.T) {
 			t.Fatalf("expected no attempt after deadline, got %d", attempts)
 		}
 	})
+}
+
+func TestRunReleaseExtractionAttemptTimeoutIsRetryablePerAttempt(t *testing.T) {
+	var attempts int
+	err := retryReleaseExtraction(context.Background(), "release-images-latest", []time.Duration{0}, func(context.Context, time.Duration) error { return nil }, func(ctx context.Context) error {
+		attempts++
+		return runReleaseExtractionAttempt(ctx, 0, func(attemptCtx context.Context) error {
+			<-attemptCtx.Done()
+			return attemptCtx.Err()
+		})
+	})
+	if !errors.Is(err, context.DeadlineExceeded) {
+		t.Fatalf("expected attempt deadline error, got %v", err)
+	}
+	if attempts != 2 {
+		t.Fatalf("expected a fresh timeout for both attempts, got %d attempts", attempts)
+	}
+}
+
+func TestTransientReleaseExtractionErrorPattern(t *testing.T) {
+	pattern := regexp.MustCompile("(?i)(" + transientReleaseExtractionErrorPattern + ")")
+	testCases := []struct {
+		name      string
+		output    string
+		transient bool
+	}{
+		{name: "too many requests", output: "error: too many requests", transient: true},
+		{name: "server status", output: "registry returned status code 503", transient: true},
+		{name: "connection reset", output: "read: connection reset by peer", transient: true},
+		{name: "timeout", output: "TLS handshake timeout", transient: true},
+		{name: "forbidden", output: "forbidden: access denied"},
+		{name: "invalid reference", output: "invalid reference format"},
+		{name: "malformed payload", output: "image-references is malformed"},
+	}
+	for _, testCase := range testCases {
+		t.Run(testCase.name, func(t *testing.T) {
+			if got := pattern.MatchString(testCase.output); got != testCase.transient {
+				t.Fatalf("classification = %t, want %t for %q", got, testCase.transient, testCase.output)
+			}
+		})
+	}
 }
 
 type transientThenSuccessfulPodClient struct {

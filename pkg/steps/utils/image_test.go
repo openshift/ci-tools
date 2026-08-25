@@ -5,7 +5,9 @@ import (
 	"context"
 	"errors"
 	"fmt"
+	"io"
 	"strings"
+	"syscall"
 	"testing"
 	"time"
 
@@ -354,6 +356,9 @@ func TestImportTagWithRetryDelaysClassifiesTypedAPIErrors(t *testing.T) {
 		{name: "timeout", err: kerrors.NewTimeoutError("timeout", 0), retryable: true},
 		{name: "internal error", err: kerrors.NewInternalError(errors.New("internal")), retryable: true},
 		{name: "service unavailable", err: kerrors.NewServiceUnavailable("unavailable"), retryable: true},
+		{name: "connection reset", err: syscall.ECONNRESET, retryable: true},
+		{name: "unexpected EOF", err: io.ErrUnexpectedEOF, retryable: true},
+		{name: "network timeout", err: context.DeadlineExceeded, retryable: true},
 		{name: "forbidden", err: kerrors.NewForbidden(resource, "release", errors.New("denied"))},
 		{name: "unauthorized", err: kerrors.NewUnauthorized("unauthorized")},
 		{name: "bad request", err: kerrors.NewBadRequest("malformed source")},
@@ -499,6 +504,27 @@ func TestImageImportRetryPolicyValidationAndJitter(t *testing.T) {
 		if got[i] < wantBase[i] || got[i] > wantBase[i]+wantBase[i]/10 {
 			t.Fatalf("jittered delay %d = %s, want within [%s,%s]", i, got[i], wantBase[i], wantBase[i]+wantBase[i]/10)
 		}
+	}
+}
+
+func TestImageImportRetryDelay(t *testing.T) {
+	testCases := []struct {
+		name       string
+		err        error
+		configured time.Duration
+		want       time.Duration
+	}{
+		{name: "no suggestion", err: errors.New("transient"), configured: 5 * time.Second, want: 5 * time.Second},
+		{name: "shorter suggestion", err: kerrors.NewTooManyRequests("busy", 3), configured: 5 * time.Second, want: 5 * time.Second},
+		{name: "equal suggestion", err: kerrors.NewTooManyRequests("busy", 5), configured: 5 * time.Second, want: 5 * time.Second},
+		{name: "longer suggestion", err: kerrors.NewTooManyRequests("busy", 7), configured: 5 * time.Second, want: 7 * time.Second},
+	}
+	for _, testCase := range testCases {
+		t.Run(testCase.name, func(t *testing.T) {
+			if got := imageImportRetryDelay(testCase.err, testCase.configured); got != testCase.want {
+				t.Fatalf("delay = %s, want %s", got, testCase.want)
+			}
+		})
 	}
 }
 

@@ -163,24 +163,33 @@ func newOpts() (*options, error) {
 
 	var errs []error
 	if opts.releaseRepoGitSyncPath != "" {
-		if opts.ciOperatorconfigPath != "" || opts.stepConfigPath != "" || opts.prowconfig.JobConfigPath != "" || opts.prowconfig.SupplementalProwConfigDirs.String() != "" {
-			errs = append(errs, fmt.Errorf("--release-repo-path is mutually exclusive with --ci-operator-config-path and --step-config-path and --%s and --supplemental-prow-config-dir", opts.prowconfig.JobConfigPathFlagName))
-		} else {
-			if _, err := os.Stat(opts.releaseRepoGitSyncPath); err != nil {
-				if os.IsNotExist(err) {
-					errs = append(errs, fmt.Errorf("--release-repo-path points to a nonexistent directory: %w", err))
-				}
-				errs = append(errs, fmt.Errorf("error getting stat info for --release-repo-path directory: %w", err))
+		if _, err := os.Stat(opts.releaseRepoGitSyncPath); err != nil {
+			if os.IsNotExist(err) {
+				errs = append(errs, fmt.Errorf("--release-repo-path points to a nonexistent directory: %w", err))
 			}
+			errs = append(errs, fmt.Errorf("error getting stat info for --release-repo-path directory: %w", err))
+		}
 
+		if opts.ciOperatorconfigPath == "" {
 			opts.ciOperatorconfigPath = filepath.Join(opts.releaseRepoGitSyncPath, config.CiopConfigInRepoPath)
+		}
+
+		if opts.stepConfigPath == "" {
 			opts.stepConfigPath = filepath.Join(opts.releaseRepoGitSyncPath, config.RegistryPath)
+		}
+
+		if opts.prowconfig.JobConfigPath == "" {
 			opts.prowconfig.JobConfigPath = filepath.Join(opts.releaseRepoGitSyncPath, config.JobConfigInRepoPath)
+		}
+
+		if opts.prowconfig.ConfigPath == "" {
 			opts.prowconfig.ConfigPath = filepath.Join(opts.releaseRepoGitSyncPath, config.ConfigInRepoPath)
+		}
+
+		if opts.prowconfig.SupplementalProwConfigDirs.String() == "" {
 			if err := opts.prowconfig.SupplementalProwConfigDirs.Set(filepath.Dir(filepath.Join(opts.releaseRepoGitSyncPath, config.ConfigInRepoPath))); err != nil {
 				errs = append(errs, fmt.Errorf("could not set supplemental prow config dirs: %w", err))
 			}
-
 		}
 	}
 	if opts.leaderElectionNamespace == "" {

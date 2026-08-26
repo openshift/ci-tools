@@ -1,6 +1,8 @@
 package jobconfig
 
 import (
+	"os"
+	"path/filepath"
 	"reflect"
 	"testing"
 
@@ -1106,6 +1108,196 @@ func TestStaleSelectorFor(t *testing.T) {
 			stale := staleSelector.Matches(labels.Set(tc.labels))
 			if stale != tc.expected {
 				t.Fatalf("%s: expected %t, got %t", tc.description, tc.expected, stale)
+			}
+		})
+	}
+}
+
+func TestWriteToDir(t *testing.T) {
+	makePresubmit := func(name string, labels map[string]string) prowconfig.Presubmit {
+		if labels == nil {
+			labels = map[string]string{}
+		}
+		return prowconfig.Presubmit{
+			JobBase:  prowconfig.JobBase{Name: name, Labels: labels},
+			Brancher: prowconfig.Brancher{Branches: []string{"main"}},
+		}
+	}
+
+	testCases := []struct {
+		name        string
+		jobConfig   *prowconfig.JobConfig
+		pruneAll    bool
+		matchLabels labels.Set
+		preseed     func(t *testing.T, jobsDir string)
+		verify      func(t *testing.T, jobsDir string)
+	}{
+		{
+			name: "pruneAll removes stale generated jobs from existing files",
+			jobConfig: &prowconfig.JobConfig{
+				PresubmitsStatic: map[string][]prowconfig.Presubmit{
+					"org/repo": {makePresubmit("pull-ci-org-repo-main-new-test", nil)},
+				},
+			},
+			pruneAll: true,
+			preseed: func(t *testing.T, jobsDir string) {
+				dir := filepath.Join(jobsDir, "org", "repo")
+				if err := os.MkdirAll(dir, os.ModePerm); err != nil {
+					t.Fatalf("mkdir: %v", err)
+				}
+				if err := WriteToFile(filepath.Join(dir, "org-repo-main-presubmits.yaml"), &prowconfig.JobConfig{
+					PresubmitsStatic: map[string][]prowconfig.Presubmit{
+						"org/repo": {makePresubmit("pull-ci-org-repo-main-stale-test", map[string]string{LabelGenerator: "prowgen"})},
+					},
+				}); err != nil {
+					t.Fatalf("seed: %v", err)
+				}
+			},
+			verify: func(t *testing.T, jobsDir string) {
+				jc, err := ReadFromDir(filepath.Join(jobsDir, "org", "repo"))
+				if err != nil {
+					t.Fatalf("read: %v", err)
+				}
+				names := sets.New[string]()
+				for _, job := range jc.PresubmitsStatic["org/repo"] {
+					names.Insert(job.Name)
+				}
+				if names.Has("pull-ci-org-repo-main-stale-test") {
+					t.Error("stale job should have been pruned")
+				}
+				if !names.Has("pull-ci-org-repo-main-new-test") {
+					t.Error("new job should be present")
+				}
+			},
+		},
+		{
+			name: "pruneAll=false does not prune stale jobs",
+			jobConfig: &prowconfig.JobConfig{
+				PresubmitsStatic: map[string][]prowconfig.Presubmit{
+					"org/repo": {makePresubmit("pull-ci-org-repo-main-new-test", nil)},
+				},
+			},
+			pruneAll: false,
+			preseed: func(t *testing.T, jobsDir string) {
+				dir := filepath.Join(jobsDir, "org", "repo")
+				if err := os.MkdirAll(dir, os.ModePerm); err != nil {
+					t.Fatalf("mkdir: %v", err)
+				}
+				if err := WriteToFile(filepath.Join(dir, "org-repo-main-presubmits.yaml"), &prowconfig.JobConfig{
+					PresubmitsStatic: map[string][]prowconfig.Presubmit{
+						"org/repo": {makePresubmit("pull-ci-org-repo-main-stale-test", map[string]string{LabelGenerator: "prowgen"})},
+					},
+				}); err != nil {
+					t.Fatalf("seed: %v", err)
+				}
+			},
+			verify: func(t *testing.T, jobsDir string) {
+				jc, err := ReadFromDir(filepath.Join(jobsDir, "org", "repo"))
+				if err != nil {
+					t.Fatalf("read: %v", err)
+				}
+				names := sets.New[string]()
+				for _, job := range jc.PresubmitsStatic["org/repo"] {
+					names.Insert(job.Name)
+				}
+				if !names.Has("pull-ci-org-repo-main-stale-test") {
+					t.Error("stale job should be kept when pruneAll=false")
+				}
+				if !names.Has("pull-ci-org-repo-main-new-test") {
+					t.Error("new job should be present")
+				}
+			},
+		},
+		{
+			name: "pruneAll=true scans all existing files including those not being written",
+			jobConfig: &prowconfig.JobConfig{
+				PresubmitsStatic: map[string][]prowconfig.Presubmit{
+					"org/repo": {makePresubmit("pull-ci-org-repo-main-test", nil)},
+				},
+			},
+			pruneAll: true,
+			preseed: func(t *testing.T, jobsDir string) {
+				dir := filepath.Join(jobsDir, "org", "repo")
+				if err := os.MkdirAll(dir, os.ModePerm); err != nil {
+					t.Fatalf("mkdir: %v", err)
+				}
+				if err := WriteToFile(filepath.Join(dir, "org-repo-release-4.18-presubmits.yaml"), &prowconfig.JobConfig{
+					PresubmitsStatic: map[string][]prowconfig.Presubmit{
+						"org/repo": {makePresubmit("pull-ci-org-repo-release-4.18-stale", map[string]string{LabelGenerator: "prowgen"})},
+					},
+				}); err != nil {
+					t.Fatalf("seed: %v", err)
+				}
+			},
+			verify: func(t *testing.T, jobsDir string) {
+				path := filepath.Join(jobsDir, "org", "repo", "org-repo-release-4.18-presubmits.yaml")
+				if _, err := os.Stat(path); !os.IsNotExist(err) {
+					t.Errorf("expected stale-only file to be removed after prune, stat err: %v", err)
+				}
+			},
+		},
+		{
+			name: "pruneAll=false does not touch files it is not writing to",
+			jobConfig: &prowconfig.JobConfig{
+				PresubmitsStatic: map[string][]prowconfig.Presubmit{
+					"org/repo": {makePresubmit("pull-ci-org-repo-main-test", nil)},
+				},
+			},
+			pruneAll: false,
+			preseed: func(t *testing.T, jobsDir string) {
+				dir := filepath.Join(jobsDir, "org", "repo")
+				if err := os.MkdirAll(dir, os.ModePerm); err != nil {
+					t.Fatalf("mkdir: %v", err)
+				}
+				if err := WriteToFile(filepath.Join(dir, "org-repo-release-4.18-presubmits.yaml"), &prowconfig.JobConfig{
+					PresubmitsStatic: map[string][]prowconfig.Presubmit{
+						"org/repo": {makePresubmit("pull-ci-org-repo-release-4.18-stale", map[string]string{LabelGenerator: "prowgen"})},
+					},
+				}); err != nil {
+					t.Fatalf("seed: %v", err)
+				}
+			},
+			verify: func(t *testing.T, jobsDir string) {
+				jc, err := ReadFromDir(filepath.Join(jobsDir, "org", "repo"))
+				if err != nil {
+					t.Fatalf("read: %v", err)
+				}
+				names := sets.New[string]()
+				for _, job := range jc.PresubmitsStatic["org/repo"] {
+					names.Insert(job.Name)
+				}
+				if !names.Has("pull-ci-org-repo-release-4.18-stale") {
+					t.Error("other branch's stale job should be untouched when pruneAll=false")
+				}
+			},
+		},
+		{
+			name: "custom writeFunc is called for each output file",
+			jobConfig: &prowconfig.JobConfig{
+				PresubmitsStatic: map[string][]prowconfig.Presubmit{
+					"org/repo": {makePresubmit("pull-ci-org-repo-main-test", nil)},
+				},
+			},
+			pruneAll: true,
+			verify: func(t *testing.T, jobsDir string) {
+				if _, err := os.Stat(filepath.Join(jobsDir, "org", "repo", "org-repo-main-presubmits.yaml")); err != nil {
+					t.Errorf("expected WriteToFile to create the output: %v", err)
+				}
+			},
+		},
+	}
+
+	for _, tc := range testCases {
+		t.Run(tc.name, func(t *testing.T) {
+			jobsDir := t.TempDir()
+			if tc.preseed != nil {
+				tc.preseed(t, jobsDir)
+			}
+			if err := WriteToDir(jobsDir, "org", "repo", tc.jobConfig, "prowgen", tc.matchLabels, WriteToFile, tc.pruneAll); err != nil {
+				t.Fatalf("WriteToDir: %v", err)
+			}
+			if tc.verify != nil {
+				tc.verify(t, jobsDir)
 			}
 		})
 	}

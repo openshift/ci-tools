@@ -4,23 +4,31 @@ import (
 	"bytes"
 	"context"
 	"errors"
-	"regexp"
+	"fmt"
+	"os/exec"
 	"strings"
+	"sync"
 	"testing"
 	"time"
 
 	"github.com/sirupsen/logrus"
 
 	corev1 "k8s.io/api/core/v1"
+	kerrors "k8s.io/apimachinery/pkg/api/errors"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/apimachinery/pkg/runtime"
+	"k8s.io/apimachinery/pkg/types"
 	"k8s.io/apimachinery/pkg/watch"
+	utilpointer "k8s.io/utils/pointer"
 	ctrlruntimeclient "sigs.k8s.io/controller-runtime/pkg/client"
 	fakectrlruntimeclient "sigs.k8s.io/controller-runtime/pkg/client/fake"
+	prowapi "sigs.k8s.io/prow/pkg/apis/prowjobs/v1"
+	"sigs.k8s.io/prow/pkg/pod-utils/downwardapi"
 
 	imagev1 "github.com/openshift/api/image/v1"
 
 	"github.com/openshift/ci-tools/pkg/api"
+	"github.com/openshift/ci-tools/pkg/steps"
 	"github.com/openshift/ci-tools/pkg/steps/loggingclient"
 	testhelperkube "github.com/openshift/ci-tools/pkg/testhelper/kubernetes"
 	ciutil "github.com/openshift/ci-tools/pkg/util"
@@ -70,7 +78,7 @@ func TestRetryReleaseExtractionRecoversAfterVirtualTwoMinuteOutage(t *testing.T)
 	if elapsed != 127*time.Second {
 		t.Fatalf("expected virtual recovery after 127s, got %s", elapsed)
 	}
-	if !strings.Contains(logs.String(), "Release extraction pod release-images-latest failed, retrying") {
+	if !strings.Contains(logs.String(), "Release extraction failed, retrying") || strings.Contains(logs.String(), "release-images-latest") {
 		t.Fatalf("expected retry log evidence, got %q", logs.String())
 	}
 	if !strings.Contains(logs.String(), "Release extraction recovered after retry") || !strings.Contains(logs.String(), "attempts=8") {
@@ -158,6 +166,36 @@ func TestRetryReleaseExtractionIsBoundedAndContextAware(t *testing.T) {
 		}
 	})
 
+	t.Run("cancellation during final attempt", func(t *testing.T) {
+		ctx, cancel := context.WithCancel(context.Background())
+		var attempts int
+		err := retryReleaseExtraction(ctx, "release-images-latest", []time.Duration{0}, func(context.Context, time.Duration) error { return nil }, func(context.Context) error {
+			attempts++
+			if attempts == 2 {
+				cancel()
+			}
+			return &transientReleaseExtractionError{err: errors.New("extract failed")}
+		})
+		if !errors.Is(err, context.Canceled) || attempts != 2 {
+			t.Fatalf("expected final-attempt cancellation, got err=%v attempts=%d", err, attempts)
+		}
+	})
+
+	t.Run("attempt retains parent deadline", func(t *testing.T) {
+		ctx, cancel := context.WithTimeout(context.Background(), time.Hour)
+		defer cancel()
+		err := retryReleaseExtraction(ctx, "release-images-latest", nil, sleepForReleaseImportRetry, func(attemptCtx context.Context) error {
+			deadline, ok := attemptCtx.Deadline()
+			if !ok || time.Until(deadline) < 30*time.Minute {
+				return fmt.Errorf("attempt context was unexpectedly capped: deadline=%v present=%t", deadline, ok)
+			}
+			return nil
+		})
+		if err != nil {
+			t.Fatalf("expected parent deadline to govern the attempt: %v", err)
+		}
+	})
+
 	t.Run("expired deadline", func(t *testing.T) {
 		ctx, cancel := context.WithDeadline(context.Background(), time.Now().Add(-time.Second))
 		defer cancel()
@@ -175,60 +213,106 @@ func TestRetryReleaseExtractionIsBoundedAndContextAware(t *testing.T) {
 	})
 }
 
-func TestRunReleaseExtractionAttemptTimeoutIsRetryablePerAttempt(t *testing.T) {
-	var attempts int
-	err := retryReleaseExtraction(context.Background(), "release-images-latest", []time.Duration{0}, func(context.Context, time.Duration) error { return nil }, func(ctx context.Context) error {
-		attempts++
-		return runReleaseExtractionAttempt(ctx, 0, func(attemptCtx context.Context) error {
-			<-attemptCtx.Done()
-			return attemptCtx.Err()
-		})
-	})
-	if !errors.Is(err, context.DeadlineExceeded) {
-		t.Fatalf("expected attempt deadline error, got %v", err)
-	}
-	if attempts != 2 {
-		t.Fatalf("expected a fresh timeout for both attempts, got %d attempts", attempts)
-	}
-}
-
 func TestTransientReleaseExtractionErrorPattern(t *testing.T) {
-	pattern := regexp.MustCompile("(?i)(" + transientReleaseExtractionErrorPattern + ")")
 	testCases := []struct {
 		name      string
 		output    string
 		transient bool
 	}{
 		{name: "too many requests", output: "error: too many requests", transient: true},
+		{name: "docker hub rate limit", output: "toomanyrequests: You have reached your pull rate limit", transient: true},
 		{name: "server status", output: "registry returned status code 503", transient: true},
+		{name: "canonical internal server error", output: "received unexpected HTTP status: 500 Internal Server Error", transient: true},
+		{name: "canonical bad gateway", output: "received unexpected HTTP status: 502 Bad Gateway", transient: true},
 		{name: "connection reset", output: "read: connection reset by peer", transient: true},
 		{name: "timeout", output: "TLS handshake timeout", transient: true},
+		{name: "unauthorized", output: "unauthorized: authentication required"},
 		{name: "forbidden", output: "forbidden: access denied"},
+		{name: "manifest unknown", output: "manifest unknown: manifest unknown"},
 		{name: "invalid reference", output: "invalid reference format"},
 		{name: "malformed payload", output: "image-references is malformed"},
 	}
 	for _, testCase := range testCases {
 		t.Run(testCase.name, func(t *testing.T) {
-			if got := pattern.MatchString(testCase.output); got != testCase.transient {
+			command := exec.Command("grep", "-Eqi", "("+transientReleaseExtractionErrorPattern+")")
+			command.Stdin = strings.NewReader(testCase.output)
+			got := command.Run() == nil
+			if got != testCase.transient {
 				t.Fatalf("classification = %t, want %t for %q", got, testCase.transient, testCase.output)
 			}
 		})
 	}
 }
 
-type transientThenSuccessfulPodClient struct {
+type releasePodLifecycleClient struct {
 	*testhelperkube.FakePodClient
+	lock             sync.Mutex
+	statuses         []corev1.PodStatus
+	createCount      int
+	deletedUIDs      []types.UID
+	staleDeleteCount int
+	deleteCalls      chan struct{}
 }
 
-func (c *transientThenSuccessfulPodClient) Get(ctx context.Context, key ctrlruntimeclient.ObjectKey, obj ctrlruntimeclient.Object, opts ...ctrlruntimeclient.GetOption) error {
-	return c.FakePodExecutor.LoggingClient.Get(ctx, key, obj, opts...)
+func (c *releasePodLifecycleClient) Create(ctx context.Context, obj ctrlruntimeclient.Object, opts ...ctrlruntimeclient.CreateOption) error {
+	pod, ok := obj.(*corev1.Pod)
+	if !ok {
+		return c.FakePodExecutor.LoggingClient.Create(ctx, obj, opts...)
+	}
+	c.lock.Lock()
+	c.createCount++
+	attempt := c.createCount
+	pod.UID = types.UID(fmt.Sprintf("release-pod-%d", attempt))
+	pod.CreationTimestamp = metav1.NewTime(time.Now().Add(-time.Minute))
+	pod.Status = c.statuses[attempt-1]
+	c.CreatedPods = append(c.CreatedPods, pod.DeepCopy())
+	c.lock.Unlock()
+	return c.FakePodExecutor.LoggingClient.Create(ctx, pod, opts...)
 }
 
-func TestRetryReleaseExtractionRecreatesTransientFailedPod(t *testing.T) {
-	const (
-		namespace = "test-namespace"
-		podName   = "release-images-latest"
-	)
+func (c *releasePodLifecycleClient) Watch(ctx context.Context, list ctrlruntimeclient.ObjectList, _ ...ctrlruntimeclient.ListOption) (watch.Interface, error) {
+	if err := c.FakePodExecutor.LoggingClient.List(ctx, list); err != nil {
+		return nil, err
+	}
+	items := list.(*corev1.PodList).Items
+	ch := make(chan watch.Event, len(items))
+	for i := range items {
+		ch <- watch.Event{Type: watch.Modified, Object: items[i].DeepCopy()}
+	}
+	return watch.NewProxyWatcher(ch), nil
+}
+
+func (c *releasePodLifecycleClient) Delete(ctx context.Context, obj ctrlruntimeclient.Object, opts ...ctrlruntimeclient.DeleteOption) error {
+	c.deleteCalls <- struct{}{}
+	pod, ok := obj.(*corev1.Pod)
+	if !ok {
+		return c.FakePodExecutor.LoggingClient.Delete(ctx, obj, opts...)
+	}
+	deleteOptions := &ctrlruntimeclient.DeleteOptions{}
+	deleteOptions.ApplyOptions(opts)
+	var expectedUID types.UID
+	if deleteOptions.Preconditions != nil && deleteOptions.Preconditions.UID != nil {
+		expectedUID = *deleteOptions.Preconditions.UID
+	}
+	current := &corev1.Pod{}
+	if err := c.FakePodExecutor.LoggingClient.Get(ctx, ctrlruntimeclient.ObjectKeyFromObject(pod), current); err != nil {
+		return err
+	}
+	if expectedUID == "" || current.UID != expectedUID {
+		c.lock.Lock()
+		c.staleDeleteCount++
+		c.lock.Unlock()
+		return kerrors.NewConflict(corev1.Resource("pods"), pod.Name, errors.New("UID precondition mismatch"))
+	}
+	c.lock.Lock()
+	c.deletedUIDs = append(c.deletedUIDs, expectedUID)
+	c.DeletedPods = append(c.DeletedPods, current.DeepCopy())
+	c.lock.Unlock()
+	return c.FakePodExecutor.LoggingClient.Delete(ctx, current, opts...)
+}
+
+func newReleasePodLifecycleClient(t *testing.T, statuses ...corev1.PodStatus) *releasePodLifecycleClient {
+	t.Helper()
 	scheme := runtime.NewScheme()
 	if err := corev1.AddToScheme(scheme); err != nil {
 		t.Fatalf("add core API to scheme: %v", err)
@@ -236,52 +320,131 @@ func TestRetryReleaseExtractionRecreatesTransientFailedPod(t *testing.T) {
 	loggingClient := loggingclient.New(fakectrlruntimeclient.NewClientBuilder().
 		WithScheme(scheme).
 		WithIndex(&corev1.Pod{}, "metadata.name", func(obj ctrlruntimeclient.Object) []string { return []string{obj.GetName()} }).
+		WithIndex(&corev1.Event{}, "involvedObject.uid", func(obj ctrlruntimeclient.Object) []string {
+			return []string{string(obj.(*corev1.Event).InvolvedObject.UID)}
+		}).
 		Build(), nil)
-	client := &transientThenSuccessfulPodClient{FakePodClient: &testhelperkube.FakePodClient{
-		FakePodExecutor: &testhelperkube.FakePodExecutor{LoggingClient: loggingClient, AutoSchedule: true},
-		PendingTimeout:  time.Minute,
+	return &releasePodLifecycleClient{
+		FakePodClient: &testhelperkube.FakePodClient{
+			FakePodExecutor: &testhelperkube.FakePodExecutor{LoggingClient: loggingClient},
+			PendingTimeout:  0,
+		},
+		statuses:    statuses,
+		deleteCalls: make(chan struct{}, 20),
+	}
+}
+
+func waitForReleasePodDeleteCalls(t *testing.T, client *releasePodLifecycleClient, count int) {
+	t.Helper()
+	for i := 0; i < count; i++ {
+		select {
+		case <-client.deleteCalls:
+		case <-time.After(time.Second):
+			t.Fatalf("timed out waiting for delete call %d of %d", i+1, count)
+		}
+	}
+}
+
+func releaseExtractionPodStep(client *releasePodLifecycleClient, namespace, podName string) api.Step {
+	jobSpec := &api.JobSpec{JobSpec: downwardapi.JobSpec{
+		Job:  "release-import-test",
+		Type: prowapi.PresubmitJob,
+		Refs: &prowapi.Refs{Org: "openshift", Repo: "ci-tools", BaseRef: "main", Pulls: []prowapi.Pull{{Number: 5376, SHA: "test-sha"}}},
+		DecorationConfig: &prowapi.DecorationConfig{
+			Timeout:     &prowapi.Duration{Duration: time.Hour},
+			GracePeriod: &prowapi.Duration{Duration: time.Second},
+			UtilityImages: &prowapi.UtilityImages{
+				Sidecar:    "sidecar",
+				Entrypoint: "entrypoint",
+			},
+			SkipCloning: utilpointer.Bool(true),
+		},
 	}}
-	pod := &corev1.Pod{
-		ObjectMeta: metav1.ObjectMeta{Namespace: namespace, Name: podName},
-		Spec: corev1.PodSpec{
-			RestartPolicy: corev1.RestartPolicyNever,
-			Containers:    []corev1.Container{{Name: releaseExtractionContainerName, Image: "stable:cli"}},
+	jobSpec.SetNamespace(namespace)
+	return steps.PodStep(releaseExtractionContainerName, steps.PodStepConfiguration{
+		WaitFlags: ciutil.SkipLogs,
+		As:        podName,
+		From:      api.ImageStreamTagReference{Name: api.PipelineImageStream, Tag: "cli"},
+		Commands:  "oc adm release extract",
+	}, nil, client, jobSpec, nil)
+}
+
+func transientRunningReleasePodStatus() corev1.PodStatus {
+	return corev1.PodStatus{
+		Phase: corev1.PodRunning,
+		ContainerStatuses: []corev1.ContainerStatus{
+			{Name: releaseExtractionContainerName, State: corev1.ContainerState{Terminated: &corev1.ContainerStateTerminated{ExitCode: transientReleaseExtractionExitCode}}},
+			{Name: "sidecar", State: corev1.ContainerState{Running: &corev1.ContainerStateRunning{}}},
 		},
 	}
+}
 
+func TestReleaseExtractionUsesRealPodStepLifecycle(t *testing.T) {
+	const (
+		namespace = "test-namespace"
+		podName   = "release-images-latest"
+	)
 	ctx, cancel := context.WithCancel(context.Background())
-	defer cancel()
-	var attempts int
-	err := retryReleaseExtraction(ctx, podName, []time.Duration{0}, func(context.Context, time.Duration) error { return nil }, func(ctx context.Context) error {
-		attempts++
-		created, err := ciutil.CreateOrRestartPod(ctx, client, pod.DeepCopy())
-		if err != nil {
-			return err
-		}
-		if attempts > 1 {
-			return nil
-		}
-		created.Status.Phase = corev1.PodFailed
-		created.Status.ContainerStatuses = []corev1.ContainerStatus{{
-			Name: releaseExtractionContainerName,
-			State: corev1.ContainerState{Terminated: &corev1.ContainerStateTerminated{
-				ExitCode: transientReleaseExtractionExitCode,
-			}},
-		}}
-		if err := client.FakePodExecutor.LoggingClient.Status().Update(ctx, created); err != nil {
-			return err
-		}
-		return transientReleaseExtractionPodError(ctx, client, namespace, podName, errors.New("transient registry outage"))
-	})
+	client := newReleasePodLifecycleClient(t, transientRunningReleasePodStatus(), corev1.PodStatus{Phase: corev1.PodSucceeded})
+	err := runReleaseExtractionWithRetries(ctx, podName, releaseExtractionPodStep(client, namespace, podName), client, []time.Duration{0}, func(context.Context, time.Duration) error { return nil })
 	if err != nil {
 		t.Fatalf("expected recreated extraction pod to succeed: %v", err)
 	}
-	if len(client.CreatedPods) != 2 {
-		t.Fatalf("expected two real pod creations, got %d", len(client.CreatedPods))
+	if client.createCount != 2 {
+		t.Fatalf("expected two PodStep pod creations, got %d", client.createCount)
 	}
-	if len(client.DeletedPods) != 1 || client.DeletedPods[0].Status.Phase != corev1.PodFailed {
-		t.Fatalf("expected the transient failed pod to be deleted once, got %#v", client.DeletedPods)
+	if len(client.deletedUIDs) != 1 || client.deletedUIDs[0] != "release-pod-1" {
+		t.Fatalf("expected UID-safe deletion of the transient pod, got %v", client.deletedUIDs)
 	}
+	replacement := &corev1.Pod{}
+	if err := client.Get(ctx, ctrlruntimeclient.ObjectKey{Namespace: namespace, Name: podName}, replacement); err != nil || replacement.UID != "release-pod-2" {
+		t.Fatalf("expected recreated pod with new UID, got pod=%#v err=%v", replacement, err)
+	}
+	if err := ciutil.DeletePodWithUID(ctx, client, client.CreatedPods[0]); err != nil {
+		t.Fatalf("stale cleanup should be harmless: %v", err)
+	}
+	if err := client.Get(ctx, ctrlruntimeclient.ObjectKey{Namespace: namespace, Name: podName}, replacement); err != nil || replacement.UID != "release-pod-2" || client.staleDeleteCount != 1 {
+		t.Fatalf("stale cleanup affected replacement: pod=%#v err=%v stale_deletes=%d", replacement, err, client.staleDeleteCount)
+	}
+	cancel()
+	waitForReleasePodDeleteCalls(t, client, 4)
+}
+
+func TestReleaseExtractionRealPodStepTransientExhaustion(t *testing.T) {
+	client := newReleasePodLifecycleClient(t, transientRunningReleasePodStatus(), transientRunningReleasePodStatus())
+	ctx, cancel := context.WithCancel(context.Background())
+	err := runReleaseExtractionWithRetries(ctx, "extract", releaseExtractionPodStep(client, "ns", "extract"), client, []time.Duration{0}, func(context.Context, time.Duration) error { return nil })
+	var transientErr *transientReleaseExtractionError
+	if !errors.As(err, &transientErr) {
+		t.Fatalf("expected typed transient exhaustion cause, got %v", err)
+	}
+	if client.createCount != 2 || len(client.deletedUIDs) != 2 {
+		t.Fatalf("expected two real attempts and UID-safe deletions, got creates=%d deletes=%v", client.createCount, client.deletedUIDs)
+	}
+	cancel()
+	waitForReleasePodDeleteCalls(t, client, 4)
+}
+
+func TestReleaseExtractionPendingImagePullIsNotRetried(t *testing.T) {
+	pending := corev1.PodStatus{Phase: corev1.PodPending, ContainerStatuses: []corev1.ContainerStatus{{
+		Name: releaseExtractionContainerName,
+		State: corev1.ContainerState{Waiting: &corev1.ContainerStateWaiting{
+			Reason:  "ImagePullBackOff",
+			Message: "authentication required",
+		}},
+	}}}
+	client := newReleasePodLifecycleClient(t, pending)
+	ctx, cancel := context.WithCancel(context.Background())
+	err := runReleaseExtractionWithRetries(ctx, "extract", releaseExtractionPodStep(client, "ns", "extract"), client, []time.Duration{0}, func(context.Context, time.Duration) error {
+		t.Fatal("pending image-pull failure must not retry")
+		return nil
+	})
+	var transientErr *transientReleaseExtractionError
+	if err == nil || errors.As(err, &transientErr) || client.createCount != 1 {
+		t.Fatalf("expected one permanent pending failure, got err=%v creates=%d", err, client.createCount)
+	}
+	cancel()
+	waitForReleasePodDeleteCalls(t, client, 1)
 }
 
 func TestTransientReleaseExtractionPodErrorClassification(t *testing.T) {
@@ -292,8 +455,8 @@ func TestTransientReleaseExtractionPodErrorClassification(t *testing.T) {
 		transient bool
 	}{
 		{name: "explicit transient exit", phase: corev1.PodFailed, exitCode: transientReleaseExtractionExitCode, transient: true},
+		{name: "decorated running pod with transient release exit", phase: corev1.PodRunning, exitCode: transientReleaseExtractionExitCode, transient: true},
 		{name: "permanent container failure", phase: corev1.PodFailed, exitCode: 1},
-		{name: "pending timeout", phase: corev1.PodPending, exitCode: transientReleaseExtractionExitCode},
 		{name: "successful pod", phase: corev1.PodSucceeded},
 	}
 	for _, testCase := range testCases {
@@ -308,9 +471,8 @@ func TestTransientReleaseExtractionPodErrorClassification(t *testing.T) {
 					}},
 				},
 			}
-			client := fakectrlruntimeclient.NewClientBuilder().WithObjects(pod).Build()
 			original := errors.New("pod failed")
-			err := transientReleaseExtractionPodError(context.Background(), client, "ns", "extract", original)
+			err := transientReleaseExtractionPodError(pod, original)
 			var transientErr *transientReleaseExtractionError
 			if got := errors.As(err, &transientErr); got != testCase.transient {
 				t.Fatalf("transient classification = %t, want %t (err=%v)", got, testCase.transient, err)

@@ -321,6 +321,28 @@ func TestImportTagWithRetryDelaysDoesNotRetryPermanentErrors(t *testing.T) {
 	}
 }
 
+func TestImportTagWithRetryDelaysPreservesTransientExhaustionCause(t *testing.T) {
+	lastCause := kerrors.NewTooManyRequests("registry overloaded", 0)
+	client := &scriptedImageImportClient{
+		Client: fakectrlruntimeclient.NewClientBuilder().Build(),
+		create: func(context.Context, int, *imagev1.ImageStreamImport) error {
+			return lastCause
+		},
+	}
+
+	_, err := ImportTagWithRetryDelays(context.Background(), client, "ns", "release", "latest", "registry/release:latest", []time.Duration{0, 0}, nil)
+	var transientErr *transientImageImportError
+	if !errors.As(err, &transientErr) {
+		t.Fatalf("expected typed transient exhaustion, got %v", err)
+	}
+	if !errors.Is(err, wait.ErrWaitTimeout) || !errors.Is(err, lastCause) {
+		t.Fatalf("expected exhaustion and final API cause to be preserved, got %v", err)
+	}
+	if client.attempts != 3 {
+		t.Fatalf("expected three bounded attempts, got %d", client.attempts)
+	}
+}
+
 type outageImageImportClient struct {
 	ctrlruntimeclient.Client
 	now          func() time.Duration
@@ -359,7 +381,7 @@ func TestImportTagWithRetryDelaysClassifiesTypedAPIErrors(t *testing.T) {
 		{name: "connection reset", err: syscall.ECONNRESET, retryable: true},
 		{name: "unexpected EOF", err: io.ErrUnexpectedEOF, retryable: true},
 		{name: "network timeout", err: context.DeadlineExceeded, retryable: true},
-		{name: "forbidden", err: kerrors.NewForbidden(resource, "release", errors.New("denied"))},
+		{name: "forbidden", err: kerrors.NewForbidden(resource, "release", errors.New("denied")), retryable: true},
 		{name: "unauthorized", err: kerrors.NewUnauthorized("unauthorized")},
 		{name: "bad request", err: kerrors.NewBadRequest("malformed source")},
 		{name: "generic", err: errors.New("generic client failure")},
@@ -405,7 +427,9 @@ func TestImportTagWithRetryDelaysClassifiesImportStatus(t *testing.T) {
 	}{
 		{name: "service unavailable", reason: metav1.StatusReasonServiceUnavailable, retryable: true},
 		{name: "too many requests", reason: metav1.StatusReasonTooManyRequests, retryable: true},
+		{name: "unauthorized propagation delay", reason: metav1.StatusReasonUnauthorized, retryable: true},
 		{name: "forbidden", reason: metav1.StatusReasonForbidden},
+		{name: "not found missing image", reason: metav1.StatusReasonNotFound},
 		{name: "invalid malformed source", reason: metav1.StatusReasonInvalid},
 	}
 	for _, testCase := range testCases {
@@ -518,6 +542,7 @@ func TestImageImportRetryDelay(t *testing.T) {
 		{name: "shorter suggestion", err: kerrors.NewTooManyRequests("busy", 3), configured: 5 * time.Second, want: 5 * time.Second},
 		{name: "equal suggestion", err: kerrors.NewTooManyRequests("busy", 5), configured: 5 * time.Second, want: 5 * time.Second},
 		{name: "longer suggestion", err: kerrors.NewTooManyRequests("busy", 7), configured: 5 * time.Second, want: 7 * time.Second},
+		{name: "suggestion is capped", err: kerrors.NewTooManyRequests("busy", 600), configured: 5 * time.Second, want: maxImageImportRetryDelay},
 	}
 	for _, testCase := range testCases {
 		t.Run(testCase.name, func(t *testing.T) {

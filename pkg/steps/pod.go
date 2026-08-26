@@ -85,6 +85,18 @@ type podStep struct {
 	resolvedGSMCredentials []api.CredentialReference
 }
 
+// PodStepError reports a failed PodStep together with the last pod state
+// observed by WaitForPodCompletion. Callers that need failure-specific
+// lifecycle handling can use errors.As without racing a replacement pod via a
+// second API lookup.
+type PodStepError struct {
+	Pod *coreapi.Pod
+	err error
+}
+
+func (e *PodStepError) Error() string { return e.err.Error() }
+func (e *PodStepError) Unwrap() error { return e.err }
+
 func (s *podStep) Inputs() (api.InputDefinition, error) {
 	return nil, nil
 }
@@ -133,14 +145,6 @@ func (s *podStep) run(ctx context.Context) error {
 		pod.OwnerReferences = append(pod.OwnerReferences, *owner)
 	}
 
-	go func() {
-		<-ctx.Done()
-		logrus.Infof("cleanup: Deleting %s pod %s", s.name, s.config.As)
-		if err := s.client.Delete(CleanupCtx, &coreapi.Pod{ObjectMeta: meta.ObjectMeta{Namespace: s.jobSpec.Namespace(), Name: s.config.As}}); err != nil && !kerrors.IsNotFound(err) {
-			logrus.WithError(err).Warnf("Could not delete %s pod.", s.name)
-		}
-	}()
-
 	s.client.MetricsAgent().StoreMachinesSnapshot(pod)
 
 	pod, err = util.CreateOrRestartPod(ctx, s.client, pod)
@@ -148,11 +152,22 @@ func (s *podStep) run(ctx context.Context) error {
 		return fmt.Errorf("failed to create or restart %s pod: %w", s.name, err)
 	}
 
+	// Register cleanup only after creation, when the API-assigned UID is known.
+	// A later attempt may reuse the name, so deleting by name alone is unsafe.
+	cleanupPod := pod.DeepCopy()
+	go func() {
+		<-ctx.Done()
+		logrus.Infof("cleanup: Deleting %s pod %s", s.name, s.config.As)
+		if err := util.DeletePodWithUID(CleanupCtx, s.client, cleanupPod); err != nil {
+			logrus.WithError(err).Warnf("Could not delete %s pod.", s.name)
+		}
+	}()
+
 	defer func() {
 		s.subTests = testCaseNotifier.SubTests(s.Description() + " - ")
 	}()
-	if _, err := util.WaitForPodCompletion(ctx, s.client, pod.Namespace, pod.Name, testCaseNotifier, s.config.WaitFlags); err != nil {
-		return fmt.Errorf("%s %q failed: %w", s.name, pod.Name, err)
+	if observedPod, err := util.WaitForPodCompletion(ctx, s.client, pod.Namespace, pod.Name, testCaseNotifier, s.config.WaitFlags); err != nil {
+		return &PodStepError{Pod: observedPod, err: fmt.Errorf("%s %q failed: %w", s.name, pod.Name, err)}
 	}
 	return nil
 }

@@ -88,9 +88,21 @@ func waitForCompletedPodDeletion(ctx context.Context, podClient ctrlruntimeclien
 		return nil
 	}
 
-	// delete the pod we expect, otherwise another user has relaunched this pod
+	return DeletePodWithUID(ctx, podClient, pod)
+}
+
+// DeletePodWithUID deletes exactly the observed pod and waits until that UID is
+// gone. A pod recreated under the same namespace and name is left untouched.
+func DeletePodWithUID(ctx context.Context, podClient ctrlruntimeclient.Client, pod *corev1.Pod) error {
+	if pod == nil {
+		return errors.New("cannot delete a nil pod")
+	}
+	if pod.UID == "" {
+		return fmt.Errorf("cannot safely delete pod %s/%s without a UID", pod.Namespace, pod.Name)
+	}
+
 	uid := pod.UID
-	err := podClient.Delete(ctx, pod, ctrlruntimeclient.Preconditions(metav1.Preconditions{UID: &uid}))
+	err := podClient.Delete(ctx, &corev1.Pod{ObjectMeta: metav1.ObjectMeta{Namespace: pod.Namespace, Name: pod.Name}}, ctrlruntimeclient.Preconditions(metav1.Preconditions{UID: &uid}))
 	if kerrors.IsNotFound(err) {
 		return nil
 	}
@@ -103,7 +115,7 @@ func waitForCompletedPodDeletion(ctx context.Context, podClient ctrlruntimeclien
 		return fmt.Errorf("could not delete completed pod: %w", err)
 	}
 
-	return WaitForPodDeletion(ctx, podClient, namespace, name, uid)
+	return WaitForPodDeletion(ctx, podClient, pod.Namespace, pod.Name, uid)
 }
 
 func WaitForPodDeletion(ctx context.Context, podClient ctrlruntimeclient.Client, namespace, name string, uid types.UID) error {

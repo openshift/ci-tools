@@ -180,7 +180,10 @@ func FindStatusTag(is *imagev1.ImageStream, tag string) (*coreapi.ObjectReferenc
 	return nil, ""
 }
 
-const DefaultImageImportTimeout = 45 * time.Minute
+const (
+	DefaultImageImportTimeout = 45 * time.Minute
+	maxImageImportRetryDelay  = 5 * time.Minute
+)
 
 type imageTagImporter func(context.Context, ctrlruntimeclient.Client, string, string, string, string, int, *metrics.MetricsAgent) (string, error)
 
@@ -360,6 +363,14 @@ func isRetryableImageImportAPIError(err error) bool {
 		kerrors.IsUnexpectedServerError(err)
 }
 
+func isRetryableImageImportCreateError(err error) bool {
+	return isRetryableImageImportAPIError(err) || kerrors.IsForbidden(err)
+}
+
+func isRetryableImageImportStatusError(err error) bool {
+	return isRetryableImageImportAPIError(err) || kerrors.IsUnauthorized(err)
+}
+
 func imageImportRetryErrorClass(err error) string {
 	switch {
 	case err == nil:
@@ -382,6 +393,9 @@ func imageImportRetryErrorClass(err error) string {
 func imageImportRetryDelay(err error, configured time.Duration) time.Duration {
 	if seconds, suggested := kerrors.SuggestsClientDelay(err); suggested {
 		serverDelay := time.Duration(seconds) * time.Second
+		if serverDelay > maxImageImportRetryDelay {
+			serverDelay = maxImageImportRetryDelay
+		}
 		if serverDelay > configured {
 			return serverDelay
 		}
@@ -389,7 +403,10 @@ func imageImportRetryDelay(err error, configured time.Duration) time.Duration {
 	return configured
 }
 
-// ImportTagWithRetries imports image with retries
+// ImportTagWithRetries imports an image with bounded retries for transient API
+// and registry failures. Create-level Forbidden and status-level Unauthorized
+// are retried because they can reflect propagation delays; status-level
+// NotFound remains permanent because it normally identifies a missing image.
 func ImportTagWithRetries(ctx context.Context, client ctrlruntimeclient.Client, ns, name, tag, sourcePullSpec string, retries int, metricsAgent *metrics.MetricsAgent) (string, error) {
 	if retries < 1 {
 		return importTagWithRetryDelays(ctx, client, ns, name, tag, sourcePullSpec, nil, sleepForImageImportRetry, false, metricsAgent, 0)
@@ -457,7 +474,7 @@ func importTagWithRetryDelays(ctx context.Context, client ctrlruntimeclient.Clie
 			return "", fmt.Errorf("unable to import tag %s/%s:%s at import (%d): %w", ns, name, tag, step-1, ctxErr)
 		}
 		if attemptErr != nil {
-			if !isRetryableImageImportAPIError(attemptErr) {
+			if !isRetryableImageImportCreateError(attemptErr) {
 				return "", fmt.Errorf("unable to import tag %s/%s:%s at import (%d): %w", ns, name, tag, step-1, attemptErr)
 			}
 			logger.WithFields(logrus.Fields{"error_class": imageImportRetryErrorClass(attemptErr), "step": step - 1}).Debug("Transient image stream import API error")
@@ -473,7 +490,7 @@ func importTagWithRetryDelays(ctx context.Context, client ctrlruntimeclient.Clie
 			}
 			if image.Status.Reason != "" || image.Status.Status == meta.StatusFailure {
 				statusErr := &kerrors.StatusError{ErrStatus: image.Status}
-				if !isRetryableImageImportAPIError(statusErr) {
+				if !isRetryableImageImportStatusError(statusErr) {
 					return "", fmt.Errorf("unable to import tag %s/%s:%s at import (%d): %w", ns, name, tag, step-1, statusErr)
 				}
 				attemptErr = statusErr

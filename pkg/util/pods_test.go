@@ -124,6 +124,40 @@ func TestWaitForCompletedPodDeletion(t *testing.T) {
 	}
 }
 
+func TestDeletePodWithUIDDoesNotDeleteReplacement(t *testing.T) {
+	const (
+		namespace = "test-ns"
+		name      = "test-pod"
+	)
+	observed := &corev1.Pod{ObjectMeta: metav1.ObjectMeta{Namespace: namespace, Name: name, UID: types.UID("old-uid")}}
+	replacement := &corev1.Pod{ObjectMeta: metav1.ObjectMeta{Namespace: namespace, Name: name, UID: types.UID("replacement-uid")}}
+	var preconditionUID types.UID
+	client := fakectrlruntimeclient.NewClientBuilder().WithObjects(replacement).WithInterceptorFuncs(interceptor.Funcs{
+		Delete: func(_ context.Context, _ ctrlruntimeclient.WithWatch, _ ctrlruntimeclient.Object, opts ...ctrlruntimeclient.DeleteOption) error {
+			deleteOptions := &ctrlruntimeclient.DeleteOptions{}
+			deleteOptions.ApplyOptions(opts)
+			if deleteOptions.Preconditions != nil && deleteOptions.Preconditions.UID != nil {
+				preconditionUID = *deleteOptions.Preconditions.UID
+			}
+			return apierrors.NewConflict(corev1.Resource("pods"), name, errors.New("UID precondition mismatch"))
+		},
+	}).Build()
+
+	if err := DeletePodWithUID(context.Background(), client, observed); err != nil {
+		t.Fatalf("stale deletion should be harmless: %v", err)
+	}
+	if preconditionUID != observed.UID {
+		t.Fatalf("delete precondition UID = %q, want %q", preconditionUID, observed.UID)
+	}
+	current := &corev1.Pod{}
+	if err := client.Get(context.Background(), ctrlruntimeclient.ObjectKey{Namespace: namespace, Name: name}, current); err != nil {
+		t.Fatalf("replacement pod was deleted: %v", err)
+	}
+	if current.UID != replacement.UID {
+		t.Fatalf("got pod UID %q, want replacement UID %q", current.UID, replacement.UID)
+	}
+}
+
 func TestCheckPending(t *testing.T) {
 	timeout, now := 30*time.Minute, time.Time{}
 	withinLimit := metav1.Time{Time: now.Add(-time.Minute)}

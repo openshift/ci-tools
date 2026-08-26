@@ -222,10 +222,15 @@ func (s *testCaseAnalyzerJobGetter) filterJobsByNames(jobNames sets.Set[string],
 	return ret
 }
 
-// TestCaseChecker checks if a test passes certain criteria across all job runs
+// TestCaseChecker checks if a test passes certain criteria across all job runs.
+// Job runs are folded in one at a time so that no more than a single job run's junit content
+// needs to be held in memory at once.
 type TestCaseChecker interface {
-	// CheckTestCase returns a test suite based on whether a test has passed certain criteria across job runs
-	CheckTestCase(ctx context.Context, jobRunJunits map[jobrunaggregatorapi.JobRunInfo]*junit.TestSuites) *junit.TestSuite
+	// AddJobRun folds the junit results of a single job run into the criteria being checked
+	AddJobRun(jobRun jobrunaggregatorapi.JobRunInfo, testSuites *junit.TestSuites)
+	// TestSuite returns a test suite based on whether a test has passed certain criteria across
+	// all the job runs added so far
+	TestSuite() *junit.TestSuite
 }
 
 type minimumRequiredPassesTestCaseChecker struct {
@@ -234,6 +239,24 @@ type minimumRequiredPassesTestCaseChecker struct {
 	// be created. This might include variant info like platform, network and infrastructure etc.
 	testNameSuffix         string
 	requiredNumberOfPasses int
+
+	// state accumulated by AddJobRun
+	details      *jobrunaggregatorlib.TestCaseDetails
+	jobRunCount  int
+	successCount int
+	duration     time.Duration
+}
+
+func newMinimumRequiredPassesTestCaseChecker(id testIdentifier, testNameSuffix string, requiredNumberOfPasses int) *minimumRequiredPassesTestCaseChecker {
+	return &minimumRequiredPassesTestCaseChecker{
+		id:                     id,
+		testNameSuffix:         testNameSuffix,
+		requiredNumberOfPasses: requiredNumberOfPasses,
+		details: &jobrunaggregatorlib.TestCaseDetails{
+			Name:          id.testName,
+			TestSuiteName: strings.Join(id.testSuites, jobrunaggregatorlib.TestSuitesSeparator),
+		},
+	}
 }
 
 type testStatus int
@@ -276,7 +299,7 @@ func getTestStatus(id testIdentifier, testSuite *junit.TestSuite) testStatus {
 	return testSkipped
 }
 
-func (r minimumRequiredPassesTestCaseChecker) addTestResultToDetails(currDetails *jobrunaggregatorlib.TestCaseDetails,
+func (r *minimumRequiredPassesTestCaseChecker) addTestResultToDetails(currDetails *jobrunaggregatorlib.TestCaseDetails,
 	jobRun jobrunaggregatorapi.JobRunInfo, status testStatus) {
 	switch status {
 	case testPassed:
@@ -338,8 +361,34 @@ func updateTestCountsInSuite(suite *junit.TestSuite) {
 	suite.NumFailed = numFailed
 }
 
-// CheckTestCase returns a test case based on whether a test has passed certain criteria across job runs
-func (r minimumRequiredPassesTestCaseChecker) CheckTestCase(ctx context.Context, jobRunJunits map[jobrunaggregatorapi.JobRunInfo]*junit.TestSuites) *junit.TestSuite {
+// AddJobRun records the result of the checked test case in a single job run
+func (r *minimumRequiredPassesTestCaseChecker) AddJobRun(jobRun jobrunaggregatorapi.JobRunInfo, testSuites *junit.TestSuites) {
+	start := time.Now()
+
+	status := testSkipped
+	// Now go through test suites check test result
+	for _, testSuite := range testSuites.Suites {
+		status = getTestStatus(r.id, testSuite)
+		found := false
+		switch status {
+		case testPassed:
+			found = true
+			r.successCount++
+		case testFailed:
+			found = true
+		}
+		if found {
+			break
+		}
+	}
+	r.addTestResultToDetails(r.details, jobRun, status)
+
+	r.jobRunCount++
+	r.duration += time.Since(start)
+}
+
+// TestSuite returns a test case based on whether a test has passed certain criteria across job runs
+func (r *minimumRequiredPassesTestCaseChecker) TestSuite() *junit.TestSuite {
 	topSuite := &junit.TestSuite{
 		Name:      "minimum-required-passes-checker",
 		TestCases: []*junit.TestCase{},
@@ -355,41 +404,16 @@ func (r minimumRequiredPassesTestCaseChecker) CheckTestCase(ctx context.Context,
 	}
 	bottomSuite.TestCases = append(bottomSuite.TestCases, testCase)
 
-	start := time.Now()
-	successCount := 0
-	currDetails := &jobrunaggregatorlib.TestCaseDetails{
-		Name:          r.id.testName,
-		TestSuiteName: strings.Join(r.id.testSuites, jobrunaggregatorlib.TestSuitesSeparator),
-	}
-	for jobRun, testSuites := range jobRunJunits {
-		status := testSkipped
-		// Now go through test suites check test result
-		for _, testSuite := range testSuites.Suites {
-			status = getTestStatus(r.id, testSuite)
-			found := false
-			switch status {
-			case testPassed:
-				found = true
-				successCount++
-			case testFailed:
-				found = true
-			}
-			if found {
-				break
-			}
-		}
-		r.addTestResultToDetails(currDetails, jobRun, status)
-	}
-	currDetails.Summary = fmt.Sprintf("Total job runs: %d, passes: %d, failures: %d, skips %d", len(jobRunJunits), len(currDetails.Passes), len(currDetails.Failures), len(currDetails.Skips))
-	detailsYaml, err := yaml.Marshal(currDetails)
+	r.details.Summary = fmt.Sprintf("Total job runs: %d, passes: %d, failures: %d, skips %d", r.jobRunCount, len(r.details.Passes), len(r.details.Failures), len(r.details.Skips))
+	detailsYaml, err := yaml.Marshal(r.details)
 	if err != nil {
 		return nil
 	}
-	testCase.Duration = time.Since(start).Seconds()
+	testCase.Duration = r.duration.Seconds()
 	testCase.SystemOut = string(detailsYaml)
-	if successCount < r.requiredNumberOfPasses {
+	if r.successCount < r.requiredNumberOfPasses {
 		testCase.FailureOutput = &junit.FailureOutput{
-			Message: fmt.Sprintf("required minimum successful count %d, got %d", r.requiredNumberOfPasses, successCount),
+			Message: fmt.Sprintf("required minimum successful count %d, got %d", r.requiredNumberOfPasses, r.successCount),
 		}
 	}
 	updateTestCountsInSuite(topSuite)
@@ -599,7 +623,6 @@ func (o *JobRunTestCaseAnalyzerOptions) runTestCaseCheckers(ctx context.Context,
 	}
 
 	allJobRuns := append(finishedJobRuns, unfinishedJobRuns...)
-	jobRunJunitMap := map[jobrunaggregatorapi.JobRunInfo]*junit.TestSuites{}
 	for i := range allJobRuns {
 		jobRun := allJobRuns[i]
 
@@ -607,10 +630,15 @@ func (o *JobRunTestCaseAnalyzerOptions) runTestCaseCheckers(ctx context.Context,
 		if err != nil {
 			continue
 		}
-		jobRunJunitMap[jobRun] = testSuites
+		for _, checker := range o.testCaseCheckers {
+			checker.AddJobRun(jobRun, testSuites)
+		}
+		// the junit content of a single job run runs into hundreds of megabytes, so release it
+		// before fetching the next job run instead of holding all of them until the end
+		jobRun.ClearAllContent()
 	}
 	for _, checker := range o.testCaseCheckers {
-		testSuite := checker.CheckTestCase(ctx, jobRunJunitMap)
+		testSuite := checker.TestSuite()
 		topSuite.Children = append(topSuite.Children, testSuite)
 		topSuite.NumTests += testSuite.NumTests
 		topSuite.NumFailed += testSuite.NumFailed

@@ -13,8 +13,6 @@ import (
 	"time"
 
 	apierrors "k8s.io/apimachinery/pkg/api/errors"
-	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
-	"k8s.io/apimachinery/pkg/util/sets"
 
 	dispatcherv1 "github.com/openshift/ci-tools/pkg/api/dispatcher/v1"
 )
@@ -25,9 +23,6 @@ func testControlPlane(t *testing.T, options ControlOptions) (*ControlPlane, *Mem
 	options.AllowedChannelID = "C-team"
 	if options.EnableCapacity && options.SchedulerPropagationBound == 0 {
 		options.SchedulerPropagationBound = 30 * time.Second
-	}
-	if options.EnableCapacity && options.AffectedDemandApproval == 0 {
-		options.AffectedDemandApproval = 1000
 	}
 	if options.EnableCapacity && options.WriteSafetyCheck == nil {
 		options.WriteSafetyCheck = func() error { return nil }
@@ -162,7 +157,6 @@ func TestControlOptionsSchedulerPropagationBound(t *testing.T) {
 				AllowedChannelID:          "C-team",
 				EnableCapacity:            true,
 				SchedulerPropagationBound: tc.bound,
-				AffectedDemandApproval:    1,
 				WriteSafetyCheck:          func() error { return nil },
 			}
 			err := options.Validate()
@@ -226,18 +220,18 @@ func TestControlPlaneRejectsStalePlan(t *testing.T) {
 	}
 }
 
-func TestControlPlaneRejectsStaleSecondApproval(t *testing.T) {
-	control, store, _, _ := testControlPlane(t, ControlOptions{EnableCapacity: true, AffectedDemandApproval: 15})
+func TestControlPlaneAdditionalApplyOnActiveOverrideIsIdempotent(t *testing.T) {
+	control, store, _, _ := testControlPlane(t, ControlOptions{EnableCapacity: true})
 	plan, err := control.Plan(context.Background(), capacityPlanRequest())
 	if err != nil {
 		t.Fatal(err)
 	}
-	pending, err := control.Apply(context.Background(), plan.ID, ApplyRequest{UserID: "U1", ChannelID: "C-team", IdempotencyKey: "apply-1"})
+	active, err := control.Apply(context.Background(), plan.ID, ApplyRequest{UserID: "U1", ChannelID: "C-team", IdempotencyKey: "apply-1"})
 	if err != nil {
 		t.Fatal(err)
 	}
-	if pending.Status.State != dispatcherv1.OverrideStatePending || len(pending.Spec.Approvals) != 1 {
-		t.Fatalf("first approval was not pending: %#v", pending)
+	if active.Status.State != dispatcherv1.OverrideStateActive || len(active.Spec.Approvals) != 1 {
+		t.Fatalf("single approval did not activate: %#v", active)
 	}
 
 	control.UpdateBaseline(map[string]ProwJobData{
@@ -251,15 +245,19 @@ func TestControlPlaneRejectsStaleSecondApproval(t *testing.T) {
 	if err := control.Reconcile(context.Background()); err != nil {
 		t.Fatal(err)
 	}
-	if _, err := control.Apply(context.Background(), plan.ID, ApplyRequest{UserID: "U2", ChannelID: "C-team", IdempotencyKey: "apply-2"}); err == nil || !strings.Contains(err.Error(), "stale") {
-		t.Fatalf("stale second approval was accepted: %v", err)
-	}
-	stored, err := store.Get(context.Background(), pending.Name)
+	repeated, err := control.Apply(context.Background(), plan.ID, ApplyRequest{UserID: "U2", ChannelID: "C-team", IdempotencyKey: "apply-2"})
 	if err != nil {
 		t.Fatal(err)
 	}
-	if len(stored.Spec.Approvals) != 1 || stored.Status.State != dispatcherv1.OverrideStatePending {
-		t.Fatalf("stale approval changed the pending override: %#v", stored)
+	if len(repeated.Spec.Approvals) != 1 || repeated.Status.State != dispatcherv1.OverrideStateActive {
+		t.Fatalf("additional apply changed an already active override: %#v", repeated)
+	}
+	stored, err := store.Get(context.Background(), active.Name)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if len(stored.Spec.Approvals) != 1 || stored.Status.State != dispatcherv1.OverrideStateActive {
+		t.Fatalf("additional apply persisted a new approval: %#v", stored)
 	}
 }
 
@@ -285,56 +283,6 @@ func TestControlPlaneQuarantinesInvalidStoredOverride(t *testing.T) {
 	decision, found := manager.Lookup("job-a", now)
 	if !found || decision.Cluster != "build01" || decision.OverrideID != "" {
 		t.Fatalf("invalid override affected serving policy: %#v", decision)
-	}
-}
-
-func TestControlPlaneRequiresExplicitVerifiedFallbackProtection(t *testing.T) {
-	control, store, manager, now := testControlPlane(t, ControlOptions{EnableCapacity: true, EnableDrain: true})
-	override := activeOverride("drain", dispatcherv1.OverrideKindDrain, "build01", nil, "", now)
-	override.Name = override.Spec.ID
-	override.Spec.SourceChannelID = "C-team"
-	override.Spec.RequiredApprovals = 2
-	override.Spec.Approvals = append(override.Spec.Approvals, dispatcherv1.DispatchApproval{UserID: "U2", At: metav1.NewTime(now)})
-	override.Spec.FallbackConfirmed = true
-	if err := store.Create(context.Background(), &override); err != nil {
-		t.Fatal(err)
-	}
-	if err := control.Reconcile(context.Background()); err != nil {
-		t.Fatal(err)
-	}
-	control.UpdateBaseline(map[string]ProwJobData{"job": {Cluster: "build02", Demand: 1}}, ClusterMap{"build02": {Provider: "aws", Capacity: 100}}, sets.New[string]("build01"))
-	if err := control.Reconcile(context.Background()); err != nil {
-		t.Fatal(err)
-	}
-	stored, err := store.Get(context.Background(), override.Name)
-	if err != nil {
-		t.Fatal(err)
-	}
-	if stored.Status.FallbackProtected || stored.Status.State != dispatcherv1.OverrideStateActive {
-		t.Fatalf("desired blocked inventory was incorrectly treated as verified fallback protection: %#v", stored.Status)
-	}
-	digest, err := fallbackDigestForBaseline(manager.Current().Baseline)
-	if err != nil {
-		t.Fatal(err)
-	}
-	if err := control.ObserveFallbackProtection(FallbackProtectionObservation{
-		FallbackDigest: digest, ProtectedClusters: []string{"build01"}, ValidUntil: now.Add(time.Minute),
-	}); err != nil {
-		t.Fatal(err)
-	}
-	if err := control.Reconcile(context.Background()); err != nil {
-		t.Fatal(err)
-	}
-	stored, err = store.Get(context.Background(), override.Name)
-	if err != nil {
-		t.Fatal(err)
-	}
-	if !stored.Status.FallbackProtected {
-		t.Fatalf("explicit verified fallback protection was not observed: %#v", stored.Status)
-	}
-	control.now = func() time.Time { return now.Add(2 * time.Minute) }
-	if control.verifiedFallbackProtection().Has("build01") {
-		t.Fatal("expired fallback observation remained protected")
 	}
 }
 
@@ -468,19 +416,19 @@ func TestParsePositiveDurationRejectsSubSecondValues(t *testing.T) {
 	}
 }
 
-func TestControlPlaneLargeCapacityChangeRequiresSecondApproval(t *testing.T) {
-	control, _, _, _ := testControlPlane(t, ControlOptions{EnableCapacity: true, AffectedDemandApproval: 15})
+func TestControlPlanePlansRequireOneApproval(t *testing.T) {
+	control, _, _, _ := testControlPlane(t, ControlOptions{EnableCapacity: true})
 	plan, err := control.Plan(context.Background(), capacityPlanRequest())
 	if err != nil {
 		t.Fatal(err)
 	}
-	if plan.RequiredApprovals != 2 || plan.Impact.AffectedDemand != 20 {
-		t.Fatalf("large capacity change did not require two approvals: %#v", plan)
+	if plan.RequiredApprovals != 1 || plan.Impact.AffectedDemand != 20 {
+		t.Fatalf("capacity plan did not require a single approval: %#v", plan)
 	}
 }
 
 func TestControlPlaneMergesConcurrentInitialApprovals(t *testing.T) {
-	control, baseStore, _, _ := testControlPlane(t, ControlOptions{EnableCapacity: true, AffectedDemandApproval: 15})
+	control, baseStore, _, _ := testControlPlane(t, ControlOptions{EnableCapacity: true})
 	store := &concurrentCreateStore{MemoryOverrideStore: baseStore, release: make(chan struct{})}
 	control.store = store
 	plan, err := control.Plan(context.Background(), capacityPlanRequest())
@@ -508,12 +456,12 @@ func TestControlPlaneMergesConcurrentInitialApprovals(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	if len(overrides) != 1 || uniqueApprovals(&overrides[0]) != 2 || overrides[0].Status.State != dispatcherv1.OverrideStateActive {
-		t.Fatalf("concurrent approvals were not merged: %#v", overrides)
+	if len(overrides) != 1 || uniqueApprovals(&overrides[0]) < 1 || overrides[0].Status.State != dispatcherv1.OverrideStateActive {
+		t.Fatalf("concurrent applies did not converge on one active override: %#v", overrides)
 	}
 }
 
-func TestControlPlaneDrainRequiresDistinctSecondApprovalAndFallbackConfirmation(t *testing.T) {
+func TestControlPlaneDrainActivatesOnSingleApproval(t *testing.T) {
 	control, _, _, _ := testControlPlane(t, ControlOptions{EnableCapacity: true, EnableDrain: true})
 	request := PlanRequest{
 		Kind: dispatcherv1.OverrideKindDrain, Cluster: "build01", DurationSeconds: 3600,
@@ -523,29 +471,19 @@ func TestControlPlaneDrainRequiresDistinctSecondApprovalAndFallbackConfirmation(
 	if err != nil {
 		t.Fatal(err)
 	}
-	if plan.RequiredApprovals != 2 || plan.FallbackProtected {
+	if plan.RequiredApprovals != 1 {
 		t.Fatalf("unexpected drain safety policy: %#v", plan)
 	}
-	if _, err := control.Apply(context.Background(), plan.ID, ApplyRequest{UserID: "U1", ChannelID: "C-team", IdempotencyKey: "apply-1"}); err == nil || !strings.Contains(err.Error(), "confirmation") {
-		t.Fatalf("unconfirmed drain was accepted: %v", err)
-	}
-	pending, err := control.Apply(context.Background(), plan.ID, ApplyRequest{UserID: "U1", ChannelID: "C-team", IdempotencyKey: "apply-1", FallbackConfirmed: true})
+	active, err := control.Apply(context.Background(), plan.ID, ApplyRequest{UserID: "U1", ChannelID: "C-team", IdempotencyKey: "apply-1"})
 	if err != nil {
 		t.Fatal(err)
 	}
-	if pending.Status.State != dispatcherv1.OverrideStatePending || len(pending.Spec.Approvals) != 1 {
-		t.Fatalf("first drain approval was not pending: %#v", pending)
+	if active.Status.State != dispatcherv1.OverrideStateActive || len(active.Spec.Approvals) != 1 {
+		t.Fatalf("single drain approval did not activate: %#v", active)
 	}
-	repeated, err := control.Apply(context.Background(), plan.ID, ApplyRequest{UserID: "U1", ChannelID: "C-team", IdempotencyKey: "apply-retry", FallbackConfirmed: true})
+	repeated, err := control.Apply(context.Background(), plan.ID, ApplyRequest{UserID: "U1", ChannelID: "C-team", IdempotencyKey: "apply-retry"})
 	if err != nil || len(repeated.Spec.Approvals) != 1 {
 		t.Fatalf("same user counted twice: %#v, %v", repeated, err)
-	}
-	active, err := control.Apply(context.Background(), plan.ID, ApplyRequest{UserID: "U2", ChannelID: "C-team", IdempotencyKey: "apply-2", FallbackConfirmed: true})
-	if err != nil {
-		t.Fatal(err)
-	}
-	if active.Status.State != dispatcherv1.OverrideStateActive || len(active.Spec.Approvals) != 2 {
-		t.Fatalf("second approval did not activate drain: %#v", active)
 	}
 }
 
@@ -681,41 +619,5 @@ func TestControlPlaneExplainHitAndMiss(t *testing.T) {
 	server.ServeHTTP(unreadyResponse, unready)
 	if unreadyResponse.Code != http.StatusBadRequest || !strings.Contains(unreadyResponse.Body.String(), "ready") {
 		t.Fatalf("unready explain HTTP: %d %s", unreadyResponse.Code, unreadyResponse.Body.String())
-	}
-}
-
-func TestFallbackObservationServerAuthenticationAndDigestBinding(t *testing.T) {
-	control, _, manager, now := testControlPlane(t, ControlOptions{})
-	server := NewFallbackObservationServer(control, func() []byte { return []byte("observer-secret") })
-	digest, err := fallbackDigestForBaseline(manager.Current().Baseline)
-	if err != nil {
-		t.Fatal(err)
-	}
-	body, err := json.Marshal(FallbackProtectionObservation{FallbackDigest: digest, ValidUntil: now.Add(time.Minute)})
-	if err != nil {
-		t.Fatal(err)
-	}
-	unauthorized := httptest.NewRecorder()
-	server.ServeHTTP(unauthorized, httptest.NewRequest(http.MethodPost, "/fallback-observer/v1/protection", bytes.NewReader(body)))
-	if unauthorized.Code != http.StatusUnauthorized {
-		t.Fatalf("expected unauthorized, got %d", unauthorized.Code)
-	}
-	staleBody, err := json.Marshal(FallbackProtectionObservation{FallbackDigest: "stale", ValidUntil: now.Add(time.Minute)})
-	if err != nil {
-		t.Fatal(err)
-	}
-	staleRequest := httptest.NewRequest(http.MethodPost, "/fallback-observer/v1/protection", bytes.NewReader(staleBody))
-	staleRequest.Header.Set("Authorization", "Bearer observer-secret")
-	stale := httptest.NewRecorder()
-	server.ServeHTTP(stale, staleRequest)
-	if stale.Code != http.StatusConflict {
-		t.Fatalf("expected stale digest conflict, got %d: %s", stale.Code, stale.Body.String())
-	}
-	request := httptest.NewRequest(http.MethodPost, "/fallback-observer/v1/protection", bytes.NewReader(body))
-	request.Header.Set("Authorization", "Bearer observer-secret")
-	response := httptest.NewRecorder()
-	server.ServeHTTP(response, request)
-	if response.Code != http.StatusOK {
-		t.Fatalf("expected observation to be accepted, got %d: %s", response.Code, response.Body.String())
 	}
 }

@@ -96,7 +96,6 @@ type options struct {
 
 	overrideNamespace               string
 	controlAPITokenPath             string
-	fallbackObserverTokenPath       string
 	dispatchCommandChannelID        string
 	enableRuntimeCapacity           bool
 	enableRuntimeDrain              bool
@@ -141,7 +140,6 @@ func gatherOptions() options {
 	fs.StringVar(&o.opsChannelId, "ops-channel-id", "CHY2E1BL4", "Channel ID for #ops-testplatform")
 	fs.StringVar(&o.overrideNamespace, "dispatch-override-namespace", "", "Namespace containing DispatchOverride resources. Empty disables the runtime control plane.")
 	fs.StringVar(&o.controlAPITokenPath, "control-api-token-path", "", "Path to the bearer token accepted from the DPTP bot control client.")
-	fs.StringVar(&o.fallbackObserverTokenPath, "fallback-observer-token-path", "", "Path to the separate bearer token accepted from the Prow fallback-state observer.")
 	fs.StringVar(&o.dispatchCommandChannelID, "dispatch-command-channel-id", "", "Immutable Slack channel ID for #team-dp-testplatform.")
 	fs.BoolVar(&o.enableRuntimeCapacity, "enable-runtime-capacity", false, "Allow whole-cluster capacity overrides to be applied.")
 	fs.BoolVar(&o.enableRuntimeDrain, "enable-runtime-drain", false, "Allow whole-cluster drains to be applied.")
@@ -149,7 +147,7 @@ func gatherOptions() options {
 	fs.DurationVar(&o.maxOverrideTTL, "max-runtime-override-ttl", 24*time.Hour, "Maximum TTL for a runtime capacity override.")
 	fs.DurationVar(&o.maxDrainTTL, "max-runtime-drain-ttl", 2*time.Hour, "Maximum TTL for a runtime drain.")
 	fs.DurationVar(&o.planTTL, "runtime-plan-ttl", 15*time.Minute, "How long an unapplied runtime plan remains valid.")
-	fs.Float64Var(&o.affectedDemandApprovalThreshold, "runtime-second-approval-demand", 0, "Affected demand at or above this value requires a distinct second approver. A positive value is required before writes can be enabled.")
+	fs.Float64Var(&o.affectedDemandApprovalThreshold, "runtime-second-approval-demand", 0, "Deprecated and ignored. One approval is sufficient to apply a runtime override.")
 	fs.DurationVar(&o.schedulerPropagationBound, "scheduler-propagation-bound", 0, "Measured upper bound from dispatcher publication through the Prow external-scheduler cache. Required and at most 5m before writes can be enabled.")
 	fs.StringVar(&o.prowSchedulerConfigPath, "prow-scheduler-config-path", "", "Path to the live Prow configuration mounted from the same source used by the scheduler. Required before runtime writes can be enabled.")
 	fs.BoolVar(&o.legacyEventEndpoint, "enable-legacy-event-endpoint", false, "Expose the unauthenticated legacy /event dispatch endpoint. Disabled for the next-generation control plane.")
@@ -197,7 +195,7 @@ func (o *options) validate() error {
 	if o.slackTokenPath == "" {
 		logrus.Fatal("mandatory argument --slack-token-path wasn't set")
 	}
-	controlConfigured := o.overrideNamespace != "" || o.controlAPITokenPath != "" || o.fallbackObserverTokenPath != "" || o.dispatchCommandChannelID != "" ||
+	controlConfigured := o.overrideNamespace != "" || o.controlAPITokenPath != "" || o.dispatchCommandChannelID != "" ||
 		o.enableRuntimeCapacity || o.enableRuntimeDrain || o.enableRuntimeCapabilityScope
 	if controlConfigured && (o.overrideNamespace == "" || o.controlAPITokenPath == "" || o.dispatchCommandChannelID == "") {
 		return fmt.Errorf("--dispatch-override-namespace, --control-api-token-path, and --dispatch-command-channel-id are all required for runtime controls")
@@ -205,18 +203,12 @@ func (o *options) validate() error {
 	if o.enableRuntimeDrain && !o.enableRuntimeCapacity {
 		return fmt.Errorf("--enable-runtime-drain requires --enable-runtime-capacity")
 	}
-	if o.enableRuntimeDrain && o.fallbackObserverTokenPath == "" {
-		return fmt.Errorf("--enable-runtime-drain requires --fallback-observer-token-path")
-	}
-	if o.fallbackObserverTokenPath != "" && o.fallbackObserverTokenPath == o.controlAPITokenPath {
-		return fmt.Errorf("--fallback-observer-token-path must use a token distinct from --control-api-token-path")
-	}
 	if o.enableRuntimeCapabilityScope && !o.enableRuntimeCapacity {
 		return fmt.Errorf("--enable-runtime-capability-scope requires --enable-runtime-capacity")
 	}
 	controlOptions := dispatcher.ControlOptions{
 		AllowedChannelID: o.dispatchCommandChannelID, MaxTTL: o.maxOverrideTTL, MaxDrainTTL: o.maxDrainTTL,
-		PlanTTL: o.planTTL, AffectedDemandApproval: o.affectedDemandApprovalThreshold,
+		PlanTTL:        o.planTTL,
 		EnableCapacity: o.enableRuntimeCapacity, EnableDrain: o.enableRuntimeDrain, EnableCapabilityScope: o.enableRuntimeCapabilityScope,
 		SchedulerPropagationBound: o.schedulerPropagationBound,
 		WriteSafetyCheck:          o.schedulerWriteSafetyCheck(),
@@ -1343,9 +1335,6 @@ func main() {
 	if o.controlAPITokenPath != "" {
 		secretPaths = append(secretPaths, o.controlAPITokenPath)
 	}
-	if o.fallbackObserverTokenPath != "" {
-		secretPaths = append(secretPaths, o.fallbackObserverTokenPath)
-	}
 	if err := secret.Add(secretPaths...); err != nil {
 		logrus.WithError(err).Fatal("failed to start secrets agent")
 	}
@@ -1385,7 +1374,7 @@ func main() {
 		}
 		controlPlane, err = dispatcher.NewControlPlane(snapshots, dispatcher.NewKubernetesOverrideStore(kubeClient, o.overrideNamespace), dispatcher.ControlOptions{
 			AllowedChannelID: o.dispatchCommandChannelID, MaxTTL: o.maxOverrideTTL, MaxDrainTTL: o.maxDrainTTL,
-			PlanTTL: o.planTTL, AffectedDemandApproval: o.affectedDemandApprovalThreshold,
+			PlanTTL:        o.planTTL,
 			EnableCapacity: o.enableRuntimeCapacity, EnableDrain: o.enableRuntimeDrain, EnableCapabilityScope: o.enableRuntimeCapabilityScope,
 			SchedulerPropagationBound: o.schedulerPropagationBound,
 			WriteSafetyCheck:          o.schedulerWriteSafetyCheck(),
@@ -1647,9 +1636,6 @@ func main() {
 	}
 	if controlPlane != nil {
 		mux.Handle("/control/v1/", dispatcher.NewControlServer(controlPlane, secret.GetTokenGenerator(o.controlAPITokenPath)))
-		if o.fallbackObserverTokenPath != "" {
-			mux.Handle("/fallback-observer/v1/protection", dispatcher.NewFallbackObservationServer(controlPlane, secret.GetTokenGenerator(o.fallbackObserverTokenPath)))
-		}
 	}
 	httpServer := &http.Server{
 		Addr:              ":8080",

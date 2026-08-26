@@ -25,10 +25,6 @@ var (
 		Name: "prowjob_dispatcher_overrides",
 		Help: "Durable runtime overrides by kind and lifecycle state.",
 	}, []string{"kind", "state"})
-	unprotectedDrainMetric = prometheus.NewGauge(prometheus.GaugeOpts{
-		Name: "prowjob_dispatcher_active_unprotected_drains",
-		Help: "Active runtime drains whose Git fallback still targets the drained cluster.",
-	})
 	capabilityCoverageJobsMetric = prometheus.NewGaugeVec(prometheus.GaugeOpts{
 		Name: "prowjob_dispatcher_capability_coverage_jobs",
 		Help: "Number of baseline jobs classified under each scheduling capability; __unclassified__ has none.",
@@ -52,7 +48,7 @@ var (
 func init() {
 	prometheus.MustRegister(
 		policyGenerationMetric, policyReadyMetric, decisionMetric, overrideStateMetric,
-		unprotectedDrainMetric, capabilityCoverageJobsMetric, capabilityCoverageDemandMetric,
+		capabilityCoverageJobsMetric, capabilityCoverageDemandMetric,
 		compileDurationMetric, overrideActivationMetric,
 	)
 }
@@ -91,12 +87,7 @@ func observeSnapshot(snapshot *PolicySnapshot) {
 
 func observeOverrides(overrides []dispatcherv1.DispatchOverride) {
 	overrideStateMetric.Reset()
-	unprotectedDrains := 0.0
 	for i := range overrides {
 		overrideStateMetric.WithLabelValues(string(overrides[i].Spec.Kind), string(overrides[i].Status.State)).Inc()
-		if overrides[i].Spec.Kind == dispatcherv1.OverrideKindDrain && overrides[i].Status.State == dispatcherv1.OverrideStateActive && !overrides[i].Status.FallbackProtected {
-			unprotectedDrains++
-		}
 	}
-	unprotectedDrainMetric.Set(unprotectedDrains)
 }

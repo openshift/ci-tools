@@ -2,6 +2,7 @@ package steps
 
 import (
 	"context"
+	"fmt"
 	"sort"
 	"testing"
 	"time"
@@ -10,6 +11,7 @@ import (
 	"github.com/google/go-cmp/cmp"
 
 	corev1 "k8s.io/api/core/v1"
+	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/apimachinery/pkg/runtime"
 	utilpointer "k8s.io/utils/pointer"
 	ctrlruntimeclient "sigs.k8s.io/controller-runtime/pkg/client"
@@ -376,6 +378,7 @@ func TestTestStepAndRequires(t *testing.T) {
 func TestResolveAndCreateGSMSecrets(t *testing.T) {
 	scheme := runtime.NewScheme()
 	_ = csiapi.AddToScheme(scheme)
+	_ = corev1.AddToScheme(scheme)
 
 	gsmConfig := &csi_secrets.GSMConfiguration{
 		Config: &api.GSMConfig{},
@@ -386,13 +389,30 @@ func TestResolveAndCreateGSMSecrets(t *testing.T) {
 		},
 	}
 
+	// A bundle with sync_to_cluster: true resolves to an existing K8s secret
+	// (this also covers cluster profile bundles, which are defined the same way).
+	syncToClusterConfig := &csi_secrets.GSMConfiguration{
+		Config: &api.GSMConfig{
+			Bundles: []api.GSMBundle{
+				{Name: "k8s-bundle-secret", SyncToCluster: true},
+			},
+		},
+		Client: &secretmanager.Client{},
+		ProjectConfig: gsm.Config{
+			ProjectIdString: "test-project",
+			ProjectIdNumber: "123456",
+		},
+	}
+
 	testCases := []struct {
-		name                string
-		secrets             []*api.Secret
-		enableCSI           bool
-		gsmConfig           *csi_secrets.GSMConfiguration
-		expectedError       string
-		expectedCredentials []api.CredentialReference
+		name                   string
+		secrets                []*api.Secret
+		enableCSI              bool
+		gsmConfig              *csi_secrets.GSMConfiguration
+		initialObjects         []ctrlruntimeclient.Object
+		expectedError          string
+		expectedCredentials    []api.CredentialReference
+		expectedK8sCredentials []api.CredentialReference
 	}{
 		{
 			name:    "no secrets - nothing to resolve",
@@ -462,6 +482,23 @@ func TestResolveAndCreateGSMSecrets(t *testing.T) {
 				{Collection: "test-col", Group: "test-group", Field: "field-a", As: "renamed", MountPath: "/var/secrets"},
 			},
 		},
+		{
+			name: "sync_to_cluster bundle - mounted as K8s secret, no SPC",
+			secrets: []*api.Secret{
+				{Bundle: "k8s-bundle-secret", Namespace: "ci", MountPath: "/var/bundle-k8s"},
+			},
+			enableCSI: true,
+			gsmConfig: syncToClusterConfig,
+			initialObjects: []ctrlruntimeclient.Object{
+				&corev1.Secret{
+					ObjectMeta: metav1.ObjectMeta{Namespace: "ci", Name: "k8s-bundle-secret"},
+					Data:       map[string][]byte{"service-account.json": []byte("creds")},
+				},
+			},
+			expectedK8sCredentials: []api.CredentialReference{
+				{Namespace: "ci", Name: "k8s-bundle-secret", MountPath: "/var/bundle-k8s"},
+			},
+		},
 	}
 
 	for _, tc := range testCases {
@@ -471,6 +508,7 @@ func TestResolveAndCreateGSMSecrets(t *testing.T) {
 					LoggingClient: loggingclient.New(
 						fakectrlruntimeclient.NewClientBuilder().
 							WithScheme(scheme).
+							WithObjects(tc.initialObjects...).
 							Build(), nil),
 				},
 			}
@@ -497,6 +535,20 @@ func TestResolveAndCreateGSMSecrets(t *testing.T) {
 
 			if diff := cmp.Diff(tc.expectedCredentials, step.resolvedGSMCredentials); diff != "" {
 				t.Errorf("resolved credentials differ:\n%s", diff)
+			}
+
+			if diff := cmp.Diff(tc.expectedK8sCredentials, step.resolvedK8sSecretCredentials); diff != "" {
+				t.Errorf("resolved K8s Secret credentials differ:\n%s", diff)
+			}
+
+			// sync_to_cluster bundles are copied into the test namespace and must
+			// never produce a SecretProviderClass.
+			for _, cred := range tc.expectedK8sCredentials {
+				copied := &corev1.Secret{}
+				key := ctrlruntimeclient.ObjectKey{Namespace: step.jobSpec.Namespace(), Name: fmt.Sprintf("%s-%s", cred.Namespace, cred.Name)}
+				if err := fakeClient.Get(context.TODO(), key, copied); err != nil {
+					t.Errorf("expected source secret copied to %s: %v", key, err)
+				}
 			}
 
 			spcs := &csiapi.SecretProviderClassList{}

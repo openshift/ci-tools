@@ -625,8 +625,8 @@ func addSharedDirSecret(secret string, pod *coreapi.Pod) {
 func addCredentials(credentials []api.CredentialReference, pod *coreapi.Pod, useCSI bool) {
 	addK8sSecretVolumes := func(creds []api.CredentialReference) {
 		for _, credential := range creds {
-			name := fmt.Sprintf("%s-%s", credential.Namespace, credential.Name)
-			volumeName := volumeName(credential.Namespace, credential.Name)
+			name := csi_secrets.SourceSecretName(credential.Namespace, credential.Name)
+			volumeName := csi_secrets.K8sSecretVolumeName(credential.Namespace, credential.Name)
 			pod.Spec.Volumes = append(pod.Spec.Volumes, coreapi.Volume{
 				Name: volumeName,
 				VolumeSource: coreapi.VolumeSource{

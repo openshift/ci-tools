@@ -5,7 +5,6 @@ import (
 	"errors"
 	"fmt"
 	"path"
-	"strings"
 	"sync"
 	"time"
 
@@ -648,10 +647,6 @@ func (s *multiStageTestStep) addCredentialsToCensoring(secretVolumes []coreapi.V
 // will be mounted in the sidecar container.
 func getMountPath(secretName string) string {
 	return path.Join("/secrets", secretName)
-}
-
-func volumeName(ns, name string) string {
-	return strings.ReplaceAll(fmt.Sprintf("%s-%s", ns, name), ".", "-")
 }
 
 // ensureScriptConfigMap copies the lease proxy scripts ConfigMap from src to dst.

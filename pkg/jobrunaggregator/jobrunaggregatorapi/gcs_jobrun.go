@@ -357,10 +357,10 @@ func (j *gcsJobRun) getCurrentContent(ctx context.Context, path string) ([]byte,
 }
 
 func (j *gcsJobRun) getAllContent(ctx context.Context) (map[string][]byte, error) {
-	if len(j.pathToContent) > 0 {
-		return j.pathToContent, nil
-	}
-
+	// deliberately no shortcut on a non-empty pathToContent: it is a cache of whatever anyone
+	// asked for, not of everything this job run has. IsFinished alone leaves finished.json in
+	// there, which would make a shortcut return a map with neither the prowjob nor the junits.
+	// GetContent below serves what is already cached anyway.
 	errs := []error{}
 	ret := map[string][]byte{}
 

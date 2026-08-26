@@ -371,7 +371,7 @@ func (f *JobRunsTestCaseAnalyzerFlags) ToOptions(ctx context.Context) (*JobRunTe
 		timeout:             f.Timeout,
 		ciDataClient:        ciDataClient,
 		ciGCSClient:         ciGCSClient,
-		testCaseCheckers:    []TestCaseChecker{minimumRequiredPassesTestCaseChecker{testIdentifierOpt, f.testNameSuffix(), f.MinimumSuccessfulTestCount}},
+		testCaseCheckers:    []TestCaseChecker{newMinimumRequiredPassesTestCaseChecker(testIdentifierOpt, f.testNameSuffix(), f.MinimumSuccessfulTestCount)},
 		testNameSuffix:      f.testNameSuffix(),
 		payloadInvocationID: f.PayloadInvocationID,
 		jobGCSPrefixes:      &f.JobGCSPrefixes,

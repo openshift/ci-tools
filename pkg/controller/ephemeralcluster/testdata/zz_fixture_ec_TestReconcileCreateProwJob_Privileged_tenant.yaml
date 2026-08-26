@@ -42,6 +42,8 @@ spec:
 status:
   conditions:
   - lastTransitionTime: "2025-04-02T12:12:12Z"
+    message: ""
+    reason: EphemeralClusterValid
     status: "True"
     type: ProwJobCreating
   phase: Provisioning

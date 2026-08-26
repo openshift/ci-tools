@@ -17,6 +17,7 @@ import (
 	corev1 "k8s.io/api/core/v1"
 	"k8s.io/apimachinery/pkg/runtime"
 	aggerrs "k8s.io/apimachinery/pkg/util/errors"
+	"k8s.io/client-go/tools/record"
 	prowv1 "sigs.k8s.io/prow/pkg/apis/prowjobs/v1"
 
 	ephemeralclusterv1 "github.com/openshift/ci-tools/pkg/api/ephemeralcluster/v1"
@@ -168,4 +169,13 @@ func fakeScheme(t *testing.T) *runtime.Scheme {
 		t.Fatal("build scheme")
 	}
 	return scheme
+}
+
+func drainEvents(recorder *record.FakeRecorder) []string {
+	close(recorder.Events)
+	var events []string
+	for e := range recorder.Events {
+		events = append(events, e)
+	}
+	return events
 }

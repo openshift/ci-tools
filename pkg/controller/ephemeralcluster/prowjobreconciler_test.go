@@ -14,6 +14,7 @@ import (
 	corev1 "k8s.io/api/core/v1"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/apimachinery/pkg/types"
+	"k8s.io/client-go/tools/record"
 	"k8s.io/utils/ptr"
 	ctrlclient "sigs.k8s.io/controller-runtime/pkg/client"
 	"sigs.k8s.io/controller-runtime/pkg/client/fake"
@@ -98,6 +99,7 @@ func TestReconcileProwJob(t *testing.T) {
 		wantPJ       *prowv1.ProwJob
 		wantSecret   *corev1.Secret
 		wantRes      reconcile.Result
+		wantEvents   []string
 		wantErr      error
 	}{
 		{
@@ -141,6 +143,9 @@ func TestReconcileProwJob(t *testing.T) {
 					CompletionTime: ptr.To(metav1.NewTime(fakeNow)),
 				},
 			},
+			wantEvents: []string{
+				"Warning Aborted EphemeralCluster deleted before ci-operator namespace was created",
+			},
 		},
 		{
 			name: "Gracefully terminate ci-operator",
@@ -181,6 +186,9 @@ func TestReconcileProwJob(t *testing.T) {
 					Name:      api.EphemeralClusterTestDoneSignalSecretName,
 					Namespace: "ci-op-1234",
 				},
+			},
+			wantEvents: []string{
+				"Normal DeprovisioningStarted EphemeralCluster deleted, deprovisioning signal sent",
 			},
 		},
 		{
@@ -233,6 +241,9 @@ func TestReconcileProwJob(t *testing.T) {
 				},
 				Data: map[string][]byte{"foo": []byte("bar")},
 			},
+			wantEvents: []string{
+				"Normal DeprovisioningStarted EphemeralCluster deleted, deprovisioning signal sent",
+			},
 		},
 		{
 			name: "ProwJob in a final state, skip graceful termination",
@@ -274,6 +285,9 @@ func TestReconcileProwJob(t *testing.T) {
 			buildClients: func() map[string]*ctrlruntimetest.FakeClient {
 				return map[string]*ctrlruntimetest.FakeClient{}
 			},
+			wantEvents: []string{
+				"Warning BuildClientNotFound Build client not found for cluster build01",
+			},
 			wantErr: reconcile.TerminalError(errors.New("build client not found for cluster build01")),
 		},
 	} {
@@ -293,10 +307,12 @@ func TestReconcileProwJob(t *testing.T) {
 				}
 			}
 
+			fakeEventRecorder := record.NewFakeRecorder(100)
 			r := prowJobReconciler{
 				logger:       logrus.NewEntry(logrus.StandardLogger()),
 				masterClient: client,
 				buildClients: clients,
+				recorder:     fakeEventRecorder,
 				now:          func() time.Time { return fakeNow },
 			}
 
@@ -351,6 +367,10 @@ func TestReconcileProwJob(t *testing.T) {
 				} else {
 					t.Errorf("expected 1 secret, got %d", len(gotSecrets.Items))
 				}
+			}
+
+			if diff := cmp.Diff(tc.wantEvents, drainEvents(fakeEventRecorder)); diff != "" {
+				t.Errorf("events differ: %s\n", diff)
 			}
 		})
 	}

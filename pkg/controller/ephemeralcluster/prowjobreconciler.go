@@ -13,6 +13,7 @@ import (
 	apierrors "k8s.io/apimachinery/pkg/api/errors"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/apimachinery/pkg/types"
+	"k8s.io/client-go/tools/record"
 	"k8s.io/utils/ptr"
 	ctrlbldr "sigs.k8s.io/controller-runtime/pkg/builder"
 	ctrlruntimeclient "sigs.k8s.io/controller-runtime/pkg/client"
@@ -34,6 +35,7 @@ type prowJobReconciler struct {
 	logger       *logrus.Entry
 	masterClient ctrlruntimeclient.Client
 	buildClients buildClients
+	recorder     record.EventRecorder
 
 	now func() time.Time
 }
@@ -43,16 +45,17 @@ func ProwJobFilter(object ctrlruntimeclient.Object) bool {
 	return ok
 }
 
-func addPJReconcilerToManager(logger *logrus.Entry, mgr manager.Manager, buildClients buildClients) error {
+func addPJReconcilerToManager(logger *logrus.Entry, mgr manager.Manager, buildClients buildClients, maxConcurrentReconciles int) error {
 	r := prowJobReconciler{
 		logger:       logger.WithField("controller", "ephemeral_cluster_provisioner_pj"),
 		masterClient: mgr.GetClient(),
 		buildClients: buildClients,
+		recorder:     mgr.GetEventRecorderFor("ephemeral_cluster_provisioner_pj"),
 		now:          time.Now,
 	}
 
 	if err := ctrlbldr.ControllerManagedBy(mgr).
-		WithOptions(controller.Options{MaxConcurrentReconciles: 1}).
+		WithOptions(controller.Options{MaxConcurrentReconciles: maxConcurrentReconciles}).
 		WithEventFilter(predicate.NewPredicateFuncs(ProwJobFilter)).
 		For(&prowv1.ProwJob{}).
 		Complete(&r); err != nil {
@@ -112,12 +115,12 @@ func (r *prowJobReconciler) gracefullyTerminateClusterProvisioning(ctx context.C
 	buildClient, err := buildClientFor(r.buildClients, pj.Spec.Cluster)
 	if err != nil && errors.Is(err, &errBuildClientNotFound{}) {
 		log.WithField("cluster", pj.Spec.Cluster).WithError(err).Warn("Build client not found")
+		r.recorder.Eventf(pj, corev1.EventTypeWarning, ephemeralclusterv1.EventReasonBuildClientNotFound, "Build client not found for cluster %s", pj.Spec.Cluster)
 		return reconcile.Result{}, reconcile.TerminalError(err)
 	}
 
 	ns, err := findCIOperatorTestNS(ctx, buildClient, pj)
 	if err != nil {
-		// If the test NS hasn't been created yet we can just abort the PJ, no graceful termination is needed.
 		if errors.Is(err, &errCIOperatorNSNotFound{}) {
 			return r.abortProwJob(ctx, pj)
 		}
@@ -141,11 +144,12 @@ func (r *prowJobReconciler) gracefullyTerminateClusterProvisioning(ctx context.C
 		log.Info("Secret created")
 	}
 
+	r.recorder.Event(pj, corev1.EventTypeNormal, ephemeralclusterv1.EventReasonDeprovisioningStarted, "EphemeralCluster deleted, deprovisioning signal sent")
 	return reconcile.Result{}, nil
 }
 
 func (r *prowJobReconciler) abortProwJob(ctx context.Context, pj *prowv1.ProwJob) (reconcile.Result, error) {
-	if pj.Status.State == prowv1.AbortedState {
+	if pjInAFinalState(pj) {
 		return reconcile.Result{}, nil
 	}
 
@@ -156,6 +160,8 @@ func (r *prowJobReconciler) abortProwJob(ctx context.Context, pj *prowv1.ProwJob
 	if err := r.masterClient.Update(ctx, pj); err != nil {
 		return reconcile.Result{}, fmt.Errorf("abort prowjob: %w", err)
 	}
+
+	r.recorder.Event(pj, corev1.EventTypeWarning, ephemeralclusterv1.EventReasonAborted, "EphemeralCluster deleted before ci-operator namespace was created")
 
 	return reconcile.Result{}, nil
 }

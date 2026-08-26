@@ -1337,11 +1337,12 @@ func TestMultiStageParams(t *testing.T) {
 
 func TestApplyEnvOverrides(t *testing.T) {
 	testCases := []struct {
-		id             string
-		envVars        map[string]string
-		expectedParams map[string]string
-		testConfig     []api.TestStepConfiguration
-		expectedErrs   []string
+		id                string
+		envVars           map[string]string
+		expectedParams    map[string]string
+		expectedOverrides map[string]string
+		testConfig        []api.TestStepConfiguration
+		expectedErrs      []string
 	}{
 		{
 			id: "Apply overrides",
@@ -1353,6 +1354,10 @@ func TestApplyEnvOverrides(t *testing.T) {
 			expectedParams: map[string]string{
 				"MULTISTAGE_PARAM_OVERRIDE_PARAM1": "VAL1",
 				"MULTISTAGE_PARAM_OVERRIDE_PARAM2": "VAL2",
+			},
+			expectedOverrides: map[string]string{
+				"PARAM1": "VAL1",
+				"PARAM2": "VAL2",
 			},
 			testConfig: []api.TestStepConfiguration{
 				{
@@ -1370,7 +1375,8 @@ func TestApplyEnvOverrides(t *testing.T) {
 			envVars: map[string]string{
 				"PARAM1": "VAL1",
 			},
-			expectedParams: map[string]string{},
+			expectedParams:    map[string]string{},
+			expectedOverrides: map[string]string{},
 			testConfig: []api.TestStepConfiguration{
 				{
 					MultiStageTestConfigurationLiteral: &api.MultiStageTestConfigurationLiteral{
@@ -1391,6 +1397,11 @@ func TestApplyEnvOverrides(t *testing.T) {
 				"MULTISTAGE_PARAM_OVERRIDE_PARAM2": "VAL=2",
 				"MULTISTAGE_PARAM_OVERRIDE_PARAM3": "VAL2",
 			},
+			expectedOverrides: map[string]string{
+				"PARAM1": "VAL2",
+				"PARAM2": "VAL=2",
+				"PARAM3": "VAL2",
+			},
 			testConfig: []api.TestStepConfiguration{
 				{
 					MultiStageTestConfigurationLiteral: &api.MultiStageTestConfigurationLiteral{
@@ -1399,6 +1410,87 @@ func TestApplyEnvOverrides(t *testing.T) {
 							"MULTISTAGE_PARAM_OVERRIDE_PARAM2": "VAL=2",
 							"MULTISTAGE_PARAM_OVERRIDE_PARAM3": "VAL2",
 						},
+					},
+				},
+			},
+		},
+		{
+			id: "plain name honored for an opted-in parameter",
+			envVars: map[string]string{
+				"EVAL_MODEL": "gpt-5",
+			},
+			expectedParams: map[string]string{},
+			expectedOverrides: map[string]string{
+				"EVAL_MODEL": "gpt-5",
+			},
+			testConfig: []api.TestStepConfiguration{
+				{
+					MultiStageTestConfigurationLiteral: &api.MultiStageTestConfigurationLiteral{
+						Test: []api.LiteralTestStep{{
+							As:          "step",
+							Environment: []api.StepParameter{{Name: "EVAL_MODEL", Overridable: true}},
+						}},
+					},
+				},
+			},
+		},
+		{
+			id: "plain name ignored for a parameter that did not opt in",
+			envVars: map[string]string{
+				"EVAL_MODEL": "gpt-5",
+			},
+			expectedParams:    map[string]string{},
+			expectedOverrides: map[string]string{},
+			testConfig: []api.TestStepConfiguration{
+				{
+					MultiStageTestConfigurationLiteral: &api.MultiStageTestConfigurationLiteral{
+						Test: []api.LiteralTestStep{{
+							As:          "step",
+							Environment: []api.StepParameter{{Name: "EVAL_MODEL"}},
+						}},
+					},
+				},
+			},
+		},
+		{
+			id: "plain name honored for an opted-in observer parameter",
+			envVars: map[string]string{
+				"EVAL_MODEL": "gpt-5",
+			},
+			expectedParams: map[string]string{},
+			expectedOverrides: map[string]string{
+				"EVAL_MODEL": "gpt-5",
+			},
+			testConfig: []api.TestStepConfiguration{
+				{
+					MultiStageTestConfigurationLiteral: &api.MultiStageTestConfigurationLiteral{
+						Observers: []api.Observer{{
+							Name:        "observer",
+							Environment: []api.StepParameter{{Name: "EVAL_MODEL", Overridable: true}},
+						}},
+					},
+				},
+			},
+		},
+		{
+			id: "prefixed form takes precedence over the plain form when both are present",
+			envVars: map[string]string{
+				"MULTISTAGE_PARAM_OVERRIDE_EVAL_MODEL": "prefixed-value",
+				"EVAL_MODEL":                           "plain-value",
+			},
+			expectedParams: map[string]string{
+				"MULTISTAGE_PARAM_OVERRIDE_EVAL_MODEL": "prefixed-value",
+			},
+			expectedOverrides: map[string]string{
+				"EVAL_MODEL": "prefixed-value",
+			},
+			testConfig: []api.TestStepConfiguration{
+				{
+					MultiStageTestConfigurationLiteral: &api.MultiStageTestConfigurationLiteral{
+						Test: []api.LiteralTestStep{{
+							As:          "step",
+							Environment: []api.StepParameter{{Name: "EVAL_MODEL", Overridable: true}},
+						}},
 					},
 				},
 			},
@@ -1423,17 +1515,24 @@ func TestApplyEnvOverrides(t *testing.T) {
 			applyEnvOverrides(o)
 
 			actualParams := make(map[string]string)
+			actualOverrides := make(map[string]string)
 
 			for _, test := range o.configSpec.Tests {
 				if test.MultiStageTestConfigurationLiteral != nil {
 					for name, val := range test.MultiStageTestConfigurationLiteral.Environment {
 						actualParams[name] = val
 					}
+					for name, val := range test.MultiStageTestConfigurationLiteral.ParamOverrides {
+						actualOverrides[name] = val
+					}
 				}
 			}
 
 			if diff := cmp.Diff(tc.expectedParams, actualParams); diff != "" {
 				t.Errorf("actual does not match expected, diff: %s", diff)
+			}
+			if diff := cmp.Diff(tc.expectedOverrides, actualOverrides); diff != "" {
+				t.Errorf("actual overrides do not match expected, diff: %s", diff)
 			}
 		})
 	}

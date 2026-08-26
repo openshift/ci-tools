@@ -66,7 +66,12 @@ type importReleaseStep struct {
 
 	// originalPullSpec stores the original value before resolving the release to pass as an env var for multi-stage steps to utilize
 	originalPullSpec string
+
+	releaseImportRetryDelays func() []time.Duration
+	importTagWithRetryDelays releaseTagImporter
 }
+
+type releaseTagImporter func(context.Context, ctrlruntimeclient.Client, string, string, string, string, []time.Duration, *metrics.MetricsAgent) (string, error)
 
 const (
 	releaseExtractionContainerName         = "release"
@@ -230,8 +235,8 @@ func (s *importReleaseStep) run(ctx context.Context) error {
 	s.originalPullSpec = pullSpec
 	// Retry importing for several minutes because we might race against establishing
 	// credentials/roles or a transient registry outage.
-	retryDelays := utils.ReleaseImportRetryDelays()
-	if newPullSpec, err := utils.ImportTagWithRetryDelays(ctx, s.client, s.jobSpec.Namespace(), "release", s.name, pullSpec, retryDelays, s.client.MetricsAgent()); err != nil {
+	retryDelays := s.releaseImportRetryDelays()
+	if newPullSpec, err := s.importTagWithRetryDelays(ctx, s.client, s.jobSpec.Namespace(), "release", s.name, pullSpec, retryDelays, s.client.MetricsAgent()); err != nil {
 		return fmt.Errorf("unable to import %s release image: %w", s.name, err)
 	} else {
 		logrus.WithField("pullSpec", pullSpec).WithField("newPullSpec", newPullSpec).WithField("name", s.name).
@@ -490,6 +495,8 @@ func ImportReleaseStep(
 		jobSpec:                        jobSpec,
 		pullSecret:                     pullSecret,
 		overrideCLIReleaseExtractImage: overrideCLIReleaseExtractImage,
+		releaseImportRetryDelays:       utils.ReleaseImportRetryDelays,
+		importTagWithRetryDelays:       utils.ImportTagWithRetryDelays,
 	}
 }
 

@@ -14,6 +14,7 @@ import (
 	"github.com/sirupsen/logrus"
 
 	corev1 "k8s.io/api/core/v1"
+	rbacv1 "k8s.io/api/rbac/v1"
 	kerrors "k8s.io/apimachinery/pkg/api/errors"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/apimachinery/pkg/runtime"
@@ -23,13 +24,16 @@ import (
 	ctrlruntimeclient "sigs.k8s.io/controller-runtime/pkg/client"
 	fakectrlruntimeclient "sigs.k8s.io/controller-runtime/pkg/client/fake"
 	prowapi "sigs.k8s.io/prow/pkg/apis/prowjobs/v1"
+	"sigs.k8s.io/prow/pkg/entrypoint"
 	"sigs.k8s.io/prow/pkg/pod-utils/downwardapi"
 
 	imagev1 "github.com/openshift/api/image/v1"
 
 	"github.com/openshift/ci-tools/pkg/api"
+	"github.com/openshift/ci-tools/pkg/metrics"
 	"github.com/openshift/ci-tools/pkg/steps"
 	"github.com/openshift/ci-tools/pkg/steps/loggingclient"
+	steputils "github.com/openshift/ci-tools/pkg/steps/utils"
 	testhelperkube "github.com/openshift/ci-tools/pkg/testhelper/kubernetes"
 	ciutil "github.com/openshift/ci-tools/pkg/util"
 )
@@ -384,6 +388,166 @@ func transientRunningReleasePodStatus() corev1.PodStatus {
 			{Name: "sidecar", State: corev1.ContainerState{Running: &corev1.ContainerStateRunning{}}},
 		},
 	}
+}
+
+type importReleaseOrchestrationClient struct {
+	*releasePodLifecycleClient
+	imageImportAttempts int
+	extractionCommands  string
+}
+
+func (c *importReleaseOrchestrationClient) Create(ctx context.Context, obj ctrlruntimeclient.Object, opts ...ctrlruntimeclient.CreateOption) error {
+	switch typed := obj.(type) {
+	case *imagev1.ImageStreamImport:
+		c.imageImportAttempts++
+		if c.imageImportAttempts == 1 {
+			return kerrors.NewServiceUnavailable("registry temporarily unavailable")
+		}
+		typed.Status.Images = []imagev1.ImageImportStatus{{Image: &imagev1.Image{DockerImageReference: "registry.test/release@sha256:aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa"}}}
+		return nil
+	case *corev1.Pod:
+		if typed.Name == "release-images-latest" && len(typed.Spec.Containers) > 0 {
+			for _, env := range typed.Spec.Containers[0].Env {
+				if env.Name == entrypoint.JSONConfigEnvVar {
+					var options entrypoint.Options
+					if options.LoadConfig(env.Value) == nil {
+						c.extractionCommands = strings.Join(options.Args, "\n")
+					}
+					break
+				}
+			}
+		}
+	}
+	return c.releasePodLifecycleClient.Create(ctx, obj, opts...)
+}
+
+func (c *importReleaseOrchestrationClient) Watch(ctx context.Context, list ctrlruntimeclient.ObjectList, opts ...ctrlruntimeclient.ListOption) (watch.Interface, error) {
+	if _, ok := list.(*corev1.PodList); ok {
+		return c.releasePodLifecycleClient.Watch(ctx, list, opts...)
+	}
+	return c.FakePodExecutor.LoggingClient.Watch(ctx, list, opts...)
+}
+
+func newImportReleaseOrchestrationClient(t *testing.T, namespace string) *importReleaseOrchestrationClient {
+	t.Helper()
+	scheme := runtime.NewScheme()
+	for name, addToScheme := range map[string]func(*runtime.Scheme) error{
+		"core":  corev1.AddToScheme,
+		"image": imagev1.AddToScheme,
+		"rbac":  rbacv1.AddToScheme,
+	} {
+		if err := addToScheme(scheme); err != nil {
+			t.Fatalf("add %s API to scheme: %v", name, err)
+		}
+	}
+	stableStream := &imagev1.ImageStream{
+		ObjectMeta: metav1.ObjectMeta{Namespace: namespace, Name: api.ReleaseStreamFor(api.LatestReleaseName)},
+		Spec: imagev1.ImageStreamSpec{Tags: []imagev1.TagReference{{
+			Name: "cli",
+			From: &corev1.ObjectReference{Kind: "DockerImage", Name: testCLIImage},
+		}}},
+		Status: imagev1.ImageStreamStatus{Tags: []imagev1.NamedTagEventList{{
+			Tag:   "cli",
+			Items: []imagev1.TagEvent{{DockerImageReference: "quay.io/test/cli@sha256:bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb"}},
+		}}},
+	}
+	stableCLI := &imagev1.ImageStreamTag{
+		ObjectMeta: metav1.ObjectMeta{Namespace: namespace, Name: stableStream.Name + ":cli"},
+		Tag:        &imagev1.TagReference{From: &corev1.ObjectReference{Kind: "DockerImage", Name: testCLIImage}},
+	}
+	serviceAccount := &corev1.ServiceAccount{
+		ObjectMeta:       metav1.ObjectMeta{Namespace: namespace, Name: "ci-operator"},
+		ImagePullSecrets: []corev1.LocalObjectReference{{Name: api.RegistryPullCredentialsSecret}, {Name: "generated-dockercfg"}},
+	}
+	loggingClient := loggingclient.New(fakectrlruntimeclient.NewClientBuilder().
+		WithScheme(scheme).
+		WithObjects(stableStream, stableCLI, serviceAccount).
+		WithIndex(&corev1.Pod{}, "metadata.name", func(obj ctrlruntimeclient.Object) []string { return []string{obj.GetName()} }).
+		WithIndex(&corev1.Event{}, "involvedObject.uid", func(obj ctrlruntimeclient.Object) []string {
+			return []string{string(obj.(*corev1.Event).InvolvedObject.UID)}
+		}).
+		Build(), nil)
+	base := &releasePodLifecycleClient{
+		FakePodClient: &testhelperkube.FakePodClient{
+			FakePodExecutor: &testhelperkube.FakePodExecutor{LoggingClient: loggingClient},
+			PendingTimeout:  0,
+		},
+		statuses: []corev1.PodStatus{
+			transientRunningReleasePodStatus(),
+			{Phase: corev1.PodFailed, ContainerStatuses: []corev1.ContainerStatus{{
+				Name:  releaseExtractionContainerName,
+				State: corev1.ContainerState{Terminated: &corev1.ContainerStateTerminated{ExitCode: 1}},
+			}}},
+		},
+		deleteCalls: make(chan struct{}, 20),
+	}
+	return &importReleaseOrchestrationClient{releasePodLifecycleClient: base}
+}
+
+func TestImportReleaseRunOrchestratesRetriesAndExtractionLifecycle(t *testing.T) {
+	const namespace = "test-namespace"
+	client := newImportReleaseOrchestrationClient(t, namespace)
+	jobSpec := &api.JobSpec{JobSpec: downwardapi.JobSpec{
+		Job:              "release-import-test",
+		Type:             prowapi.PresubmitJob,
+		Refs:             &prowapi.Refs{Org: "openshift", Repo: "ci-tools", BaseRef: "main", Pulls: []prowapi.Pull{{Number: 5376, SHA: "test-sha"}}},
+		DecorationConfig: &prowapi.DecorationConfig{Timeout: &prowapi.Duration{Duration: time.Hour}, GracePeriod: &prowapi.Duration{Duration: time.Second}, UtilityImages: &prowapi.UtilityImages{Sidecar: "sidecar", Entrypoint: "entrypoint"}, SkipCloning: utilpointer.Bool(true)},
+	}}
+	jobSpec.SetNamespace(namespace)
+	step := ImportReleaseStep(
+		api.LatestReleaseName,
+		"",
+		"release:latest",
+		imagev1.SourceTagReferencePolicy,
+		NewReleaseSourceFromPullSpec("registry.test/source:latest"),
+		false,
+		nil,
+		client,
+		jobSpec,
+		nil,
+		nil,
+	).(*importReleaseStep)
+	expectedDelays := []time.Duration{0}
+	step.releaseImportRetryDelays = func() []time.Duration { return append([]time.Duration(nil), expectedDelays...) }
+	importCalled := false
+	step.importTagWithRetryDelays = func(ctx context.Context, gotClient ctrlruntimeclient.Client, ns, name, tag, pullSpec string, delays []time.Duration, metricsAgent *metrics.MetricsAgent) (string, error) {
+		importCalled = true
+		if gotClient != client || ns != namespace || name != "release" || tag != api.LatestReleaseName || pullSpec != "registry.test/source:latest" {
+			t.Fatalf("unexpected extended import arguments: client_match=%t ns=%q name=%q tag=%q pull_spec=%q", gotClient == client, ns, name, tag, pullSpec)
+		}
+		if len(delays) != 1 || delays[0] != 0 {
+			t.Fatalf("unexpected release import retry delays: %v", delays)
+		}
+		return steputils.ImportTagWithRetryDelays(ctx, gotClient, ns, name, tag, pullSpec, delays, metricsAgent)
+	}
+
+	ctx, cancel := context.WithCancel(context.Background())
+	err := step.Run(ctx)
+	if err == nil || !strings.Contains(err.Error(), "failed to extract release image") {
+		t.Fatalf("expected permanent extraction failure from real Run wiring, got %v", err)
+	}
+	if !importCalled || client.imageImportAttempts != 2 {
+		t.Fatalf("expected extended import API to retry once, called=%t attempts=%d", importCalled, client.imageImportAttempts)
+	}
+	if client.createCount != 2 || len(client.deletedUIDs) != 1 || client.deletedUIDs[0] != "release-pod-1" {
+		t.Fatalf("expected exit-75 pod recreation followed by one permanent failure, creates=%d deleted_uids=%v", client.createCount, client.deletedUIDs)
+	}
+	for _, expected := range []string{
+		"extract_error=${ARTIFACT_DIR}/release-images-latest-extract-error.log",
+		"grep -Eqi '(" + transientReleaseExtractionErrorPattern + ")'",
+		"exit 75",
+		"oc adm release extract --from=\"registry.test/release@sha256:aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa\"",
+	} {
+		if !strings.Contains(client.extractionCommands, expected) {
+			t.Fatalf("generated extraction command missing %q:\n%s", expected, client.extractionCommands)
+		}
+	}
+	var transientErr *transientReleaseExtractionError
+	if errors.As(err, &transientErr) {
+		t.Fatalf("permanent second attempt retained transient classification: %v", err)
+	}
+	cancel()
+	waitForReleasePodDeleteCalls(t, client.releasePodLifecycleClient, 3)
 }
 
 func TestReleaseExtractionUsesRealPodStepLifecycle(t *testing.T) {

@@ -217,7 +217,10 @@ func (j *gcsJobRun) GetCombinedJUnitTestSuites(ctx context.Context) (*junit.Test
 	testSuites := &junit.TestSuites{}
 	for _, junitFile := range j.GetGCSJunitPaths() {
 		logrus.Debug("getting junit file content content from GCS")
-		junitContent, err := j.GetContent(ctx, junitFile)
+		// deliberately not going through GetContent: a job run's junit files add up to hundreds
+		// of megabytes and their raw content is of no use once they are parsed, so it must not
+		// end up in the content cache
+		junitContent, err := j.getCurrentContent(ctx, junitFile)
 		if err != nil {
 			return nil, fmt.Errorf("error getting content for jobrun/%v/%v %q: %w", j.GetJobName(), j.GetJobRunID(), junitFile, err)
 		}

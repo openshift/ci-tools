@@ -50,17 +50,14 @@ type DispatchAuditEvent struct {
 
 // DispatchOverrideSpec is the desired temporary scheduling policy.
 // +kubebuilder:validation:XValidation:rule="self.kind == 'Capacity' ? has(self.capacity) : !has(self.capacity)",message="capacity is required only for Capacity overrides"
-// +kubebuilder:validation:XValidation:rule="self.id == oldSelf.id && self.planID == oldSelf.planID && self.sourceGeneration == oldSelf.sourceGeneration && self.policyInputDigest == oldSelf.policyInputDigest && self.kind == oldSelf.kind && self.cluster == oldSelf.cluster && self.startsAt == oldSelf.startsAt && self.expiresAt == oldSelf.expiresAt && self.createdBy == oldSelf.createdBy && self.sourceChannelID == oldSelf.sourceChannelID && self.reason == oldSelf.reason && self.requiredApprovals == oldSelf.requiredApprovals && self.fallbackProtected == oldSelf.fallbackProtected && self.idempotencyKey == oldSelf.idempotencyKey",message="immutable override identity and policy fields cannot change"
+// +kubebuilder:validation:XValidation:rule="self.id == oldSelf.id && self.planID == oldSelf.planID && self.sourceGeneration == oldSelf.sourceGeneration && self.policyInputDigest == oldSelf.policyInputDigest && self.kind == oldSelf.kind && self.cluster == oldSelf.cluster && self.startsAt == oldSelf.startsAt && self.expiresAt == oldSelf.expiresAt && self.createdBy == oldSelf.createdBy && self.sourceChannelID == oldSelf.sourceChannelID && self.reason == oldSelf.reason && self.requiredApprovals == oldSelf.requiredApprovals && self.idempotencyKey == oldSelf.idempotencyKey",message="immutable override identity and policy fields cannot change"
 // +kubebuilder:validation:XValidation:rule="has(self.scope) == has(oldSelf.scope) && (!has(self.scope) || self.scope == oldSelf.scope)",message="override scope is immutable"
 // +kubebuilder:validation:XValidation:rule="has(self.capacity) == has(oldSelf.capacity) && (!has(self.capacity) || self.capacity == oldSelf.capacity)",message="override capacity is immutable"
 // +kubebuilder:validation:XValidation:rule="has(self.incidentURL) == has(oldSelf.incidentURL) && (!has(self.incidentURL) || self.incidentURL == oldSelf.incidentURL)",message="incident URL is immutable"
 // +kubebuilder:validation:XValidation:rule="!has(oldSelf.approvals) || (has(self.approvals) && oldSelf.approvals.all(a, self.approvals.exists(b, b.userID == a.userID && b.at == a.at)))",message="approvals may only be appended"
-// +kubebuilder:validation:XValidation:rule="!has(oldSelf.fallbackConfirmed) || !oldSelf.fallbackConfirmed || (has(self.fallbackConfirmed) && self.fallbackConfirmed)",message="fallback confirmation cannot be withdrawn"
 // +kubebuilder:validation:XValidation:rule="has(self.revokedAt) == has(self.revokedBy) && (!has(self.revokedBy) || size(self.revokedBy) > 0)",message="revokedAt and a non-empty revokedBy must be set together"
 // +kubebuilder:validation:XValidation:rule="!has(oldSelf.revokedAt) || (has(self.revokedAt) && self.revokedAt == oldSelf.revokedAt && has(oldSelf.revokedBy) && has(self.revokedBy) && self.revokedBy == oldSelf.revokedBy)",message="revocation cannot be removed or changed"
 // +kubebuilder:validation:XValidation:rule="!has(oldSelf.slackThreadTS) || (has(self.slackThreadTS) && self.slackThreadTS == oldSelf.slackThreadTS)",message="Slack thread binding cannot be changed"
-// +kubebuilder:validation:XValidation:rule="self.kind != 'Drain' || self.requiredApprovals == 2",message="drain overrides require two approvals"
-// +kubebuilder:validation:XValidation:rule="self.kind != 'Drain' || self.fallbackProtected || (has(self.fallbackConfirmed) && self.fallbackConfirmed)",message="an unprotected drain requires explicit fallback confirmation"
 type DispatchOverrideSpec struct {
 	// +kubebuilder:validation:MinLength=1
 	ID string `json:"id"`
@@ -93,8 +90,6 @@ type DispatchOverrideSpec struct {
 	// +kubebuilder:validation:Minimum=1
 	// +kubebuilder:validation:Maximum=2
 	RequiredApprovals int32        `json:"requiredApprovals"`
-	FallbackProtected bool         `json:"fallbackProtected"`
-	FallbackConfirmed bool         `json:"fallbackConfirmed,omitempty"`
 	RevokedAt         *metav1.Time `json:"revokedAt,omitempty"`
 	RevokedBy         string       `json:"revokedBy,omitempty"`
 	SlackThreadTS     string       `json:"slackThreadTS,omitempty"`
@@ -108,7 +103,6 @@ type DispatchOverrideStatus struct {
 	ObservedGeneration int64         `json:"observedGeneration,omitempty"`
 	PolicyGeneration   uint64        `json:"policyGeneration,omitempty"`
 	SnapshotChecksum   string        `json:"snapshotChecksum,omitempty"`
-	FallbackProtected  bool          `json:"fallbackProtected,omitempty"`
 	Message            string        `json:"message,omitempty"`
 	// +listType=map
 	// +listMapKey=type

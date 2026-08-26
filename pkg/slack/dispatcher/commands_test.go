@@ -208,7 +208,7 @@ func TestMentionRetryIsIdempotentAndApplyUsesOriginatingThread(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	callback := mentionCallback("Ev-apply", "C-team", "U2", "<@B1> tp-dispatch apply plan-1 --confirm-fallback", "101.2", "100.1")
+	callback := mentionCallback("Ev-apply", "C-team", "U2", "<@B1> tp-dispatch apply plan-1", "101.2", "100.1")
 	logger := logrus.NewEntry(logrus.New())
 	for range 2 {
 		handled, err := handler.MentionHandler().Handle(callback, logger)
@@ -220,7 +220,7 @@ func TestMentionRetryIsIdempotentAndApplyUsesOriginatingThread(t *testing.T) {
 		t.Fatalf("Slack retry was not deduplicated: calls=%d apply=%d posts=%d", client.calls, len(client.applyRequests), len(messenger.posts))
 	}
 	request := client.applyRequests[0]
-	if request.IdempotencyKey != "apply:Ev-apply" || request.SlackThreadTS != "100.1" || !request.FallbackConfirmed {
+	if request.IdempotencyKey != "apply:Ev-apply" || request.SlackThreadTS != "100.1" {
 		t.Fatalf("apply identity or thread was not preserved: %#v", request)
 	}
 	if messenger.posts[0].channel != "C-team" || messenger.posts[0].threadTS != "100.1" || !strings.Contains(messenger.posts[0].text, "override-1") {
@@ -234,11 +234,11 @@ func TestMutatingCommandsUseEventIdentity(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	result := handler.Handle(context.Background(), Command{ChannelID: "C-team", UserID: "U2", RequestID: "Ev-apply", ThreadTS: "100.1", Text: "apply plan-1 --confirm-fallback"})
+	result := handler.Handle(context.Background(), Command{ChannelID: "C-team", UserID: "U2", RequestID: "Ev-apply", ThreadTS: "100.1", Text: "apply plan-1"})
 	if !strings.Contains(result.Text, "Active") {
 		t.Fatalf("apply failed: %#v", result)
 	}
-	result = handler.Handle(context.Background(), Command{ChannelID: "C-team", UserID: "U2", RequestID: "Ev-approve", ThreadTS: "100.1", Text: "approve plan-1 --confirm-fallback"})
+	result = handler.Handle(context.Background(), Command{ChannelID: "C-team", UserID: "U2", RequestID: "Ev-approve", ThreadTS: "100.1", Text: "approve plan-1"})
 	if !strings.Contains(result.Text, "Recorded approval") || !strings.Contains(result.Text, "1/1") || len(client.applyRequests) != 2 || client.applyRequests[1].IdempotencyKey != "approve:Ev-approve" {
 		t.Fatalf("approve failed: %#v, apply=%#v", result, client.applyRequests)
 	}
@@ -256,25 +256,20 @@ func TestFormatOverridesIncludesExpiry(t *testing.T) {
 			RequiredApprovals: 2, Approvals: []dispatcherv1.DispatchApproval{{UserID: "U9"}},
 			ExpiresAt: metav1.NewTime(time.Date(2026, 8, 20, 14, 0, 0, 0, time.UTC)),
 		},
-		Status: dispatcherv1.DispatchOverrideStatus{State: dispatcherv1.OverrideStatePending, PolicyGeneration: 7, FallbackProtected: true},
+		Status: dispatcherv1.DispatchOverrideStatus{State: dispatcherv1.OverrideStatePending, PolicyGeneration: 7},
 	}
 	formatted := formatOverrides([]dispatcherv1.DispatchOverride{override})
-	for _, want := range []string{"o1", "Pending", "2026-08-20T14:00:00Z", "INC-123 API outage", "U9", "1/2", "generation 7", "fallback protected: *true*", "https://issues.example/INC-123"} {
+	for _, want := range []string{"o1", "Pending", "2026-08-20T14:00:00Z", "INC-123 API outage", "U9", "1/2", "generation 7", "https://issues.example/INC-123"} {
 		if !strings.Contains(formatted, want) {
 			t.Fatalf("override presentation missing %q: %s", want, formatted)
 		}
 	}
 	withoutIncident := override
 	withoutIncident.Spec.IncidentURL = ""
-	withoutIncident.Spec.FallbackProtected = true
-	withoutIncident.Status.FallbackProtected = false
 	withoutIncident.Status.State = dispatcherv1.OverrideStatePending
 	formatted = formatOverrides([]dispatcherv1.DispatchOverride{withoutIncident})
 	if strings.Contains(formatted, "incident") {
 		t.Fatalf("empty incident URL was included: %s", formatted)
-	}
-	if !strings.Contains(formatted, "fallback protected: *false*") {
-		t.Fatalf("status fallback protection was not preferred: %s", formatted)
 	}
 }
 
@@ -430,5 +425,64 @@ func TestDisabledPlanKindFeatureFlagCombinations(t *testing.T) {
 				}
 			})
 		}
+	}
+}
+
+func threadOverride(id string, state dispatcherv1.OverrideState, generation uint64) dispatcherv1.DispatchOverride {
+	return dispatcherv1.DispatchOverride{
+		Spec:   dispatcherv1.DispatchOverrideSpec{ID: id, SourceChannelID: "C-team", SlackThreadTS: "100.1"},
+		Status: dispatcherv1.DispatchOverrideStatus{State: state, PolicyGeneration: generation},
+	}
+}
+
+func TestTransitionPollPostsStateChangesNotGenerationBumps(t *testing.T) {
+	override := threadOverride("o1", dispatcherv1.OverrideStateActive, 38)
+	client := &fakeControlClient{overrides: []dispatcherv1.DispatchOverride{override}}
+	messenger := &fakeMessenger{}
+	handler, err := NewHandler(client, Options{ChannelID: "C-team", Messenger: messenger})
+	if err != nil {
+		t.Fatal(err)
+	}
+	ctx := context.Background()
+	if err := handler.pollTransitions(ctx, false); err != nil {
+		t.Fatal(err)
+	}
+	if len(messenger.posts) != 0 {
+		t.Fatalf("startup seed posted a transition: %#v", messenger.posts)
+	}
+
+	override.Status.PolicyGeneration = 39
+	client.overrides = []dispatcherv1.DispatchOverride{override}
+	if err := handler.pollTransitions(ctx, true); err != nil {
+		t.Fatal(err)
+	}
+	if len(messenger.posts) != 0 {
+		t.Fatalf("policy generation bump posted a transition: %#v", messenger.posts)
+	}
+
+	override.Status.State = dispatcherv1.OverrideStateRevoked
+	client.overrides = []dispatcherv1.DispatchOverride{override}
+	if err := handler.pollTransitions(ctx, true); err != nil {
+		t.Fatal(err)
+	}
+	if len(messenger.posts) != 1 || !strings.Contains(messenger.posts[0].text, "Revoked") || messenger.posts[0].threadTS != "100.1" {
+		t.Fatalf("state change was not posted: %#v", messenger.posts)
+	}
+
+	override.Status.PolicyGeneration = 40
+	client.overrides = []dispatcherv1.DispatchOverride{override}
+	if err := handler.pollTransitions(ctx, true); err != nil {
+		t.Fatal(err)
+	}
+	if len(messenger.posts) != 1 {
+		t.Fatalf("revoked generation bump posted again: %#v", messenger.posts)
+	}
+
+	client.overrides = []dispatcherv1.DispatchOverride{override, threadOverride("o2", dispatcherv1.OverrideStatePending, 40)}
+	if err := handler.pollTransitions(ctx, true); err != nil {
+		t.Fatal(err)
+	}
+	if len(messenger.posts) != 2 || !strings.Contains(messenger.posts[1].text, "Pending") {
+		t.Fatalf("new override was not posted: %#v", messenger.posts)
 	}
 }

@@ -146,10 +146,6 @@ func parseOptions(tokens []string, positionalCount int, allowedOptions ...string
 		if _, exists := options[name]; exists {
 			return nil, nil, fmt.Errorf("option --%s was specified more than once", name)
 		}
-		if name == "confirm-fallback" {
-			options[name] = "true"
-			continue
-		}
 		if i+1 >= len(tokens) || strings.HasPrefix(tokens[i+1], "--") {
 			return nil, nil, fmt.Errorf("--%s requires a value", name)
 		}
@@ -182,13 +178,9 @@ func formatOverrides(overrides []dispatcherv1.DispatchOverride) string {
 		if overrides[i].Spec.Scope.Capability != "" {
 			scope += "/capability:" + overrides[i].Spec.Scope.Capability
 		}
-		fallbackProtected := overrides[i].Spec.FallbackProtected
-		if overrides[i].Status.State != "" {
-			fallbackProtected = overrides[i].Status.FallbackProtected
-		}
-		detail := fmt.Sprintf("reason %s; created by %s; approvals %d/%d; generation %d; fallback protected: *%t*",
+		detail := fmt.Sprintf("reason %s; created by %s; approvals %d/%d; generation %d",
 			overrides[i].Spec.Reason, overrides[i].Spec.CreatedBy, len(overrides[i].Spec.Approvals), overrides[i].Spec.RequiredApprovals,
-			overrides[i].Status.PolicyGeneration, fallbackProtected)
+			overrides[i].Status.PolicyGeneration)
 		if overrides[i].Spec.IncidentURL != "" {
 			detail += "; incident " + overrides[i].Spec.IncidentURL
 		}
@@ -205,7 +197,6 @@ func formatStatus(status coredispatcher.ControlStatus) string {
 			effective = *status.EffectiveCapacity
 		}
 		text += fmt.Sprintf("\n`%s`: provider %s, baseline/effective capacity %d/%d, capabilities %s.", status.Cluster, status.ClusterInfo.Provider, status.ClusterInfo.Capacity, effective, strings.Join(status.ClusterInfo.Capabilities, ", "))
-		text += fmt.Sprintf("\nFallback protected: *%t*.", status.FallbackProtected)
 	}
 	if len(status.Overrides) > 0 {
 		text += "\n" + formatOverrides(status.Overrides)
@@ -234,19 +225,12 @@ func formatPlan(plan coredispatcher.DispatchPlan) string {
 	if plan.PropagationBound > 0 {
 		propagation = plan.PropagationBound.String()
 	}
-	return fmt.Sprintf("Plan `%s`: %s %s for %s; effective capacity %d → %d.\nAffected: %d jobs in %d placement groups / %.1f demand; movable: %d / %.1f; immovable: %d.\nDestinations: %s.\nApprovals required: %d. Fallback protected: *%t*. Maximum propagation: %s.\nApply with `@dptp-bot tp-dispatch apply %s%s`.",
+	return fmt.Sprintf("Plan `%s`: %s %s for %s; effective capacity %d → %d.\nAffected: %d jobs in %d placement groups / %.1f demand; movable: %d / %.1f; immovable: %d.\nDestinations: %s.\nApprovals required: %d. Maximum propagation: %s.\nApply with `@dptp-bot tp-dispatch apply %s`.",
 		plan.ID, plan.Request.Kind, scope, coredispatcher.FormatDurationSeconds(plan.Request.DurationSeconds),
 		plan.CurrentEffectiveCapacity, plan.RequestedEffectiveCapacity,
 		plan.Impact.AffectedJobs, plan.Impact.AffectedGroups, plan.Impact.AffectedDemand, plan.Impact.MovableJobs, plan.Impact.MovableDemand, len(plan.Impact.ImmovableJobs),
-		strings.Join(destinations, ", "), plan.RequiredApprovals, plan.FallbackProtected, propagation,
-		plan.ID, fallbackSuffix(plan))
-}
-
-func fallbackSuffix(plan coredispatcher.DispatchPlan) string {
-	if plan.Request.Kind == dispatcherv1.OverrideKindDrain && !plan.FallbackProtected {
-		return " --confirm-fallback"
-	}
-	return ""
+		strings.Join(destinations, ", "), plan.RequiredApprovals, propagation,
+		plan.ID)
 }
 
 func formatHistory(override dispatcherv1.DispatchOverride) string {
@@ -300,11 +284,13 @@ func (h *Handler) DeniedResponse(command Command) Response {
 }
 
 func transitionKey(override *dispatcherv1.DispatchOverride) string {
-	return fmt.Sprintf("%s/%d", override.Status.State, override.Status.PolicyGeneration)
+	// Policy generation is stamped on every reconcile, including terminal overrides.
+	// Notify only when lifecycle state changes.
+	return string(override.Status.State)
 }
 
 func transitionText(override *dispatcherv1.DispatchOverride) string {
-	return fmt.Sprintf("Dispatcher override `%s` transitioned to *%s* at policy generation `%d`. Fallback protected: *%t*.", override.Spec.ID, override.Status.State, override.Status.PolicyGeneration, override.Status.FallbackProtected)
+	return fmt.Sprintf("Dispatcher override `%s` transitioned to *%s* at policy generation `%d`.", override.Spec.ID, override.Status.State, override.Status.PolicyGeneration)
 }
 
 func (h *Handler) markObserved(override *dispatcherv1.DispatchOverride) {
@@ -334,24 +320,9 @@ func (h *Handler) Run(ctx context.Context) {
 	defer ticker.Stop()
 	initialized := false
 	for {
-		overrides, err := h.client.Overrides(ctx)
-		if err != nil {
+		if err := h.pollTransitions(ctx, initialized); err != nil {
 			logrus.WithError(err).Warn("failed to list dispatcher overrides for Slack transition polling")
 		} else {
-			for i := range overrides {
-				if overrides[i].Spec.SourceChannelID != h.options.ChannelID || overrides[i].Spec.SlackThreadTS == "" {
-					continue
-				}
-				key := transitionKey(&overrides[i])
-				h.mu.Lock()
-				previous, seen := h.observed[overrides[i].Spec.ID]
-				h.mu.Unlock()
-				if !initialized {
-					h.markObserved(&overrides[i])
-				} else if !seen || previous != key {
-					h.postTransition(&overrides[i])
-				}
-			}
 			initialized = true
 		}
 		select {
@@ -360,6 +331,30 @@ func (h *Handler) Run(ctx context.Context) {
 		case <-ticker.C:
 		}
 	}
+}
+
+func (h *Handler) pollTransitions(ctx context.Context, initialized bool) error {
+	overrides, err := h.client.Overrides(ctx)
+	if err != nil {
+		return err
+	}
+	for i := range overrides {
+		if overrides[i].Spec.SourceChannelID != h.options.ChannelID || overrides[i].Spec.SlackThreadTS == "" {
+			continue
+		}
+		key := transitionKey(&overrides[i])
+		h.mu.Lock()
+		previous, seen := h.observed[overrides[i].Spec.ID]
+		h.mu.Unlock()
+		if !initialized {
+			h.markObserved(&overrides[i])
+			continue
+		}
+		if !seen || previous != key {
+			h.postTransition(&overrides[i])
+		}
+	}
+	return nil
 }
 
 // Handle enforces the channel boundary before any dispatcher API call.
@@ -451,7 +446,7 @@ func (h *Handler) Handle(parent context.Context, command Command) Response {
 		if kind == dispatcherv1.OverrideKindCapacity {
 			positionalCount = 2
 		}
-		positionals, options, parseErr := parseOptions(tokens[2:], positionalCount, "for", "reason", "incident", "capability", "confirm-fallback")
+		positionals, options, parseErr := parseOptions(tokens[2:], positionalCount, "for", "reason", "incident", "capability")
 		if parseErr != nil {
 			return response(parseErr.Error() + ". " + usage())
 		}
@@ -466,14 +461,10 @@ func (h *Handler) Handle(parent context.Context, command Command) Response {
 				return response(parseErr.Error())
 			}
 		}
-		if kind != dispatcherv1.OverrideKindDrain && options["confirm-fallback"] == "true" {
-			return response("--confirm-fallback is valid only for drain plans.")
-		}
 		request := coredispatcher.PlanRequest{
 			Kind: kind, Cluster: positionals[0], Capability: options["capability"], Capacity: capacity,
 			DurationSeconds: duration, Reason: options["reason"], IncidentURL: options["incident"],
 			UserID: command.UserID, ChannelID: command.ChannelID, IdempotencyKey: idempotencyKey(command, "plan"),
-			FallbackConfirmed: options["confirm-fallback"] == "true",
 		}
 		var plan coredispatcher.DispatchPlan
 		plan, err = h.client.Plan(ctx, request)
@@ -484,7 +475,7 @@ func (h *Handler) Handle(parent context.Context, command Command) Response {
 		if !h.options.EnableApply {
 			return response(fmt.Sprintf("Dispatcher %s is disabled while the command is in read-only shadow mode.", tokens[0]))
 		}
-		positionals, options, parseErr := parseOptions(tokens[1:], 1, "confirm-fallback")
+		positionals, _, parseErr := parseOptions(tokens[1:], 1)
 		if parseErr != nil {
 			return response(parseErr.Error() + ". " + usage())
 		}
@@ -499,7 +490,7 @@ func (h *Handler) Handle(parent context.Context, command Command) Response {
 		var override *dispatcherv1.DispatchOverride
 		override, err = h.client.Apply(ctx, positionals[0], coredispatcher.ApplyRequest{
 			UserID: command.UserID, ChannelID: command.ChannelID, IdempotencyKey: idempotencyKey(command, tokens[0]),
-			FallbackConfirmed: options["confirm-fallback"] == "true", SlackThreadTS: command.ThreadTS,
+			SlackThreadTS: command.ThreadTS,
 		})
 		if err == nil {
 			resultingOverride = override

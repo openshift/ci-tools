@@ -40,7 +40,6 @@ type ControlOptions struct {
 	MaxTTL                    time.Duration
 	MaxDrainTTL               time.Duration
 	PlanTTL                   time.Duration
-	AffectedDemandApproval    float64
 	EnableCapacity            bool
 	EnableDrain               bool
 	EnableCapabilityScope     bool
@@ -76,9 +75,6 @@ func (o *ControlOptions) Validate() error {
 	if o.MaxDrainTTL > o.MaxTTL {
 		return errors.New("maximum drain TTL cannot exceed maximum override TTL")
 	}
-	if o.AffectedDemandApproval < 0 {
-		return errors.New("affected-demand approval threshold cannot be negative")
-	}
 	if o.EnableDrain && !o.EnableCapacity {
 		return errors.New("drain operations require capacity operations to be enabled")
 	}
@@ -87,9 +83,6 @@ func (o *ControlOptions) Validate() error {
 	}
 	if o.EnableCapacity && (o.SchedulerPropagationBound <= 0 || o.SchedulerPropagationBound > maxSchedulerPropagationBound) {
 		return fmt.Errorf("write operations require a measured scheduler propagation bound no greater than %s", maxSchedulerPropagationBound)
-	}
-	if o.EnableCapacity && o.AffectedDemandApproval <= 0 {
-		return errors.New("write operations require a positive affected-demand threshold for second approval")
 	}
 	if o.EnableCapacity && o.WriteSafetyCheck == nil {
 		return errors.New("write operations require verification of the Prow scheduler cache bound")
@@ -104,17 +97,16 @@ func (o *ControlOptions) Validate() error {
 
 // PlanRequest is a read-only request to preview a temporary override.
 type PlanRequest struct {
-	Kind              dispatcherv1.OverrideKind `json:"kind"`
-	Cluster           string                    `json:"cluster"`
-	Capability        string                    `json:"capability,omitempty"`
-	Capacity          *int32                    `json:"capacity,omitempty"`
-	DurationSeconds   int64                     `json:"durationSeconds"`
-	Reason            string                    `json:"reason"`
-	IncidentURL       string                    `json:"incidentURL,omitempty"`
-	UserID            string                    `json:"userID"`
-	ChannelID         string                    `json:"channelID"`
-	IdempotencyKey    string                    `json:"idempotencyKey"`
-	FallbackConfirmed bool                      `json:"fallbackConfirmed,omitempty"`
+	Kind            dispatcherv1.OverrideKind `json:"kind"`
+	Cluster         string                    `json:"cluster"`
+	Capability      string                    `json:"capability,omitempty"`
+	Capacity        *int32                    `json:"capacity,omitempty"`
+	DurationSeconds int64                     `json:"durationSeconds"`
+	Reason          string                    `json:"reason"`
+	IncidentURL     string                    `json:"incidentURL,omitempty"`
+	UserID          string                    `json:"userID"`
+	ChannelID       string                    `json:"channelID"`
+	IdempotencyKey  string                    `json:"idempotencyKey"`
 }
 
 // DispatchPlan is an immutable impact preview tied to one policy generation.
@@ -127,7 +119,6 @@ type DispatchPlan struct {
 	Request                    PlanRequest    `json:"request"`
 	Impact                     CompileSummary `json:"impact"`
 	RequiredApprovals          int32          `json:"requiredApprovals"`
-	FallbackProtected          bool           `json:"fallbackProtected"`
 	PropagationBound           time.Duration  `json:"propagationBound"`
 	CurrentEffectiveCapacity   int            `json:"currentEffectiveCapacity"`
 	RequestedEffectiveCapacity int            `json:"requestedEffectiveCapacity"`
@@ -135,11 +126,10 @@ type DispatchPlan struct {
 
 // ApplyRequest applies or approves a plan.
 type ApplyRequest struct {
-	UserID            string `json:"userID"`
-	ChannelID         string `json:"channelID"`
-	IdempotencyKey    string `json:"idempotencyKey"`
-	FallbackConfirmed bool   `json:"fallbackConfirmed,omitempty"`
-	SlackThreadTS     string `json:"slackThreadTS,omitempty"`
+	UserID         string `json:"userID"`
+	ChannelID      string `json:"channelID"`
+	IdempotencyKey string `json:"idempotencyKey"`
+	SlackThreadTS  string `json:"slackThreadTS,omitempty"`
 }
 
 // CancelRequest revokes an override idempotently.
@@ -167,18 +157,7 @@ type ControlStatus struct {
 	ClusterInfo       *ClusterInfo                    `json:"clusterInfo,omitempty"`
 	EffectiveCapacity *int                            `json:"effectiveCapacity,omitempty"`
 	Overrides         []dispatcherv1.DispatchOverride `json:"overrides,omitempty"`
-	FallbackProtected bool                            `json:"fallbackProtected"`
 }
-
-// FallbackProtectionObservation reports a short-lived external verification of
-// the fallback assignments currently loaded by Prow.
-type FallbackProtectionObservation struct {
-	FallbackDigest    string    `json:"fallbackDigest"`
-	ProtectedClusters []string  `json:"protectedClusters"`
-	ValidUntil        time.Time `json:"validUntil"`
-}
-
-const maxFallbackObservationTTL = 5 * time.Minute
 
 // ControlPlane compiles durable overrides into serving snapshots and implements plan/apply/cancel.
 type ControlPlane struct {
@@ -192,13 +171,8 @@ type ControlPlane struct {
 	baseline    map[string]ProwJobData
 	inventory   ClusterMap
 	blocked     sets.Set[string]
-	// fallbackProtected is populated only from an external observation that Prow
-	// loaded the matching Git fallback generation. Desired inventory is not proof.
-	fallbackProtected        sets.Set[string]
-	fallbackDigest           string
-	fallbackProtectionExpiry time.Time
-	plans                    map[string]DispatchPlan
-	wake                     chan struct{}
+	plans       map[string]DispatchPlan
+	wake        chan struct{}
 }
 
 // NewControlPlane creates a single-replica control plane.
@@ -209,7 +183,7 @@ func NewControlPlane(manager *SnapshotManager, store OverrideStore, options Cont
 	if err := options.Validate(); err != nil {
 		return nil, err
 	}
-	return &ControlPlane{manager: manager, store: store, options: options, now: time.Now, fallbackProtected: sets.New[string](), plans: make(map[string]DispatchPlan), wake: make(chan struct{}, 1)}, nil
+	return &ControlPlane{manager: manager, store: store, options: options, now: time.Now, plans: make(map[string]DispatchPlan), wake: make(chan struct{}, 1)}, nil
 }
 
 // UpdateBaseline installs the latest durable Git baseline inputs and triggers compilation.
@@ -218,55 +192,8 @@ func (c *ControlPlane) UpdateBaseline(baseline map[string]ProwJobData, inventory
 	c.baseline = copyBaseline(baseline)
 	c.inventory = copyInventory(inventory)
 	c.blocked = blocked.Clone()
-	if digest, err := fallbackDigestForBaseline(baseline); err != nil || digest != c.fallbackDigest {
-		c.fallbackProtected = sets.New[string]()
-		c.fallbackDigest = ""
-		c.fallbackProtectionExpiry = time.Time{}
-	}
 	c.mu.Unlock()
 	c.trigger()
-}
-
-// ObserveFallbackProtection installs a digest-bound, short-lived observation
-// from a trusted external process that inspects Prow's loaded fallback state.
-func (c *ControlPlane) ObserveFallbackProtection(observation FallbackProtectionObservation) error {
-	now := c.now().UTC()
-	if !observation.ValidUntil.After(now) || observation.ValidUntil.After(now.Add(maxFallbackObservationTTL)) {
-		return fmt.Errorf("fallback observation validUntil must be after now and at most %s in the future", maxFallbackObservationTTL)
-	}
-	snapshot := c.manager.Current()
-	if snapshot == nil || !c.manager.Ready() {
-		return errors.New("dispatcher has no ready policy generation")
-	}
-	expectedDigest, err := fallbackDigestForBaseline(snapshot.Baseline)
-	if err != nil {
-		return fmt.Errorf("calculate current fallback digest: %w", err)
-	}
-	if observation.FallbackDigest == "" || observation.FallbackDigest != expectedDigest {
-		return errors.New("fallback observation does not match the current baseline")
-	}
-	protected := sets.New[string]()
-	for _, cluster := range observation.ProtectedClusters {
-		if strings.TrimSpace(cluster) == "" {
-			return errors.New("fallback protected cluster names must not be empty")
-		}
-		if protected.Has(cluster) {
-			return fmt.Errorf("fallback protected cluster %q is duplicated", cluster)
-		}
-		for jobName, assignment := range snapshot.Baseline {
-			if assignment.Cluster == cluster {
-				return fmt.Errorf("fallback cluster %q is still targeted by job %q", cluster, jobName)
-			}
-		}
-		protected.Insert(cluster)
-	}
-	c.mu.Lock()
-	c.fallbackProtected = protected
-	c.fallbackDigest = observation.FallbackDigest
-	c.fallbackProtectionExpiry = observation.ValidUntil.UTC()
-	c.mu.Unlock()
-	c.trigger()
-	return nil
 }
 
 func (c *ControlPlane) trigger() {
@@ -280,40 +207,6 @@ func (c *ControlPlane) inputs() (map[string]ProwJobData, ClusterMap, sets.Set[st
 	c.mu.Lock()
 	defer c.mu.Unlock()
 	return copyBaseline(c.baseline), copyInventory(c.inventory), c.blocked.Clone()
-}
-
-func (c *ControlPlane) verifiedFallbackProtection() sets.Set[string] {
-	c.mu.Lock()
-	protected := c.fallbackProtected.Clone()
-	digest := c.fallbackDigest
-	expires := c.fallbackProtectionExpiry
-	c.mu.Unlock()
-	if digest == "" || !expires.After(c.now().UTC()) {
-		return sets.New[string]()
-	}
-	snapshot := c.manager.Current()
-	if snapshot == nil || !c.manager.Ready() {
-		return sets.New[string]()
-	}
-	currentDigest, err := fallbackDigestForBaseline(snapshot.Baseline)
-	if err != nil || currentDigest != digest {
-		return sets.New[string]()
-	}
-	return protected
-}
-
-// FallbackAssignmentDigest returns the stable digest of the job-to-cluster
-// assignments observed in Prow's loaded fallback configuration.
-func FallbackAssignmentDigest(assignments map[string]string) (string, error) {
-	return digestJSON(assignments)
-}
-
-func fallbackDigestForBaseline(baseline map[string]ProwJobData) (string, error) {
-	assignments := make(map[string]string, len(baseline))
-	for jobName, assignment := range baseline {
-		assignments[jobName] = assignment.Cluster
-	}
-	return FallbackAssignmentDigest(assignments)
 }
 
 // Run reconciles baseline and override changes until ctx is cancelled.
@@ -372,10 +265,9 @@ func appendAudit(status *dispatcherv1.DispatchOverrideStatus, event dispatcherv1
 	}
 }
 
-func (c *ControlPlane) updateStatus(ctx context.Context, override *dispatcherv1.DispatchOverride, state dispatcherv1.OverrideState, snapshot *PolicySnapshot, fallbackProtected bool, message string) error {
+func (c *ControlPlane) updateStatus(ctx context.Context, override *dispatcherv1.DispatchOverride, state dispatcherv1.OverrideState, snapshot *PolicySnapshot, message string) error {
 	if override.Status.State == state && override.Status.ObservedGeneration == override.Generation &&
 		override.Status.Message == message &&
-		override.Status.FallbackProtected == fallbackProtected &&
 		(snapshot == nil || override.Status.PolicyGeneration == snapshot.Generation && override.Status.SnapshotChecksum == snapshot.Checksum) {
 		return nil
 	}
@@ -383,7 +275,6 @@ func (c *ControlPlane) updateStatus(ctx context.Context, override *dispatcherv1.
 	override.Status.State = state
 	override.Status.ObservedGeneration = override.Generation
 	override.Status.Message = message
-	override.Status.FallbackProtected = fallbackProtected
 	if snapshot != nil {
 		override.Status.PolicyGeneration = snapshot.Generation
 		override.Status.SnapshotChecksum = snapshot.Checksum
@@ -432,7 +323,6 @@ func (c *ControlPlane) Reconcile(ctx context.Context) error {
 		return err
 	}
 	now := c.now().UTC()
-	verifiedFallback := c.verifiedFallbackProtection()
 	current := c.manager.Current()
 	generation := uint64(1)
 	if current != nil {
@@ -461,8 +351,7 @@ func (c *ControlPlane) Reconcile(ctx context.Context) error {
 			state = dispatcherv1.OverrideStateFailed
 			message = invalidErr.Error()
 		}
-		fallbackProtected := verifiedFallback.Has(overrides[i].Spec.Cluster)
-		if err := c.updateStatus(ctx, &overrides[i], state, snapshot, fallbackProtected, message); err != nil {
+		if err := c.updateStatus(ctx, &overrides[i], state, snapshot, message); err != nil {
 			statusErrors = append(statusErrors, fmt.Errorf("update override %q status: %w", overrides[i].Name, err))
 		}
 	}
@@ -529,7 +418,7 @@ func (c *ControlPlane) validatePlanRequest(request PlanRequest) error {
 	return nil
 }
 
-func (c *ControlPlane) validateStoredOverride(override *dispatcherv1.DispatchOverride, fallbackProtected bool) error {
+func (c *ControlPlane) validateStoredOverride(override *dispatcherv1.DispatchOverride) error {
 	if override.Name == "" || override.Name != override.Spec.ID || !controlIDPattern.MatchString(override.Spec.ID) {
 		return errors.New("override resource name and spec ID must be the same valid identifier")
 	}
@@ -545,14 +434,10 @@ func (c *ControlPlane) validateStoredOverride(override *dispatcherv1.DispatchOve
 	if !override.Spec.ExpiresAt.Time.After(override.Spec.StartsAt.Time) || override.Spec.ExpiresAt.Sub(override.Spec.StartsAt.Time) > c.options.MaxTTL {
 		return errors.New("override has an invalid or excessive TTL")
 	}
-	if override.Spec.Kind == dispatcherv1.OverrideKindDrain {
-		if override.Spec.ExpiresAt.Sub(override.Spec.StartsAt.Time) > c.options.MaxDrainTTL || override.Spec.RequiredApprovals != 2 {
-			return errors.New("drain exceeds its TTL or does not require two approvals")
-		}
-		if !fallbackProtected && !override.Spec.FallbackProtected && !override.Spec.FallbackConfirmed {
-			return errors.New("unprotected drain lacks explicit fallback confirmation")
-		}
-	} else if override.Spec.RequiredApprovals < 1 || override.Spec.RequiredApprovals > 2 {
+	if override.Spec.Kind == dispatcherv1.OverrideKindDrain && override.Spec.ExpiresAt.Sub(override.Spec.StartsAt.Time) > c.options.MaxDrainTTL {
+		return errors.New("drain exceeds its TTL")
+	}
+	if override.Spec.RequiredApprovals < 1 || override.Spec.RequiredApprovals > 2 {
 		return errors.New("override required approvals must be one or two")
 	}
 	return nil
@@ -561,11 +446,10 @@ func (c *ControlPlane) validateStoredOverride(override *dispatcherv1.DispatchOve
 func (c *ControlPlane) compileableOverrides(overrides []dispatcherv1.DispatchOverride, baseline map[string]ProwJobData, inventory ClusterMap, blocked sets.Set[string], generation uint64, now time.Time) ([]dispatcherv1.DispatchOverride, map[string]error) {
 	result := make([]dispatcherv1.DispatchOverride, 0, len(overrides))
 	invalid := make(map[string]error)
-	verifiedFallback := c.verifiedFallbackProtection()
 	for i := range overrides {
 		live := overrides[i].Spec.RevokedAt == nil && now.Before(overrides[i].Spec.ExpiresAt.Time)
 		if live {
-			if err := c.validateStoredOverride(&overrides[i], verifiedFallback.Has(overrides[i].Spec.Cluster)); err != nil {
+			if err := c.validateStoredOverride(&overrides[i]); err != nil {
 				invalid[overrides[i].Name] = err
 				continue
 			}
@@ -618,7 +502,7 @@ func (c *ControlPlane) Plan(ctx context.Context, request PlanRequest) (DispatchP
 		StartsAt: metav1.NewTime(now), ExpiresAt: metav1.NewTime(now.Add(time.Duration(request.DurationSeconds) * time.Second)),
 		CreatedBy: request.UserID, SourceChannelID: request.ChannelID, Reason: request.Reason, IncidentURL: request.IncidentURL,
 		Approvals: []dispatcherv1.DispatchApproval{{UserID: request.UserID, At: metav1.NewTime(now)}}, RequiredApprovals: 1,
-		FallbackConfirmed: request.FallbackConfirmed, IdempotencyKey: request.IdempotencyKey,
+		IdempotencyKey: request.IdempotencyKey,
 	})
 	preview.Name = planID
 	overrides = append(overrides, preview)
@@ -639,15 +523,10 @@ func (c *ControlPlane) Plan(ctx context.Context, request PlanRequest) (DispatchP
 	if impact.MovedJobs == 0 {
 		return DispatchPlan{}, errors.New("override would not change any assignment")
 	}
-	requiredApprovals := int32(1)
-	if request.Kind == dispatcherv1.OverrideKindDrain || c.options.AffectedDemandApproval > 0 && impact.AffectedDemand >= c.options.AffectedDemandApproval {
-		requiredApprovals = 2
-	}
-	fallbackProtected := c.verifiedFallbackProtection().Has(request.Cluster)
 	plan := DispatchPlan{
 		ID: planID, CreatedAt: now, ExpiresAt: now.Add(c.options.PlanTTL), SourceGeneration: snapshot.Generation,
-		PolicyInputDigest: snapshot.InputDigest, Request: request, Impact: impact, RequiredApprovals: requiredApprovals,
-		FallbackProtected: fallbackProtected, PropagationBound: c.options.SchedulerPropagationBound,
+		PolicyInputDigest: snapshot.InputDigest, Request: request, Impact: impact, RequiredApprovals: 1,
+		PropagationBound:         c.options.SchedulerPropagationBound,
 		CurrentEffectiveCapacity: snapshot.Inventory[request.Cluster].Capacity,
 	}
 	if request.Kind == dispatcherv1.OverrideKindDrain {
@@ -747,13 +626,6 @@ func (c *ControlPlane) Apply(ctx context.Context, planID string, request ApplyRe
 	if err := c.verifyWriteSafety(); err != nil {
 		return nil, err
 	}
-	fallbackProtected := false
-	if plan.Request.Kind == dispatcherv1.OverrideKindDrain {
-		fallbackProtected = c.verifiedFallbackProtection().Has(plan.Request.Cluster)
-		if !fallbackProtected && !request.FallbackConfirmed {
-			return nil, errors.New("drain requires explicit confirmation that the Git fallback is not protected")
-		}
-	}
 	overrideID, err := stableID("override", struct {
 		Plan string `json:"plan"`
 	}{plan.ID})
@@ -770,18 +642,23 @@ func (c *ControlPlane) Apply(ctx context.Context, planID string, request ApplyRe
 		return apierrors.IsAlreadyExists(err) || apierrors.IsConflict(err)
 	}, func() error {
 		stored, err := c.store.Get(ctx, overrideID)
-		if apierrors.IsNotFound(err) {
-			if !planIsCurrent() {
+		if apierrors.IsNotFound(err) && !planIsCurrent() {
+			// A concurrent apply can create this override and publish a new
+			// generation before this Get is processed. Re-read so an already
+			// applied override is treated as a no-op instead of a stale plan.
+			stored, err = c.store.Get(ctx, overrideID)
+			if apierrors.IsNotFound(err) {
 				return errors.New("plan is stale; create a new plan")
 			}
+		}
+		if apierrors.IsNotFound(err) {
 			overrideValue := NewOverride(dispatcherv1.DispatchOverrideSpec{
 				ID: overrideID, PlanID: plan.ID, SourceGeneration: plan.SourceGeneration, PolicyInputDigest: plan.PolicyInputDigest,
 				Kind: plan.Request.Kind, Cluster: plan.Request.Cluster, Scope: dispatcherv1.DispatchOverrideScope{Capability: plan.Request.Capability}, Capacity: plan.Request.Capacity,
 				StartsAt: metav1.NewTime(now), ExpiresAt: metav1.NewTime(now.Add(time.Duration(plan.Request.DurationSeconds) * time.Second)),
 				CreatedBy: plan.Request.UserID, SourceChannelID: plan.Request.ChannelID, Reason: plan.Request.Reason, IncidentURL: plan.Request.IncidentURL,
 				Approvals: []dispatcherv1.DispatchApproval{{UserID: request.UserID, At: metav1.NewTime(now)}}, RequiredApprovals: plan.RequiredApprovals,
-				FallbackProtected: fallbackProtected, FallbackConfirmed: request.FallbackConfirmed, SlackThreadTS: request.SlackThreadTS,
-				IdempotencyKey: request.IdempotencyKey,
+				SlackThreadTS: request.SlackThreadTS, IdempotencyKey: request.IdempotencyKey,
 			})
 			override = &overrideValue
 			return c.store.Create(ctx, override)
@@ -798,16 +675,13 @@ func (c *ControlPlane) Apply(ctx context.Context, planID string, request ApplyRe
 				return nil
 			}
 		}
+		if uniqueApprovals(override) >= int(override.Spec.RequiredApprovals) {
+			return nil
+		}
 		if !planIsCurrent() {
 			return errors.New("plan is stale; create a new plan")
 		}
 		override.Spec.Approvals = append(override.Spec.Approvals, dispatcherv1.DispatchApproval{UserID: request.UserID, At: metav1.NewTime(now)})
-		if request.FallbackConfirmed {
-			override.Spec.FallbackConfirmed = true
-		}
-		if fallbackProtected {
-			override.Spec.FallbackProtected = true
-		}
 		return c.store.Update(ctx, override)
 	})
 	if err != nil {
@@ -911,7 +785,6 @@ func (c *ControlPlane) Status(ctx context.Context, cluster string) (ControlStatu
 		status.ClusterInfo = &info
 		effectiveCapacity := info.Capacity
 		status.EffectiveCapacity = &effectiveCapacity
-		status.FallbackProtected = c.verifiedFallbackProtection().Has(cluster)
 	}
 	overrides, err := c.store.List(ctx)
 	if err != nil {
@@ -1078,41 +951,6 @@ func (s *ControlServer) ServeHTTP(writer http.ResponseWriter, request *http.Requ
 	default:
 		writeControlError(writer, http.StatusNotFound, errors.New("not found"))
 	}
-}
-
-// FallbackObservationServer accepts narrowly authenticated observations from
-// the process that inspects the fallback assignments loaded by Prow.
-type FallbackObservationServer struct {
-	control *ControlPlane
-	token   func() []byte
-}
-
-// NewFallbackObservationServer creates the fallback observation API handler.
-func NewFallbackObservationServer(control *ControlPlane, token func() []byte) *FallbackObservationServer {
-	return &FallbackObservationServer{control: control, token: token}
-}
-
-// ServeHTTP validates and installs one leased fallback-protection observation.
-func (s *FallbackObservationServer) ServeHTTP(writer http.ResponseWriter, request *http.Request) {
-	if !bearerTokenAuthorized(request, s.token) {
-		writeControlError(writer, http.StatusUnauthorized, errors.New("unauthorized"))
-		return
-	}
-	if request.Method != http.MethodPost || request.URL.Path != "/fallback-observer/v1/protection" {
-		writeControlError(writer, http.StatusNotFound, errors.New("not found"))
-		return
-	}
-	request.Body = http.MaxBytesReader(writer, request.Body, 64<<10)
-	var observation FallbackProtectionObservation
-	if err := json.NewDecoder(request.Body).Decode(&observation); err != nil {
-		writeControlError(writer, http.StatusBadRequest, err)
-		return
-	}
-	if err := s.control.ObserveFallbackProtection(observation); err != nil {
-		writeControlError(writer, http.StatusConflict, err)
-		return
-	}
-	writeJSON(writer, http.StatusOK, map[string]string{"status": "observed"})
 }
 
 // ControlClient is used by the DPTP bot to call the dispatcher control API.

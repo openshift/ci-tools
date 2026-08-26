@@ -175,7 +175,9 @@ func runReleaseExtractionWithRetries(ctx context.Context, name string, step api.
 			return classifiedErr
 		}
 		if err := util.DeletePodWithUID(ctx, client, podStepErr.Pod); err != nil {
-			return fmt.Errorf("failed to delete transient release extraction pod safely: %w", errors.Join(err, classifiedErr))
+			// Preserve the extraction cause without its transient marker: retrying
+			// cannot make progress while the failed pod still owns the name.
+			return fmt.Errorf("failed to delete transient release extraction pod safely, cannot retry: %w", errors.Join(err, transientErr.err))
 		}
 		return classifiedErr
 	})

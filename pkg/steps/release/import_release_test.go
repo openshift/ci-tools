@@ -251,6 +251,7 @@ type releasePodLifecycleClient struct {
 	createCount      int
 	deletedUIDs      []types.UID
 	staleDeleteCount int
+	deleteErr        error
 	deleteCalls      chan struct{}
 }
 
@@ -287,6 +288,12 @@ func (c *releasePodLifecycleClient) Delete(ctx context.Context, obj ctrlruntimec
 	pod, ok := obj.(*corev1.Pod)
 	if !ok {
 		return c.FakePodExecutor.LoggingClient.Delete(ctx, obj, opts...)
+	}
+	c.lock.Lock()
+	deleteErr := c.deleteErr
+	c.lock.Unlock()
+	if deleteErr != nil {
+		return deleteErr
 	}
 	deleteOptions := &ctrlruntimeclient.DeleteOptions{}
 	deleteOptions.ApplyOptions(opts)
@@ -423,6 +430,29 @@ func TestReleaseExtractionRealPodStepTransientExhaustion(t *testing.T) {
 	}
 	cancel()
 	waitForReleasePodDeleteCalls(t, client, 4)
+}
+
+func TestReleaseExtractionCleanupFailureStopsRetry(t *testing.T) {
+	client := newReleasePodLifecycleClient(t, transientRunningReleasePodStatus())
+	cleanupErr := errors.New("pod deletion failed")
+	client.deleteErr = cleanupErr
+	ctx, cancel := context.WithCancel(context.Background())
+	err := runReleaseExtractionWithRetries(ctx, "extract", releaseExtractionPodStep(client, "ns", "extract"), client, []time.Duration{0}, func(context.Context, time.Duration) error {
+		t.Fatal("cleanup failure must stop before retry backoff")
+		return nil
+	})
+	if !errors.Is(err, cleanupErr) || !strings.Contains(err.Error(), "cannot retry") {
+		t.Fatalf("expected permanent cleanup failure, got %v", err)
+	}
+	var transientErr *transientReleaseExtractionError
+	if errors.As(err, &transientErr) {
+		t.Fatalf("cleanup failure retained transient marker: %v", err)
+	}
+	if client.createCount != 1 {
+		t.Fatalf("cleanup failure retried the PodStep, got %d creations", client.createCount)
+	}
+	cancel()
+	waitForReleasePodDeleteCalls(t, client, 2)
 }
 
 func TestReleaseExtractionPendingImagePullIsNotRetried(t *testing.T) {

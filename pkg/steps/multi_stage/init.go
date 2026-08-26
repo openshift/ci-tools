@@ -107,38 +107,7 @@ func (s *multiStageTestStep) separateCredentialsByType() ([]api.CredentialRefere
 }
 
 func (s *multiStageTestStep) createCredentials(ctx context.Context, credentials []api.CredentialReference) error {
-	toCreate := map[string]*coreapi.Secret{}
-	for _, credential := range credentials {
-		// we don't want secrets imported from separate namespaces to collide
-		// but we want to keep them generally recognizable for debugging, and the
-		// chance we get a second-level collision (ns-a, name) and (ns, a-name) is
-		// small, so we can get away with this string prefixing
-		name := fmt.Sprintf("%s-%s", credential.Namespace, credential.Name)
-		if _, ok := toCreate[name]; ok {
-			continue
-		}
-		raw := &coreapi.Secret{}
-		if err := s.client.Get(ctx, ctrlruntimeclient.ObjectKey{Namespace: credential.Namespace, Name: credential.Name}, raw); err != nil {
-			return fmt.Errorf("could not read source credential: %w", err)
-		}
-		toCreate[name] = &coreapi.Secret{
-			TypeMeta: raw.TypeMeta,
-			ObjectMeta: meta.ObjectMeta{
-				Name:      name,
-				Namespace: s.jobSpec.Namespace(),
-			},
-			Type:       raw.Type,
-			Data:       raw.Data,
-			StringData: raw.StringData,
-		}
-	}
-
-	for name := range toCreate {
-		if err := s.client.Create(ctx, toCreate[name]); err != nil && !kerrors.IsAlreadyExists(err) {
-			return fmt.Errorf("could not create source credential: %w", err)
-		}
-	}
-	return nil
+	return csi_secrets.CreateSourceCredentials(ctx, s.client, s.jobSpec.Namespace(), credentials)
 }
 
 // createSPCs creates all the SecretProviderClasses (SPCs) needed

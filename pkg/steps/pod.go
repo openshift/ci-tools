@@ -83,6 +83,12 @@ type podStep struct {
 
 	clusterClaim           *api.ClusterClaim
 	resolvedGSMCredentials []api.CredentialReference
+	// resolvedK8sSecretCredentials holds credentials that resolve to an existing
+	// Kubernetes secret rather than GSM secrets. This is the case for bundles with
+	// sync_to_cluster: true (including cluster profile bundles), which are mounted
+	// the legacy way (a copy of the source secret) instead of via a
+	// SecretProviderClass.
+	resolvedK8sSecretCredentials []api.CredentialReference
 }
 
 func (s *podStep) Inputs() (api.InputDefinition, error) {
@@ -329,6 +335,22 @@ func (s *podStep) generatePodForStep(image string, containerResources coreapi.Re
 			})
 		}
 	}
+	// K8s Secret credentials (sync_to_cluster: true bundles) were copied into the
+	// test namespace by createCredentials; mount them as regular secret volumes.
+	for _, credential := range s.resolvedK8sSecretCredentials {
+		secretName := csi_secrets.SourceSecretName(credential.Namespace, credential.Name)
+		volName := csi_secrets.K8sSecretVolumeName(credential.Namespace, credential.Name)
+		secretVolumes = append(secretVolumes, coreapi.Volume{
+			Name: volName,
+			VolumeSource: coreapi.VolumeSource{
+				Secret: &coreapi.SecretVolumeSource{SecretName: secretName},
+			},
+		})
+		secretVolumeMounts = append(secretVolumeMounts, coreapi.VolumeMount{
+			Name:      volName,
+			MountPath: credential.MountPath,
+		})
+	}
 	if s.clusterClaim != nil {
 		secretVolumeMounts = append(secretVolumeMounts, []coreapi.VolumeMount{
 			{
@@ -471,17 +493,41 @@ func (s *podStep) resolveAndCreateGSMSecrets(ctx context.Context) error {
 		return fmt.Errorf("invalid GSM credentials: %w", err)
 	}
 
-	spcsToCreate, err := csi_secrets.BuildSPCsForCredentials(s.jobSpec.Namespace(), resolved)
-	if err != nil {
-		return fmt.Errorf("failed to build SecretProviderClass objects: %w", err)
-	}
-	for name := range spcsToCreate {
-		if err := s.client.Create(ctx, spcsToCreate[name]); err != nil && !kerrors.IsAlreadyExists(err) {
-			return fmt.Errorf("could not create SecretProviderClass: %w", err)
+	// A bundle with sync_to_cluster: true (this includes cluster profile bundles)
+	// resolves to an existing Kubernetes secret rather than a set of GSM secrets.
+	// Such credentials are mounted the legacy way (a copy of the source secret) and
+	// must be kept out of the SecretProviderClass machinery, which only understands
+	// GSM (collection/group/field) references. This mirrors the multi-stage
+	// credentials path (separateCredentialsByType).
+	var k8sSecretCredentials, gsmCredentials []api.CredentialReference
+	for _, cred := range resolved {
+		if csi_secrets.IsK8sSecretReference(cred) {
+			k8sSecretCredentials = append(k8sSecretCredentials, cred)
+		} else if csi_secrets.IsGSMReference(cred) {
+			gsmCredentials = append(gsmCredentials, cred)
 		}
 	}
 
-	s.resolvedGSMCredentials = resolved
+	if len(k8sSecretCredentials) > 0 {
+		if err := csi_secrets.CreateSourceCredentials(ctx, s.client, s.jobSpec.Namespace(), k8sSecretCredentials); err != nil {
+			return fmt.Errorf("failed to create K8s Secret credentials: %w", err)
+		}
+	}
+
+	if len(gsmCredentials) > 0 {
+		spcsToCreate, err := csi_secrets.BuildSPCsForCredentials(s.jobSpec.Namespace(), gsmCredentials)
+		if err != nil {
+			return fmt.Errorf("failed to build SecretProviderClass objects: %w", err)
+		}
+		for name := range spcsToCreate {
+			if err := s.client.Create(ctx, spcsToCreate[name]); err != nil && !kerrors.IsAlreadyExists(err) {
+				return fmt.Errorf("could not create SecretProviderClass: %w", err)
+			}
+		}
+	}
+
+	s.resolvedGSMCredentials = gsmCredentials
+	s.resolvedK8sSecretCredentials = k8sSecretCredentials
 	return nil
 }
 

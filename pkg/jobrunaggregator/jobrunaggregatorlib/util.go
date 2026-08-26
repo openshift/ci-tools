@@ -11,16 +11,18 @@ import (
 
 	"github.com/sirupsen/logrus"
 
+	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/apimachinery/pkg/labels"
+	"k8s.io/apimachinery/pkg/runtime"
 	"k8s.io/apimachinery/pkg/util/sets"
 	"k8s.io/apimachinery/pkg/util/wait"
+	"k8s.io/apimachinery/pkg/watch"
 	"k8s.io/client-go/tools/cache"
 	"k8s.io/client-go/tools/clientcmd"
 	"k8s.io/utils/clock"
 	prowv1 "sigs.k8s.io/prow/pkg/apis/prowjobs/v1"
 	prowjobclientset "sigs.k8s.io/prow/pkg/client/clientset/versioned"
-	prowjobinformers "sigs.k8s.io/prow/pkg/client/informers/externalversions"
-	v1 "sigs.k8s.io/prow/pkg/client/informers/externalversions/prowjobs/v1"
+	prowjoblisters "sigs.k8s.io/prow/pkg/client/listers/prowjobs/v1"
 
 	"github.com/openshift/ci-tools/pkg/jobrunaggregator/jobrunaggregatorapi"
 	"github.com/openshift/ci-tools/pkg/junit"
@@ -31,6 +33,13 @@ const (
 	JobStateQuerySourceCluster  = "cluster"
 	// prowJobJobRunIDLabel is the label in prowJob for the prow job run ID. It is a unique identifier for job runs across different jobs
 	prowJobJobRunIDLabel = "prow.k8s.io/build-id"
+	// prowJobNamespace is the namespace holding the ProwJobs of the CI cluster
+	prowJobNamespace = "ci"
+	// prowJobListPageSize bounds how many untrimmed ProwJobs are decoded at once when the
+	// prowjob informer does its initial list. The namespace holds tens of thousands of
+	// ProwJobs, so this trades a few hundred megabytes of peak usage against the number of
+	// requests the initial sync needs.
+	prowJobListPageSize = 5000
 )
 
 const (
@@ -222,6 +231,42 @@ type ClusterJobRunWaiter struct {
 	ProwJobMatcherFunc ProwJobMatcherFunc
 }
 
+// trimProwJob drops the parts of a ProwJob that no aggregator ever reads, so that the informer
+// cache holds job names, labels, annotations and completion state instead of whole pod specs.
+// The ProwJob is trimmed in place: the caller always owns the only reference to it.
+//
+// This is the same idea as pjutil.TrimCachedProwJob upstream (kubernetes-sigs/prow#904), which
+// several prow components share. Once that merges and we pick it up in a prow bump, most of the
+// body below can defer to it, but not all of it: that helper keeps ExtraRefs because the
+// exporter builds metric labels out of it, and keeps the status fields that deck and tide serve,
+// while nothing here reads any of them.
+func trimProwJob(prowJob *prowv1.ProwJob) {
+	prowJob.ManagedFields = nil
+	prowJob.OwnerReferences = nil
+	prowJob.Spec.PodSpec = nil
+	prowJob.Spec.PipelineRunSpec = nil
+	prowJob.Spec.TektonPipelineRunSpec = nil
+	prowJob.Spec.DecorationConfig = nil
+	prowJob.Spec.ExtraRefs = nil
+	prowJob.Spec.RerunAuthConfig = nil
+	prowJob.Spec.RerunCommand = ""
+	prowJob.Status.Description = ""
+	prowJob.Status.PrevReportStates = nil
+}
+
+// trimProwJobObject is the cache.TransformFunc form of trimProwJob
+func trimProwJobObject(obj interface{}) (interface{}, error) {
+	switch typed := obj.(type) {
+	case *prowv1.ProwJob:
+		trimProwJob(typed)
+	case cache.DeletedFinalStateUnknown:
+		if prowJob, ok := typed.Obj.(*prowv1.ProwJob); ok {
+			trimProwJob(prowJob)
+		}
+	}
+	return obj, nil
+}
+
 func (w *ClusterJobRunWaiter) allProwJobsFinished(allItems []*prowv1.ProwJob) (bool, map[string]*prowv1.ProwJob) {
 	uncompletedJobMap := map[string]*prowv1.ProwJob{}
 	matchedJobMap := map[string]*prowv1.ProwJob{}
@@ -246,8 +291,8 @@ func (w *ClusterJobRunWaiter) allProwJobsFinished(allItems []*prowv1.ProwJob) (b
 	return false, matchedJobMap
 }
 
-func (w *ClusterJobRunWaiter) checkMatchedJobsForCompletion(prowJobInformer v1.ProwJobInformer) (bool, map[string]*prowv1.ProwJob, error) {
-	allItems, err := prowJobInformer.Lister().List(labels.Everything())
+func (w *ClusterJobRunWaiter) checkMatchedJobsForCompletion(prowJobLister prowjoblisters.ProwJobLister) (bool, map[string]*prowv1.ProwJob, error) {
+	allItems, err := prowJobLister.List(labels.Everything())
 	if err != nil {
 		return false, nil, err
 	}
@@ -256,21 +301,92 @@ func (w *ClusterJobRunWaiter) checkMatchedJobsForCompletion(prowJobInformer v1.P
 	return allDone, matchedJobs, nil
 }
 
+// newProwJobInformer builds an informer over all ProwJobs in the CI cluster, tuned to keep the
+// aggregator's memory footprint down. A ProwJob embeds the full pod spec of the job it runs,
+// which for ci-operator jobs carries the unresolved ci-operator configuration and is by far the
+// largest part of the object, and the CI cluster holds tens of thousands of ProwJobs at any
+// time. Neither the list nor the cache can therefore hold whole ProwJobs:
+//   - the initial list is paged by hand and each page is trimmed before it is accumulated, so at
+//     most one page worth of untrimmed ProwJobs is ever decoded at once. The generated informers
+//     cannot do this: the reflector accumulates every page of its initial list into one slice
+//     before the transform below ever runs, which happens later, in the DeltaFIFO. It does ask
+//     the server to paginate, but a resourceVersion=0 list is served from the watch cache, which
+//     ignores the limit and returns the whole collection in one response anyway.
+//   - a transform trims the objects the watch delivers afterwards.
+//
+// The streaming watch-list initial sync (SendInitialEvents) would make the hand-rolled paging
+// unnecessary, because from client-go 1.34 the reflector trims the objects it streams into its
+// internal store. It is of no use to us yet: the client-side WatchListClient gate only defaults
+// to true in client-go 1.35 (we build against 1.33), and, more importantly, the server-side
+// WatchList gate is alpha and off in Kubernetes 1.31, which is what the CI cluster (OCP 4.18)
+// runs. Upstream also turned that gate back off by default in 1.33 after it was briefly on in
+// 1.32, so a newer cluster would not obviously help either. When the server honors
+// SendInitialEvents, the reflector uses WatchFunc below and ignores ListFunc, which can then go.
+func (w *ClusterJobRunWaiter) newProwJobInformer(ctx context.Context) (cache.SharedIndexInformer, error) {
+	prowJobs := w.ProwJobClient.ProwV1().ProwJobs(prowJobNamespace)
+	listWatch := &cache.ListWatch{
+		ListFunc: func(options metav1.ListOptions) (runtime.Object, error) {
+			// page ourselves, which requires a quorum read: the watch cache cannot paginate
+			options.ResourceVersion = ""
+			options.ResourceVersionMatch = ""
+			options.Continue = ""
+			options.Limit = prowJobListPageSize
+			trimmed := &prowv1.ProwJobList{}
+			for pageNumber := 1; ; pageNumber++ {
+				page, err := prowJobs.List(ctx, options)
+				if err != nil {
+					return nil, fmt.Errorf("failed to list prowjobs in namespace %q (page %d): %w", prowJobNamespace, pageNumber, err)
+				}
+				if pageNumber == 1 {
+					// every page of a paged list is served from the same snapshot, so the
+					// resourceVersion the watch resumes from is the one of the first page
+					trimmed.TypeMeta = page.TypeMeta
+					trimmed.ResourceVersion = page.ResourceVersion
+				}
+				for i := range page.Items {
+					trimProwJob(&page.Items[i])
+					trimmed.Items = append(trimmed.Items, page.Items[i])
+				}
+				if len(page.Continue) == 0 {
+					// no Continue on the returned list: the reflector's pager must not ask for more
+					return trimmed, nil
+				}
+				options.Continue = page.Continue
+			}
+		},
+		WatchFunc: func(options metav1.ListOptions) (watch.Interface, error) {
+			return prowJobs.Watch(ctx, options)
+		},
+	}
+
+	informer := cache.NewSharedIndexInformer(listWatch, &prowv1.ProwJob{}, 24*time.Hour, cache.Indexers{})
+	if err := informer.SetTransform(trimProwJobObject); err != nil {
+		return nil, fmt.Errorf("failed to set prowjob informer transform: %w", err)
+	}
+	return informer, nil
+}
+
 func (w *ClusterJobRunWaiter) Wait(ctx context.Context) ([]JobRunIdentifier, error) {
 	if w.ProwJobClient == nil {
 		return nil, fmt.Errorf("prowjob client is missing")
 	}
 
-	prowJobInformerFactory := prowjobinformers.NewSharedInformerFactoryWithOptions(w.ProwJobClient, 24*time.Hour, prowjobinformers.WithNamespace("ci"))
-	prowJobInformer := prowJobInformerFactory.Prow().V1().ProwJobs()
+	// the cached prowjobs are only needed while we wait, so shut the informer down on the way out
+	// instead of keeping the cache around for the rest of the analysis
+	informerCtx, shutdownInformer := context.WithCancel(ctx)
+	defer shutdownInformer()
 
-	// done to be sure that the informer is shown as "active" so that start activates them
-	// start informers and wait for them to sync
-	hasSynced := prowJobInformer.Informer().HasSynced
-	go prowJobInformerFactory.Start(ctx.Done())
-	if !cache.WaitForCacheSync(ctx.Done(), hasSynced) {
+	prowJobInformer, err := w.newProwJobInformer(informerCtx)
+	if err != nil {
+		return nil, err
+	}
+
+	// start the informer and wait for it to sync
+	go prowJobInformer.Run(informerCtx.Done())
+	if !cache.WaitForCacheSync(informerCtx.Done(), prowJobInformer.HasSynced) {
 		return nil, fmt.Errorf("prowjob informer sync error")
 	}
+	prowJobLister := prowjoblisters.NewProwJobLister(prowJobInformer.GetIndexer())
 	timeout := time.Until(w.TimeToStopWaiting)
 	if timeout < 0 {
 		timeout = 30 * time.Second
@@ -278,13 +394,13 @@ func (w *ClusterJobRunWaiter) Wait(ctx context.Context) ([]JobRunIdentifier, err
 	logrus.Infof("Going to wait until %+v with timeout value %+v", w.TimeToStopWaiting, timeout)
 
 	// wait for up to limit until we've finished
-	err := wait.PollUntilContextTimeout(
+	err = wait.PollUntilContextTimeout(
 		ctx,
 		5*time.Minute,
 		timeout,
 		true,
 		func(ctx context.Context) (bool, error) {
-			allDone, _, err := w.checkMatchedJobsForCompletion(prowJobInformer)
+			allDone, _, err := w.checkMatchedJobsForCompletion(prowJobLister)
 
 			if err != nil {
 				// log and suppress the error
@@ -300,7 +416,7 @@ func (w *ClusterJobRunWaiter) Wait(ctx context.Context) ([]JobRunIdentifier, err
 	}
 
 	// one more time to get the matched jobs
-	_, matchedJobs, err := w.checkMatchedJobsForCompletion(prowJobInformer)
+	_, matchedJobs, err := w.checkMatchedJobsForCompletion(prowJobLister)
 
 	if err != nil && err != context.DeadlineExceeded {
 		return nil, fmt.Errorf("failed waiting for prowjobs to complete: %w", err)

@@ -314,7 +314,10 @@ func TestNewProwJobInformer(t *testing.T) {
 			ResourceVersionMatch: metav1.ResourceVersionMatch(r.URL.Query().Get("resourceVersionMatch")),
 		}
 		if r.URL.Query().Get("watch") == "true" {
-			watchOptions <- options
+			select {
+			case watchOptions <- options:
+			default:
+			}
 			w.Header().Set("Content-Type", "application/json")
 			flusher := w.(http.Flusher)
 			flusher.Flush()

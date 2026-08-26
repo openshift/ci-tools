@@ -817,7 +817,7 @@ func (r *reconciler) fetchClusterKubeconfig(
 func (r *reconciler) updateEphemeralClusterStatus(ctx context.Context, ec *ephemeralclusterv1.EphemeralCluster, observedStatus *ephemeralclusterv1.EphemeralClusterStatus) error {
 	cmpECStatusOpts := []cmp.Option{
 		cmpopts.SortSlices(func(a, b metav1.Condition) int {
-			return strings.Compare(string(a.Type), string(b.Type))
+			return strings.Compare(a.Type, b.Type)
 		}),
 		cmpopts.IgnoreTypes(metav1.Time{}),
 	}

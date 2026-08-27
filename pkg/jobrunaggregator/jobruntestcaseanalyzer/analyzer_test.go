@@ -2,15 +2,20 @@ package jobruntestcaseanalyzer
 
 import (
 	"context"
+	"errors"
 	"testing"
 
 	"github.com/spf13/pflag"
+	"github.com/stretchr/testify/assert"
+	"github.com/stretchr/testify/require"
 	"go.uber.org/mock/gomock"
+	"gopkg.in/yaml.v2"
 
 	"k8s.io/apimachinery/pkg/util/sets"
 
 	"github.com/openshift/ci-tools/pkg/jobrunaggregator/jobrunaggregatorapi"
 	"github.com/openshift/ci-tools/pkg/jobrunaggregator/jobrunaggregatorlib"
+	"github.com/openshift/ci-tools/pkg/junit"
 )
 
 func TestGetJobs(t *testing.T) {
@@ -108,4 +113,138 @@ func createJobs() []jobrunaggregatorapi.JobRowWithVariants {
 	jobs[2] = jobrunaggregatorapi.JobRowWithVariants{JobName: "periodic-ci-openshift-release-master-nightly-4.12-e2e-metal-ipi-serial-ovn-ipv6", Platform: "metal", Network: "sdn"}
 
 	return jobs
+}
+
+type analyzerTestJobRun struct {
+	jobrunaggregatorapi.JobRunInfo
+	id          string
+	humanURL    string
+	artifactURL string
+	testSuites  *junit.TestSuites
+	err         error
+	events      *[]string
+}
+
+func (j *analyzerTestJobRun) GetJobRunID() string       { return j.id }
+func (j *analyzerTestJobRun) GetHumanURL() string       { return j.humanURL }
+func (j *analyzerTestJobRun) GetGCSArtifactURL() string { return j.artifactURL }
+
+func (j *analyzerTestJobRun) GetCombinedJUnitTestSuites(context.Context) (*junit.TestSuites, error) {
+	if j.events != nil {
+		*j.events = append(*j.events, "get:"+j.id)
+	}
+	return j.testSuites, j.err
+}
+
+func (j *analyzerTestJobRun) ClearAllContent() {
+	if j.events != nil {
+		*j.events = append(*j.events, "clear:"+j.id)
+	}
+}
+
+func nestedTestSuites(id testIdentifier, failure bool) *junit.TestSuites {
+	testCase := &junit.TestCase{Name: id.testName}
+	if failure {
+		testCase.FailureOutput = &junit.FailureOutput{Message: "failed"}
+	}
+
+	child := &junit.TestSuite{Name: id.testSuites[len(id.testSuites)-1], TestCases: []*junit.TestCase{testCase}}
+	for i := len(id.testSuites) - 2; i >= 0; i-- {
+		child = &junit.TestSuite{Name: id.testSuites[i], Children: []*junit.TestSuite{child}}
+	}
+	return &junit.TestSuites{Suites: []*junit.TestSuite{child}}
+}
+
+func TestMinimumRequiredPassesTestCaseCheckerIncrementalFold(t *testing.T) {
+	id := testIdentifier{testSuites: []string{"outer", "inner"}, testName: "target test"}
+	jobRuns := []*analyzerTestJobRun{
+		{id: "pass", humanURL: "https://prow/pass", artifactURL: "https://gcs/pass", testSuites: nestedTestSuites(id, false)},
+		{id: "fail", humanURL: "https://prow/fail", artifactURL: "https://gcs/fail", testSuites: nestedTestSuites(id, true)},
+		{id: "skip", humanURL: "https://prow/skip", artifactURL: "https://gcs/skip", testSuites: &junit.TestSuites{Suites: []*junit.TestSuite{{Name: "other"}}}},
+	}
+
+	for _, tc := range []struct {
+		name                  string
+		requiredPasses        int
+		expectedFailureOutput *junit.FailureOutput
+	}{
+		{name: "equivalent passing result", requiredPasses: 1},
+		{name: "equivalent failing result", requiredPasses: 2, expectedFailureOutput: &junit.FailureOutput{Message: "required minimum successful count 2, got 1"}},
+	} {
+		t.Run(tc.name, func(t *testing.T) {
+			checker := newMinimumRequiredPassesTestCaseChecker(id, "aws-ovn", tc.requiredPasses)
+			for _, jobRun := range jobRuns {
+				checker.AddJobRun(jobRun, jobRun.testSuites)
+			}
+
+			suite := checker.TestSuite()
+			require.NotNil(t, suite)
+			assert.Equal(t, uint(1), suite.NumTests)
+			if tc.expectedFailureOutput == nil {
+				assert.Zero(t, suite.NumFailed)
+			} else {
+				assert.Equal(t, uint(1), suite.NumFailed)
+			}
+			require.Len(t, suite.Children, 1)
+			require.Len(t, suite.Children[0].Children, 1)
+			require.Len(t, suite.Children[0].Children[0].TestCases, 1)
+			testCase := suite.Children[0].Children[0].TestCases[0]
+			assert.Equal(t, "test 'target test' has required number of successful passes across payload jobs for aws-ovn", testCase.Name)
+			assert.Equal(t, tc.expectedFailureOutput, testCase.FailureOutput)
+
+			details := &jobrunaggregatorlib.TestCaseDetails{}
+			require.NoError(t, yaml.Unmarshal([]byte(testCase.SystemOut), details))
+			assert.Equal(t, "target test", details.Name)
+			assert.Equal(t, "outer"+jobrunaggregatorlib.TestSuitesSeparator+"inner", details.TestSuiteName)
+			assert.Equal(t, "Total job runs: 3, passes: 1, failures: 1, skips 1", details.Summary)
+			require.Len(t, details.Passes, 1)
+			require.Len(t, details.Failures, 1)
+			require.Len(t, details.Skips, 1)
+			assert.Equal(t, "pass", details.Passes[0].JobRunID)
+			assert.Equal(t, "https://prow/pass", details.Passes[0].HumanURL)
+			assert.Equal(t, "https://gcs/pass", details.Passes[0].GCSArtifactURL)
+			assert.Equal(t, "fail", details.Failures[0].JobRunID)
+			assert.Equal(t, "skip", details.Skips[0].JobRunID)
+		})
+	}
+}
+
+type recordingTestCaseChecker struct {
+	events *[]string
+	added  []string
+}
+
+func (c *recordingTestCaseChecker) AddJobRun(jobRun jobrunaggregatorapi.JobRunInfo, _ *junit.TestSuites) {
+	id := jobRun.GetJobRunID()
+	c.added = append(c.added, id)
+	*c.events = append(*c.events, "add:"+id)
+}
+
+func (c *recordingTestCaseChecker) TestSuite() *junit.TestSuite {
+	*c.events = append(*c.events, "suite")
+	return &junit.TestSuite{Name: "recording", NumTests: uint(len(c.added))}
+}
+
+func TestRunTestCaseCheckersProcessesAndCleansIncrementally(t *testing.T) {
+	events := []string{}
+	checker := &recordingTestCaseChecker{events: &events}
+	options := &JobRunTestCaseAnalyzerOptions{testCaseCheckers: []TestCaseChecker{checker}}
+	suites := &junit.TestSuites{Suites: []*junit.TestSuite{{Name: "suite"}}}
+	finished := &analyzerTestJobRun{id: "finished", testSuites: suites, events: &events}
+	readError := &analyzerTestJobRun{id: "read-error", err: errors.New("could not read junit"), events: &events}
+	unfinished := &analyzerTestJobRun{id: "unfinished", testSuites: suites, events: &events}
+
+	got := options.runTestCaseCheckers(context.Background(), []jobrunaggregatorapi.JobRunInfo{finished, readError}, []jobrunaggregatorapi.JobRunInfo{unfinished})
+
+	assert.Equal(t, []string{
+		"get:finished", "add:finished", "clear:finished",
+		"get:read-error",
+		"get:unfinished", "add:unfinished", "clear:unfinished",
+		"suite",
+	}, events, "each successful job run must be folded and cleared before the next is fetched; read errors are skipped")
+	assert.Equal(t, []string{"finished", "unfinished"}, checker.added)
+	assert.Equal(t, "payload-cross-jobs", got.Name)
+	assert.Equal(t, uint(2), got.NumTests)
+	assert.Zero(t, got.NumFailed)
+	require.Len(t, got.Children, 1)
 }

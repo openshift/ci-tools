@@ -1155,6 +1155,13 @@ func (in *MultiStageTestConfigurationLiteral) DeepCopyInto(out *MultiStageTestCo
 			(*out)[key] = val
 		}
 	}
+	if in.ParamOverrides != nil {
+		in, out := &in.ParamOverrides, &out.ParamOverrides
+		*out = make(TestEnvironment, len(*in))
+		for key, val := range *in {
+			(*out)[key] = val
+		}
+	}
 	if in.Dependencies != nil {
 		in, out := &in.Dependencies, &out.Dependencies
 		*out = make(TestDependencies, len(*in))

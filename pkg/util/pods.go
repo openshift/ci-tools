@@ -21,6 +21,7 @@ import (
 	"k8s.io/apimachinery/pkg/fields"
 	"k8s.io/apimachinery/pkg/runtime"
 	"k8s.io/apimachinery/pkg/types"
+	utilnet "k8s.io/apimachinery/pkg/util/net"
 	"k8s.io/apimachinery/pkg/util/wait"
 	"k8s.io/utils/ptr"
 	ctrlruntimeclient "sigs.k8s.io/controller-runtime/pkg/client"
@@ -94,6 +95,10 @@ func waitForCompletedPodDeletion(ctx context.Context, podClient ctrlruntimeclien
 // DeletePodWithUID deletes exactly the observed pod and waits until that UID is
 // gone. A pod recreated under the same namespace and name is left untouched.
 func DeletePodWithUID(ctx context.Context, podClient ctrlruntimeclient.Client, pod *corev1.Pod) error {
+	return deletePodWithUID(ctx, podClient, pod, wait.Backoff{Duration: 2 * time.Second, Factor: 2, Steps: 10})
+}
+
+func deletePodWithUID(ctx context.Context, podClient ctrlruntimeclient.Client, pod *corev1.Pod, backoff wait.Backoff) error {
 	if pod == nil {
 		return errors.New("cannot delete a nil pod")
 	}
@@ -102,20 +107,62 @@ func DeletePodWithUID(ctx context.Context, podClient ctrlruntimeclient.Client, p
 	}
 
 	uid := pod.UID
-	err := podClient.Delete(ctx, &corev1.Pod{ObjectMeta: metav1.ObjectMeta{Namespace: pod.Namespace, Name: pod.Name}}, ctrlruntimeclient.Preconditions(metav1.Preconditions{UID: &uid}))
-	if kerrors.IsNotFound(err) {
-		return nil
-	}
-	if kerrors.IsConflict(err) {
-		// UID precondition mismatch: the pod was replaced between our GET and
-		// DELETE. The completed pod we intended to remove is already gone.
-		return nil
-	}
-	if err != nil {
-		return fmt.Errorf("could not delete completed pod: %w", err)
-	}
+	key := ctrlruntimeclient.ObjectKey{Namespace: pod.Namespace, Name: pod.Name}
+	deleteAccepted := false
+	var lastRetryableErr error
+	err := wait.ExponentialBackoffWithContext(ctx, backoff, func(ctx context.Context) (bool, error) {
+		var deleteErr error
+		if !deleteAccepted {
+			deleteErr = podClient.Delete(ctx, &corev1.Pod{ObjectMeta: metav1.ObjectMeta{Namespace: pod.Namespace, Name: pod.Name}}, ctrlruntimeclient.Preconditions(metav1.Preconditions{UID: &uid}))
+			switch {
+			case deleteErr == nil:
+				deleteAccepted = true
+			case kerrors.IsNotFound(deleteErr):
+				return true, nil
+			case kerrors.IsConflict(deleteErr), isRetryablePodRequestError(deleteErr):
+				lastRetryableErr = deleteErr
+			default:
+				return false, fmt.Errorf("could not delete completed pod: %w", deleteErr)
+			}
+		}
 
-	return WaitForPodDeletion(ctx, podClient, pod.Namespace, pod.Name, uid)
+		current := &corev1.Pod{}
+		getErr := podClient.Get(ctx, key, current)
+		switch {
+		case kerrors.IsNotFound(getErr):
+			return true, nil
+		case getErr != nil && isRetryablePodRequestError(getErr):
+			lastRetryableErr = getErr
+			return false, nil
+		case getErr != nil:
+			return false, fmt.Errorf("could not retrieve deleting pod: %w", getErr)
+		case current.UID != uid:
+			return true, nil
+		case kerrors.IsConflict(deleteErr):
+			return false, fmt.Errorf("could not delete completed pod with matching UID: %w", deleteErr)
+		default:
+			if deleteAccepted {
+				lastRetryableErr = nil
+			}
+			logrus.Debugf("Waiting for pod %s to be deleted ...", pod.Name)
+			return false, nil
+		}
+	})
+	if err == nil {
+		return nil
+	}
+	if wait.Interrupted(err) && lastRetryableErr != nil {
+		err = errors.Join(err, lastRetryableErr)
+	}
+	return fmt.Errorf("could not confirm completed pod deletion: %w", err)
+}
+
+func isRetryablePodRequestError(err error) bool {
+	return utilnet.IsConnectionReset(err) ||
+		utilnet.IsConnectionRefused(err) ||
+		utilnet.IsHTTP2ConnectionLost(err) ||
+		utilnet.IsProbableEOF(err) ||
+		utilnet.IsTimeout(err)
 }
 
 func WaitForPodDeletion(ctx context.Context, podClient ctrlruntimeclient.Client, namespace, name string, uid types.UID) error {

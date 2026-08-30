@@ -8,6 +8,7 @@ import (
 	"os/exec"
 	"strings"
 	"sync"
+	"syscall"
 	"testing"
 	"time"
 
@@ -250,13 +251,14 @@ func TestTransientReleaseExtractionErrorPattern(t *testing.T) {
 
 type releasePodLifecycleClient struct {
 	*testhelperkube.FakePodClient
-	lock             sync.Mutex
-	statuses         []corev1.PodStatus
-	createCount      int
-	deletedUIDs      []types.UID
-	staleDeleteCount int
-	deleteErr        error
-	deleteCalls      chan struct{}
+	lock              sync.Mutex
+	statuses          []corev1.PodStatus
+	createCount       int
+	deletedUIDs       []types.UID
+	staleDeleteCount  int
+	deleteErr         error
+	deleteResponseErr error
+	deleteCalls       chan struct{}
 }
 
 func (c *releasePodLifecycleClient) Create(ctx context.Context, obj ctrlruntimeclient.Object, opts ...ctrlruntimeclient.CreateOption) error {
@@ -295,6 +297,7 @@ func (c *releasePodLifecycleClient) Delete(ctx context.Context, obj ctrlruntimec
 	}
 	c.lock.Lock()
 	deleteErr := c.deleteErr
+	deleteResponseErr := c.deleteResponseErr
 	c.lock.Unlock()
 	if deleteErr != nil {
 		return deleteErr
@@ -319,7 +322,10 @@ func (c *releasePodLifecycleClient) Delete(ctx context.Context, obj ctrlruntimec
 	c.deletedUIDs = append(c.deletedUIDs, expectedUID)
 	c.DeletedPods = append(c.DeletedPods, current.DeepCopy())
 	c.lock.Unlock()
-	return c.FakePodExecutor.LoggingClient.Delete(ctx, current, opts...)
+	if err := c.FakePodExecutor.LoggingClient.Delete(ctx, current, opts...); err != nil {
+		return err
+	}
+	return deleteResponseErr
 }
 
 func newReleasePodLifecycleClient(t *testing.T, statuses ...corev1.PodStatus) *releasePodLifecycleClient {
@@ -579,6 +585,34 @@ func TestReleaseExtractionUsesRealPodStepLifecycle(t *testing.T) {
 	}
 	cancel()
 	waitForReleasePodDeleteCalls(t, client, 4)
+}
+
+func TestReleaseExtractionRecreatesAfterCommittedDeleteLostResponse(t *testing.T) {
+	const (
+		namespace = "test-namespace"
+		podName   = "release-images-latest"
+	)
+	ctx, cancel := context.WithCancel(context.Background())
+	client := newReleasePodLifecycleClient(t, transientRunningReleasePodStatus(), corev1.PodStatus{Phase: corev1.PodSucceeded})
+	client.deleteResponseErr = syscall.ECONNRESET
+
+	err := runReleaseExtractionWithRetries(ctx, podName, releaseExtractionPodStep(client, namespace, podName), client, []time.Duration{0}, func(context.Context, time.Duration) error { return nil })
+	if err != nil {
+		t.Fatalf("expected lost deletion response to be reconciled before retry: %v", err)
+	}
+	if client.createCount != 2 {
+		t.Fatalf("expected extraction pod recreation, got %d creations", client.createCount)
+	}
+	if len(client.deletedUIDs) != 1 || client.deletedUIDs[0] != "release-pod-1" {
+		t.Fatalf("expected confirmed deletion of the first pod UID, got %v", client.deletedUIDs)
+	}
+	replacement := &corev1.Pod{}
+	if err := client.Get(ctx, ctrlruntimeclient.ObjectKey{Namespace: namespace, Name: podName}, replacement); err != nil || replacement.UID != "release-pod-2" {
+		t.Fatalf("expected successful replacement pod, got pod=%#v err=%v", replacement, err)
+	}
+
+	cancel()
+	waitForReleasePodDeleteCalls(t, client, 3)
 }
 
 func TestReleaseExtractionRealPodStepTransientExhaustion(t *testing.T) {

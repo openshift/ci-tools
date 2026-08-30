@@ -352,6 +352,8 @@ func isTransientImageImportError(err error) bool {
 
 func isRetryableImageImportAPIError(err error) bool {
 	return utilnet.IsConnectionReset(err) ||
+		utilnet.IsConnectionRefused(err) ||
+		utilnet.IsHTTP2ConnectionLost(err) ||
 		utilnet.IsProbableEOF(err) ||
 		utilnet.IsTimeout(err) ||
 		kerrors.IsConflict(err) ||
@@ -377,6 +379,10 @@ func imageImportRetryErrorClass(err error) string {
 		return "status_not_ready"
 	case utilnet.IsConnectionReset(err):
 		return "connection_reset"
+	case utilnet.IsConnectionRefused(err):
+		return "connection_refused"
+	case utilnet.IsHTTP2ConnectionLost(err):
+		return "http2_connection_lost"
 	case utilnet.IsProbableEOF(err):
 		return "connection_closed"
 	case utilnet.IsTimeout(err):

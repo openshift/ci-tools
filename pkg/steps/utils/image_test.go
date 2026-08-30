@@ -368,9 +368,10 @@ func (c *scriptedImageImportClient) Create(ctx context.Context, obj ctrlruntimec
 func TestImportTagWithRetryDelaysClassifiesTypedAPIErrors(t *testing.T) {
 	resource := schema.GroupResource{Group: "image.openshift.io", Resource: "imagestreamimports"}
 	testCases := []struct {
-		name      string
-		err       error
-		retryable bool
+		name           string
+		err            error
+		retryable      bool
+		wantErrorClass string
 	}{
 		{name: "conflict", err: kerrors.NewConflict(resource, "release", errors.New("conflict")), retryable: true},
 		{name: "too many requests", err: kerrors.NewTooManyRequests("busy", 0), retryable: true},
@@ -379,6 +380,8 @@ func TestImportTagWithRetryDelaysClassifiesTypedAPIErrors(t *testing.T) {
 		{name: "internal error", err: kerrors.NewInternalError(errors.New("internal")), retryable: true},
 		{name: "service unavailable", err: kerrors.NewServiceUnavailable("unavailable"), retryable: true},
 		{name: "connection reset", err: syscall.ECONNRESET, retryable: true},
+		{name: "connection refused", err: fmt.Errorf("dial API server: %w", syscall.ECONNREFUSED), retryable: true, wantErrorClass: "connection_refused"},
+		{name: "HTTP2 connection lost", err: errors.New("Post API request: http2: client connection lost"), retryable: true, wantErrorClass: "http2_connection_lost"},
 		{name: "unexpected EOF", err: io.ErrUnexpectedEOF, retryable: true},
 		{name: "network timeout", err: context.DeadlineExceeded, retryable: true},
 		{name: "forbidden", err: kerrors.NewForbidden(resource, "release", errors.New("denied")), retryable: true},
@@ -389,6 +392,11 @@ func TestImportTagWithRetryDelaysClassifiesTypedAPIErrors(t *testing.T) {
 
 	for _, testCase := range testCases {
 		t.Run(testCase.name, func(t *testing.T) {
+			if testCase.wantErrorClass != "" {
+				if got := imageImportRetryErrorClass(testCase.err); got != testCase.wantErrorClass {
+					t.Fatalf("error class = %q, want %q", got, testCase.wantErrorClass)
+				}
+			}
 			client := &scriptedImageImportClient{
 				Client: fakectrlruntimeclient.NewClientBuilder().Build(),
 				create: func(_ context.Context, attempt int, streamImport *imagev1.ImageStreamImport) error {

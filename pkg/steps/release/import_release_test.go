@@ -230,6 +230,7 @@ func TestTransientReleaseExtractionErrorPattern(t *testing.T) {
 		{name: "canonical internal server error", output: "received unexpected HTTP status: 500 Internal Server Error", transient: true},
 		{name: "canonical bad gateway", output: "received unexpected HTTP status: 502 Bad Gateway", transient: true},
 		{name: "connection reset", output: "read: connection reset by peer", transient: true},
+		{name: "HTTP2 connection lost", output: "http2: client connection lost", transient: true},
 		{name: "timeout", output: "TLS handshake timeout", transient: true},
 		{name: "unauthorized", output: "unauthorized: authentication required"},
 		{name: "forbidden", output: "forbidden: access denied"},

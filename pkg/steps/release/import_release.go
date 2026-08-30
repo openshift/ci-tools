@@ -76,7 +76,7 @@ type releaseTagImporter func(context.Context, ctrlruntimeclient.Client, string, 
 const (
 	releaseExtractionContainerName         = "release"
 	transientReleaseExtractionExitCode     = 75
-	transientReleaseExtractionErrorPattern = `too many requests|toomanyrequests|status:?( code)? (429|5[[:digit:]]{2})|unexpected http status|internal server error|bad gateway|service unavailable|gateway timeout|connection (refused|reset)|i/o timeout|TLS handshake timeout|context deadline exceeded|temporary failure|unexpected EOF`
+	transientReleaseExtractionErrorPattern = `too many requests|toomanyrequests|status:?( code)? (429|5[[:digit:]]{2})|unexpected http status|internal server error|bad gateway|service unavailable|gateway timeout|connection (refused|reset)|http2: client connection lost|i/o timeout|TLS handshake timeout|context deadline exceeded|temporary failure|unexpected EOF`
 )
 
 type releaseImportSleep func(context.Context, time.Duration) error

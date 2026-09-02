@@ -4,6 +4,15 @@
     <testcase name="Find the input image os and tag it into the pipeline" time="whatever">
       <properties></properties>
     </testcase>
+    <testcase name="Run multi-stage step check-shared-dir" time="whatever">
+      <properties></properties>
+    </testcase>
+    <testcase name="Run multi-stage step create-kubeconfig" time="whatever">
+      <properties></properties>
+    </testcase>
+    <testcase name="Run multi-stage step observer" time="whatever">
+      <properties></properties>
+    </testcase>
     <testcase name="Run multi-stage test post phase" time="whatever">
       <properties></properties>
       <system-out>The collected steps of multi-stage phase post.</system-out>
@@ -15,15 +24,6 @@
     <testcase name="Run multi-stage test test phase" time="whatever">
       <properties></properties>
       <system-out>The collected steps of multi-stage phase test.</system-out>
-    </testcase>
-    <testcase name="Run multi-stage test with-observer - with-observer-check-shared-dir container test" time="whatever">
-      <properties></properties>
-    </testcase>
-    <testcase name="Run multi-stage test with-observer - with-observer-create-kubeconfig container test" time="whatever">
-      <properties></properties>
-    </testcase>
-    <testcase name="Run multi-stage test with-observer - with-observer-observer container test" time="whatever">
-      <properties></properties>
     </testcase>
   </testsuite>
 </testsuites>

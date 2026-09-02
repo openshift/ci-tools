@@ -31,6 +31,7 @@ import (
 	"github.com/openshift/ci-tools/pkg/steps"
 	"github.com/openshift/ci-tools/pkg/steps/loggingclient"
 	testhelper_kube "github.com/openshift/ci-tools/pkg/testhelper/kubernetes"
+	"github.com/openshift/ci-tools/pkg/util"
 )
 
 func TestRun(t *testing.T) {
@@ -577,6 +578,8 @@ Link to job on registry info site: https://steps.ci.openshift.org/job?org=&repo=
 }
 
 func TestJUnit(t *testing.T) {
+	const multiStageTestAlias = "e2e-aws"
+
 	for _, tc := range []struct {
 		name     string
 		failures sets.Set[string]
@@ -584,56 +587,56 @@ func TestJUnit(t *testing.T) {
 	}{{
 		name: "no step fails",
 		expected: []string{
-			"Run multi-stage test test - test-pre0 container test",
-			"Run multi-stage test test - test-pre1 container test",
+			"Run multi-stage step pre0",
+			"Run multi-stage step ipi-install-install-stableinitial",
 			"Run multi-stage test pre phase",
-			"Run multi-stage test test - test-test0 container test",
-			"Run multi-stage test test - test-test1 container test",
+			"Run multi-stage step test0",
+			"Run multi-stage step test1",
 			"Run multi-stage test test phase",
-			"Run multi-stage test test - test-post0 container test",
-			"Run multi-stage test test - test-post1 container test",
+			"Run multi-stage step post0",
+			"Run multi-stage step post1",
 			"Run multi-stage test post phase",
 		},
 	}, {
 		name:     "failure in a pre step",
-		failures: sets.New[string]("test-pre0"),
+		failures: sets.New[string](multiStageTestAlias + "-pre0"),
 		expected: []string{
-			"Run multi-stage test test - test-pre0 container test",
+			"Run multi-stage step pre0",
 			"Run multi-stage test pre phase",
-			"Run multi-stage test test - test-post0 container test",
-			"Run multi-stage test test - test-post1 container test",
+			"Run multi-stage step post0",
+			"Run multi-stage step post1",
 			"Run multi-stage test post phase",
 		},
 	}, {
 		name:     "failure in a test step",
-		failures: sets.New[string]("test-test0"),
+		failures: sets.New[string](multiStageTestAlias + "-test0"),
 		expected: []string{
-			"Run multi-stage test test - test-pre0 container test",
-			"Run multi-stage test test - test-pre1 container test",
+			"Run multi-stage step pre0",
+			"Run multi-stage step ipi-install-install-stableinitial",
 			"Run multi-stage test pre phase",
-			"Run multi-stage test test - test-test0 container test",
+			"Run multi-stage step test0",
 			"Run multi-stage test test phase",
-			"Run multi-stage test test - test-post0 container test",
-			"Run multi-stage test test - test-post1 container test",
+			"Run multi-stage step post0",
+			"Run multi-stage step post1",
 			"Run multi-stage test post phase",
 		},
 	}, {
 		name:     "failure in a post step",
-		failures: sets.New[string]("test-post1"),
+		failures: sets.New[string](multiStageTestAlias + "-post1"),
 		expected: []string{
-			"Run multi-stage test test - test-pre0 container test",
-			"Run multi-stage test test - test-pre1 container test",
+			"Run multi-stage step pre0",
+			"Run multi-stage step ipi-install-install-stableinitial",
 			"Run multi-stage test pre phase",
-			"Run multi-stage test test - test-test0 container test",
-			"Run multi-stage test test - test-test1 container test",
+			"Run multi-stage step test0",
+			"Run multi-stage step test1",
 			"Run multi-stage test test phase",
-			"Run multi-stage test test - test-post0 container test",
-			"Run multi-stage test test - test-post1 container test",
+			"Run multi-stage step post0",
+			"Run multi-stage step post1",
 			"Run multi-stage test post phase",
 		},
 	}} {
 		t.Run(tc.name, func(t *testing.T) {
-			sa := &v1.ServiceAccount{ObjectMeta: metav1.ObjectMeta{Name: "test", Namespace: "test-namespace", Labels: map[string]string{"ci.openshift.io/multi-stage-test": "test"}}}
+			sa := &v1.ServiceAccount{ObjectMeta: metav1.ObjectMeta{Name: multiStageTestAlias, Namespace: "test-namespace", Labels: map[string]string{"ci.openshift.io/multi-stage-test": multiStageTestAlias}}}
 
 			crclient := &testhelper_kube.FakePodExecutor{
 				LoggingClient: loggingclient.New(
@@ -666,9 +669,9 @@ func TestJUnit(t *testing.T) {
 				PendingTimeout:  30 * time.Minute,
 			}
 			step := MultiStageTestStep(api.TestStepConfiguration{
-				As: "test",
+				As: multiStageTestAlias,
 				MultiStageTestConfigurationLiteral: &api.MultiStageTestConfigurationLiteral{
-					Pre:  []api.LiteralTestStep{{As: "pre0"}, {As: "pre1"}},
+					Pre:  []api.LiteralTestStep{{As: "pre0"}, {As: "ipi-install-install-stableinitial"}},
 					Test: []api.LiteralTestStep{{As: "test0"}, {As: "test1"}},
 					Post: []api.LiteralTestStep{{As: "post0"}, {As: "post1"}},
 				},
@@ -679,13 +682,59 @@ func TestJUnit(t *testing.T) {
 			}
 
 			var names []string
-			for _, t := range step.(steps.SubtestReporter).SubTests() {
-				names = append(names, t.Name)
+			for _, testCase := range step.(steps.SubtestReporter).SubTests() {
+				names = append(names, testCase.Name)
+				if strings.Contains(testCase.Name, multiStageTestAlias) {
+					t.Errorf("multi-stage step testcase name includes the test alias: %q", testCase.Name)
+				}
 			}
 			if !reflect.DeepEqual(names, tc.expected) {
 				t.Error(diff.ObjectReflectDiff(names, tc.expected))
 			}
 		})
+	}
+}
+
+func TestMultiStageStepSubTestsPreserveResults(t *testing.T) {
+	notifier := steps.NewTestCaseNotifier(util.NopNotifier)
+	notifier.Notify(&v1.Pod{
+		ObjectMeta: metav1.ObjectMeta{
+			Annotations: map[string]string{"ci-operator.openshift.io/container-sub-tests": "test"},
+		},
+		Status: v1.PodStatus{
+			ContainerStatuses: []v1.ContainerStatus{{
+				Name: "test",
+				State: v1.ContainerState{Terminated: &v1.ContainerStateTerminated{
+					ExitCode:   1,
+					Message:    "step failed",
+					StartedAt:  metav1.NewTime(time.Unix(100, 0)),
+					FinishedAt: metav1.NewTime(time.Unix(130, 0)),
+				}},
+			}},
+		},
+	}, "test")
+
+	testCases := multiStageStepSubTests(notifier, "ipi-install-install-stableinitial")
+	if len(testCases) != 1 {
+		t.Fatalf("expected one testcase, got %d", len(testCases))
+	}
+	testCase := testCases[0]
+	if testCase.Name != "Run multi-stage step ipi-install-install-stableinitial" {
+		t.Errorf("unexpected testcase name: %q", testCase.Name)
+	}
+	if testCase.Duration != 30 {
+		t.Errorf("expected duration 30, got %v", testCase.Duration)
+	}
+	if testCase.FailureOutput == nil || testCase.FailureOutput.Output != "step failed" {
+		t.Errorf("expected failure output to be preserved, got %#v", testCase.FailureOutput)
+	}
+}
+
+func TestRunPodRequiresStepMetadataLabel(t *testing.T) {
+	step := &multiStageTestStep{}
+	err := step.runPod(context.Background(), &v1.Pod{ObjectMeta: metav1.ObjectMeta{Name: "generated-step"}}, nil, 0)
+	if err == nil || !strings.Contains(err.Error(), steps.LabelMetadataStep) {
+		t.Fatalf("expected missing step metadata label error, got %v", err)
 	}
 }
 

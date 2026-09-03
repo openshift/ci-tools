@@ -76,10 +76,15 @@ func (c *Config) validate() error {
 		if k == OpenshiftPrivAdminsGroup || v.RenameTo == OpenshiftPrivAdminsGroup {
 			return fmt.Errorf("cannot use the group name %s in the configuration file", OpenshiftPrivAdminsGroup)
 		}
+		seen := sets.New[string]()
 		for _, collection := range v.SecretCollections {
 			if !validation.ValidateCollectionName(collection) {
 				return fmt.Errorf("invalid collection name '%s' in the configuration file: must be at most %d characters, contain only lowercase letters, numbers, hyphens, and underscores (no double underscores), and end with a lowercase letter or number", collection, validation.MaxCollectionLength)
 			}
+			if seen.Has(collection) {
+				return fmt.Errorf("secret collection '%s' is listed more than once for group '%s' in the configuration file", collection, k)
+			}
+			seen.Insert(collection)
 		}
 	}
 	return nil

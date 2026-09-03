@@ -33,6 +33,11 @@ func TestLoadConfig(t *testing.T) {
 			file:        filepath.Join("testdata", "TestLoadConfig", "openshift_priv_admins.yaml"),
 			expectedErr: fmt.Errorf("failed to validate config file: cannot use the group name openshift-priv-admins in the configuration file"),
 		},
+		{
+			name:        "a secret collection cannot be listed twice for the same group",
+			file:        filepath.Join("testdata", "TestLoadConfig", "duplicate_secret_collection.yaml"),
+			expectedErr: fmt.Errorf("failed to validate config file: secret collection 'wildfly-charts-secrets' is listed more than once for group 'test-platform-gsm-secrets-owners' in the configuration file"),
+		},
 	}
 	for _, tc := range testCases {
 		t.Run(tc.name, func(t *testing.T) {

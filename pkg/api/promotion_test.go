@@ -4,6 +4,8 @@ import (
 	"testing"
 
 	"github.com/google/go-cmp/cmp"
+
+	coreapi "k8s.io/api/core/v1"
 )
 
 func TestPromotesOfficialImages(t *testing.T) {
@@ -90,6 +92,31 @@ func TestRefersToOfficialImage(t *testing.T) {
 	for _, testCase := range testCases {
 		t.Run(testCase.name, func(t *testing.T) {
 			if diff := cmp.Diff(testCase.expected, RefersToOfficialImage(testCase.namespace, testCase.includeOKD)); diff != "" {
+				t.Errorf("%s: mismatch (-want +got):\n%s", testCase.name, diff)
+			}
+		})
+	}
+}
+
+func TestUsableImageStreamTagImportSource(t *testing.T) {
+	testCases := []struct {
+		name     string
+		from     *coreapi.ObjectReference
+		expected bool
+	}{
+		{name: "external docker digest", from: &coreapi.ObjectReference{Kind: "DockerImage", Name: "quay-proxy.ci.openshift.org/openshift/ci@sha256:abc"}, expected: true},
+		{name: "internal ocp registry", from: &coreapi.ObjectReference{Kind: "DockerImage", Name: ServiceDomainAPPCIRegistry + "/ocp/4.23:cli"}, expected: false},
+		{name: "internal ocp-priv registry", from: &coreapi.ObjectReference{Kind: "DockerImage", Name: ServiceDomainAPPCIRegistry + "/ocp-priv/5.1:cli"}, expected: false},
+		{name: "internal origin registry", from: &coreapi.ObjectReference{Kind: "DockerImage", Name: ServiceDomainAPPCIRegistry + "/origin/4.23:cli"}, expected: false},
+		{name: "imagestreamtag in ci", from: &coreapi.ObjectReference{Kind: "ImageStreamTag", Namespace: "ci", Name: "pipeline:cli"}, expected: true},
+		{name: "imagestreamtag in ocp-priv", from: &coreapi.ObjectReference{Kind: "ImageStreamTag", Namespace: "ocp-priv", Name: "5.1:cli"}, expected: false},
+		{name: "imagestreamimage in origin", from: &coreapi.ObjectReference{Kind: "ImageStreamImage", Namespace: "origin", Name: "4.23@sha256:abc"}, expected: false},
+		{name: "configmap rejected", from: &coreapi.ObjectReference{Kind: "ConfigMap", Name: "pull-secret"}, expected: false},
+		{name: "empty name rejected", from: &coreapi.ObjectReference{Kind: "DockerImage", Name: ""}, expected: false},
+	}
+	for _, testCase := range testCases {
+		t.Run(testCase.name, func(t *testing.T) {
+			if diff := cmp.Diff(testCase.expected, UsableImageStreamTagImportSource(testCase.from)); diff != "" {
 				t.Errorf("%s: mismatch (-want +got):\n%s", testCase.name, diff)
 			}
 		})

@@ -6,6 +6,7 @@ import (
 
 	"github.com/sirupsen/logrus"
 
+	coreapi "k8s.io/api/core/v1"
 	"k8s.io/apimachinery/pkg/util/sets"
 )
 
@@ -109,6 +110,32 @@ func RefersToOfficialImage(namespace string, includeOKD OKDInclusion) bool {
 // RefersToQuayReferenceImage is true for namespaces that get app.ci IS source-refs to QCI.
 func RefersToQuayReferenceImage(namespace string, includeOKD OKDInclusion) bool {
 	return RefersToOfficialImage(namespace, includeOKD) || namespace == ocpPrivPromotionNamespace
+}
+
+// UsableImageStreamTagImportSource reports whether ref may be copied into a release snapshot tag From.
+func UsableImageStreamTagImportSource(from *coreapi.ObjectReference) bool {
+	if from == nil || from.Name == "" {
+		return false
+	}
+	switch from.Kind {
+	case "DockerImage":
+		return !isInternalAPPCIRegistryReference(from.Name)
+	case "ImageStreamTag", "ImageStreamImage":
+		return !officialPayloadNamespaces.Has(from.Namespace)
+	default:
+		return false
+	}
+}
+
+var officialPayloadNamespaces = sets.New[string](ocpPromotionNamespace, ocpPrivPromotionNamespace, okdPromotionNamespace)
+
+func isInternalAPPCIRegistryReference(name string) bool {
+	for _, ns := range []string{ocpPromotionNamespace, ocpPrivPromotionNamespace, okdPromotionNamespace} {
+		if strings.HasPrefix(name, ServiceDomainAPPCIRegistry+"/"+ns+"/") {
+			return true
+		}
+	}
+	return false
 }
 
 // QuayImage returns the image in quay.io for an image stream tag which is used to push the image

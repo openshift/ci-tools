@@ -14,9 +14,9 @@ import (
 
 	imagev1 "github.com/openshift/api/image/v1"
 	imageregistryv1 "github.com/openshift/api/imageregistry/v1"
-	"github.com/openshift/installer/pkg/types"
 
 	"github.com/openshift/ci-tools/pkg/clusterinit/clusterinstall"
+	"github.com/openshift/ci-tools/pkg/clusterinit/installconfig"
 )
 
 func TestGenerateCertificate(t *testing.T) {
@@ -38,7 +38,7 @@ func TestGenerateCertificate(t *testing.T) {
 					Unmanaged:   ptr.To(false),
 					Hosted:      ptr.To(false),
 				},
-				InstallConfig: types.InstallConfig{BaseDomain: "ci.devcluster.openshift.com"},
+				InstallConfig: installconfig.InstallConfig{BaseDomain: "ci.devcluster.openshift.com"},
 			},
 			objects: []runtime.Object{
 				&imagev1.ImageStreamList{
@@ -128,7 +128,7 @@ func TestGenerateCertificate(t *testing.T) {
 					Unmanaged:   ptr.To(false),
 					Hosted:      ptr.To(false),
 				},
-				InstallConfig: types.InstallConfig{BaseDomain: "ci.devcluster.openshift.com"},
+				InstallConfig: installconfig.InstallConfig{BaseDomain: "ci.devcluster.openshift.com"},
 			},
 			objects: []runtime.Object{
 				&imagev1.ImageStreamList{
@@ -177,7 +177,7 @@ func TestGenerateCertificate(t *testing.T) {
 						ImageRegistryPublicHost: "registry.overridden.ci.openshift.org",
 					},
 				},
-				InstallConfig: types.InstallConfig{BaseDomain: "ci.devcluster.openshift.com"},
+				InstallConfig: installconfig.InstallConfig{BaseDomain: "ci.devcluster.openshift.com"},
 			},
 			objects: []runtime.Object{
 				&imagev1.ImageStreamList{

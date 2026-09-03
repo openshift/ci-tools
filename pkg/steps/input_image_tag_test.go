@@ -135,7 +135,7 @@ func TestInputImageTagStep(t *testing.T) {
 	}
 
 	if !equality.Semantic.DeepEqual(expectedImageStreamTag, targetImageStreamTag) {
-		t.Errorf("Different ImageStreamTag 'pipeline:TO' after step execution:\n%s", diff.ObjectReflectDiff(expectedImageStreamTag, targetImageStreamTag))
+		t.Errorf("Different ImageStreamTag 'pipeline:TO' after step execution:\n%s", diff.Diff(expectedImageStreamTag, targetImageStreamTag))
 	}
 }
 
@@ -315,7 +315,7 @@ func TestInputImageTagStepConsolidatedStream(t *testing.T) {
 		t.Fatalf("get pipeline tag: %v", err)
 	}
 	if !equality.Semantic.DeepEqual(expected, got) {
-		t.Errorf("unexpected tag:\n%s", diff.ObjectReflectDiff(expected, got))
+		t.Errorf("unexpected tag:\n%s", diff.Diff(expected, got))
 	}
 }
 
@@ -371,7 +371,7 @@ func TestInputImageTagStepStableFirst(t *testing.T) {
 		t.Fatalf("get pipeline tag: %v", err)
 	}
 	if !equality.Semantic.DeepEqual(expected, got) {
-		t.Errorf("unexpected tag:\n%s", diff.ObjectReflectDiff(expected, got))
+		t.Errorf("unexpected tag:\n%s", diff.Diff(expected, got))
 	}
 }
 
@@ -484,6 +484,6 @@ func TestInputImageTagStepExternal(t *testing.T) {
 	}
 
 	if !equality.Semantic.DeepEqual(expectedImageStreamTag, targetImageStreamTag) {
-		t.Errorf("Different ImageStreamTag 'pipeline:TO' after step execution:\n%s", diff.ObjectReflectDiff(expectedImageStreamTag, targetImageStreamTag))
+		t.Errorf("Different ImageStreamTag 'pipeline:TO' after step execution:\n%s", diff.Diff(expectedImageStreamTag, targetImageStreamTag))
 	}
 }

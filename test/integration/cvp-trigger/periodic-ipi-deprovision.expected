@@ -4,7 +4,6 @@ metadata:
   annotations:
     prow.k8s.io/context: ""
     prow.k8s.io/job: periodic-ipi-deprovision
-  creationTimestamp: null
   labels:
     created-by-prow: "true"
     prow.k8s.io/context: ""

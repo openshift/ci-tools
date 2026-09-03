@@ -35,5 +35,4 @@ data:
       mirror 5 2 /etc/push-secret/.dockerconfigjson quay.io/openshift/ci:ci_c_latest=quay.io/openshift/ci:ci_c_latest__post1
     fi
 metadata:
-  creationTimestamp: null
   name: promotion-quay-script

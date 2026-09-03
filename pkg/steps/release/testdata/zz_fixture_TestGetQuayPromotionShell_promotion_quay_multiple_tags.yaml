@@ -99,5 +99,4 @@ data:
       sleep "${backoff}"
     done
 metadata:
-  creationTimestamp: null
   name: promotion-quay-script

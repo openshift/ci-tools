@@ -2,7 +2,6 @@ metadata:
   annotations:
     ephemeralcluster.ci.openshift.io/konflux-cluster: kcluster
     ephemeralcluster.ci.openshift.io/konflux-tenant: ktenant
-  creationTimestamp: null
   finalizers:
   - ephemeralcluster.ci.openshift.io/dependent-prowjob
   name: ec

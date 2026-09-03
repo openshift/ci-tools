@@ -4,7 +4,6 @@ metadata:
   annotations:
     prow.k8s.io/context: ""
     prow.k8s.io/job: multi-pr-openshift-ci-tools-999-openshift-ci-tools-123-openshift-installer-456-e2e
-  creationTimestamp: null
   labels:
     ci.openshift.io/testwith: openshift.ci-tools.999
     created-by-prow: "true"

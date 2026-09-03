@@ -12,10 +12,8 @@ import (
 
 	"k8s.io/utils/ptr"
 
-	installertypes "github.com/openshift/installer/pkg/types"
-	installeraws "github.com/openshift/installer/pkg/types/aws"
-
 	"github.com/openshift/ci-tools/pkg/clusterinit/clusterinstall"
+	"github.com/openshift/ci-tools/pkg/clusterinit/installconfig"
 	"github.com/openshift/ci-tools/pkg/clusterinit/types"
 	awstypes "github.com/openshift/ci-tools/pkg/clusterinit/types/aws"
 )
@@ -51,9 +49,9 @@ func TestGenerateManifests(t *testing.T) {
 						},
 					},
 				},
-				InstallConfig: installertypes.InstallConfig{
-					Platform: installertypes.Platform{
-						AWS: &installeraws.Platform{
+				InstallConfig: installconfig.InstallConfig{
+					Platform: installconfig.Platform{
+						AWS: &installconfig.AWSPlatform{
 							Region: "us-east-1",
 						},
 					},
@@ -333,12 +331,12 @@ func TestGenerateManifests(t *testing.T) {
 						AWS: awstypes.MachineSet{},
 					},
 				},
-				InstallConfig: installertypes.InstallConfig{
-					Compute: []installertypes.MachinePool{
-						{Platform: installertypes.MachinePoolPlatform{AWS: &installeraws.MachinePool{Zones: []string{"us-east-1a"}}}},
+				InstallConfig: installconfig.InstallConfig{
+					Compute: []installconfig.MachinePool{
+						{Platform: installconfig.MachinePoolPlatform{AWS: &installconfig.AWSMachinePool{Zones: []string{"us-east-1a"}}}},
 					},
-					Platform: installertypes.Platform{
-						AWS: &installeraws.Platform{
+					Platform: installconfig.Platform{
+						AWS: &installconfig.AWSPlatform{
 							Region: "us-east-1",
 						},
 					},

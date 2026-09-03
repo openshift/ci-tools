@@ -481,7 +481,7 @@ func TestTestCaseNotifier_SubTests(t *testing.T) {
 			}
 			tests := n.SubTests(tt.prefix)
 			if !reflect.DeepEqual(tt.wantTests, tests) {
-				t.Fatalf("unexpected: %s", diff.ObjectReflectDiff(tt.wantTests, tests))
+				t.Fatalf("unexpected: %s", diff.Diff(tt.wantTests, tests))
 			}
 		})
 	}
@@ -620,7 +620,7 @@ func TestAddArtifactsToPod(t *testing.T) {
 		t.Run(tc.testID, func(t *testing.T) {
 			addArtifactsToPod(tc.pod)
 			if !equality.Semantic.DeepEqual(tc.pod, tc.expected) {
-				t.Fatal(diff.ObjectReflectDiff(tc.pod, tc.expected))
+				t.Fatal(diff.Diff(tc.pod, tc.expected))
 			}
 
 		})
@@ -630,7 +630,7 @@ func TestAddArtifactsToPod(t *testing.T) {
 func TestArtifactsContainer(t *testing.T) {
 	artifacts := artifactsContainer()
 	if !reflect.DeepEqual(artifacts, testArtifactsContainer) {
-		t.Fatal(diff.ObjectReflectDiff(artifacts, testArtifactsContainer))
+		t.Fatal(diff.Diff(artifacts, testArtifactsContainer))
 	}
 }
 

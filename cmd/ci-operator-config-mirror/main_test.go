@@ -49,7 +49,7 @@ func TestPrivateReleaseTagConfiguration(t *testing.T) {
 		t.Run(tc.id, func(t *testing.T) {
 			privateReleaseTagConfiguration(tc.tagSpecification)
 			if !reflect.DeepEqual(tc.tagSpecification, tc.expected) {
-				t.Fatalf("Differences found: %v", diff.ObjectReflectDiff(tc.tagSpecification, tc.expected))
+				t.Fatalf("Differences found: %v", diff.Diff(tc.tagSpecification, tc.expected))
 			}
 		})
 	}
@@ -89,7 +89,7 @@ func TestPrivateIntegrationRelease(t *testing.T) {
 		t.Run(tc.id, func(t *testing.T) {
 			privateIntegrationRelease(tc.release)
 			if !reflect.DeepEqual(tc.release, tc.expected) {
-				t.Fatalf("Differences found: %v", diff.ObjectReflectDiff(tc.release, tc.expected))
+				t.Fatalf("Differences found: %v", diff.Diff(tc.release, tc.expected))
 			}
 		})
 	}
@@ -137,7 +137,7 @@ func TestPrivateBuildRoot(t *testing.T) {
 		t.Run(tc.id, func(t *testing.T) {
 			privateBuildRoot(tc.buildRoot)
 			if !reflect.DeepEqual(tc.buildRoot, tc.expected) {
-				t.Fatalf("Differences found: %v", diff.ObjectReflectDiff(tc.buildRoot, tc.expected))
+				t.Fatalf("Differences found: %v", diff.Diff(tc.buildRoot, tc.expected))
 			}
 		})
 	}
@@ -192,7 +192,7 @@ func TestPrivateBaseImages(t *testing.T) {
 		t.Run(tc.id, func(t *testing.T) {
 			privateBaseImages(tc.baseImages)
 			if !reflect.DeepEqual(tc.baseImages, tc.expected) {
-				t.Fatalf("Differences found: %v", diff.ObjectReflectDiff(tc.baseImages, tc.expected))
+				t.Fatalf("Differences found: %v", diff.Diff(tc.baseImages, tc.expected))
 			}
 		})
 	}
@@ -235,7 +235,7 @@ func TestPrivatePromotionConfiguration(t *testing.T) {
 		t.Run(tc.id, func(t *testing.T) {
 			privatePromotionConfiguration(tc.promotion)
 			if !reflect.DeepEqual(tc.promotion, tc.expected) {
-				t.Fatalf("Differences found: %v", diff.ObjectReflectDiff(tc.promotion, tc.expected))
+				t.Fatalf("Differences found: %v", diff.Diff(tc.promotion, tc.expected))
 			}
 		})
 	}

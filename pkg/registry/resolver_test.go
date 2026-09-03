@@ -1688,7 +1688,7 @@ func TestResolve(t *testing.T) {
 				t.Errorf("got incorrect error: %s", cmp.Diff(err, testCase.expectedErr))
 			}
 			if !reflect.DeepEqual(ret, testCase.expectedRes) {
-				t.Errorf("got incorrect output: %s", diff.ObjectReflectDiff(ret, testCase.expectedRes))
+				t.Errorf("got incorrect output: %s", diff.Diff(ret, testCase.expectedRes))
 			}
 		})
 	}

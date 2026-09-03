@@ -7,8 +7,8 @@ import (
 
 	configv1 "github.com/openshift/api/config/v1"
 	operatorv1 "github.com/openshift/api/operator/v1"
-	installertypes "github.com/openshift/installer/pkg/types"
 
+	"github.com/openshift/ci-tools/pkg/clusterinit/installconfig"
 	"github.com/openshift/ci-tools/pkg/clusterinit/manifest"
 	"github.com/openshift/ci-tools/pkg/clusterinit/types"
 	"github.com/openshift/ci-tools/pkg/clusterinit/types/aws"
@@ -36,7 +36,7 @@ type ClusterInstall struct {
 	Onboard         Onboard                         `json:"onboard,omitempty"`
 	InstallBase     string
 	Infrastructure  configv1.Infrastructure
-	InstallConfig   installertypes.InstallConfig
+	InstallConfig   installconfig.InstallConfig
 	// This is needed to get info about available OS images
 	CoreOSStream rhcostream.Stream
 	Config       *rest.Config

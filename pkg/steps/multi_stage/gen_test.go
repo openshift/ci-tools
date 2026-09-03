@@ -377,7 +377,7 @@ func TestGeneratePodsEnvironment(t *testing.T) {
 				}
 			}
 			if !reflect.DeepEqual(env, tc.expected) {
-				t.Errorf("incorrect environment:\n%s", diff.ObjectReflectDiff(env, tc.expected))
+				t.Errorf("incorrect environment:\n%s", diff.Diff(env, tc.expected))
 			}
 		})
 	}

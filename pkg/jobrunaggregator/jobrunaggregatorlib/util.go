@@ -28,6 +28,12 @@ import (
 	"github.com/openshift/ci-tools/pkg/junit"
 )
 
+type classicListWatch struct {
+	cache.ListWatch
+}
+
+func (classicListWatch) IsWatchListSemanticsUnSupported() bool { return true }
+
 const (
 	JobStateQuerySourceBigQuery = "bigquery"
 	JobStateQuerySourceCluster  = "cluster"
@@ -324,7 +330,7 @@ func (w *ClusterJobRunWaiter) checkMatchedJobsForCompletion(prowJobLister prowjo
 // SendInitialEvents, the reflector uses WatchFunc below and ignores ListFunc, which can then go.
 func (w *ClusterJobRunWaiter) newProwJobInformer(ctx context.Context) (cache.SharedIndexInformer, error) {
 	prowJobs := w.ProwJobClient.ProwV1().ProwJobs(prowJobNamespace)
-	listWatch := &cache.ListWatch{
+	listWatch := &classicListWatch{cache.ListWatch{
 		ListFunc: func(options metav1.ListOptions) (runtime.Object, error) {
 			// page ourselves, which requires a quorum read: the watch cache cannot paginate
 			options.ResourceVersion = ""
@@ -357,7 +363,7 @@ func (w *ClusterJobRunWaiter) newProwJobInformer(ctx context.Context) (cache.Sha
 		WatchFunc: func(options metav1.ListOptions) (watch.Interface, error) {
 			return prowJobs.Watch(ctx, options)
 		},
-	}
+	}}
 
 	informer := cache.NewSharedIndexInformer(listWatch, &prowv1.ProwJob{}, 24*time.Hour, cache.Indexers{})
 	if err := informer.SetTransform(trimProwJobObject); err != nil {

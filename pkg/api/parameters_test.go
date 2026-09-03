@@ -63,7 +63,7 @@ func TestDeferredParametersMap(t *testing.T) {
 		createdMap, _ := tc.dp.Map()
 
 		if !reflect.DeepEqual(tc.expected, createdMap) {
-			t.Errorf("%s\n %v.Map() returned different map:\n%s", tc.purpose, tc.dp, diff.ObjectReflectDiff(tc.expected, createdMap))
+			t.Errorf("%s\n %v.Map() returned different map:\n%s", tc.purpose, tc.dp, diff.Diff(tc.expected, createdMap))
 		}
 	}
 }

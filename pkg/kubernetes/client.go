@@ -25,11 +25,17 @@ import (
 
 type evaluator func(runtime.Object) (bool, error)
 
+type classicListWatch struct {
+	cache.ListWatch
+}
+
+func (classicListWatch) IsWatchListSemanticsUnSupported() bool { return true }
+
 // WaitForConditionOnObject uses a watch to wait for a condition to be true on an object.
 // When the condition is satisfied or the timeout expires, the object is returned along
 // with any errors encountered.
 func WaitForConditionOnObject(ctx context.Context, client ctrlruntimeclient.WithWatch, identifier ctrlruntimeclient.ObjectKey, list ctrlruntimeclient.ObjectList, into ctrlruntimeclient.Object, evaluate evaluator, timeout time.Duration) error {
-	lw := &cache.ListWatch{
+	lw := &classicListWatch{cache.ListWatch{
 		ListFunc: func(options metav1.ListOptions) (object runtime.Object, e error) {
 			options.FieldSelector = fields.OneTermEqualSelector("metadata.name", identifier.Name).String()
 			res := list
@@ -44,7 +50,7 @@ func WaitForConditionOnObject(ctx context.Context, client ctrlruntimeclient.With
 			res := list
 			return client.Watch(ctx, res, opts)
 		},
-	}
+	}}
 
 	// objects in this call here are always expected to exist in advance
 	var existsPrecondition toolswatch.PreconditionFunc

@@ -65,6 +65,10 @@ func (lc *loggingClient) Create(ctx context.Context, obj ctrlruntimeclient.Objec
 	return nil
 }
 
+func (lc *loggingClient) Apply(ctx context.Context, obj runtime.ApplyConfiguration, opts ...ctrlruntimeclient.ApplyOption) error {
+	return lc.upstream.Apply(ctx, obj, opts...)
+}
+
 func (lc *loggingClient) Delete(ctx context.Context, obj ctrlruntimeclient.Object, opts ...ctrlruntimeclient.DeleteOption) error {
 	// The delete call doesn't return the object, so we have to get it first to be able to log it
 	name := ctrlruntimeclient.ObjectKey{Namespace: obj.GetNamespace(), Name: obj.GetName()}

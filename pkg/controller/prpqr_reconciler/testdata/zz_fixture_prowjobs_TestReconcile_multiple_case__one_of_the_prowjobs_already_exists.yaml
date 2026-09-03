@@ -1,10 +1,7 @@
-- apiVersion: prow.k8s.io/v1
-  kind: ProwJob
-  metadata:
+- metadata:
     annotations:
       prow.k8s.io/context: ""
       prow.k8s.io/job: ""
-    creationTimestamp: null
     labels:
       created-by-prow: "true"
       prow.k8s.io/context: ""
@@ -22,14 +19,11 @@
   status:
     startTime: "1970-01-01T00:00:00Z"
     state: triggered
-- apiVersion: prow.k8s.io/v1
-  kind: ProwJob
-  metadata:
+- metadata:
     annotations:
       prow.k8s.io/context: ""
       prow.k8s.io/job: test-org-test-repo-100-test-name-2
       releaseJobName: periodic-ci-test-org-test-repo-test-branch-test-name-2
-    creationTimestamp: null
     labels:
       created-by-prow: "true"
       prow.k8s.io/context: ""

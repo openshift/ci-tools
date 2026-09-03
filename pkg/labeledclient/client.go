@@ -52,6 +52,10 @@ func (c *client) Create(ctx context.Context, obj ctrlruntimeclient.Object, opts 
 	return c.upstream.Create(ctx, obj, opts...)
 }
 
+func (c *client) Apply(ctx context.Context, obj runtime.ApplyConfiguration, opts ...ctrlruntimeclient.ApplyOption) error {
+	return c.upstream.Apply(ctx, obj, opts...)
+}
+
 func (c *client) Delete(ctx context.Context, obj ctrlruntimeclient.Object, opts ...ctrlruntimeclient.DeleteOption) error {
 	return c.upstream.Delete(ctx, obj, opts...)
 }

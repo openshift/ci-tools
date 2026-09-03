@@ -81,15 +81,15 @@ func (s *multiStageTestStep) runSteps(
 	return err
 }
 
-func (s *multiStageTestStep) runPods(ctx context.Context, pods []generatedPod, bestEffortSteps sets.Set[string]) error {
+func (s *multiStageTestStep) runPods(ctx context.Context, pods []coreapi.Pod, bestEffortSteps sets.Set[string]) error {
 	var errs []error
-	for _, stepPod := range pods {
-		err := s.runPod(ctx, stepPod, base_steps.NewTestCaseNotifier(util.NopNotifier), util.WaitForPodFlag(0))
+	for _, pod := range pods {
+		err := s.runPod(ctx, &pod, base_steps.NewTestCaseNotifier(util.NopNotifier), util.WaitForPodFlag(0))
 		if err == nil {
 			continue
 		}
-		if bestEffortSteps != nil && bestEffortSteps.Has(stepPod.pod.Name) {
-			logrus.Infof("Pod %s is running in best-effort mode, ignoring the failure...", stepPod.pod.Name)
+		if bestEffortSteps != nil && bestEffortSteps.Has(pod.Name) {
+			logrus.Infof("Pod %s is running in best-effort mode, ignoring the failure...", pod.Name)
 			continue
 		}
 		errs = append(errs, err)
@@ -100,20 +100,20 @@ func (s *multiStageTestStep) runPods(ctx context.Context, pods []generatedPod, b
 	return utilerrors.NewAggregate(errs)
 }
 
-func (s *multiStageTestStep) runObservers(ctx, textCtx context.Context, pods []generatedPod, done chan<- struct{}) {
+func (s *multiStageTestStep) runObservers(ctx, textCtx context.Context, pods []coreapi.Pod, done chan<- struct{}) {
 	wg := sync.WaitGroup{}
 	wg.Add(len(pods))
 	errs := make(chan error, len(pods))
-	for _, stepPod := range pods {
+	for _, pod := range pods {
 		go func(p coreapi.Pod) {
 			<-ctx.Done()
 			logrus.Infof("Signalling observer pod %q to terminate...", p.Name)
 			if err := s.client.Delete(context.Background(), &p); err != nil {
 				logrus.WithError(err).Warn("failed to trigger observer to stop")
 			}
-		}(stepPod.pod)
-		go func(p generatedPod) {
-			err := s.runPod(textCtx, p, base_steps.NewTestCaseNotifier(util.NopNotifier), util.Interruptible)
+		}(pod)
+		go func(p coreapi.Pod) {
+			err := s.runPod(textCtx, &p, base_steps.NewTestCaseNotifier(util.NopNotifier), util.Interruptible)
 			if ctx.Err() == nil {
 				// when the observer is cancelled, we get an error here that we need to ignore, as it's not an error
 				// for the Pod to be deleted when it's cancelled, it's just expected
@@ -122,7 +122,7 @@ func (s *multiStageTestStep) runObservers(ctx, textCtx context.Context, pods []g
 				logrus.Debugf("ignoring observer error after cancellation: %v", err)
 			}
 			wg.Done()
-		}(stepPod)
+		}(pod)
 	}
 	wg.Wait()
 	close(errs)
@@ -134,12 +134,11 @@ func (s *multiStageTestStep) runObservers(ctx, textCtx context.Context, pods []g
 	done <- struct{}{}
 }
 
-func (s *multiStageTestStep) runPod(ctx context.Context, stepPod generatedPod, notifier *base_steps.TestCaseNotifier, flags util.WaitForPodFlag) error {
-	junitName, err := s.junitNameForStep(stepPod)
+func (s *multiStageTestStep) runPod(ctx context.Context, pod *coreapi.Pod, notifier *base_steps.TestCaseNotifier, flags util.WaitForPodFlag) error {
+	junitName, err := s.junitNameForPod(pod)
 	if err != nil {
 		return err
 	}
-	pod := &stepPod.pod
 
 	start := time.Now()
 	logrus.Infof("Running step %s.", pod.Name)
@@ -209,9 +208,10 @@ func (s *multiStageTestStep) runPod(ctx context.Context, stepPod generatedPod, n
 	return nil
 }
 
-func (s *multiStageTestStep) junitNameForStep(stepPod generatedPod) (string, error) {
-	if stepPod.stepName == "" {
-		return "", fmt.Errorf("multi-stage test %q pod %q has an empty step name", s.name, stepPod.pod.Name)
+func (s *multiStageTestStep) junitNameForPod(pod *coreapi.Pod) (string, error) {
+	stepName := pod.Labels[base_steps.LabelMetadataStep]
+	if stepName == "" {
+		return "", fmt.Errorf("multi-stage test %q pod %q is missing required label %q", s.name, pod.Name, base_steps.LabelMetadataStep)
 	}
-	return fmt.Sprintf("Run multi-stage step %s", stepPod.stepName), nil
+	return fmt.Sprintf("Run multi-stage step %s", stepName), nil
 }

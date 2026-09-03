@@ -487,6 +487,41 @@ func TestTestCaseNotifier_SubTests(t *testing.T) {
 	}
 }
 
+func TestTestCaseNotifier_SubTestsWithName(t *testing.T) {
+	n := &TestCaseNotifier{
+		nested: util.NopNotifier,
+		lastPod: &coreapi.Pod{
+			ObjectMeta: meta.ObjectMeta{
+				Annotations: map[string]string{annotationContainersForSubTestResults: "test"},
+			},
+			Status: coreapi.PodStatus{
+				ContainerStatuses: []coreapi.ContainerStatus{{
+					Name: "test",
+					State: coreapi.ContainerState{Terminated: &coreapi.ContainerStateTerminated{
+						ExitCode:   1,
+						Message:    "step failed",
+						StartedAt:  meta.Time{Time: time.Unix(100, 0)},
+						FinishedAt: meta.Time{Time: time.Unix(130, 0)},
+					}},
+				}},
+			},
+		},
+	}
+
+	want := []*junit.TestCase{{
+		Name:          "Run multi-stage step ipi-install-install-stableinitial",
+		Duration:      30,
+		FailureOutput: &junit.FailureOutput{Output: "step failed"},
+	}}
+	got := n.SubTestsWithName("Run multi-stage step ipi-install-install-stableinitial")
+	if !reflect.DeepEqual(want, got) {
+		t.Fatalf("unexpected: %s", diff.ObjectReflectDiff(want, got))
+	}
+	if got := n.SubTestsWithName("unused"); got != nil {
+		t.Fatalf("expected the notifier to clear the completed pod, got %#v", got)
+	}
+}
+
 func TestArtifactWorker(t *testing.T) {
 	tmp, err := os.MkdirTemp("", "")
 	if err != nil {

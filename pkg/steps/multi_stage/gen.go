@@ -37,7 +37,7 @@ func (s *multiStageTestStep) generateObservers(
 	secretVolumes []coreapi.Volume,
 	secretVolumeMounts []coreapi.VolumeMount,
 	genPodOpts *generatePodOptions,
-) ([]generatedPod, error) {
+) ([]coreapi.Pod, error) {
 	var adapted []api.LiteralTestStep
 	for _, observer := range observers {
 		// observers are just like steps, so we can adapt one to the other
@@ -61,11 +61,6 @@ type generatePodOptions struct {
 	enableSecretsStoreCSIDriver bool
 }
 
-type generatedPod struct {
-	pod      coreapi.Pod
-	stepName string
-}
-
 func defaultGeneratePodOptions() *generatePodOptions {
 	return &generatePodOptions{
 		IsObserver: false,
@@ -78,7 +73,7 @@ func (s *multiStageTestStep) generatePods(
 	secretVolumes []coreapi.Volume,
 	secretVolumeMounts []coreapi.VolumeMount,
 	genPodOpts *generatePodOptions,
-) ([]generatedPod, sets.Set[string], error) {
+) ([]coreapi.Pod, sets.Set[string], error) {
 	if genPodOpts == nil {
 		genPodOpts = defaultGeneratePodOptions()
 	}
@@ -86,7 +81,7 @@ func (s *multiStageTestStep) generatePods(
 	if s.flags&allowBestEffortPostSteps != 0 {
 		bestEffortSteps = sets.New[string]()
 	}
-	var ret []generatedPod
+	var ret []coreapi.Pod
 	var errs []error
 	var claimRelease *api.ClaimRelease
 	if s.clusterClaim != nil {
@@ -284,7 +279,7 @@ func (s *multiStageTestStep) generatePods(
 
 		addLeaseProxyScripts(pod, container)
 
-		ret = append(ret, generatedPod{pod: *pod, stepName: step.As})
+		ret = append(ret, *pod)
 	}
 	return ret, bestEffortSteps, utilerrors.NewAggregate(errs)
 }

@@ -694,14 +694,14 @@ func TestJUnit(t *testing.T) {
 	}
 }
 
-func TestJUnitNameForStep(t *testing.T) {
+func TestJUnitNameForPod(t *testing.T) {
 	step := &multiStageTestStep{name: "e2e-aws"}
-	stepPod := generatedPod{
-		pod:      v1.Pod{ObjectMeta: metav1.ObjectMeta{Name: "e2e-aws-ipi-install-install-stableinitial"}},
-		stepName: "ipi-install-install-stableinitial",
-	}
+	pod := &v1.Pod{ObjectMeta: metav1.ObjectMeta{
+		Name:   "e2e-aws-ipi-install-install-stableinitial",
+		Labels: map[string]string{steps.LabelMetadataStep: "ipi-install-install-stableinitial"},
+	}}
 
-	name, err := step.junitNameForStep(stepPod)
+	name, err := step.junitNameForPod(pod)
 	if err != nil {
 		t.Fatalf("unexpected error: %v", err)
 	}
@@ -710,10 +710,10 @@ func TestJUnitNameForStep(t *testing.T) {
 	}
 }
 
-func TestRunPodRequiresStepName(t *testing.T) {
+func TestRunPodRequiresStepMetadataLabel(t *testing.T) {
 	step := &multiStageTestStep{name: "e2e-aws"}
-	err := step.runPod(context.Background(), generatedPod{pod: v1.Pod{ObjectMeta: metav1.ObjectMeta{Name: "generated-step"}}}, nil, 0)
-	want := `multi-stage test "e2e-aws" pod "generated-step" has an empty step name`
+	err := step.runPod(context.Background(), &v1.Pod{ObjectMeta: metav1.ObjectMeta{Name: "generated-step"}}, nil, 0)
+	want := `multi-stage test "e2e-aws" pod "generated-step" is missing required label "ci.openshift.io/metadata.step"`
 	if err == nil || err.Error() != want {
 		t.Fatalf("expected %q, got %v", want, err)
 	}

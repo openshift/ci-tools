@@ -31,7 +31,6 @@ import (
 	"github.com/openshift/ci-tools/pkg/steps"
 	"github.com/openshift/ci-tools/pkg/steps/loggingclient"
 	testhelper_kube "github.com/openshift/ci-tools/pkg/testhelper/kubernetes"
-	"github.com/openshift/ci-tools/pkg/util"
 )
 
 func TestRun(t *testing.T) {
@@ -695,46 +694,28 @@ func TestJUnit(t *testing.T) {
 	}
 }
 
-func TestMultiStageStepSubTestsPreserveResults(t *testing.T) {
-	notifier := steps.NewTestCaseNotifier(util.NopNotifier)
-	notifier.Notify(&v1.Pod{
-		ObjectMeta: metav1.ObjectMeta{
-			Annotations: map[string]string{"ci-operator.openshift.io/container-sub-tests": "test"},
-		},
-		Status: v1.PodStatus{
-			ContainerStatuses: []v1.ContainerStatus{{
-				Name: "test",
-				State: v1.ContainerState{Terminated: &v1.ContainerStateTerminated{
-					ExitCode:   1,
-					Message:    "step failed",
-					StartedAt:  metav1.NewTime(time.Unix(100, 0)),
-					FinishedAt: metav1.NewTime(time.Unix(130, 0)),
-				}},
-			}},
-		},
-	}, "test")
+func TestJUnitNameForPod(t *testing.T) {
+	step := &multiStageTestStep{name: "e2e-aws"}
+	pod := &v1.Pod{ObjectMeta: metav1.ObjectMeta{
+		Name:   "e2e-aws-ipi-install-install-stableinitial",
+		Labels: map[string]string{steps.LabelMetadataStep: "ipi-install-install-stableinitial"},
+	}}
 
-	testCases := multiStageStepSubTests(notifier, "ipi-install-install-stableinitial")
-	if len(testCases) != 1 {
-		t.Fatalf("expected one testcase, got %d", len(testCases))
+	name, err := step.junitNameForPod(pod)
+	if err != nil {
+		t.Fatalf("unexpected error: %v", err)
 	}
-	testCase := testCases[0]
-	if testCase.Name != "Run multi-stage step ipi-install-install-stableinitial" {
-		t.Errorf("unexpected testcase name: %q", testCase.Name)
-	}
-	if testCase.Duration != 30 {
-		t.Errorf("expected duration 30, got %v", testCase.Duration)
-	}
-	if testCase.FailureOutput == nil || testCase.FailureOutput.Output != "step failed" {
-		t.Errorf("expected failure output to be preserved, got %#v", testCase.FailureOutput)
+	if name != "Run multi-stage step ipi-install-install-stableinitial" {
+		t.Errorf("unexpected JUnit name: %q", name)
 	}
 }
 
 func TestRunPodRequiresStepMetadataLabel(t *testing.T) {
-	step := &multiStageTestStep{}
+	step := &multiStageTestStep{name: "e2e-aws"}
 	err := step.runPod(context.Background(), &v1.Pod{ObjectMeta: metav1.ObjectMeta{Name: "generated-step"}}, nil, 0)
-	if err == nil || !strings.Contains(err.Error(), steps.LabelMetadataStep) {
-		t.Fatalf("expected missing step metadata label error, got %v", err)
+	want := `multi-stage test "e2e-aws" pod "generated-step" is missing required label "ci.openshift.io/metadata.step"`
+	if err == nil || err.Error() != want {
+		t.Fatalf("expected %q, got %v", want, err)
 	}
 }
 

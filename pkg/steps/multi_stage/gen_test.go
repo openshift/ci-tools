@@ -227,7 +227,21 @@ func TestGeneratePods(t *testing.T) {
 				t.Fatal(err)
 			}
 
-			testhelper.CompareWithFixture(t, ret)
+			var pods []coreapi.Pod
+			var stepNames []string
+			for _, stepPod := range ret {
+				pods = append(pods, stepPod.pod)
+				stepNames = append(stepNames, stepPod.stepName)
+			}
+			var wantStepNames []string
+			for _, literalStep := range tc.config.Tests[0].MultiStageTestConfigurationLiteral.Test {
+				wantStepNames = append(wantStepNames, literalStep.As)
+			}
+			if !reflect.DeepEqual(stepNames, wantStepNames) {
+				t.Errorf("incorrect generated step names:\n%s", diff.ObjectReflectDiff(stepNames, wantStepNames))
+			}
+
+			testhelper.CompareWithFixture(t, pods)
 		})
 	}
 }
@@ -297,7 +311,17 @@ func TestGenerateObservers(t *testing.T) {
 		t.Fatal(err)
 	}
 
-	testhelper.CompareWithFixture(t, ret)
+	var pods []coreapi.Pod
+	var stepNames []string
+	for _, stepPod := range ret {
+		pods = append(pods, stepPod.pod)
+		stepNames = append(stepNames, stepPod.stepName)
+	}
+	if expected := []string{"observer0", "observer1"}; !reflect.DeepEqual(stepNames, expected) {
+		t.Errorf("incorrect generated observer step names:\n%s", diff.ObjectReflectDiff(stepNames, expected))
+	}
+
+	testhelper.CompareWithFixture(t, pods)
 }
 
 func TestGeneratePodsEnvironment(t *testing.T) {
@@ -371,9 +395,9 @@ func TestGeneratePodsEnvironment(t *testing.T) {
 				t.Fatal(err)
 			}
 			var env *string
-			for i, v := range pods[0].Spec.Containers[0].Env {
+			for i, v := range pods[0].pod.Spec.Containers[0].Env {
 				if v.Name == "TEST" {
-					env = &pods[0].Spec.Containers[0].Env[i].Value
+					env = &pods[0].pod.Spec.Containers[0].Env[i].Value
 				}
 			}
 			if !reflect.DeepEqual(env, tc.expected) {

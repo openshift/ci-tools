@@ -219,7 +219,7 @@ func gatherOptions() (options, error) {
 
 	fs.StringVar(&o.gcsBucket, "gcs-bucket", "test-platform-results", "GCS Bucket to upload affected jobs list")
 	fs.StringVar(&o.gcsCredentialsFile, "gcs-credentials-file", "/etc/gcs/service-account.json", "GCS Credentials file to upload affected jobs list")
-	fs.StringVar(&o.gcsBrowserPrefix, "gcs-browser-prefix", "https://gcsweb-ci.apps.ci.l2s4.p1.openshiftapps.com/gcs/test-platform-results/", "Prefix for the GCS Browser for viewing the affected jobs list")
+	fs.StringVar(&o.gcsBrowserPrefix, "gcs-browser-prefix", "https://gcs.ci.openshift.org/gcs/test-platform-results/", "Prefix for the GCS Browser for viewing the affected jobs list")
 
 	o.github.AddFlags(fs)
 	o.githubEventServerOptions.Bind(fs)

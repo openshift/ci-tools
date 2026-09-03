@@ -21,6 +21,10 @@ func TestExtractInfo(t *testing.T) {
 			expected: &jobInfo{Name: "pull-ci-openshift-installer-release-4.6-e2e-metal-ipi", Id: "1319125780608847872"},
 		},
 		{
+			link:     "https://gcs.ci.openshift.org/gcs/test-platform-results/pr-logs/pull/25585/pull-ci-openshift-origin-master-e2e-aws-disruptive/1319310480841379840/build-log.txt",
+			expected: &jobInfo{Name: "pull-ci-openshift-origin-master-e2e-aws-disruptive", Id: "1319310480841379840"},
+		},
+		{
 			link:     "https://gcsweb-ci.apps.ci.l2s4.p1.openshiftapps.com/gcs/test-platform-results/pr-logs/pull/25585/pull-ci-openshift-origin-master-e2e-aws-disruptive/1319310480841379840/build-log.txt",
 			expected: &jobInfo{Name: "pull-ci-openshift-origin-master-e2e-aws-disruptive", Id: "1319310480841379840"},
 		},

@@ -129,7 +129,11 @@ func setupLogger(censor *secrets.DynamicCensor) error {
 
 func (tr *testRunner) cleanup() {
 	ctx := context.Background()
-	currentState := tr.getActualGCPState()
+	currentState, err := tr.getActualGCPState()
+	if err != nil {
+		logrus.Errorf("Failed to fetch GCP state for cleanup; leftover resources may remain: %v", err)
+		return
+	}
 
 	if len(currentState.Secrets) > 0 {
 		logrus.Infof("Deleting %d secrets...", len(currentState.Secrets))
@@ -495,9 +499,16 @@ func TestUnclaimedCollectionPreserved(t *testing.T) {
 
 	// The reconciler creates a service account for the claimed collection. Wait for it to
 	// appear so we know reconciliation has propagated before making assertions.
+	// Retry until the claimed collection's service account appears, so the negative
+	// assertions below run only against a complete, successfully retrieved state. A
+	// retrieval error keeps retrying rather than being treated as an absence.
 	var state GCPState
 	err := retry.OnError(gcpStateCheckBackoff, func(error) bool { return true }, func() error {
-		state = tr.getActualGCPState()
+		var err error
+		state, err = tr.getActualGCPState()
+		if err != nil {
+			return fmt.Errorf("failed to fetch GCP state: %w", err)
+		}
 		for _, sa := range state.ServiceAccounts {
 			if sa.Collection == claimedCollection {
 				return nil
@@ -562,29 +573,29 @@ func (tr *testRunner) runReconcilerTool(configPath string) error {
 	return nil
 }
 
-// getActualGCPState returns the current state of resources in the GCP project
-func (tr *testRunner) getActualGCPState() GCPState {
+// getActualGCPState returns the current state of resources in the GCP project.
+// Any retrieval failure is returned as an error rather than being masked as an
+// empty result, so callers never mistake a transient API failure for an absence
+// of resources (which would make negative assertions pass spuriously).
+func (tr *testRunner) getActualGCPState() (GCPState, error) {
 	gcpSecrets, err := gsm.GetAllSecrets(tr.ctx, tr.secretsClient, tr.config)
 	if err != nil {
-		logrus.Errorf("Error while fetching secrets: %v", err)
-		gcpSecrets = make(map[string]gsm.GCPSecret)
+		return GCPState{}, fmt.Errorf("failed to fetch secrets: %w", err)
 	}
 
 	serviceAccounts, err := gsm.GetUpdaterServiceAccounts(tr.ctx, tr.iamAdminClient, tr.config)
 	if err != nil {
-		logrus.Errorf("Failed to fetch service accounts: %v", err)
-		serviceAccounts = []gsm.ServiceAccountInfo{}
+		return GCPState{}, fmt.Errorf("failed to fetch service accounts: %w", err)
 	}
 
-	var iamBindings []*iampb.Binding
 	policy, err := gsm.GetProjectIAMPolicy(tr.ctx, tr.resourceManagerClient, tr.config.ProjectIdNumber)
 	if err != nil {
-		logrus.Errorf("Failed to fetch IAM policy: %v", err)
-	} else {
-		for _, binding := range policy.Bindings {
-			if gsm.IsManagedBinding(binding) {
-				iamBindings = append(iamBindings, binding)
-			}
+		return GCPState{}, fmt.Errorf("failed to fetch IAM policy: %w", err)
+	}
+	var iamBindings []*iampb.Binding
+	for _, binding := range policy.Bindings {
+		if gsm.IsManagedBinding(binding) {
+			iamBindings = append(iamBindings, binding)
 		}
 	}
 
@@ -592,7 +603,7 @@ func (tr *testRunner) getActualGCPState() GCPState {
 		Secrets:         gcpSecrets,
 		IAMBindings:     iamBindings,
 		ServiceAccounts: serviceAccounts,
-	}
+	}, nil
 }
 
 // getActualGCPStateWithRetry gets the actual state with retry for eventual consistency
@@ -607,7 +618,12 @@ func (tr *testRunner) getActualGCPStateWithRetry(expectedState GCPState) GCPStat
 	err := retry.OnError(gcpStateCheckBackoff, func(err error) bool {
 		return true
 	}, func() error {
-		state = tr.getActualGCPState()
+		var err error
+		state, err = tr.getActualGCPState()
+		if err != nil {
+			logrus.Infof("Failed to fetch GCP state, retrying: %v", err)
+			return err
+		}
 		actualSACount := len(state.ServiceAccounts)
 		actualSecretCount := len(state.Secrets)
 

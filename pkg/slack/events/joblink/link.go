@@ -359,7 +359,7 @@ func infoFromUrl(url *url.URL) *jobInfo {
 		case "view":
 			return infoForJobView(url)
 		}
-	case api.DomainForService(api.ServiceGCSWeb), api.DomainForService(api.ServiceGCSStorage):
+	case api.GCSWebPublicHost, api.DomainForService(api.ServiceGCSWeb), api.DomainForService(api.ServiceGCSStorage):
 		return infoForArtifact(url)
 	}
 	return nil
@@ -408,7 +408,7 @@ func infoForJobView(url *url.URL) *jobInfo {
 }
 
 // infoForArtifact handles URLs like:
-// https://gcsweb-ci.apps.ci.l2s4.p1.openshiftapps.com/gcs/test-platform-results/pr-logs/pull/25585/pull-ci-openshift-origin-master-e2e-aws-disruptive/1319310480841379840/build-log.txt
+// https://gcs.ci.openshift.org/gcs/test-platform-results/pr-logs/pull/25585/pull-ci-openshift-origin-master-e2e-aws-disruptive/1319310480841379840/build-log.txt
 // https://storage.googleapis.com/test-platform-results/pr-logs/pull/openshift_cluster-ingress-operator/836/pull-ci-openshift-cluster-ingress-operator-master-e2e-aws-operator/1583384716713660416/build-log.txt
 func infoForArtifact(url *url.URL) *jobInfo {
 	parts := strings.Split(url.Path, "/")

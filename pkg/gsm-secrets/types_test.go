@@ -55,57 +55,128 @@ func TestGetUpdaterSAEmail(t *testing.T) {
 }
 
 func TestGetUpdaterSAId(t *testing.T) {
+	// path describes which branch of GetUpdaterSAId a collection is expected to hit.
+	type path string
+	const (
+		direct   path = "direct"   // raw ID is the collection name plus suffix and is valid
+		hash     path = "hash"     // raw ID is the base64 hash and is valid
+		fallback path = "fallback" // raw ID is invalid, so the hex fallback is used
+	)
+
 	testCases := []struct {
 		name           string
 		collection     string
 		expectedLength int
-		shouldUseHash  bool
+		path           path
 	}{
 		{
 			name:           "short collection - direct use",
 			collection:     "alpha",
 			expectedLength: 13, // "alpha-updater" = 13 chars
-			shouldUseHash:  false,
+			path:           direct,
 		},
 		{
 			name:           "medium collection - direct use",
 			collection:     "test-collection",
 			expectedLength: 23, // "test-collection-updater" = 23 chars
-			shouldUseHash:  false,
+			path:           direct,
 		},
 		{
 			name:           "collection at limit - direct use",
 			collection:     "collection-at-limit-22",
 			expectedLength: 30, // "collection-at-limit-22-updater" = 30 chars
-			shouldUseHash:  false,
+			path:           direct,
 		},
 		{
-			name:           "very long collection - hash use",
+			name:           "very long collection - valid hash use",
 			collection:     "this-is-a-very-long-collection-name-that-exceeds-normal-limits",
 			expectedLength: 30,
-			shouldUseHash:  true,
+			path:           hash,
+		},
+		{
+			// Leading digit makes the direct ID invalid (GCP IDs must start with a letter).
+			name:           "collection with leading digit - fallback",
+			collection:     "3scale-test-image",
+			expectedLength: 30,
+			path:           fallback,
+		},
+		{
+			// Long collection whose base64url hash contains '_' (invalid in a GCP ID).
+			name:           "long collection with underscore in hash - fallback",
+			collection:     "cluster-secrets-osl-gcp",
+			expectedLength: 30,
+			path:           fallback,
+		},
+		{
+			// Long collection whose lowercased hash starts with a digit (invalid).
+			name:           "long collection with leading digit in hash - fallback",
+			collection:     "vsphere-assisted-installer-ci",
+			expectedLength: 30,
+			path:           fallback,
 		},
 	}
 
 	for _, tc := range testCases {
 		t.Run(tc.name, func(t *testing.T) {
 			actual := GetUpdaterSAId(tc.collection)
+
 			if len(actual) != tc.expectedLength {
 				t.Errorf("Expected length %d, got %d for ID %q", tc.expectedLength, len(actual), actual)
 			}
 			if !strings.HasSuffix(actual, ServiceAccountIDSuffix) {
 				t.Errorf("Expected ID %q to end with %q", actual, ServiceAccountIDSuffix)
 			}
+			// Every returned ID must satisfy GCP's rules and be deterministic.
+			if !isValidGCPServiceAccountID(actual) {
+				t.Errorf("ID %q is not a valid GCP service account ID", actual)
+			}
+			if again := GetUpdaterSAId(tc.collection); again != actual {
+				t.Errorf("GetUpdaterSAId is not deterministic: got %q then %q", actual, again)
+			}
 
 			directId := fmt.Sprintf("%s%s", tc.collection, ServiceAccountIDSuffix)
-			if tc.shouldUseHash {
+			switch tc.path {
+			case direct:
+				if actual != directId {
+					t.Errorf("Expected direct ID %q, but got %q", directId, actual)
+				}
+			case hash:
 				if actual == directId {
 					t.Errorf("Expected hash to be used for long collection %q, but got direct ID", tc.collection)
 				}
-			} else {
-				if actual != directId {
-					t.Errorf("Expected direct ID %q for short collection, but got %q", directId, actual)
+			case fallback:
+				if raw := rawUpdaterSAId(tc.collection); isValidGCPServiceAccountID(raw) {
+					t.Errorf("Expected raw ID %q to be invalid so the fallback is exercised", raw)
 				}
+				if want := fallbackUpdaterSAId(tc.collection); actual != want {
+					t.Errorf("Expected fallback ID %q, but got %q", want, actual)
+				}
+			}
+		})
+	}
+}
+
+func TestIsValidGCPServiceAccountID(t *testing.T) {
+	testCases := []struct {
+		name  string
+		id    string
+		valid bool
+	}{
+		{name: "valid direct id", id: "alpha-updater", valid: true},
+		{name: "valid hex fallback id", id: "s64f7ba388325bd0dafee3-updater", valid: true},
+		{name: "valid with double hyphen", id: "vfxj0ci--zubgj8gdeo4ec-updater", valid: true},
+		{name: "leading digit", id: "3scale-test-image-updater", valid: false},
+		{name: "contains underscore", id: "vbapy_ashggzdty6ydupia-updater", valid: false},
+		{name: "leading hyphen", id: "-alpha-updater", valid: false},
+		{name: "uppercase", id: "Alpha-updater", valid: false},
+		{name: "too short", id: "a-b", valid: false},
+		{name: "too long", id: strings.Repeat("a", GCPMaxServiceAccountIDLength+1), valid: false},
+	}
+
+	for _, tc := range testCases {
+		t.Run(tc.name, func(t *testing.T) {
+			if got := isValidGCPServiceAccountID(tc.id); got != tc.valid {
+				t.Errorf("isValidGCPServiceAccountID(%q) = %v, want %v", tc.id, got, tc.valid)
 			}
 		})
 	}

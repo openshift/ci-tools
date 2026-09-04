@@ -168,6 +168,47 @@ func TestToCanonicalIAMBinding(t *testing.T) {
 	}
 }
 
+func TestChunkCollections(t *testing.T) {
+	testCases := []struct {
+		name        string
+		collections []string
+		size        int
+		expected    [][]string
+	}{
+		{
+			name:        "empty",
+			collections: nil,
+			size:        5,
+			expected:    nil,
+		},
+		{
+			name:        "fewer than size",
+			collections: []string{"a", "b"},
+			size:        5,
+			expected:    [][]string{{"a", "b"}},
+		},
+		{
+			name:        "exact multiple of size",
+			collections: []string{"a", "b", "c", "d"},
+			size:        2,
+			expected:    [][]string{{"a", "b"}, {"c", "d"}},
+		},
+		{
+			name:        "size with remainder",
+			collections: []string{"a", "b", "c", "d", "e"},
+			size:        2,
+			expected:    [][]string{{"a", "b"}, {"c", "d"}, {"e"}},
+		},
+	}
+
+	for _, tc := range testCases {
+		t.Run(tc.name, func(t *testing.T) {
+			actual := chunkCollections(tc.collections, tc.size)
+			testhelper.Diff(t, "chunks", actual, tc.expected)
+		})
+	}
+}
+
 func TestIsManagedBinding(t *testing.T) {
 	config := Config{
 		ProjectIdString: "test-project",
@@ -245,6 +286,32 @@ func TestIsManagedBinding(t *testing.T) {
 				},
 			},
 			expected: false,
+		},
+		{
+			name: "group viewer binding chunk",
+			binding: &iampb.Binding{
+				Role:    config.GetSecretAccessorRole(),
+				Members: []string{"group:team-x@redhat.com"},
+				Condition: &expr.Expr{
+					Title:       GetSecretsViewerGroupConditionTitle("team-x", 0),
+					Description: GetSecretsViewerGroupConditionDescription("team-x", 0),
+					Expression:  BuildSecretAccessorRoleConditionExpressionForCollections([]string{"a", "b"}),
+				},
+			},
+			expected: true,
+		},
+		{
+			name: "group updater binding chunk",
+			binding: &iampb.Binding{
+				Role:    config.GetSecretUpdaterRole(),
+				Members: []string{"group:team-x@redhat.com"},
+				Condition: &expr.Expr{
+					Title:       GetSecretsUpdaterGroupConditionTitle("team-x", 1),
+					Description: GetSecretsUpdaterGroupConditionDescription("team-x", 1),
+					Expression:  BuildSecretUpdaterRoleConditionExpressionForCollections([]string{"a", "b"}),
+				},
+			},
+			expected: true,
 		},
 	}
 

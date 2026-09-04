@@ -1,0 +1,70 @@
+- Collection: at-01
+  Description: 'Updater service account for secret collection: at-01'
+  DisplayName: at-01
+  Email: at-01-updater@test-project.iam.gserviceaccount.com
+  ID: at-01-updater
+- Collection: bt-01
+  Description: 'Updater service account for secret collection: bt-01'
+  DisplayName: bt-01
+  Email: bt-01-updater@test-project.iam.gserviceaccount.com
+  ID: bt-01-updater
+- Collection: bt-02
+  Description: 'Updater service account for secret collection: bt-02'
+  DisplayName: bt-02
+  Email: bt-02-updater@test-project.iam.gserviceaccount.com
+  ID: bt-02-updater
+- Collection: bt-03
+  Description: 'Updater service account for secret collection: bt-03'
+  DisplayName: bt-03
+  Email: bt-03-updater@test-project.iam.gserviceaccount.com
+  ID: bt-03-updater
+- Collection: bt-04
+  Description: 'Updater service account for secret collection: bt-04'
+  DisplayName: bt-04
+  Email: bt-04-updater@test-project.iam.gserviceaccount.com
+  ID: bt-04-updater
+- Collection: bt-05
+  Description: 'Updater service account for secret collection: bt-05'
+  DisplayName: bt-05
+  Email: bt-05-updater@test-project.iam.gserviceaccount.com
+  ID: bt-05-updater
+- Collection: bt-06
+  Description: 'Updater service account for secret collection: bt-06'
+  DisplayName: bt-06
+  Email: bt-06-updater@test-project.iam.gserviceaccount.com
+  ID: bt-06-updater
+- Collection: bt-07
+  Description: 'Updater service account for secret collection: bt-07'
+  DisplayName: bt-07
+  Email: bt-07-updater@test-project.iam.gserviceaccount.com
+  ID: bt-07-updater
+- Collection: bt-08
+  Description: 'Updater service account for secret collection: bt-08'
+  DisplayName: bt-08
+  Email: bt-08-updater@test-project.iam.gserviceaccount.com
+  ID: bt-08-updater
+- Collection: bt-09
+  Description: 'Updater service account for secret collection: bt-09'
+  DisplayName: bt-09
+  Email: bt-09-updater@test-project.iam.gserviceaccount.com
+  ID: bt-09-updater
+- Collection: bt-10
+  Description: 'Updater service account for secret collection: bt-10'
+  DisplayName: bt-10
+  Email: bt-10-updater@test-project.iam.gserviceaccount.com
+  ID: bt-10-updater
+- Collection: bt-11
+  Description: 'Updater service account for secret collection: bt-11'
+  DisplayName: bt-11
+  Email: bt-11-updater@test-project.iam.gserviceaccount.com
+  ID: bt-11-updater
+- Collection: bt-12
+  Description: 'Updater service account for secret collection: bt-12'
+  DisplayName: bt-12
+  Email: bt-12-updater@test-project.iam.gserviceaccount.com
+  ID: bt-12-updater
+- Collection: st-01
+  Description: 'Updater service account for secret collection: st-01'
+  DisplayName: st-01
+  Email: st-01-updater@test-project.iam.gserviceaccount.com
+  ID: st-01-updater

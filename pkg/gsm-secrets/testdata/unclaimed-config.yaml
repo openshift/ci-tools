@@ -1,0 +1,11 @@
+groups:
+  owner-team:
+    secret_collections:
+    - claimed-a
+    - claimed-b
+  test-platform-gsm-unclaimed-secrets:
+    unclaimed: true
+    secret_collections:
+    - unclaimed-x
+    - unclaimed-y
+    - claimed-a

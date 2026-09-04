@@ -14,6 +14,7 @@ import (
 	"os/exec"
 	"path/filepath"
 	"slices"
+	"strings"
 	"testing"
 	"time"
 
@@ -128,7 +129,11 @@ func setupLogger(censor *secrets.DynamicCensor) error {
 
 func (tr *testRunner) cleanup() {
 	ctx := context.Background()
-	currentState := tr.getActualGCPState()
+	currentState, err := tr.getActualGCPState()
+	if err != nil {
+		logrus.Errorf("Failed to fetch GCP state for cleanup; leftover resources may remain: %v", err)
+		return
+	}
 
 	if len(currentState.Secrets) > 0 {
 		logrus.Infof("Deleting %d secrets...", len(currentState.Secrets))
@@ -472,6 +477,77 @@ func TestDeletion(t *testing.T) {
 	}
 }
 
+// TestUnclaimedCollectionPreserved verifies that a collection owned only by an unclaimed group
+// keeps its migrated data secrets but gets no service account, no SA/index secrets, and no IAM
+// bindings, while a normally-owned collection in the same config is reconciled as usual.
+func TestUnclaimedCollectionPreserved(t *testing.T) {
+	const (
+		claimedCollection   = "owned-secrets"
+		unclaimedCollection = "orphan-secrets"
+	)
+	dataSecretName := fmt.Sprintf("%s__someteam__token", unclaimedCollection)
+
+	// Seed a data secret in the unclaimed collection, simulating a migrated credential
+	// that the reconciler must preserve.
+	if err := gsm.CreateOrUpdateSecret(tr.ctx, tr.secretsClient, tr.config.ProjectIdNumber, dataSecretName, []byte("secret-value"), nil, nil); err != nil {
+		t.Fatalf("failed to seed data secret %s: %v", dataSecretName, err)
+	}
+
+	if err := tr.runReconcilerTool("testdata/config-unclaimed.yaml"); err != nil {
+		t.Fatalf("failed to run reconciler tool: %v", err)
+	}
+
+	// The reconciler creates a service account for the claimed collection. Wait for it to
+	// appear so we know reconciliation has propagated before making assertions.
+	// Retry until the claimed collection's service account appears, so the negative
+	// assertions below run only against a complete, successfully retrieved state. A
+	// retrieval error keeps retrying rather than being treated as an absence.
+	var state GCPState
+	err := retry.OnError(gcpStateCheckBackoff, func(error) bool { return true }, func() error {
+		var err error
+		state, err = tr.getActualGCPState()
+		if err != nil {
+			return fmt.Errorf("failed to fetch GCP state: %w", err)
+		}
+		for _, sa := range state.ServiceAccounts {
+			if sa.Collection == claimedCollection {
+				return nil
+			}
+		}
+		return fmt.Errorf("service account for claimed collection %q not found yet", claimedCollection)
+	})
+	if err != nil {
+		t.Fatalf("claimed collection service account never appeared: %v", err)
+	}
+
+	// The seeded data secret in the unclaimed collection must still exist.
+	dataSecretPath := fmt.Sprintf("%s/secrets/%s", gsm.GetProjectResourceIdNumber(tr.config.ProjectIdNumber), dataSecretName)
+	if _, err := tr.secretsClient.GetSecret(tr.ctx, &secretmanagerpb.GetSecretRequest{Name: dataSecretPath}); err != nil {
+		t.Errorf("seeded data secret %s was not preserved: %v", dataSecretName, err)
+	}
+
+	// No service account may be created for the unclaimed collection.
+	for _, sa := range state.ServiceAccounts {
+		if sa.Collection == unclaimedCollection {
+			t.Errorf("unexpected service account for unclaimed collection: %s", sa.Email)
+		}
+	}
+
+	// No managed SA/index secret may be created for the unclaimed collection.
+	for name, s := range state.Secrets {
+		if s.Collection == unclaimedCollection && (s.Type == gsm.SecretTypeSA || s.Type == gsm.SecretTypeIndex) {
+			t.Errorf("unexpected managed secret for unclaimed collection: %s (type %v)", name, s.Type)
+		}
+	}
+
+	// No managed IAM binding may reference the unclaimed collection.
+	for _, binding := range state.IAMBindings {
+		if binding.Condition != nil && strings.Contains(binding.Condition.Expression, unclaimedCollection+"__") {
+			t.Errorf("unexpected managed IAM binding referencing unclaimed collection: %s", binding.Condition.Title)
+		}
+	}
+}
+
 // runReconcilerTool runs the reconciler tool's binary with the given config path
 func (tr *testRunner) runReconcilerTool(configPath string) error {
 	credFile := os.Getenv(credentialsEnvVar)
@@ -497,29 +573,29 @@ func (tr *testRunner) runReconcilerTool(configPath string) error {
 	return nil
 }
 
-// getActualGCPState returns the current state of resources in the GCP project
-func (tr *testRunner) getActualGCPState() GCPState {
+// getActualGCPState returns the current state of resources in the GCP project.
+// Any retrieval failure is returned as an error rather than being masked as an
+// empty result, so callers never mistake a transient API failure for an absence
+// of resources (which would make negative assertions pass spuriously).
+func (tr *testRunner) getActualGCPState() (GCPState, error) {
 	gcpSecrets, err := gsm.GetAllSecrets(tr.ctx, tr.secretsClient, tr.config)
 	if err != nil {
-		logrus.Errorf("Error while fetching secrets: %v", err)
-		gcpSecrets = make(map[string]gsm.GCPSecret)
+		return GCPState{}, fmt.Errorf("failed to fetch secrets: %w", err)
 	}
 
 	serviceAccounts, err := gsm.GetUpdaterServiceAccounts(tr.ctx, tr.iamAdminClient, tr.config)
 	if err != nil {
-		logrus.Errorf("Failed to fetch service accounts: %v", err)
-		serviceAccounts = []gsm.ServiceAccountInfo{}
+		return GCPState{}, fmt.Errorf("failed to fetch service accounts: %w", err)
 	}
 
-	var iamBindings []*iampb.Binding
 	policy, err := gsm.GetProjectIAMPolicy(tr.ctx, tr.resourceManagerClient, tr.config.ProjectIdNumber)
 	if err != nil {
-		logrus.Errorf("Failed to fetch IAM policy: %v", err)
-	} else {
-		for _, binding := range policy.Bindings {
-			if gsm.IsManagedBinding(binding) {
-				iamBindings = append(iamBindings, binding)
-			}
+		return GCPState{}, fmt.Errorf("failed to fetch IAM policy: %w", err)
+	}
+	var iamBindings []*iampb.Binding
+	for _, binding := range policy.Bindings {
+		if gsm.IsManagedBinding(binding) {
+			iamBindings = append(iamBindings, binding)
 		}
 	}
 
@@ -527,7 +603,7 @@ func (tr *testRunner) getActualGCPState() GCPState {
 		Secrets:         gcpSecrets,
 		IAMBindings:     iamBindings,
 		ServiceAccounts: serviceAccounts,
-	}
+	}, nil
 }
 
 // getActualGCPStateWithRetry gets the actual state with retry for eventual consistency
@@ -542,7 +618,12 @@ func (tr *testRunner) getActualGCPStateWithRetry(expectedState GCPState) GCPStat
 	err := retry.OnError(gcpStateCheckBackoff, func(err error) bool {
 		return true
 	}, func() error {
-		state = tr.getActualGCPState()
+		var err error
+		state, err = tr.getActualGCPState()
+		if err != nil {
+			logrus.Infof("Failed to fetch GCP state, retrying: %v", err)
+			return err
+		}
 		actualSACount := len(state.ServiceAccounts)
 		actualSecretCount := len(state.Secrets)
 

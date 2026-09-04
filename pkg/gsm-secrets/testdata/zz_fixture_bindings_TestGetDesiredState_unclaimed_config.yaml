@@ -1,0 +1,78 @@
+- condition:
+    description: 'Managed by test platform: Read access to secrets in claimed-a collection'
+    expression: |-
+      (
+        resource.type == "secretmanager.googleapis.com/SecretVersion" ||
+        resource.type == "secretmanager.googleapis.com/Secret"
+      ) && (
+        resource.name.extract("secrets/{secret}") == "claimed-a__updater-service-account" ||
+        resource.name.extract("secrets/{secret}") == "claimed-a____index"
+      )
+    title: Read access to secrets for claimed-a
+  members:
+  - serviceAccount:claimed-a-updater@test-project.iam.gserviceaccount.com
+  role: projects/test-project/roles/openshift_ci_secrets_viewer
+- condition:
+    description: 'Managed by test platform: Create, update, and delete access to secrets
+      in claimed-a collection'
+    expression: "(\n  resource.type == \"secretmanager.googleapis.com/SecretVersion\"
+      ||\n  resource.type == \"secretmanager.googleapis.com/Secret\"\n) && \n  resource.name.extract(\"secrets/{secret}\").startsWith(\"claimed-a__\")"
+    title: Create, update, and delete access for claimed-a
+  members:
+  - serviceAccount:claimed-a-updater@test-project.iam.gserviceaccount.com
+  role: projects/test-project/roles/openshift_ci_secrets_updater
+- condition:
+    description: 'Managed by test platform: Read access to secrets in claimed-b collection'
+    expression: |-
+      (
+        resource.type == "secretmanager.googleapis.com/SecretVersion" ||
+        resource.type == "secretmanager.googleapis.com/Secret"
+      ) && (
+        resource.name.extract("secrets/{secret}") == "claimed-b__updater-service-account" ||
+        resource.name.extract("secrets/{secret}") == "claimed-b____index"
+      )
+    title: Read access to secrets for claimed-b
+  members:
+  - serviceAccount:claimed-b-updater@test-project.iam.gserviceaccount.com
+  role: projects/test-project/roles/openshift_ci_secrets_viewer
+- condition:
+    description: 'Managed by test platform: Create, update, and delete access to secrets
+      in claimed-b collection'
+    expression: "(\n  resource.type == \"secretmanager.googleapis.com/SecretVersion\"
+      ||\n  resource.type == \"secretmanager.googleapis.com/Secret\"\n) && \n  resource.name.extract(\"secrets/{secret}\").startsWith(\"claimed-b__\")"
+    title: Create, update, and delete access for claimed-b
+  members:
+  - serviceAccount:claimed-b-updater@test-project.iam.gserviceaccount.com
+  role: projects/test-project/roles/openshift_ci_secrets_updater
+- condition:
+    description: 'Managed by test platform: Read access to secrets for group owner-team
+      (set 1)'
+    expression: |-
+      (
+        resource.type == "secretmanager.googleapis.com/SecretVersion" ||
+        resource.type == "secretmanager.googleapis.com/Secret"
+      ) && (
+        resource.name.extract("secrets/{secret}") == "claimed-a__updater-service-account" ||
+        resource.name.extract("secrets/{secret}") == "claimed-a____index" ||
+        resource.name.extract("secrets/{secret}") == "claimed-b__updater-service-account" ||
+        resource.name.extract("secrets/{secret}") == "claimed-b____index"
+      )
+    title: Read access to secrets for group owner-team (set 1)
+  members:
+  - group:owner-team@redhat.com
+  role: projects/test-project/roles/openshift_ci_secrets_viewer
+- condition:
+    description: 'Managed by test platform: Create, update, and delete access to secrets
+      for group owner-team (set 1)'
+    expression: |-
+      (
+        resource.type == "secretmanager.googleapis.com/SecretVersion" ||
+        resource.type == "secretmanager.googleapis.com/Secret"
+      ) && (
+        resource.name.extract("secrets/{secret}").startsWith("claimed-a__") ||
+        resource.name.extract("secrets/{secret}").startsWith("claimed-b__")
+      )
+    title: Create, update, and delete access for group owner-team (set 1)
+  members:
+  - group:owner-team@redhat.com
+  role: projects/test-project/roles/openshift_ci_secrets_updater

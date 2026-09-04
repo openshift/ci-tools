@@ -13,30 +13,28 @@ be automatically merged (does not need a human approval).
 
 ### List of tools
 
+This list is sorted alphabetically, not in the order of execution.
+
 _(subject to bitrot, always consult the code)_
 
-- [ci-operator-yaml-creator](https://github.com/openshift/ci-tools/tree/master/cmd/ci-operator-yaml-creator): ensures
-  that repositories with in-repo `.ci-operator.yaml` file use `build_root.from_repository: true` in their ci-operator
-  configs
-- [registry-replacer](https://github.com/openshift/ci-tools/tree/master/cmd/registry-replacer): ensures that all builds
-  specified in ci-operator configs use a local cluster registry (replaces central registry pullspecs with local
-  ImageStreamTag references)
-- [config-brancher](https://github.com/openshift/ci-tools/tree/master/cmd/config-brancher): propagates ci-operator
-  config changes from `master`/`main` configs to future release branches
 - [ci-operator-config-mirror](https://github.com/openshift/ci-tools/tree/master/cmd/ci-operator-config-mirror):
   propagates ci-operator config changes to private forks in `openshift-priv` organization
-- [determinize-ci-operator](https://github.com/openshift/ci-tools/tree/master/cmd/determinize-ci-operator): loads and
-  saves ci-operator config to fix ordering, formatting etc
 - [ci-operator-prowgen](https://github.com/openshift/ci-tools/tree/master/cmd/ci-operator-prowgen): generates Prow job
   configuration from ci-operator configuration
-- [private-prow-configs-mirror](https://github.com/openshift/ci-tools/tree/master/cmd/private-prow-configs-mirror):
-  propagates Prow configuration changes to private forks in `openshift-priv` organization
-- [determinize-prow-config](https://github.com/openshift/ci-tools/tree/master/cmd/private-prow-configs-mirror): loads
-  and saves Prow configuration to fix ordering, formatting, proper sharding etc
-- [sanitize-prow-jobs](https://github.com/openshift/ci-tools/tree/master/cmd/sanitize-prow-jobs): loads and saves Prow
-  job configuration to fix ordering, formatting etc. This tool also assigns jobs to build farm clusters.
 - [clusterimageset-updater](https://github.com/openshift/ci-tools/tree/master/cmd/clusterimageset-updater): updates
   cluster pool manifests to use the latest stable OCP releases
+- [config-brancher](https://github.com/openshift/ci-tools/tree/master/cmd/config-brancher): propagates ci-operator
+  config changes from `master`/`main` configs to future release branches
+- [determinize-ci-operator](https://github.com/openshift/ci-tools/tree/master/cmd/determinize-ci-operator): loads and
+  saves ci-operator config to fix ordering, formatting etc
+- [determinize-prow-config](https://github.com/openshift/ci-tools/tree/main/cmd/determinize-prow-config): loads
+  and saves Prow configuration to fix ordering, formatting, proper sharding etc
+- [private-prow-configs-mirror](https://github.com/openshift/ci-tools/tree/master/cmd/private-prow-configs-mirror):
+  propagates Prow configuration changes to private forks in `openshift-priv` organization
+- [promoted-image-governor](https://github.com/openshift/ci-tools/blob/main/cmd/promoted-image-governor): delete tags
+  from `imagestreams` that are not promoted on every build cluster and generates the mirroring configuration.
+- [sanitize-prow-jobs](https://github.com/openshift/ci-tools/tree/master/cmd/sanitize-prow-jobs): loads and saves Prow
+  job configuration to fix ordering, formatting etc. This tool also assigns jobs to build farm clusters.
 
 ## Why it exists
 

@@ -133,7 +133,7 @@ func main() {
 
 func generateRepositories(gc gitHubClient, orgRepos map[string]sets.Set[string], logger *logrus.Entry, onlyOrg string, flattenOrgs []string) map[string]org.Repo {
 	peribolosRepos := make(map[string]org.Repo)
-	yes := true
+	visibility := github.RepoVisibilityPrivate
 
 	// Create a set of flattened orgs for efficient lookup
 	// Start with the default flattened orgs for backwards compatibility
@@ -159,7 +159,7 @@ func generateRepositories(gc gitHubClient, orgRepos map[string]sets.Set[string],
 			peribolosRepos[destRepoName] = org.PruneRepoDefaults(org.Repo{
 				Description:      &fullRepo.Description,
 				HomePage:         &fullRepo.Homepage,
-				Private:          &yes, // all repositories in private org should be private
+				Visibility:       &visibility, // all repositories in private org should be private
 				HasIssues:        &fullRepo.HasIssues,
 				HasProjects:      &fullRepo.HasProjects,
 				HasWiki:          &fullRepo.HasWiki,

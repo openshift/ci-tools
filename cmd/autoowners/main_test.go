@@ -219,7 +219,7 @@ func TestListUpdatedDirectoriesFromGitStatusOutput(t *testing.T) {
 		t.Errorf("unexpected error occurred when listUpdatedDirectoriesFromGitStatusOutput")
 	}
 	if !reflect.DeepEqual(actual, expected) {
-		t.Errorf("actual differs from expected:\n%s", diff.ObjectReflectDiff(expected, actual))
+		t.Errorf("actual differs from expected:\n%s", diff.Diff(expected, actual))
 	}
 }
 

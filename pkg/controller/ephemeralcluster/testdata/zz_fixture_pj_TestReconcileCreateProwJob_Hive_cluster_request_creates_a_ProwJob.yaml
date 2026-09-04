@@ -1,11 +1,8 @@
 items:
-- apiVersion: prow.k8s.io/v1
-  kind: ProwJob
-  metadata:
+- metadata:
     annotations:
       prow.k8s.io/context: ""
       prow.k8s.io/job: ephemeralcluster-ci-task-run-name
-    creationTimestamp: null
     labels:
       ci.openshift.io/ephemeral-cluster: ec
       created-by-prow: "true"

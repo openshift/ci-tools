@@ -223,16 +223,16 @@ func TestRegistry(t *testing.T) {
 				t.Errorf("got error when error wasn't expected: %v", err)
 			}
 			if !reflect.DeepEqual(references, testCase.references) {
-				t.Errorf("output references different from expected: %s", diff.ObjectReflectDiff(references, testCase.references))
+				t.Errorf("output references different from expected: %s", diff.Diff(references, testCase.references))
 			}
 			if !reflect.DeepEqual(chains, testCase.chains) {
-				t.Errorf("output chains different from expected: %s", diff.ObjectReflectDiff(chains, testCase.chains))
+				t.Errorf("output chains different from expected: %s", diff.Diff(chains, testCase.chains))
 			}
 			if !reflect.DeepEqual(workflows, testCase.workflows) {
-				t.Errorf("output workflows different from expected: %s", diff.ObjectReflectDiff(workflows, testCase.workflows))
+				t.Errorf("output workflows different from expected: %s", diff.Diff(workflows, testCase.workflows))
 			}
 			if !reflect.DeepEqual(observers, testCase.observers) {
-				t.Errorf("output observers different from expected: %s", diff.ObjectReflectDiff(observers, testCase.observers))
+				t.Errorf("output observers different from expected: %s", diff.Diff(observers, testCase.observers))
 			}
 		})
 	}

@@ -7,6 +7,10 @@ import (
 
 	corev1 "k8s.io/api/core/v1"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
+	"k8s.io/apimachinery/pkg/runtime"
+	"k8s.io/apimachinery/pkg/runtime/serializer"
+	utilruntime "k8s.io/apimachinery/pkg/util/runtime"
+	k8stesting "k8s.io/client-go/testing"
 	ctrlruntimeclient "sigs.k8s.io/controller-runtime/pkg/client"
 	fakectrlruntimeclient "sigs.k8s.io/controller-runtime/pkg/client/fake"
 )
@@ -175,9 +179,16 @@ func TestClean(t *testing.T) {
 
 // Always use multiple clients to implicitly verify threadsafety
 func createObjectInMultipleFakeClusters(obj ...ctrlruntimeclient.Object) map[string]ctrlruntimeclient.Client {
+	newClient := func() ctrlruntimeclient.Client {
+		scheme := runtime.NewScheme()
+		utilruntime.Must(corev1.AddToScheme(scheme))
+		codecs := serializer.NewCodecFactory(scheme)
+		tracker := k8stesting.NewObjectTracker(scheme, codecs.UniversalDecoder())
+		return fakectrlruntimeclient.NewClientBuilder().WithScheme(scheme).WithObjectTracker(tracker).WithObjects(obj...).Build()
+	}
 	return map[string]ctrlruntimeclient.Client{
-		"a": fakectrlruntimeclient.NewClientBuilder().WithObjects(obj...).Build(),
-		"b": fakectrlruntimeclient.NewClientBuilder().WithObjects(obj...).Build(),
+		"a": newClient(),
+		"b": newClient(),
 	}
 }
 

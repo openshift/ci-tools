@@ -1,7 +1,6 @@
 metadata:
   annotations:
     ci.openshift.io/job-spec: ""
-  creationTimestamp: null
   labels:
     OPENSHIFT_CI: "true"
     ci.openshift.io/jobid: prowJobId

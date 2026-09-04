@@ -174,7 +174,7 @@ func TestJobsFor(t *testing.T) {
 			}
 
 			if !reflect.DeepEqual(actualSpecsNStates, testCase.expected) {
-				t.Errorf("%s: did not get correct job specs: %v", testCase.name, diff.ObjectReflectDiff(actualSpecsNStates, testCase.expected))
+				t.Errorf("%s: did not get correct job specs: %v", testCase.name, diff.Diff(actualSpecsNStates, testCase.expected))
 			}
 		})
 	}

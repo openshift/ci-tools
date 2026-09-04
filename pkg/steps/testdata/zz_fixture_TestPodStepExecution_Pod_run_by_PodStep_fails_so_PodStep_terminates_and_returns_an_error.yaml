@@ -2,7 +2,6 @@ metadata:
   annotations:
     ci-operator.openshift.io/container-sub-tests: StepName
     ci.openshift.io/job-spec: ""
-  creationTimestamp: null
   labels:
     OPENSHIFT_CI: "true"
     ci.openshift.io/jobid: prow-job-id

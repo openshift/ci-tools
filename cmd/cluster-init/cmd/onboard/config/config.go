@@ -19,11 +19,11 @@ import (
 
 	configv1 "github.com/openshift/api/config/v1"
 	operatorv1 "github.com/openshift/api/operator/v1"
-	installertypes "github.com/openshift/installer/pkg/types"
 
 	"github.com/openshift/ci-tools/cmd/cluster-init/runtime"
 	awsruntime "github.com/openshift/ci-tools/cmd/cluster-init/runtime/aws"
 	"github.com/openshift/ci-tools/pkg/clusterinit/clusterinstall"
+	"github.com/openshift/ci-tools/pkg/clusterinit/installconfig"
 	"github.com/openshift/ci-tools/pkg/clusterinit/onboard"
 	"github.com/openshift/ci-tools/pkg/clusterinit/onboard/certmanager"
 	"github.com/openshift/ci-tools/pkg/clusterinit/onboard/cischedulingwebhook"
@@ -130,7 +130,7 @@ func addClusterInstallRuntimeInfo(ctx context.Context, ci *clusterinstall.Cluste
 	if !ok {
 		return errors.New("install-config not found")
 	}
-	installConfig := installertypes.InstallConfig{}
+	installConfig := installconfig.InstallConfig{}
 	if err := yaml.Unmarshal([]byte(installConfigRaw), &installConfig); err != nil {
 		return fmt.Errorf("unmarshall install config: %w", err)
 	}

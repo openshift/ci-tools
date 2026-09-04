@@ -562,16 +562,16 @@ func TestGenerateBranchedConfigs(t *testing.T) {
 			}
 			for i := range expected {
 				if !reflect.DeepEqual(actual[i].Info, expected[i].Info) {
-					t.Errorf("%s: [%d] got incorrect path elements: %v", testCase.name, i, diff.ObjectReflectDiff(actual[i].Info, expected[i].Info))
+					t.Errorf("%s: [%d] got incorrect path elements: %v", testCase.name, i, diff.Diff(actual[i].Info, expected[i].Info))
 				}
 				if !reflect.DeepEqual(actual[i].Configuration.PromotionConfiguration, expected[i].Configuration.PromotionConfiguration) {
-					t.Errorf("%s: [%d] got incorrect promotion config: %v", testCase.name, i, diff.ObjectReflectDiff(actual[i].Configuration.PromotionConfiguration, expected[i].Configuration.PromotionConfiguration))
+					t.Errorf("%s: [%d] got incorrect promotion config: %v", testCase.name, i, diff.Diff(actual[i].Configuration.PromotionConfiguration, expected[i].Configuration.PromotionConfiguration))
 				}
 				if !reflect.DeepEqual(actual[i].Configuration.ReleaseTagConfiguration, expected[i].Configuration.ReleaseTagConfiguration) {
-					t.Errorf("%s: [%d] got incorrect release input config: %v", testCase.name, i, diff.ObjectReflectDiff(actual[i].Configuration.ReleaseTagConfiguration, expected[i].Configuration.ReleaseTagConfiguration))
+					t.Errorf("%s: [%d] got incorrect release input config: %v", testCase.name, i, diff.Diff(actual[i].Configuration.ReleaseTagConfiguration, expected[i].Configuration.ReleaseTagConfiguration))
 				}
 				if !reflect.DeepEqual(actual[i].Configuration.Tests, expected[i].Configuration.Tests) {
-					t.Errorf("%s: [%d] got incorrect test listing: %v", testCase.name, i, diff.ObjectReflectDiff(actual[i].Configuration.Tests, expected[i].Configuration.Tests))
+					t.Errorf("%s: [%d] got incorrect test listing: %v", testCase.name, i, diff.Diff(actual[i].Configuration.Tests, expected[i].Configuration.Tests))
 				}
 			}
 		})
@@ -753,7 +753,7 @@ func TestUpdatePromotion(t *testing.T) {
 		t.Run(tc.name, func(t *testing.T) {
 			updatePromotion(tc.input, tc.input, tc.futureRelease, tc.currentRelease)
 			if !reflect.DeepEqual(tc.input, tc.output) {
-				t.Errorf("config mismatch (-want +got):\\n%s", diff.ObjectReflectDiff(tc.output, tc.input))
+				t.Errorf("config mismatch (-want +got):\\n%s", diff.Diff(tc.output, tc.input))
 			}
 		})
 	}
@@ -849,7 +849,7 @@ func TestUpdateRelease(t *testing.T) {
 		t.Run(tc.name, func(t *testing.T) {
 			updateRelease(tc.input, tc.currentRelease, tc.futureReleases)
 			if !reflect.DeepEqual(tc.input, tc.output) {
-				t.Errorf("config mismatch (-want +got):\\n%s", diff.ObjectReflectDiff(tc.output, tc.input))
+				t.Errorf("config mismatch (-want +got):\\n%s", diff.Diff(tc.output, tc.input))
 			}
 		})
 	}
@@ -1032,7 +1032,7 @@ func TestUpdateImages(t *testing.T) {
 		t.Run(tc.name, func(t *testing.T) {
 			updateImages(tc.input, tc.currentRelease, tc.futureRelease)
 			if !reflect.DeepEqual(tc.input, tc.output) {
-				t.Errorf("config mismatch (-want +got):\n%s", diff.ObjectReflectDiff(tc.output, tc.input))
+				t.Errorf("config mismatch (-want +got):\n%s", diff.Diff(tc.output, tc.input))
 			}
 		})
 	}

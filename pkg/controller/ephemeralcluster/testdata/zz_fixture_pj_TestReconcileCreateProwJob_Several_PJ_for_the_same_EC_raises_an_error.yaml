@@ -1,6 +1,5 @@
 items:
 - metadata:
-    creationTimestamp: null
     labels:
       ci.openshift.io/ephemeral-cluster: ec
     name: pj1
@@ -10,7 +9,6 @@ items:
   status:
     startTime: null
 - metadata:
-    creationTimestamp: null
     labels:
       ci.openshift.io/ephemeral-cluster: ec
     name: pj2

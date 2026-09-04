@@ -70,7 +70,7 @@ git commit --quiet --all --message changes
 		t.Fatal(err)
 	}
 	if !reflect.DeepEqual(expected, changed) {
-		t.Fatal(diff.ObjectDiff(expected, changed))
+		t.Fatal(diff.Diff(expected, changed))
 	}
 }
 

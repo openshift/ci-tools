@@ -1,3 +1,6 @@
-Patches: []
+Patches:
+- op: remove
+  path: /metadata/creationTimestamp
 allowed: true
+patchType: JSONPatch
 uid: ""

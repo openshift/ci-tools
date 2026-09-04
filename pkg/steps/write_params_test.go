@@ -56,6 +56,6 @@ func TestWriteParamsStep(t *testing.T) {
 	}
 	writtenParams := string(written)
 	if writtenParams != expectedWrittenParams {
-		t.Errorf("Params were not written out as expected:\n%s", diff.StringDiff(expectedWrittenParams, writtenParams))
+		t.Errorf("Params were not written out as expected:\n%s", diff.Diff(expectedWrittenParams, writtenParams))
 	}
 }

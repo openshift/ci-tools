@@ -1,6 +1,5 @@
 items:
 - metadata:
-    creationTimestamp: null
     name: pj-123
     namespace: ci
     resourceVersion: "1000"

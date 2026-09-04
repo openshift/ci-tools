@@ -7,7 +7,6 @@
 apiVersion: apps/v1
 kind: Deployment
 metadata:
-  creationTimestamp: null
   labels:
     app: dex
   name: dex
@@ -140,7 +139,6 @@ spec:
             type: kubernetes
           web:
             http: 0.0.0.0:8000
-      creationTimestamp: null
       labels:
         app: dex
     spec:

@@ -9,6 +9,7 @@ import (
 
 	"k8s.io/apimachinery/pkg/util/sets"
 	"sigs.k8s.io/prow/pkg/config/org"
+	"sigs.k8s.io/prow/pkg/github"
 	"sigs.k8s.io/prow/pkg/github/fakegithub"
 
 	"github.com/openshift/ci-tools/pkg/config"
@@ -16,6 +17,7 @@ import (
 
 func TestGenerateRepositories(t *testing.T) {
 	pntrBool := func(b bool) *bool { return &b }
+	privateVisibility := github.RepoVisibilityPrivate
 	pntrString := func(s string) *string { return &s }
 
 	testCases := []struct {
@@ -40,7 +42,7 @@ func TestGenerateRepositories(t *testing.T) {
 					AllowMergeCommit: pntrBool(false),
 					AllowRebaseMerge: pntrBool(false),
 					Description:      pntrString("Test Repo: repo1"),
-					Private:          pntrBool(true),
+					Visibility:       &privateVisibility,
 				},
 				"repo2": {
 					HasProjects:      pntrBool(false),
@@ -48,7 +50,7 @@ func TestGenerateRepositories(t *testing.T) {
 					AllowMergeCommit: pntrBool(false),
 					AllowRebaseMerge: pntrBool(false),
 					Description:      pntrString("Test Repo: repo2"),
-					Private:          pntrBool(true),
+					Visibility:       &privateVisibility,
 				},
 				"testshift-repo3": {
 					HasProjects:      pntrBool(false),
@@ -56,7 +58,7 @@ func TestGenerateRepositories(t *testing.T) {
 					AllowMergeCommit: pntrBool(false),
 					AllowRebaseMerge: pntrBool(false),
 					Description:      pntrString("Test Repo: repo3"),
-					Private:          pntrBool(true),
+					Visibility:       &privateVisibility,
 				},
 				"testshift-repo4": {
 					HasProjects:      pntrBool(false),
@@ -64,7 +66,7 @@ func TestGenerateRepositories(t *testing.T) {
 					AllowMergeCommit: pntrBool(false),
 					AllowRebaseMerge: pntrBool(false),
 					Description:      pntrString("Test Repo: repo4"),
-					Private:          pntrBool(true),
+					Visibility:       &privateVisibility,
 				},
 			},
 		},
@@ -83,7 +85,7 @@ func TestGenerateRepositories(t *testing.T) {
 					AllowMergeCommit: pntrBool(false),
 					AllowRebaseMerge: pntrBool(false),
 					Description:      pntrString("Test Repo: must-gather"),
-					Private:          pntrBool(true),
+					Visibility:       &privateVisibility,
 				},
 				"migtools-must-gather": {
 					HasProjects:      pntrBool(false),
@@ -91,7 +93,7 @@ func TestGenerateRepositories(t *testing.T) {
 					AllowMergeCommit: pntrBool(false),
 					AllowRebaseMerge: pntrBool(false),
 					Description:      pntrString("Test Repo: must-gather"),
-					Private:          pntrBool(true),
+					Visibility:       &privateVisibility,
 				},
 				"migtools-crane": {
 					HasProjects:      pntrBool(false),
@@ -99,7 +101,7 @@ func TestGenerateRepositories(t *testing.T) {
 					AllowMergeCommit: pntrBool(false),
 					AllowRebaseMerge: pntrBool(false),
 					Description:      pntrString("Test Repo: crane"),
-					Private:          pntrBool(true),
+					Visibility:       &privateVisibility,
 				},
 			},
 		},
@@ -120,7 +122,7 @@ func TestGenerateRepositories(t *testing.T) {
 					AllowMergeCommit: pntrBool(false),
 					AllowRebaseMerge: pntrBool(false),
 					Description:      pntrString("Test Repo: installer"),
-					Private:          pntrBool(true),
+					Visibility:       &privateVisibility,
 				},
 				"crane": {
 					HasProjects:      pntrBool(false),
@@ -128,7 +130,7 @@ func TestGenerateRepositories(t *testing.T) {
 					AllowMergeCommit: pntrBool(false),
 					AllowRebaseMerge: pntrBool(false),
 					Description:      pntrString("Test Repo: crane"),
-					Private:          pntrBool(true),
+					Visibility:       &privateVisibility,
 				},
 				"ocp-build-data": {
 					HasProjects:      pntrBool(false),
@@ -136,7 +138,7 @@ func TestGenerateRepositories(t *testing.T) {
 					AllowMergeCommit: pntrBool(false),
 					AllowRebaseMerge: pntrBool(false),
 					Description:      pntrString("Test Repo: ocp-build-data"),
-					Private:          pntrBool(true),
+					Visibility:       &privateVisibility,
 				},
 				"custom-org-custom-repo": {
 					HasProjects:      pntrBool(false),
@@ -144,7 +146,7 @@ func TestGenerateRepositories(t *testing.T) {
 					AllowMergeCommit: pntrBool(false),
 					AllowRebaseMerge: pntrBool(false),
 					Description:      pntrString("Test Repo: custom-repo"),
-					Private:          pntrBool(true),
+					Visibility:       &privateVisibility,
 				},
 			},
 		},
@@ -167,7 +169,7 @@ func TestGenerateRepositories(t *testing.T) {
 					AllowMergeCommit: pntrBool(false),
 					AllowRebaseMerge: pntrBool(false),
 					Description:      pntrString("Test Repo: ocp-build-data"),
-					Private:          pntrBool(true),
+					Visibility:       &privateVisibility,
 				},
 				"operator-sdk": {
 					HasProjects:      pntrBool(false),
@@ -175,7 +177,7 @@ func TestGenerateRepositories(t *testing.T) {
 					AllowMergeCommit: pntrBool(false),
 					AllowRebaseMerge: pntrBool(false),
 					Description:      pntrString("Test Repo: operator-sdk"),
-					Private:          pntrBool(true),
+					Visibility:       &privateVisibility,
 				},
 				"cloud-event-proxy": {
 					HasProjects:      pntrBool(false),
@@ -183,7 +185,7 @@ func TestGenerateRepositories(t *testing.T) {
 					AllowMergeCommit: pntrBool(false),
 					AllowRebaseMerge: pntrBool(false),
 					Description:      pntrString("Test Repo: cloud-event-proxy"),
-					Private:          pntrBool(true),
+					Visibility:       &privateVisibility,
 				},
 				"assisted-installer": {
 					HasProjects:      pntrBool(false),
@@ -191,7 +193,7 @@ func TestGenerateRepositories(t *testing.T) {
 					AllowMergeCommit: pntrBool(false),
 					AllowRebaseMerge: pntrBool(false),
 					Description:      pntrString("Test Repo: assisted-installer"),
-					Private:          pntrBool(true),
+					Visibility:       &privateVisibility,
 				},
 				"logging-fluentd": {
 					HasProjects:      pntrBool(false),
@@ -199,7 +201,7 @@ func TestGenerateRepositories(t *testing.T) {
 					AllowMergeCommit: pntrBool(false),
 					AllowRebaseMerge: pntrBool(false),
 					Description:      pntrString("Test Repo: logging-fluentd"),
-					Private:          pntrBool(true),
+					Visibility:       &privateVisibility,
 				},
 				"other-org-some-repo": {
 					HasProjects:      pntrBool(false),
@@ -207,7 +209,7 @@ func TestGenerateRepositories(t *testing.T) {
 					AllowMergeCommit: pntrBool(false),
 					AllowRebaseMerge: pntrBool(false),
 					Description:      pntrString("Test Repo: some-repo"),
-					Private:          pntrBool(true),
+					Visibility:       &privateVisibility,
 				},
 			},
 		},

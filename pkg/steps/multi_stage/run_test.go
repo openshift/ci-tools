@@ -683,7 +683,7 @@ func TestJUnit(t *testing.T) {
 				names = append(names, t.Name)
 			}
 			if !reflect.DeepEqual(names, tc.expected) {
-				t.Error(diff.ObjectReflectDiff(names, tc.expected))
+				t.Error(diff.Diff(names, tc.expected))
 			}
 		})
 	}

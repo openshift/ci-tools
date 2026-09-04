@@ -230,7 +230,7 @@ func TestDetermineRefsWorkdir(t *testing.T) {
 			step := gitSourceStep{config: api.ProjectDirectoryImageBuildInputs{Ref: testCase.ref}}
 			ref := step.determineRefsWorkdir(testCase.refs, testCase.extraRefs)
 			if !equality.Semantic.DeepEqual(ref, testCase.expected) {
-				t.Errorf("Refs are different than expected: %v", diff.ObjectReflectDiff(ref, testCase.expected))
+				t.Errorf("Refs are different than expected: %v", diff.Diff(ref, testCase.expected))
 			}
 		})
 	}

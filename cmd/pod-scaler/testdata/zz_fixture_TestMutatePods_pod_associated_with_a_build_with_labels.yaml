@@ -23,6 +23,8 @@ Patches:
 - op: add
   path: /spec/containers/1/resources
   value: {}
+- op: remove
+  path: /metadata/creationTimestamp
 allowed: true
 patchType: JSONPatch
 uid: ""

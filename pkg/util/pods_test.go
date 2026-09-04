@@ -3,6 +3,8 @@ package util
 import (
 	"context"
 	"errors"
+	"fmt"
+	"syscall"
 	"testing"
 	"time"
 
@@ -10,6 +12,7 @@ import (
 	apierrors "k8s.io/apimachinery/pkg/api/errors"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/apimachinery/pkg/types"
+	"k8s.io/apimachinery/pkg/util/wait"
 	ctrlruntimeclient "sigs.k8s.io/controller-runtime/pkg/client"
 	fakectrlruntimeclient "sigs.k8s.io/controller-runtime/pkg/client/fake"
 	"sigs.k8s.io/controller-runtime/pkg/client/interceptor"
@@ -80,8 +83,9 @@ func TestWaitForCompletedPodDeletion(t *testing.T) {
 			},
 		},
 		{
-			name:    "delete returns Conflict (UID mismatch) is treated as success",
-			objects: []ctrlruntimeclient.Object{succeededPod},
+			name:      "delete returns Conflict while the same UID remains",
+			objects:   []ctrlruntimeclient.Object{succeededPod},
+			expectErr: true,
 			interceptorsFunc: func() interceptor.Funcs {
 				return interceptor.Funcs{
 					Delete: func(_ context.Context, _ ctrlruntimeclient.WithWatch, _ ctrlruntimeclient.Object, _ ...ctrlruntimeclient.DeleteOption) error {
@@ -121,6 +125,181 @@ func TestWaitForCompletedPodDeletion(t *testing.T) {
 				t.Errorf("unexpected error: %v", err)
 			}
 		})
+	}
+}
+
+func TestDeletePodWithUIDReconcilesAmbiguousDeletion(t *testing.T) {
+	const (
+		namespace = "test-ns"
+		name      = "test-pod"
+	)
+	observed := &corev1.Pod{ObjectMeta: metav1.ObjectMeta{Namespace: namespace, Name: name, UID: types.UID("original-uid")}}
+
+	t.Run("committed delete with lost response", func(t *testing.T) {
+		var deleteCalls int
+		client := fakectrlruntimeclient.NewClientBuilder().WithObjects(observed.DeepCopy()).WithInterceptorFuncs(interceptor.Funcs{
+			Delete: func(ctx context.Context, client ctrlruntimeclient.WithWatch, obj ctrlruntimeclient.Object, opts ...ctrlruntimeclient.DeleteOption) error {
+				deleteCalls++
+				if err := client.Delete(ctx, obj, opts...); err != nil {
+					return err
+				}
+				return syscall.ECONNRESET
+			},
+		}).Build()
+
+		if err := deletePodWithUID(context.Background(), client, observed, wait.Backoff{Steps: 3}); err != nil {
+			t.Fatalf("expected committed deletion to be reconciled: %v", err)
+		}
+		if deleteCalls != 1 {
+			t.Fatalf("delete calls = %d, want 1", deleteCalls)
+		}
+		if err := client.Get(context.Background(), ctrlruntimeclient.ObjectKeyFromObject(observed), &corev1.Pod{}); !apierrors.IsNotFound(err) {
+			t.Fatalf("expected original pod to be gone, got %v", err)
+		}
+	})
+
+	t.Run("transient confirmation GET is retried without another DELETE", func(t *testing.T) {
+		var deleteCalls, getCalls int
+		client := fakectrlruntimeclient.NewClientBuilder().WithInterceptorFuncs(interceptor.Funcs{
+			Delete: func(context.Context, ctrlruntimeclient.WithWatch, ctrlruntimeclient.Object, ...ctrlruntimeclient.DeleteOption) error {
+				deleteCalls++
+				return nil
+			},
+			Get: func(_ context.Context, _ ctrlruntimeclient.WithWatch, _ ctrlruntimeclient.ObjectKey, _ ctrlruntimeclient.Object, _ ...ctrlruntimeclient.GetOption) error {
+				getCalls++
+				if getCalls == 1 {
+					return fmt.Errorf("confirm deletion: %w", syscall.ECONNREFUSED)
+				}
+				return apierrors.NewNotFound(corev1.Resource("pods"), name)
+			},
+		}).Build()
+
+		if err := deletePodWithUID(context.Background(), client, observed, wait.Backoff{Steps: 3}); err != nil {
+			t.Fatalf("expected transient confirmation failure to recover: %v", err)
+		}
+		if deleteCalls != 1 || getCalls != 2 {
+			t.Fatalf("calls delete=%d get=%d, want delete=1 get=2", deleteCalls, getCalls)
+		}
+	})
+
+	t.Run("permanent confirmation GET fails", func(t *testing.T) {
+		forbidden := apierrors.NewForbidden(corev1.Resource("pods"), name, errors.New("denied"))
+		client := fakectrlruntimeclient.NewClientBuilder().WithInterceptorFuncs(interceptor.Funcs{
+			Delete: func(context.Context, ctrlruntimeclient.WithWatch, ctrlruntimeclient.Object, ...ctrlruntimeclient.DeleteOption) error {
+				return nil
+			},
+			Get: func(context.Context, ctrlruntimeclient.WithWatch, ctrlruntimeclient.ObjectKey, ctrlruntimeclient.Object, ...ctrlruntimeclient.GetOption) error {
+				return forbidden
+			},
+		}).Build()
+
+		err := deletePodWithUID(context.Background(), client, observed, wait.Backoff{Steps: 3})
+		if !apierrors.IsForbidden(err) {
+			t.Fatalf("expected permanent GET error, got %v", err)
+		}
+	})
+
+	t.Run("same UID after transient DELETE is retried boundedly", func(t *testing.T) {
+		var deleteCalls, getCalls int
+		client := fakectrlruntimeclient.NewClientBuilder().WithInterceptorFuncs(interceptor.Funcs{
+			Delete: func(context.Context, ctrlruntimeclient.WithWatch, ctrlruntimeclient.Object, ...ctrlruntimeclient.DeleteOption) error {
+				deleteCalls++
+				return syscall.ECONNRESET
+			},
+			Get: func(_ context.Context, _ ctrlruntimeclient.WithWatch, _ ctrlruntimeclient.ObjectKey, obj ctrlruntimeclient.Object, _ ...ctrlruntimeclient.GetOption) error {
+				getCalls++
+				observed.DeepCopyInto(obj.(*corev1.Pod))
+				return nil
+			},
+		}).Build()
+
+		err := deletePodWithUID(context.Background(), client, observed, wait.Backoff{Steps: 3})
+		if !wait.Interrupted(err) || !errors.Is(err, syscall.ECONNRESET) {
+			t.Fatalf("expected bounded transient deletion failure, got %v", err)
+		}
+		if deleteCalls != 3 || getCalls != 3 {
+			t.Fatalf("calls delete=%d get=%d, want 3 each", deleteCalls, getCalls)
+		}
+	})
+
+	t.Run("accepted DELETE polls a remaining UID without redundant DELETEs", func(t *testing.T) {
+		var deleteCalls, getCalls int
+		client := fakectrlruntimeclient.NewClientBuilder().WithInterceptorFuncs(interceptor.Funcs{
+			Delete: func(context.Context, ctrlruntimeclient.WithWatch, ctrlruntimeclient.Object, ...ctrlruntimeclient.DeleteOption) error {
+				deleteCalls++
+				return nil
+			},
+			Get: func(_ context.Context, _ ctrlruntimeclient.WithWatch, _ ctrlruntimeclient.ObjectKey, obj ctrlruntimeclient.Object, _ ...ctrlruntimeclient.GetOption) error {
+				getCalls++
+				observed.DeepCopyInto(obj.(*corev1.Pod))
+				return nil
+			},
+		}).Build()
+
+		err := deletePodWithUID(context.Background(), client, observed, wait.Backoff{Steps: 3})
+		if !wait.Interrupted(err) {
+			t.Fatalf("expected bounded confirmation failure, got %v", err)
+		}
+		if deleteCalls != 1 || getCalls != 3 {
+			t.Fatalf("calls delete=%d get=%d, want delete=1 get=3", deleteCalls, getCalls)
+		}
+	})
+}
+
+func TestDeletePodWithUIDSameUIDConflictFails(t *testing.T) {
+	const (
+		namespace = "test-ns"
+		name      = "test-pod"
+	)
+	observed := &corev1.Pod{ObjectMeta: metav1.ObjectMeta{Namespace: namespace, Name: name, UID: types.UID("original-uid")}}
+	var deleteCalls int
+	client := fakectrlruntimeclient.NewClientBuilder().WithObjects(observed.DeepCopy()).WithInterceptorFuncs(interceptor.Funcs{
+		Delete: func(context.Context, ctrlruntimeclient.WithWatch, ctrlruntimeclient.Object, ...ctrlruntimeclient.DeleteOption) error {
+			deleteCalls++
+			return apierrors.NewConflict(corev1.Resource("pods"), name, errors.New("conflict"))
+		},
+	}).Build()
+
+	err := deletePodWithUID(context.Background(), client, observed, wait.Backoff{Steps: 3})
+	if !apierrors.IsConflict(err) {
+		t.Fatalf("expected same-UID conflict to fail permanently, got %v", err)
+	}
+	if deleteCalls != 1 {
+		t.Fatalf("delete calls = %d, want 1", deleteCalls)
+	}
+}
+
+func TestDeletePodWithUIDDoesNotDeleteReplacement(t *testing.T) {
+	const (
+		namespace = "test-ns"
+		name      = "test-pod"
+	)
+	observed := &corev1.Pod{ObjectMeta: metav1.ObjectMeta{Namespace: namespace, Name: name, UID: types.UID("old-uid")}}
+	replacement := &corev1.Pod{ObjectMeta: metav1.ObjectMeta{Namespace: namespace, Name: name, UID: types.UID("replacement-uid")}}
+	var preconditionUID types.UID
+	client := fakectrlruntimeclient.NewClientBuilder().WithObjects(replacement).WithInterceptorFuncs(interceptor.Funcs{
+		Delete: func(_ context.Context, _ ctrlruntimeclient.WithWatch, _ ctrlruntimeclient.Object, opts ...ctrlruntimeclient.DeleteOption) error {
+			deleteOptions := &ctrlruntimeclient.DeleteOptions{}
+			deleteOptions.ApplyOptions(opts)
+			if deleteOptions.Preconditions != nil && deleteOptions.Preconditions.UID != nil {
+				preconditionUID = *deleteOptions.Preconditions.UID
+			}
+			return apierrors.NewConflict(corev1.Resource("pods"), name, errors.New("UID precondition mismatch"))
+		},
+	}).Build()
+
+	if err := DeletePodWithUID(context.Background(), client, observed); err != nil {
+		t.Fatalf("stale deletion should be harmless: %v", err)
+	}
+	if preconditionUID != observed.UID {
+		t.Fatalf("delete precondition UID = %q, want %q", preconditionUID, observed.UID)
+	}
+	current := &corev1.Pod{}
+	if err := client.Get(context.Background(), ctrlruntimeclient.ObjectKey{Namespace: namespace, Name: name}, current); err != nil {
+		t.Fatalf("replacement pod was deleted: %v", err)
+	}
+	if current.UID != replacement.UID {
+		t.Fatalf("got pod UID %q, want replacement UID %q", current.UID, replacement.UID)
 	}
 }
 

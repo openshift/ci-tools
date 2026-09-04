@@ -66,6 +66,126 @@ type importReleaseStep struct {
 
 	// originalPullSpec stores the original value before resolving the release to pass as an env var for multi-stage steps to utilize
 	originalPullSpec string
+
+	releaseImportRetryDelays func() []time.Duration
+	importTagWithRetryDelays releaseTagImporter
+}
+
+type releaseTagImporter func(context.Context, ctrlruntimeclient.Client, string, string, string, string, []time.Duration, *metrics.MetricsAgent) (string, error)
+
+const (
+	releaseExtractionContainerName         = "release"
+	transientReleaseExtractionExitCode     = 75
+	transientReleaseExtractionErrorPattern = `too many requests|toomanyrequests|status:?( code)? (429|5[[:digit:]]{2})|unexpected http status|internal server error|bad gateway|service unavailable|gateway timeout|connection (refused|reset)|http2: client connection lost|i/o timeout|TLS handshake timeout|context deadline exceeded|temporary failure|unexpected EOF`
+)
+
+type releaseImportSleep func(context.Context, time.Duration) error
+
+func sleepForReleaseImportRetry(ctx context.Context, duration time.Duration) error {
+	timer := time.NewTimer(duration)
+	defer timer.Stop()
+	select {
+	case <-ctx.Done():
+		return ctx.Err()
+	case <-timer.C:
+		return nil
+	}
+}
+
+type transientReleaseExtractionError struct {
+	err error
+}
+
+func (e *transientReleaseExtractionError) Error() string { return e.err.Error() }
+func (e *transientReleaseExtractionError) Unwrap() error { return e.err }
+
+func retryReleaseExtraction(ctx context.Context, name string, retryDelays []time.Duration, sleep releaseImportSleep, run func(context.Context) error) error {
+	start := time.Now()
+	var retryBudget time.Duration
+	for _, delay := range retryDelays {
+		if delay < 0 {
+			return fmt.Errorf("invalid release extraction retry delay %s", delay)
+		}
+		retryBudget += delay
+	}
+	for attempt := 0; ; attempt++ {
+		if err := ctx.Err(); err != nil {
+			return fmt.Errorf("release extraction pod %s canceled before attempt %d: %w", name, attempt+1, err)
+		}
+		err := run(ctx)
+		if err == nil {
+			if attempt > 0 {
+				logrus.WithFields(logrus.Fields{
+					"attempts": attempt + 1,
+					"elapsed":  time.Since(start),
+				}).Info("Release extraction recovered after retry")
+			}
+			return nil
+		}
+		if ctxErr := ctx.Err(); ctxErr != nil {
+			return fmt.Errorf("release extraction pod %s canceled after attempt %d: %w", name, attempt+1, ctxErr)
+		}
+		var transientErr *transientReleaseExtractionError
+		if !errors.As(err, &transientErr) {
+			return fmt.Errorf("release extraction pod %s failed on attempt %d: %w", name, attempt+1, err)
+		}
+		if attempt == len(retryDelays) {
+			logrus.WithFields(logrus.Fields{
+				"attempts":     attempt + 1,
+				"elapsed":      time.Since(start),
+				"error_class":  "transient_extraction",
+				"retry_budget": retryBudget,
+			}).Error("Release extraction retry attempts exhausted")
+			return fmt.Errorf("release extraction pod %s exhausted %d attempts with retry budget %s after %s: %w", name, attempt+1, retryBudget, time.Since(start).Truncate(time.Millisecond), err)
+		}
+		delay := retryDelays[attempt]
+		logrus.WithFields(logrus.Fields{
+			"attempt":     attempt + 1,
+			"delay":       delay,
+			"error_class": "transient_extraction",
+		}).Warn("Release extraction failed, retrying")
+		if err := sleep(ctx, delay); err != nil {
+			return fmt.Errorf("release extraction pod %s canceled while waiting to retry attempt %d: %w", name, attempt+2, err)
+		}
+	}
+}
+
+func transientReleaseExtractionPodError(pod *coreapi.Pod, runErr error) error {
+	if pod == nil {
+		return runErr
+	}
+	statuses := append([]coreapi.ContainerStatus{}, pod.Status.InitContainerStatuses...)
+	statuses = append(statuses, pod.Status.ContainerStatuses...)
+	for _, status := range statuses {
+		if status.Name == releaseExtractionContainerName && status.State.Terminated != nil && status.State.Terminated.ExitCode == transientReleaseExtractionExitCode {
+			return &transientReleaseExtractionError{err: runErr}
+		}
+	}
+	return runErr
+}
+
+func runReleaseExtractionWithRetries(ctx context.Context, name string, step api.Step, client ctrlruntimeclient.Client, retryDelays []time.Duration, sleep releaseImportSleep) error {
+	return retryReleaseExtraction(ctx, name, retryDelays, sleep, func(ctx context.Context) error {
+		err := step.Run(ctx)
+		if err == nil {
+			return nil
+		}
+		var podStepErr *steps.PodStepError
+		if !errors.As(err, &podStepErr) {
+			return err
+		}
+		classifiedErr := transientReleaseExtractionPodError(podStepErr.Pod, err)
+		var transientErr *transientReleaseExtractionError
+		if !errors.As(classifiedErr, &transientErr) {
+			return classifiedErr
+		}
+		if err := util.DeletePodWithUID(ctx, client, podStepErr.Pod); err != nil {
+			// Preserve the extraction cause without its transient marker: a new
+			// attempt is unsafe until cleanup confirms that this pod UID is gone.
+			return fmt.Errorf("failed to confirm transient release extraction pod cleanup, cannot retry safely: %w", errors.Join(err, transientErr.err))
+		}
+		return classifiedErr
+	})
 }
 
 func (s *importReleaseStep) Inputs() (api.InputDefinition, error) {
@@ -113,9 +233,10 @@ func (s *importReleaseStep) run(ctx context.Context) error {
 	}
 	logrus.WithField("name", s.name).Debugf("setting originalPullSpec to: %s for multi-stage steps to reference", pullSpec)
 	s.originalPullSpec = pullSpec
-	// retry importing the image a few times because we might race against establishing credentials/roles
-	// and be unable to import images on the same cluster
-	if newPullSpec, err := utils.ImportTagWithRetries(ctx, s.client, s.jobSpec.Namespace(), "release", s.name, pullSpec, api.ImageStreamImportRetries, s.client.MetricsAgent()); err != nil {
+	// Retry importing for several minutes because we might race against establishing
+	// credentials/roles or a transient registry outage.
+	retryDelays := s.releaseImportRetryDelays()
+	if newPullSpec, err := s.importTagWithRetryDelays(ctx, s.client, s.jobSpec.Namespace(), "release", s.name, pullSpec, retryDelays, s.client.MetricsAgent()); err != nil {
 		return fmt.Errorf("unable to import %s release image: %w", s.name, err)
 	} else {
 		logrus.WithField("pullSpec", pullSpec).WithField("newPullSpec", newPullSpec).WithField("name", s.name).
@@ -149,7 +270,21 @@ if [[ -d /pull ]]; then
 	cp /pull/.dockerconfigjson $HOME/.docker/config.json
 fi
 oc registry login --to $HOME/.docker/config.json
-oc adm release extract --from=%q --file=image-references > ${ARTIFACT_DIR}/%s
+extract_error=${ARTIFACT_DIR}/%s-extract-error.log
+set +e
+oc adm release extract --from=%q --file=image-references > ${ARTIFACT_DIR}/%s 2> "${extract_error}"
+extract_status=$?
+set -e
+cat "${extract_error}" >&2
+if (( extract_status != 0 )); then
+	# Exit 75 is reserved for failures that are safe to retry in a fresh pod.
+	# Authorization, invalid references, and malformed payloads retain the
+	# original exit status and fail immediately.
+	if grep -Eqi '(%s)' "${extract_error}"; then
+		exit %d
+	fi
+	exit "${extract_status}"
+fi
 # while release creation may happen more than once in the lifetime of a test
 # namespace, only one release creation Pod will ever run at once. Therefore,
 # while actions editing the output ConfigMap may race if done from ci-operator
@@ -160,7 +295,7 @@ if oc get configmap release-%s; then
 	oc delete configmap release-%s
 fi
 oc create configmap release-%s --from-file=%s.yaml=${ARTIFACT_DIR}/%s
-`, pullSpec, target, target, target, target, target, target)
+`, target, pullSpec, target, transientReleaseExtractionErrorPattern, transientReleaseExtractionExitCode, target, target, target, target, target)
 
 	// run adm release extract and grab the raw image-references from the payload
 	podConfig := steps.PodStepConfiguration{
@@ -185,9 +320,9 @@ oc create configmap release-%s --from-file=%s.yaml=${ARTIFACT_DIR}/%s
 		copied[podConfig.As] = api.ResourceRequirements{Requests: api.ResourceList{"cpu": "50m", "memory": "400Mi"}}
 		resources = copied
 	}
-	step := steps.PodStep("release", podConfig, resources, s.client, s.jobSpec, nil)
-	if err := step.Run(ctx); err != nil {
-		return err
+	step := steps.PodStep(releaseExtractionContainerName, podConfig, resources, s.client, s.jobSpec, nil)
+	if err := runReleaseExtractionWithRetries(ctx, target, step, s.client, retryDelays, sleepForReleaseImportRetry); err != nil {
+		return fmt.Errorf("failed to extract release image %s: %w", s.name, err)
 	}
 
 	// read the contents from the configmap we created
@@ -360,6 +495,8 @@ func ImportReleaseStep(
 		jobSpec:                        jobSpec,
 		pullSecret:                     pullSecret,
 		overrideCLIReleaseExtractImage: overrideCLIReleaseExtractImage,
+		releaseImportRetryDelays:       utils.ReleaseImportRetryDelays,
+		importTagWithRetryDelays:       utils.ImportTagWithRetryDelays,
 	}
 }
 

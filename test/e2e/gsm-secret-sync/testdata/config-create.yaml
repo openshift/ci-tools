@@ -15,4 +15,15 @@ groups:
   team-noop:
     cluster_groups:
     - dp-managed
+  # Owns more than MaxCollectionsPerGroupBinding collections, so its bindings are
+  # chunked. The first chunk has 5 collections and exercises the largest viewer
+  # condition (11 logical operators) GCP will accept.
+  test-platform-large:
+    secret_collections:
+    - large-secrets-01
+    - large-secrets-02
+    - large-secrets-03
+    - large-secrets-04
+    - large-secrets-05
+    - large-secrets-06
 

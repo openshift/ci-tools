@@ -11,7 +11,6 @@
       )
     title: Read access to secrets for alpha-secrets
   members:
-  - group:team-alpha@redhat.com
   - serviceAccount:alpha-secrets-updater@test-project.iam.gserviceaccount.com
   role: projects/test-project/roles/openshift_ci_secrets_viewer
 - condition:
@@ -21,7 +20,6 @@
       ||\n  resource.type == \"secretmanager.googleapis.com/Secret\"\n) && \n  resource.name.extract(\"secrets/{secret}\").startsWith(\"alpha-secrets__\")"
     title: Create, update, and delete access for alpha-secrets
   members:
-  - group:team-alpha@redhat.com
   - serviceAccount:alpha-secrets-updater@test-project.iam.gserviceaccount.com
   role: projects/test-project/roles/openshift_ci_secrets_updater
 - condition:
@@ -37,8 +35,6 @@
       )
     title: Read access to secrets for beta-delta-secrets
   members:
-  - group:team-beta@redhat.com
-  - group:team-delta@redhat.com
   - serviceAccount:beta-delta-secrets-updater@test-project.iam.gserviceaccount.com
   role: projects/test-project/roles/openshift_ci_secrets_viewer
 - condition:
@@ -48,8 +44,6 @@
       ||\n  resource.type == \"secretmanager.googleapis.com/Secret\"\n) && \n  resource.name.extract(\"secrets/{secret}\").startsWith(\"beta-delta-secrets__\")"
     title: Create, update, and delete access for beta-delta-secrets
   members:
-  - group:team-beta@redhat.com
-  - group:team-delta@redhat.com
   - serviceAccount:beta-delta-secrets-updater@test-project.iam.gserviceaccount.com
   role: projects/test-project/roles/openshift_ci_secrets_updater
 - condition:
@@ -65,7 +59,6 @@
       )
     title: Read access to secrets for epsilon-secrets
   members:
-  - group:team-epsilon@redhat.com
   - serviceAccount:epsilon-secrets-updater@test-project.iam.gserviceaccount.com
   role: projects/test-project/roles/openshift_ci_secrets_viewer
 - condition:
@@ -75,6 +68,121 @@
       ||\n  resource.type == \"secretmanager.googleapis.com/Secret\"\n) && \n  resource.name.extract(\"secrets/{secret}\").startsWith(\"epsilon-secrets__\")"
     title: Create, update, and delete access for epsilon-secrets
   members:
-  - group:team-epsilon@redhat.com
   - serviceAccount:epsilon-secrets-updater@test-project.iam.gserviceaccount.com
+  role: projects/test-project/roles/openshift_ci_secrets_updater
+- condition:
+    description: 'Managed by test platform: Read access to secrets for group team-alpha
+      (set 1)'
+    expression: |-
+      (
+        resource.type == "secretmanager.googleapis.com/SecretVersion" ||
+        resource.type == "secretmanager.googleapis.com/Secret"
+      ) && (
+        resource.name.extract("secrets/{secret}") == "alpha-secrets__updater-service-account" ||
+        resource.name.extract("secrets/{secret}") == "alpha-secrets____index"
+      )
+    title: Read access to secrets for group team-alpha (set 1)
+  members:
+  - group:team-alpha@redhat.com
+  role: projects/test-project/roles/openshift_ci_secrets_viewer
+- condition:
+    description: 'Managed by test platform: Create, update, and delete access to secrets
+      for group team-alpha (set 1)'
+    expression: |-
+      (
+        resource.type == "secretmanager.googleapis.com/SecretVersion" ||
+        resource.type == "secretmanager.googleapis.com/Secret"
+      ) && (
+        resource.name.extract("secrets/{secret}").startsWith("alpha-secrets__")
+      )
+    title: Create, update, and delete access for group team-alpha (set 1)
+  members:
+  - group:team-alpha@redhat.com
+  role: projects/test-project/roles/openshift_ci_secrets_updater
+- condition:
+    description: 'Managed by test platform: Read access to secrets for group team-beta
+      (set 1)'
+    expression: |-
+      (
+        resource.type == "secretmanager.googleapis.com/SecretVersion" ||
+        resource.type == "secretmanager.googleapis.com/Secret"
+      ) && (
+        resource.name.extract("secrets/{secret}") == "beta-delta-secrets__updater-service-account" ||
+        resource.name.extract("secrets/{secret}") == "beta-delta-secrets____index"
+      )
+    title: Read access to secrets for group team-beta (set 1)
+  members:
+  - group:team-beta@redhat.com
+  role: projects/test-project/roles/openshift_ci_secrets_viewer
+- condition:
+    description: 'Managed by test platform: Create, update, and delete access to secrets
+      for group team-beta (set 1)'
+    expression: |-
+      (
+        resource.type == "secretmanager.googleapis.com/SecretVersion" ||
+        resource.type == "secretmanager.googleapis.com/Secret"
+      ) && (
+        resource.name.extract("secrets/{secret}").startsWith("beta-delta-secrets__")
+      )
+    title: Create, update, and delete access for group team-beta (set 1)
+  members:
+  - group:team-beta@redhat.com
+  role: projects/test-project/roles/openshift_ci_secrets_updater
+- condition:
+    description: 'Managed by test platform: Read access to secrets for group team-delta
+      (set 1)'
+    expression: |-
+      (
+        resource.type == "secretmanager.googleapis.com/SecretVersion" ||
+        resource.type == "secretmanager.googleapis.com/Secret"
+      ) && (
+        resource.name.extract("secrets/{secret}") == "beta-delta-secrets__updater-service-account" ||
+        resource.name.extract("secrets/{secret}") == "beta-delta-secrets____index"
+      )
+    title: Read access to secrets for group team-delta (set 1)
+  members:
+  - group:team-delta@redhat.com
+  role: projects/test-project/roles/openshift_ci_secrets_viewer
+- condition:
+    description: 'Managed by test platform: Create, update, and delete access to secrets
+      for group team-delta (set 1)'
+    expression: |-
+      (
+        resource.type == "secretmanager.googleapis.com/SecretVersion" ||
+        resource.type == "secretmanager.googleapis.com/Secret"
+      ) && (
+        resource.name.extract("secrets/{secret}").startsWith("beta-delta-secrets__")
+      )
+    title: Create, update, and delete access for group team-delta (set 1)
+  members:
+  - group:team-delta@redhat.com
+  role: projects/test-project/roles/openshift_ci_secrets_updater
+- condition:
+    description: 'Managed by test platform: Read access to secrets for group team-epsilon
+      (set 1)'
+    expression: |-
+      (
+        resource.type == "secretmanager.googleapis.com/SecretVersion" ||
+        resource.type == "secretmanager.googleapis.com/Secret"
+      ) && (
+        resource.name.extract("secrets/{secret}") == "epsilon-secrets__updater-service-account" ||
+        resource.name.extract("secrets/{secret}") == "epsilon-secrets____index"
+      )
+    title: Read access to secrets for group team-epsilon (set 1)
+  members:
+  - group:team-epsilon@redhat.com
+  role: projects/test-project/roles/openshift_ci_secrets_viewer
+- condition:
+    description: 'Managed by test platform: Create, update, and delete access to secrets
+      for group team-epsilon (set 1)'
+    expression: |-
+      (
+        resource.type == "secretmanager.googleapis.com/SecretVersion" ||
+        resource.type == "secretmanager.googleapis.com/Secret"
+      ) && (
+        resource.name.extract("secrets/{secret}").startsWith("epsilon-secrets__")
+      )
+    title: Create, update, and delete access for group team-epsilon (set 1)
+  members:
+  - group:team-epsilon@redhat.com
   role: projects/test-project/roles/openshift_ci_secrets_updater

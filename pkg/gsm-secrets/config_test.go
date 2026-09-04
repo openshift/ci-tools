@@ -31,6 +31,10 @@ func TestGetDesiredState(t *testing.T) {
 			name:       "complex config",
 			configFile: "testdata/complex-config.yaml",
 		},
+		{
+			name:       "chunked config",
+			configFile: "testdata/chunked-config.yaml",
+		},
 	}
 
 	for _, tc := range testCases {

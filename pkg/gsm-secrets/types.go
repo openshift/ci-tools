@@ -31,6 +31,12 @@ const (
 	// IAM binding condition description templates
 	SecretsViewerConditionDescriptionTemplate  = "Managed by %s: Read access to secrets in %s collection"
 	SecretsUpdaterConditionDescriptionTemplate = "Managed by %s: Create, update, and delete access to secrets in %s collection"
+
+	// MaxCollectionsPerGroupBinding is the maximum number of collections referenced by a
+	// single group IAM binding condition. GCP allows at most 12 logical operators (&&, ||, !)
+	// per condition expression. The viewer condition uses 2N+1 operators for N collections,
+	// so N=5 (11 operators) is the largest chunk that stays within the limit.
+	MaxCollectionsPerGroupBinding = 5
 )
 
 type Config struct {

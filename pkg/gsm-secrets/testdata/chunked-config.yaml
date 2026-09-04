@@ -1,0 +1,22 @@
+groups:
+  big-team:
+    secret_collections:
+    - bt-01
+    - bt-02
+    - bt-03
+    - bt-04
+    - bt-05
+    - bt-06
+    - bt-07
+    - bt-08
+    - bt-09
+    - bt-10
+    - bt-11
+    - bt-12
+  small-team:
+    secret_collections:
+    - st-01
+  another-team:
+    secret_collections:
+    - bt-01
+    - at-01

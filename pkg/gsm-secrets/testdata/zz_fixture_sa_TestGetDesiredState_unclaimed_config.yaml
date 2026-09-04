@@ -1,0 +1,10 @@
+- Collection: claimed-a
+  Description: 'Updater service account for secret collection: claimed-a'
+  DisplayName: claimed-a
+  Email: claimed-a-updater@test-project.iam.gserviceaccount.com
+  ID: claimed-a-updater
+- Collection: claimed-b
+  Description: 'Updater service account for secret collection: claimed-b'
+  DisplayName: claimed-b
+  Email: claimed-b-updater@test-project.iam.gserviceaccount.com
+  ID: claimed-b-updater

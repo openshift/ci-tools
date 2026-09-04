@@ -35,6 +35,10 @@ func TestGetDesiredState(t *testing.T) {
 			name:       "chunked config",
 			configFile: "testdata/chunked-config.yaml",
 		},
+		{
+			name:       "unclaimed config",
+			configFile: "testdata/unclaimed-config.yaml",
+		},
 	}
 
 	for _, tc := range testCases {

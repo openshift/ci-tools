@@ -34,6 +34,10 @@ type Target struct {
 	ClusterGroups []string `json:"cluster_groups,omitempty" yaml:"cluster_groups,omitempty"`
 	// SecretCollections are the secret collections the group has access to.
 	SecretCollections []string `json:"secret_collections,omitempty" yaml:"secret_collections,omitempty"`
+	// Unclaimed marks a group as a holding area for secret collections that no team owns yet.
+	// The gsm-secret-sync reconciler keeps these collections' secrets alive but creates no
+	// updater service account and no IAM bindings for them until they are moved under a normal group.
+	Unclaimed bool `json:"unclaimed,omitempty" yaml:"unclaimed,omitempty"`
 }
 
 func (t Target) ResolveClusters(cg map[string][]string) sets.Set[string] {

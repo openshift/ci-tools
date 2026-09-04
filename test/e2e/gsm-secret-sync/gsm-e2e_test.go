@@ -14,6 +14,7 @@ import (
 	"os/exec"
 	"path/filepath"
 	"slices"
+	"strings"
 	"testing"
 	"time"
 
@@ -469,6 +470,70 @@ func TestDeletion(t *testing.T) {
 
 	if !tr.compareStates(actualState, expectedState) {
 		t.Fatal("deletion test failed")
+	}
+}
+
+// TestUnclaimedCollectionPreserved verifies that a collection owned only by an unclaimed group
+// keeps its migrated data secrets but gets no service account, no SA/index secrets, and no IAM
+// bindings, while a normally-owned collection in the same config is reconciled as usual.
+func TestUnclaimedCollectionPreserved(t *testing.T) {
+	const (
+		claimedCollection   = "owned-secrets"
+		unclaimedCollection = "orphan-secrets"
+	)
+	dataSecretName := fmt.Sprintf("%s__someteam__token", unclaimedCollection)
+
+	// Seed a data secret in the unclaimed collection, simulating a migrated credential
+	// that the reconciler must preserve.
+	if err := gsm.CreateOrUpdateSecret(tr.ctx, tr.secretsClient, tr.config.ProjectIdNumber, dataSecretName, []byte("secret-value"), nil, nil); err != nil {
+		t.Fatalf("failed to seed data secret %s: %v", dataSecretName, err)
+	}
+
+	if err := tr.runReconcilerTool("testdata/config-unclaimed.yaml"); err != nil {
+		t.Fatalf("failed to run reconciler tool: %v", err)
+	}
+
+	// The reconciler creates a service account for the claimed collection. Wait for it to
+	// appear so we know reconciliation has propagated before making assertions.
+	var state GCPState
+	err := retry.OnError(gcpStateCheckBackoff, func(error) bool { return true }, func() error {
+		state = tr.getActualGCPState()
+		for _, sa := range state.ServiceAccounts {
+			if sa.Collection == claimedCollection {
+				return nil
+			}
+		}
+		return fmt.Errorf("service account for claimed collection %q not found yet", claimedCollection)
+	})
+	if err != nil {
+		t.Fatalf("claimed collection service account never appeared: %v", err)
+	}
+
+	// The seeded data secret in the unclaimed collection must still exist.
+	dataSecretPath := fmt.Sprintf("%s/secrets/%s", gsm.GetProjectResourceIdNumber(tr.config.ProjectIdNumber), dataSecretName)
+	if _, err := tr.secretsClient.GetSecret(tr.ctx, &secretmanagerpb.GetSecretRequest{Name: dataSecretPath}); err != nil {
+		t.Errorf("seeded data secret %s was not preserved: %v", dataSecretName, err)
+	}
+
+	// No service account may be created for the unclaimed collection.
+	for _, sa := range state.ServiceAccounts {
+		if sa.Collection == unclaimedCollection {
+			t.Errorf("unexpected service account for unclaimed collection: %s", sa.Email)
+		}
+	}
+
+	// No managed SA/index secret may be created for the unclaimed collection.
+	for name, s := range state.Secrets {
+		if s.Collection == unclaimedCollection && (s.Type == gsm.SecretTypeSA || s.Type == gsm.SecretTypeIndex) {
+			t.Errorf("unexpected managed secret for unclaimed collection: %s (type %v)", name, s.Type)
+		}
+	}
+
+	// No managed IAM binding may reference the unclaimed collection.
+	for _, binding := range state.IAMBindings {
+		if binding.Condition != nil && strings.Contains(binding.Condition.Expression, unclaimedCollection+"__") {
+			t.Errorf("unexpected managed IAM binding referencing unclaimed collection: %s", binding.Condition.Title)
+		}
 	}
 }
 

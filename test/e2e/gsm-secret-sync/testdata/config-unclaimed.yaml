@@ -1,0 +1,10 @@
+groups:
+  test-platform-ci-admins:
+    secret_collections:
+    - owned-secrets
+  # Holding area for collections no team owns yet. The reconciler must keep these
+  # collections' data secrets alive while creating no service account and no bindings.
+  test-platform-gsm-unclaimed-secrets:
+    unclaimed: true
+    secret_collections:
+    - orphan-secrets

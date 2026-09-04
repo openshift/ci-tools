@@ -14,11 +14,15 @@ import (
 
 // GetDesiredState parses the configuration file and builds the desired state specifications.
 //
-// Each collection referenced by a group gets an updater service account, its SA secret, an index
-// secret, and service-account-scoped viewer/updater bindings limited to that single collection.
-// Each owning group additionally gets its own viewer/updater bindings; a group's collections are
-// chunked (at most MaxCollectionsPerGroupBinding per binding) so no single binding exceeds GCP's
-// IAM limits on operators per condition and bindings per role+member.
+// Collections owned by a normal ("claimed") group each get an updater service account, its SA
+// secret, an index secret, and service-account-scoped viewer/updater bindings limited to that
+// single collection. Each owning group additionally gets its own viewer/updater bindings; a
+// group's collections are chunked (at most MaxCollectionsPerGroupBinding per binding) so no
+// single binding exceeds GCP's IAM limits on operators per condition and bindings per role+member.
+//
+// Collections owned only by an "unclaimed" group (see group.Target.Unclaimed) are kept in the
+// active-collection set so their migrated data secrets are not deleted, but they get no service
+// account, no SA/index secrets, and no bindings until they are moved under a normal group.
 //
 // Returns desired service account specs, secret specs, IAM binding specs, and the set of active collections.
 func GetDesiredState(configFile string, config Config) ([]ServiceAccountInfo, map[string]GCPSecret, []*iampb.Binding, map[string]bool, error) {
@@ -33,9 +37,15 @@ func GetDesiredState(configFile string, config Config) ([]ServiceAccountInfo, ma
 	}
 	sort.Strings(groupNames)
 
-	collections := sets.New[string]()
+	claimedCollections := sets.New[string]()
+	unclaimedCollections := sets.New[string]()
 	for _, name := range groupNames {
-		collections.Insert(groupConfig.Groups[name].SecretCollections...)
+		groupCfg := groupConfig.Groups[name]
+		if groupCfg.Unclaimed {
+			unclaimedCollections.Insert(groupCfg.SecretCollections...)
+			continue
+		}
+		claimedCollections.Insert(groupCfg.SecretCollections...)
 	}
 
 	var desiredSAs []ServiceAccountInfo
@@ -43,15 +53,17 @@ func GetDesiredState(configFile string, config Config) ([]ServiceAccountInfo, ma
 	desiredCollections := make(map[string]bool)
 	var desiredIAMBindings []*iampb.Binding
 
-	for _, collection := range collections.UnsortedList() {
+	// Keep every referenced collection alive so its migrated data secrets are not deleted,
+	// including unclaimed collections that have no service account or bindings yet.
+	for _, collection := range claimedCollections.Union(unclaimedCollections).UnsortedList() {
 		desiredCollections[collection] = true
 	}
 
-	// Per collection: an updater service account, its SA secret, an index secret, and
+	// Per claimed collection: an updater service account, its SA secret, an index secret, and
 	// service-account-scoped viewer/updater bindings limited to that single collection. The
 	// service account is given its own bindings rather than being grouped with the owning group,
 	// so its access stays scoped to exactly one collection.
-	for _, collection := range sets.List(collections) {
+	for _, collection := range sets.List(claimedCollections) {
 		desiredSAs = append(desiredSAs, ServiceAccountInfo{
 			Email:       GetUpdaterSAEmail(collection, config),
 			DisplayName: GetUpdaterSADisplayName(collection),
@@ -96,7 +108,7 @@ func GetDesiredState(configFile string, config Config) ([]ServiceAccountInfo, ma
 	// binding condition stays within GCP's IAM limits.
 	for _, name := range groupNames {
 		groupCfg := groupConfig.Groups[name]
-		if len(groupCfg.SecretCollections) == 0 {
+		if groupCfg.Unclaimed || len(groupCfg.SecretCollections) == 0 {
 			continue
 		}
 		email := fmt.Sprintf("%s@redhat.com", name)

@@ -7,6 +7,7 @@ import (
 
 	"github.com/sirupsen/logrus"
 
+	coreapi "k8s.io/api/core/v1"
 	ctrlruntimeclient "sigs.k8s.io/controller-runtime/pkg/client"
 
 	imagev1 "github.com/openshift/api/image/v1"
@@ -15,8 +16,9 @@ import (
 )
 
 type IntegratedStream struct {
-	Tags                        []string `json:"tags,omitempty"`
-	ReleaseControllerConfigName string   `json:"releaseControllerConfigName"`
+	Tags                        []string                           `json:"tags,omitempty"`
+	TagSources                  map[string]coreapi.ObjectReference `json:"tagSources,omitempty"`
+	ReleaseControllerConfigName string                             `json:"releaseControllerConfigName"`
 }
 
 type releaseConfig struct {
@@ -50,8 +52,15 @@ func LocalIntegratedStream(ctx context.Context, client ctrlruntimeclient.Client,
 		return nil, fmt.Errorf("failed to get image stream %s/%s: %w", ns, name, err)
 	}
 	var tags []string
+	var tagSources map[string]coreapi.ObjectReference
 	for _, tag := range is.Spec.Tags {
 		tags = append(tags, tag.Name)
+		if tag.From != nil && api.UsableImageStreamTagImportSource(tag.From) {
+			if tagSources == nil {
+				tagSources = map[string]coreapi.ObjectReference{}
+			}
+			tagSources[tag.Name] = *tag.From
+		}
 	}
 	var releaseControllerConfigName string
 	if raw, ok := is.ObjectMeta.Annotations[api.ReleaseConfigAnnotation]; ok {
@@ -61,5 +70,5 @@ func LocalIntegratedStream(ctx context.Context, client ctrlruntimeclient.Client,
 		}
 		releaseControllerConfigName = configName
 	}
-	return &IntegratedStream{Tags: tags, ReleaseControllerConfigName: releaseControllerConfigName}, nil
+	return &IntegratedStream{Tags: tags, TagSources: tagSources, ReleaseControllerConfigName: releaseControllerConfigName}, nil
 }

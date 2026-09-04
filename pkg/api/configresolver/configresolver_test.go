@@ -8,6 +8,7 @@ import (
 
 	"github.com/google/go-cmp/cmp"
 
+	coreapi "k8s.io/api/core/v1"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/client-go/kubernetes/scheme"
 	ctrlruntimeclient "sigs.k8s.io/controller-runtime/pkg/client"
@@ -118,6 +119,74 @@ func TestIntegratedStream(t *testing.T) {
 				},
 			}).Build(),
 			expected: &IntegratedStream{Tags: []string{"spec-only", "common"}, ReleaseControllerConfigName: ""},
+		},
+		{
+			name:   "tag sources from spec",
+			isNS:   "ocp",
+			isName: "5.1",
+			client: fakeclient.NewClientBuilder().WithRuntimeObjects(&imagev1.ImageStream{
+				ObjectMeta: metav1.ObjectMeta{
+					Name:      "5.1",
+					Namespace: "ocp",
+				},
+				Spec: imagev1.ImageStreamSpec{
+					Tags: []imagev1.TagReference{{
+						Name: "karpenter-operator",
+						From: &coreapi.ObjectReference{
+							Kind: "DockerImage",
+							Name: "quay-proxy.ci.openshift.org/openshift/ci@sha256:abc",
+						},
+					}},
+				},
+			}).Build(),
+			expected: &IntegratedStream{
+				Tags: []string{"karpenter-operator"},
+				TagSources: map[string]coreapi.ObjectReference{
+					"karpenter-operator": {Kind: "DockerImage", Name: "quay-proxy.ci.openshift.org/openshift/ci@sha256:abc"},
+				},
+			},
+		},
+		{
+			name:   "internal registry tag sources excluded",
+			isNS:   "ocp-priv",
+			isName: "5.1",
+			client: fakeclient.NewClientBuilder().WithRuntimeObjects(&imagev1.ImageStream{
+				ObjectMeta: metav1.ObjectMeta{
+					Name:      "5.1",
+					Namespace: "ocp-priv",
+				},
+				Spec: imagev1.ImageStreamSpec{
+					Tags: []imagev1.TagReference{
+						{
+							Name: "cli",
+							From: &coreapi.ObjectReference{
+								Kind: "DockerImage",
+								Name: "registry.ci.openshift.org/ocp-priv/5.1:cli",
+							},
+						},
+						{
+							Name: "installer",
+							From: &coreapi.ObjectReference{
+								Kind: "DockerImage",
+								Name: "registry.ci.openshift.org/origin/4.23:installer",
+							},
+						},
+						{
+							Name: "good",
+							From: &coreapi.ObjectReference{
+								Kind: "DockerImage",
+								Name: "quay-proxy.ci.openshift.org/openshift/ci@sha256:good",
+							},
+						},
+					},
+				},
+			}).Build(),
+			expected: &IntegratedStream{
+				Tags: []string{"cli", "installer", "good"},
+				TagSources: map[string]coreapi.ObjectReference{
+					"good": {Kind: "DockerImage", Name: "quay-proxy.ci.openshift.org/openshift/ci@sha256:good"},
+				},
+			},
 		},
 	}
 

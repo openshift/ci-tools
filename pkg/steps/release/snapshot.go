@@ -100,7 +100,7 @@ func snapshotStream(ctx context.Context, client loggingclient.LoggingClient, sou
 				return nil, fmt.Errorf("could not resolve source imagestream %s/%s for release %s: %w", sourceNamespace, sourceName, targetRelease, err)
 			}
 		}
-		from, ok := snapshotImportSource(sourceNamespace, sourceName, tag, source)
+		from, ok := snapshotImportSource(sourceNamespace, sourceName, tag, source, integratedStream.TagSources)
 		if !ok {
 			continue
 		}
@@ -129,7 +129,7 @@ func snapshotStream(ctx context.Context, client loggingclient.LoggingClient, sou
 	return snapshot, nil
 }
 
-func snapshotImportSource(sourceNamespace, sourceName, tag string, source *imagev1.ImageStream) (*coreapi.ObjectReference, bool) {
+func snapshotImportSource(sourceNamespace, sourceName, tag string, source *imagev1.ImageStream, tagSources map[string]coreapi.ObjectReference) (*coreapi.ObjectReference, bool) {
 	base := api.ImageStreamTagReference{Namespace: sourceNamespace, Name: sourceName, Tag: tag}
 	from := &coreapi.ObjectReference{
 		Kind: "DockerImage",
@@ -142,7 +142,14 @@ func snapshotImportSource(sourceNamespace, sourceName, tag string, source *image
 		return nil, false
 	}
 	if api.RefersToOfficialImage(sourceNamespace, api.WithoutOKD) {
-		return utils.OfficialImageTagFrom(source, base), true
+		if source != nil {
+			return utils.OfficialImageTagFrom(source, base), true
+		}
+		if ref, ok := tagSources[tag]; ok && api.UsableImageStreamTagImportSource(&ref) {
+			refCopy := ref
+			return &refCopy, true
+		}
+		return nil, false
 	}
 	return from, true
 }

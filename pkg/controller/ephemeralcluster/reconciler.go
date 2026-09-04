@@ -600,7 +600,7 @@ func (r *reconciler) createProwJob(ctx context.Context, log *logrus.Entry, ec *e
 	return nil
 }
 
-func (r *reconciler) prowJobName(periodic *prowconfig.Periodic, ec *ephemeralclusterv1.EphemeralCluster) string {
+func (r *reconciler) prowJobName(ec *ephemeralclusterv1.EphemeralCluster) string {
 	return ProwJobNamePrefix + "-ci-" + ec.Name
 }
 
@@ -623,7 +623,7 @@ func (r *reconciler) makeProwJob(ciOperatorConfig *api.ReleaseBuildConfiguration
 		return nil, fmt.Errorf("default periodic: %w", err)
 	}
 
-	periodic.JobBase.Name = r.prowJobName(periodic, ec)
+	periodic.JobBase.Name = r.prowJobName(ec)
 	periodic.UtilityConfig.ExtraRefs = []prowv1.Refs{}
 
 	labels := make(map[string]string)

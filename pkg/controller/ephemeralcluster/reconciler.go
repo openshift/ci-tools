@@ -39,7 +39,6 @@ import (
 
 	"github.com/openshift/ci-tools/pkg/api"
 	ephemeralclusterv1 "github.com/openshift/ci-tools/pkg/api/ephemeralcluster/v1"
-	"github.com/openshift/ci-tools/pkg/jobconfig"
 	"github.com/openshift/ci-tools/pkg/load/agents"
 	"github.com/openshift/ci-tools/pkg/prowgen"
 	"github.com/openshift/ci-tools/pkg/steps"
@@ -601,21 +600,8 @@ func (r *reconciler) createProwJob(ctx context.Context, log *logrus.Entry, ec *e
 	return nil
 }
 
-func (r *reconciler) prowJobName(periodic *prowconfig.Periodic, ec *ephemeralclusterv1.EphemeralCluster) (string, error) {
-	if pipelineRunName := ec.PipelineRunName(); pipelineRunName != "" {
-		return ProwJobNamePrefix + "-ci-" + pipelineRunName, nil
-	}
-
-	if taskRunName := ec.TaskRunName(); taskRunName != "" {
-		return ProwJobNamePrefix + "-ci-" + taskRunName, nil
-	}
-
-	jobNameWithoutPrefix, prefixCut := strings.CutPrefix(periodic.JobBase.Name, jobconfig.PeriodicPrefix)
-	if !prefixCut {
-		return "", fmt.Errorf("failed to strip %s prefix from %s", jobconfig.PeriodicPrefix, periodic.JobBase.Name)
-	}
-
-	return ProwJobNamePrefix + jobNameWithoutPrefix, nil
+func (r *reconciler) prowJobName(ec *ephemeralclusterv1.EphemeralCluster) string {
+	return ProwJobNamePrefix + "-ci-" + ec.Name
 }
 
 func (r *reconciler) makeProwJob(ciOperatorConfig *api.ReleaseBuildConfiguration, ec *ephemeralclusterv1.EphemeralCluster) (*prowv1.ProwJob, error) {
@@ -637,12 +623,7 @@ func (r *reconciler) makeProwJob(ciOperatorConfig *api.ReleaseBuildConfiguration
 		return nil, fmt.Errorf("default periodic: %w", err)
 	}
 
-	pjName, err := r.prowJobName(periodic, ec)
-	if err != nil {
-		return nil, fmt.Errorf("generate prowjob name: %w", err)
-	}
-
-	periodic.JobBase.Name = pjName
+	periodic.JobBase.Name = r.prowJobName(ec)
 	periodic.UtilityConfig.ExtraRefs = []prowv1.Refs{}
 
 	labels := make(map[string]string)

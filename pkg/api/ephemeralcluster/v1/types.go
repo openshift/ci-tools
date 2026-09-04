@@ -37,10 +37,8 @@ const (
 	EventReasonProwJobSucceeded      = "ProwJobSucceeded"
 	EventReasonProwJobAborted        = "ProwJobAborted"
 
-	KonfluxClusterAnnotation  = "ephemeralcluster.ci.openshift.io/konflux-cluster"
-	KonfluxTenantAnnotation   = "ephemeralcluster.ci.openshift.io/konflux-tenant"
-	PipelineRunNameAnnotation = "ephemeralcluster.ci.openshift.io/pipeline-run-name"
-	TaskRunNameAnnotation     = "ephemeralcluster.ci.openshift.io/task-run-name"
+	KonfluxClusterAnnotation = "ephemeralcluster.ci.openshift.io/konflux-cluster"
+	KonfluxTenantAnnotation  = "ephemeralcluster.ci.openshift.io/konflux-tenant"
 )
 
 // Conditions
@@ -95,20 +93,6 @@ func (ec *EphemeralCluster) KonfluxCluster() string {
 
 func (ec *EphemeralCluster) KonfluxTenant() string {
 	if value, ok := ec.Annotations[KonfluxTenantAnnotation]; ok {
-		return value
-	}
-	return ""
-}
-
-func (ec *EphemeralCluster) PipelineRunName() string {
-	if value, ok := ec.Annotations[PipelineRunNameAnnotation]; ok {
-		return value
-	}
-	return ""
-}
-
-func (ec *EphemeralCluster) TaskRunName() string {
-	if value, ok := ec.Annotations[TaskRunNameAnnotation]; ok {
 		return value
 	}
 	return ""

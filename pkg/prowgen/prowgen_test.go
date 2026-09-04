@@ -1238,3 +1238,181 @@ func TestBundleWithCapabilities(t *testing.T) {
 		})
 	}
 }
+
+func TestProjectImageCapabilitiesForTest(t *testing.T) {
+	config := &ciop.ReleaseBuildConfiguration{
+		Images: ciop.ImageConfiguration{Items: []ciop.ProjectDirectoryImageBuildStepConfiguration{
+			{
+				To:                      "required-arm",
+				Capabilities:            []string{"intranet"},
+				AdditionalArchitectures: []string{"arm64"},
+			},
+			{To: "optional-kvm", Capabilities: []string{"nested-kvm"}, Optional: true},
+			{To: "optional-child", From: "optional-kvm", Optional: true},
+			{To: "independent"},
+		}},
+		InputConfiguration: ciop.InputConfiguration{Releases: map[string]ciop.UnresolvedRelease{
+			"with-built-images":    {Integration: &ciop.Integration{IncludeBuiltImages: true}},
+			"without-built-images": {Integration: &ciop.Integration{}},
+		}},
+	}
+
+	tests := []struct {
+		name     string
+		test     ciop.TestStepConfiguration
+		expected []string
+	}{
+		{
+			name:     "container inherits capabilities through image dependencies",
+			test:     ciop.TestStepConfiguration{ContainerTestConfiguration: &ciop.ContainerTestConfiguration{From: "optional-child"}},
+			expected: []string{"nested-kvm"},
+		},
+		{
+			name:     "unrelated container is not constrained by other image builds",
+			test:     ciop.TestStepConfiguration{ContainerTestConfiguration: &ciop.ContainerTestConfiguration{From: "independent"}},
+			expected: []string{},
+		},
+		{
+			name: "cluster profile requires all non-optional images",
+			test: ciop.TestStepConfiguration{MultiStageTestConfigurationLiteral: &ciop.MultiStageTestConfigurationLiteral{
+				ClusterProfileLiteral: &ciop.ClusterProfileLiteral{},
+			}},
+			expected: []string{"arm64", "intranet"},
+		},
+		{
+			name: "inline cluster profile requires all non-optional images",
+			test: ciop.TestStepConfiguration{MultiStageTestConfiguration: &ciop.MultiStageTestConfiguration{
+				ClusterProfile: "aws",
+			}},
+			expected: []string{"arm64", "intranet"},
+		},
+		{
+			name: "literal step dependency selects optional image chain",
+			test: ciop.TestStepConfiguration{MultiStageTestConfigurationLiteral: &ciop.MultiStageTestConfigurationLiteral{
+				Test: []ciop.LiteralTestStep{{Dependencies: []ciop.StepDependency{{Name: "optional-child"}}}},
+			}},
+			expected: []string{"nested-kvm"},
+		},
+		{
+			name: "literal dependency pullspec override is case insensitive",
+			test: ciop.TestStepConfiguration{MultiStageTestConfigurationLiteral: &ciop.MultiStageTestConfigurationLiteral{
+				Test:                []ciop.LiteralTestStep{{Dependencies: []ciop.StepDependency{{Name: "optional-child", Env: "OPTIONAL_IMAGE"}}}},
+				DependencyOverrides: ciop.DependencyOverrides{"optional_image": "quay.io/example/external:latest"},
+			}},
+			expected: []string{},
+		},
+		{
+			name: "unresolved dependency pullspec override is case insensitive",
+			test: ciop.TestStepConfiguration{MultiStageTestConfiguration: &ciop.MultiStageTestConfiguration{
+				Test:                []ciop.TestStep{{LiteralTestStep: &ciop.LiteralTestStep{Dependencies: []ciop.StepDependency{{Name: "optional-child", Env: "Optional_Image"}}}}},
+				Dependencies:        ciop.TestDependencies{"OPTIONAL_IMAGE": "optional-child"},
+				DependencyOverrides: ciop.DependencyOverrides{"optional_image": "quay.io/example/external:latest"},
+			}},
+			expected: []string{},
+		},
+		{
+			name: "release assembled with built images requires non-optional images",
+			test: ciop.TestStepConfiguration{MultiStageTestConfigurationLiteral: &ciop.MultiStageTestConfigurationLiteral{
+				Test: []ciop.LiteralTestStep{{From: "release:with-built-images"}},
+			}},
+			expected: []string{"arm64", "intranet"},
+		},
+		{
+			name: "release without built images does not select image builds",
+			test: ciop.TestStepConfiguration{MultiStageTestConfigurationLiteral: &ciop.MultiStageTestConfigurationLiteral{
+				Test: []ciop.LiteralTestStep{{From: "release:without-built-images"}},
+			}},
+			expected: []string{},
+		},
+	}
+
+	for _, tc := range tests {
+		t.Run(tc.name, func(t *testing.T) {
+			testhelper.Diff(t, "capabilities", projectImageCapabilitiesForTest(config, tc.test), tc.expected)
+		})
+	}
+}
+
+func TestGenerateJobsPropagatesDependentImageCapabilities(t *testing.T) {
+	config := &ciop.ReleaseBuildConfiguration{
+		Images: ciop.ImageConfiguration{Items: []ciop.ProjectDirectoryImageBuildStepConfiguration{
+			{To: "required-arm", Capabilities: []string{"arm64"}},
+			{To: "optional-kvm", Capabilities: []string{"nested-kvm"}, Optional: true},
+			{To: "optional-child", From: "optional-kvm", Optional: true},
+			{To: "independent"},
+		}},
+		Tests: []ciop.TestStepConfiguration{
+			{
+				As:                         "dependent",
+				Capabilities:               []string{"intranet"},
+				ContainerTestConfiguration: &ciop.ContainerTestConfiguration{From: "optional-child"},
+			},
+			{
+				As:                         "independent",
+				ContainerTestConfiguration: &ciop.ContainerTestConfiguration{From: "independent"},
+			},
+		},
+	}
+	jobConfig, err := GenerateJobs(config, &ciop.Metadata{Org: "org", Repo: "repo", Branch: "main"}, clusterProfileResolverFunc())
+	if err != nil {
+		t.Fatalf("generate jobs: %v", err)
+	}
+
+	var dependent, independent map[string]string
+	for _, job := range jobConfig.PresubmitsStatic["org/repo"] {
+		switch {
+		case strings.HasSuffix(job.Name, "-dependent"):
+			dependent = job.Labels
+		case strings.HasSuffix(job.Name, "-independent"):
+			independent = job.Labels
+		}
+	}
+	if dependent == nil || independent == nil {
+		t.Fatalf("failed to find generated test jobs: dependent=%v independent=%v", dependent != nil, independent != nil)
+	}
+	for key, value := range map[string]string{
+		"capability/intranet":   "intranet",
+		"capability/nested-kvm": "nested-kvm",
+	} {
+		if dependent[key] != value {
+			t.Errorf("dependent job label %s: got %q, want %q", key, dependent[key], value)
+		}
+	}
+	if _, ok := dependent["capability/arm64"]; ok {
+		t.Error("dependent job unexpectedly inherited capability from an unrelated image")
+	}
+	for key := range independent {
+		if strings.HasPrefix(key, "capability/") {
+			t.Errorf("independent job unexpectedly has capability label %s", key)
+		}
+	}
+}
+
+func TestGenerateJobsPropagatesArm64ImageCapabilityToClusterProfileTest(t *testing.T) {
+	config := &ciop.ReleaseBuildConfiguration{
+		Images: ciop.ImageConfiguration{Items: []ciop.ProjectDirectoryImageBuildStepConfiguration{{
+			To:                      "hypershift-operator",
+			AdditionalArchitectures: []string{"arm64"},
+		}}},
+		Tests: []ciop.TestStepConfiguration{{
+			As: "e2e-aks",
+			MultiStageTestConfigurationLiteral: &ciop.MultiStageTestConfigurationLiteral{
+				ClusterProfileLiteral: &ciop.ClusterProfileLiteral{Name: "hypershift-aks", ClusterType: "azure"},
+			},
+		}},
+	}
+	jobConfig, err := GenerateJobs(config, &ciop.Metadata{Org: "openshift", Repo: "hypershift", Branch: "main"}, clusterProfileResolverFunc())
+	if err != nil {
+		t.Fatalf("generate jobs: %v", err)
+	}
+
+	for _, job := range jobConfig.PresubmitsStatic["openshift/hypershift"] {
+		if strings.HasSuffix(job.Name, "-e2e-aks") {
+			if actual := job.Labels["capability/arm64"]; actual != "arm64" {
+				t.Fatalf("generated e2e-aks capability/arm64 label: got %q, want %q", actual, "arm64")
+			}
+			return
+		}
+	}
+	t.Fatal("failed to find generated e2e-aks ProwJob")
+}

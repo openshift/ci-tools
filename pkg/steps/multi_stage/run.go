@@ -135,6 +135,11 @@ func (s *multiStageTestStep) runObservers(ctx, textCtx context.Context, pods []c
 }
 
 func (s *multiStageTestStep) runPod(ctx context.Context, pod *coreapi.Pod, notifier *base_steps.TestCaseNotifier, flags util.WaitForPodFlag) error {
+	junitName, err := s.junitNameForPod(pod)
+	if err != nil {
+		return err
+	}
+
 	start := time.Now()
 	logrus.Infof("Running step %s.", pod.Name)
 	client := s.client.WithNewLoggingClient()
@@ -182,7 +187,7 @@ func (s *multiStageTestStep) runPod(ctx context.Context, pod *coreapi.Pod, notif
 		Failed:      utilpointer.Bool(err != nil),
 		Manifests:   client.Objects(),
 	})
-	s.subTests = append(s.subTests, notifier.SubTests(fmt.Sprintf("%s - %s ", s.Description(), pod.Name))...)
+	s.subTests = append(s.subTests, notifier.SubTestsWithName(junitName)...)
 	s.subLock.Unlock()
 	if err != nil {
 		linksText := strings.Builder{}
@@ -201,4 +206,12 @@ func (s *multiStageTestStep) runPod(ctx context.Context, pod *coreapi.Pod, notif
 		return fmt.Errorf("%q pod %q %s: %w\n%s", s.name, pod.Name, status, err, linksText.String())
 	}
 	return nil
+}
+
+func (s *multiStageTestStep) junitNameForPod(pod *coreapi.Pod) (string, error) {
+	stepName := pod.Labels[base_steps.LabelMetadataStep]
+	if stepName == "" {
+		return "", fmt.Errorf("multi-stage test %q pod %q is missing required label %q", s.name, pod.Name, base_steps.LabelMetadataStep)
+	}
+	return fmt.Sprintf("Run multi-stage step %s", stepName), nil
 }

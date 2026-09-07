@@ -9,7 +9,6 @@ postsubmits:
       skip_cloning: true
     labels:
       ci.openshift.io/generator: prowgen
-      prowgen: newly-generated
     max_concurrency: 1
     name: branch-ci-norehearsals-duper-master-upload-results
     spec:

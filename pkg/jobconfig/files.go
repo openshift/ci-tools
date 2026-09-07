@@ -375,6 +375,8 @@ func WriteToDir(jobDir, org, repo string, jobConfig *prowconfig.JobConfig, gener
 			if err != nil {
 				return err
 			}
+		} else {
+			stripNewlyGeneratedLabel(jobConfig, generator)
 		}
 		sortConfigFields(jobConfig)
 		if err := writeFunc(filepath.Join(jobDirForComponent, file), jobConfig); err != nil {
@@ -709,6 +711,29 @@ func staleSelectorFor(generator Generator, pruneLabels labels.Set) (labels.Selec
 		ls = ls.Add(*req)
 	}
 	return ls, nil
+}
+
+func stripNewlyGeneratedLabel(jobConfig *prowconfig.JobConfig, generator Generator) {
+	key := string(generator)
+	for _, jobs := range jobConfig.PresubmitsStatic {
+		for i := range jobs {
+			if jobs[i].Labels[key] == string(newlyGenerated) {
+				delete(jobs[i].Labels, key)
+			}
+		}
+	}
+	for _, jobs := range jobConfig.PostsubmitsStatic {
+		for i := range jobs {
+			if jobs[i].Labels[key] == string(newlyGenerated) {
+				delete(jobs[i].Labels, key)
+			}
+		}
+	}
+	for i := range jobConfig.Periodics {
+		if jobConfig.Periodics[i].Labels[key] == string(newlyGenerated) {
+			delete(jobConfig.Periodics[i].Labels, key)
+		}
+	}
 }
 
 // Prune removes all generated jobs of the supplied Generator with values that are NOT newly-generated.

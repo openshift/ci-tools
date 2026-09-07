@@ -14,7 +14,6 @@ periodics:
   labels:
     ci.openshift.io/generator: prowgen
     pj-rehearse.openshift.io/can-be-rehearsed: "true"
-    prowgen: newly-generated
   name: periodic-ci-super-duper-master-e2e-aws-nightly
   spec:
     containers:
@@ -78,7 +77,6 @@ periodics:
   labels:
     ci.openshift.io/generator: prowgen
     pj-rehearse.openshift.io/can-be-rehearsed: "true"
-    prowgen: newly-generated
   name: periodic-ci-super-duper-master-e2e-aws-nightly-interval
   spec:
     containers:
@@ -142,7 +140,6 @@ periodics:
   labels:
     ci.openshift.io/generator: prowgen
     pj-rehearse.openshift.io/can-be-rehearsed: "true"
-    prowgen: newly-generated
   name: periodic-ci-super-duper-master-e2e-nightly
   spec:
     containers:
@@ -207,7 +204,6 @@ periodics:
     ci-operator.openshift.io/release-controller: "true"
     ci.openshift.io/generator: prowgen
     pj-rehearse.openshift.io/can-be-rehearsed: "true"
-    prowgen: newly-generated
   name: periodic-ci-super-duper-master-informer
   spec:
     containers:

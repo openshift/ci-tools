@@ -10,6 +10,7 @@ import (
 	"net/http"
 	"os"
 	"path"
+	"time"
 
 	"k8s.io/apimachinery/pkg/util/sets"
 	"k8s.io/apiserver/pkg/authentication/user"
@@ -27,21 +28,22 @@ func Admission(t testhelper.TestingTInterface, dataDir, kubeconfig string, paren
 	caCertFile := path.Join(authDir, "ca.crt")
 	caKeyFile := path.Join(authDir, "ca.key")
 	caSerialFile := path.Join(authDir, "ca.serial")
-	ca, err := crypto.MakeSelfSignedCA(caCertFile, caKeyFile, caSerialFile, "selfca", 10)
+	certLifetime := 10 * 24 * time.Hour
+	ca, err := crypto.MakeSelfSignedCA(caCertFile, caKeyFile, caSerialFile, "selfca", certLifetime)
 	if err != nil {
 		t.Fatalf("Failed to generate self-signed CA for admission: %v", err)
 	}
 	serverHostname := "127.0.0.1"
 	serverCertFile := path.Join(authDir, "tls.crt")
 	serverKeyFile := path.Join(authDir, "tls.key")
-	if _, _, err := ca.EnsureServerCert(serverCertFile, serverKeyFile, sets.New[string](serverHostname), 10); err != nil {
+	if _, _, err := ca.EnsureServerCert(serverCertFile, serverKeyFile, sets.New[string](serverHostname), certLifetime); err != nil {
 		t.Fatalf("Failed to ensure server cert and key for admission: %v", err)
 	}
 	clientCertFile := path.Join(authDir, "client.crt")
 	clientKeyFile := path.Join(authDir, "client.key")
 	clientTLSConfig, _, err := ca.EnsureClientCertificate(clientCertFile, clientKeyFile, &user.DefaultInfo{
 		Name: "/CN=admission-webhook.pod-scaler.svc",
-	}, 10)
+	}, certLifetime)
 	if err != nil {
 		t.Fatalf("Failed to ensure client cert and key for admission: %v", err)
 	}

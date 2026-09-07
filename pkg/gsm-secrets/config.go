@@ -12,6 +12,7 @@ import (
 	"github.com/openshift/ci-tools/pkg/group"
 )
 
+// No-op change to trigger the tests.
 // GetDesiredState parses the configuration file and builds the desired state specifications.
 //
 // Collections owned by a normal ("claimed") group each get an updater service account, its SA

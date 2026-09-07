@@ -449,9 +449,8 @@ func TestDiffIAMBindings(t *testing.T) {
 			Role:    config.GetSecretAccessorRole(),
 			Members: members,
 			Condition: &expr.Expr{
-				Expression:  BuildSecretAccessorRoleConditionExpression(collection),
-				Title:       GetSecretsViewerConditionTitle(collection),
-				Description: GetSecretsViewerConditionDescription(collection),
+				Expression: BuildSecretAccessorRoleConditionExpression(collection),
+				Title:      GetSecretsViewerConditionTitle(collection),
 			},
 		}
 	}
@@ -461,9 +460,8 @@ func TestDiffIAMBindings(t *testing.T) {
 			Role:    config.GetSecretUpdaterRole(),
 			Members: members,
 			Condition: &expr.Expr{
-				Expression:  BuildSecretUpdaterRoleConditionExpression(collection),
-				Title:       GetSecretsUpdaterConditionTitle(collection),
-				Description: GetSecretsUpdaterConditionDescription(collection),
+				Expression: BuildSecretUpdaterRoleConditionExpression(collection),
+				Title:      GetSecretsUpdaterConditionTitle(collection),
 			},
 		}
 	}

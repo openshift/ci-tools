@@ -1,84 +1,66 @@
 - condition:
-    description: 'Managed by test platform: Read access to secrets in collection-alpha
-      collection'
     expression: resource.name.extract("secrets/{s}/versions/") in ["collection-alpha__updater-service-account",
       "collection-alpha____index"]
-    title: Read access to secrets for collection-alpha
+    title: 'tp-viewer: collection-alpha'
   members:
   - serviceAccount:collection-alpha-updater@test-project.iam.gserviceaccount.com
   role: projects/test-project/roles/openshift_ci_secrets_viewer
 - condition:
-    description: 'Managed by test platform: Create, update, and delete access to secrets
-      in collection-alpha collection'
     expression: resource.name.extract("secrets/{c}__") in ["collection-alpha"]
-    title: Create, update, and delete access for collection-alpha
+    title: 'tp-updater: collection-alpha'
   members:
   - serviceAccount:collection-alpha-updater@test-project.iam.gserviceaccount.com
   role: projects/test-project/roles/openshift_ci_secrets_updater
 - condition:
-    description: 'Managed by test platform: Read access to secrets in shared-collection
-      collection'
     expression: resource.name.extract("secrets/{s}/versions/") in ["shared-collection__updater-service-account",
       "shared-collection____index"]
-    title: Read access to secrets for shared-collection
+    title: 'tp-viewer: shared-collection'
   members:
   - serviceAccount:shared-collection-updater@test-project.iam.gserviceaccount.com
   role: projects/test-project/roles/openshift_ci_secrets_viewer
 - condition:
-    description: 'Managed by test platform: Create, update, and delete access to secrets
-      in shared-collection collection'
     expression: resource.name.extract("secrets/{c}__") in ["shared-collection"]
-    title: Create, update, and delete access for shared-collection
+    title: 'tp-updater: shared-collection'
   members:
   - serviceAccount:shared-collection-updater@test-project.iam.gserviceaccount.com
   role: projects/test-project/roles/openshift_ci_secrets_updater
 - condition:
-    description: 'Managed by test platform: Read access to secrets in some-collection-with-a-very-long-name
-      collection'
     expression: resource.name.extract("secrets/{s}/versions/") in ["some-collection-with-a-very-long-name__updater-service-account",
       "some-collection-with-a-very-long-name____index"]
-    title: Read access to secrets for some-collection-with-a-very-long-name
+    title: 'tp-viewer: some-collection-with-a-very-long-name'
   members:
   - serviceAccount:ynbbgzp1q3u3iwp8edyqix-updater@test-project.iam.gserviceaccount.com
   role: projects/test-project/roles/openshift_ci_secrets_viewer
 - condition:
-    description: 'Managed by test platform: Create, update, and delete access to secrets
-      in some-collection-with-a-very-long-name collection'
     expression: resource.name.extract("secrets/{c}__") in ["some-collection-with-a-very-long-name"]
-    title: Create, update, and delete access for some-collection-with-a-very-long-name
+    title: 'tp-updater: some-collection-with-a-very-long-name'
   members:
   - serviceAccount:ynbbgzp1q3u3iwp8edyqix-updater@test-project.iam.gserviceaccount.com
   role: projects/test-project/roles/openshift_ci_secrets_updater
 - condition:
-    description: 'Managed by test platform: Read access to secrets for group team-alpha'
     expression: resource.name.extract("secrets/{s}/versions/") in ["collection-alpha__updater-service-account",
       "collection-alpha____index", "shared-collection__updater-service-account", "shared-collection____index"]
-    title: Read access to secrets for group team-alpha
+    title: 'tp-viewer: team-alpha'
   members:
   - group:team-alpha@redhat.com
   role: projects/test-project/roles/openshift_ci_secrets_viewer
 - condition:
-    description: 'Managed by test platform: Create, update, and delete access to secrets
-      for group team-alpha'
     expression: resource.name.extract("secrets/{c}__") in ["collection-alpha", "shared-collection"]
-    title: Create, update, and delete access for group team-alpha
+    title: 'tp-updater: team-alpha'
   members:
   - group:team-alpha@redhat.com
   role: projects/test-project/roles/openshift_ci_secrets_updater
 - condition:
-    description: 'Managed by test platform: Read access to secrets for group team-beta'
     expression: resource.name.extract("secrets/{s}/versions/") in ["shared-collection__updater-service-account",
       "shared-collection____index", "some-collection-with-a-very-long-name__updater-service-account",
       "some-collection-with-a-very-long-name____index"]
-    title: Read access to secrets for group team-beta
+    title: 'tp-viewer: team-beta'
   members:
   - group:team-beta@redhat.com
   role: projects/test-project/roles/openshift_ci_secrets_viewer
 - condition:
-    description: 'Managed by test platform: Create, update, and delete access to secrets
-      for group team-beta'
     expression: resource.name.extract("secrets/{c}__") in ["shared-collection", "some-collection-with-a-very-long-name"]
-    title: Create, update, and delete access for group team-beta
+    title: 'tp-updater: team-beta'
   members:
   - group:team-beta@redhat.com
   role: projects/test-project/roles/openshift_ci_secrets_updater

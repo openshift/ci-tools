@@ -1,1 +1,1 @@
-{"kind":"AdmissionReview","apiVersion":"admission.k8s.io/v1","response":{"uid":"705ab4f5-6393-11e8-b7cc-42010a800002","allowed":true,"status":{"metadata":{},"code":200}}}
+{"kind":"AdmissionReview","apiVersion":"admission.k8s.io/v1","response":{"uid":"705ab4f5-6393-11e8-b7cc-42010a800002","allowed":true,"status":{"metadata":{},"code":200},"patch":"W3sib3AiOiJyZW1vdmUiLCJwYXRoIjoiL21ldGFkYXRhL2NyZWF0aW9uVGltZXN0YW1wIn1d","patchType":"JSONPatch"}}

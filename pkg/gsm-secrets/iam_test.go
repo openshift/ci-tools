@@ -263,7 +263,7 @@ func TestIsManagedBinding(t *testing.T) {
 			expected: false,
 		},
 		{
-			name: "correct binding with different description",
+			name: "description is not part of the detection",
 			binding: &iampb.Binding{
 				Role:    config.GetSecretUpdaterRole(),
 				Members: []string{"serviceAccount:test@example.com"},
@@ -271,6 +271,19 @@ func TestIsManagedBinding(t *testing.T) {
 					Title:       GetSecretsUpdaterConditionTitle("test-collection"),
 					Description: "some wrong description",
 					Expression:  BuildSecretUpdaterRoleConditionExpression("test-collection"),
+				},
+			},
+			expected: true,
+		},
+		{
+			name: "hand-made exception binding on a managed role",
+			binding: &iampb.Binding{
+				Role:    config.GetSecretAccessorRole(),
+				Members: []string{"group:team-x@redhat.com"},
+				Condition: &expr.Expr{
+					Title:       "EXCEPTION: read secrets for team-x",
+					Description: "MANUAL EXCEPTION: permission to read secret values in team-x collection",
+					Expression:  `resource.name.extract("secrets/{secret}").startsWith("team-x__")`,
 				},
 			},
 			expected: false,

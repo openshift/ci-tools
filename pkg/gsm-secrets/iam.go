@@ -12,28 +12,28 @@ import (
 	"github.com/sirupsen/logrus"
 )
 
+// The two roles need different templates because GCP checks their permissions on different
+// resources. The viewer only holds versions.access, checked on "projects/P/secrets/S/versions/V",
+// so anchoring on "/versions/" makes {s} stop at the secret name and match by equality. The
+// updater also holds secrets.get/update/delete, checked on the bare "projects/P/secrets/S",
+// where that anchor finds nothing and returns ""; the greedy template yields the secret name
+// there and "S/versions/V" on a version, both of which satisfy the prefix match.
+//
+// Dropping the "resource.type" guard is safe: an unmatched template returns "" and the
+// condition is false, so access fails closed.
+const (
+	viewerSecretNameTemplate  = `resource.name.extract("secrets/{s}/versions/")`
+	updaterSecretNameTemplate = `resource.name.extract("secrets/{secret}")`
+)
+
 // BuildSecretAccessorRoleConditionExpression builds the IAM condition expression for secret accessor role
 func BuildSecretAccessorRoleConditionExpression(collection string) string {
-	// Define the two specific secrets this role can access
-	updaterSecret := fmt.Sprintf("%s%s", collection, UpdaterSASecretSuffix)
-	indexSecret := fmt.Sprintf("%s%s", collection, IndexSecretSuffix)
-
-	return fmt.Sprintf(`(
-  resource.type == "secretmanager.googleapis.com/SecretVersion" ||
-  resource.type == "secretmanager.googleapis.com/Secret"
-) && (
-  resource.name.extract("secrets/{secret}") == "%s" ||
-  resource.name.extract("secrets/{secret}") == "%s"
-)`, updaterSecret, indexSecret)
+	return BuildSecretAccessorRoleConditionExpressionForCollections([]string{collection})
 }
 
 // BuildSecretUpdaterRoleConditionExpression builds the IAM condition expression for secret updater role
 func BuildSecretUpdaterRoleConditionExpression(collection string) string {
-	return fmt.Sprintf(`(
-  resource.type == "secretmanager.googleapis.com/SecretVersion" ||
-  resource.type == "secretmanager.googleapis.com/Secret"
-) && 
-  resource.name.extract("secrets/{secret}").startsWith("%s__")`, collection)
+	return BuildSecretUpdaterRoleConditionExpressionForCollections([]string{collection})
 }
 
 // BuildSecretAccessorRoleConditionExpressionForCollections builds the viewer IAM condition
@@ -43,16 +43,11 @@ func BuildSecretAccessorRoleConditionExpressionForCollections(collections []stri
 	var terms []string
 	for _, collection := range collections {
 		terms = append(terms,
-			fmt.Sprintf(`  resource.name.extract("secrets/{secret}") == "%s%s"`, collection, UpdaterSASecretSuffix),
-			fmt.Sprintf(`  resource.name.extract("secrets/{secret}") == "%s%s"`, collection, IndexSecretSuffix),
+			fmt.Sprintf(`%s == "%s%s"`, viewerSecretNameTemplate, collection, UpdaterSASecretSuffix),
+			fmt.Sprintf(`%s == "%s%s"`, viewerSecretNameTemplate, collection, IndexSecretSuffix),
 		)
 	}
-	return fmt.Sprintf(`(
-  resource.type == "secretmanager.googleapis.com/SecretVersion" ||
-  resource.type == "secretmanager.googleapis.com/Secret"
-) && (
-%s
-)`, strings.Join(terms, " ||\n"))
+	return strings.Join(terms, " || ")
 }
 
 // BuildSecretUpdaterRoleConditionExpressionForCollections builds the updater IAM condition
@@ -61,14 +56,9 @@ func BuildSecretAccessorRoleConditionExpressionForCollections(collections []stri
 func BuildSecretUpdaterRoleConditionExpressionForCollections(collections []string) string {
 	var terms []string
 	for _, collection := range collections {
-		terms = append(terms, fmt.Sprintf(`  resource.name.extract("secrets/{secret}").startsWith("%s__")`, collection))
+		terms = append(terms, fmt.Sprintf(`%s.startsWith("%s__")`, updaterSecretNameTemplate, collection))
 	}
-	return fmt.Sprintf(`(
-  resource.type == "secretmanager.googleapis.com/SecretVersion" ||
-  resource.type == "secretmanager.googleapis.com/Secret"
-) && (
-%s
-)`, strings.Join(terms, " ||\n"))
+	return strings.Join(terms, " || ")
 }
 
 // chunkCollections splits a sorted slice of collections into consecutive chunks of at most
@@ -133,23 +123,19 @@ func IsManagedBinding(b *iampb.Binding) bool {
 		return false
 	}
 
+	// The title prefix is what separates our bindings from hand-made ones on the same roles,
+	// such as the "EXCEPTION: ..." grants, which must be left untouched.
 	title := b.Condition.GetTitle()
-	description := b.Condition.GetDescription()
-
-	titleMatches := strings.HasPrefix(title, SecretsViewerConditionTitlePrefix) ||
-		strings.HasPrefix(title, SecretsUpdaterConditionTitlePrefix)
-	descriptionMatches := strings.HasPrefix(description, fmt.Sprintf("Managed by %s:", TestPlatform))
-
-	if !titleMatches || !descriptionMatches {
+	if !strings.HasPrefix(title, SecretsViewerConditionTitlePrefix) &&
+		!strings.HasPrefix(title, SecretsUpdaterConditionTitlePrefix) {
 		return false
 	}
 
 	expr := b.Condition.Expression
-	hasSecretManagerResource := strings.Contains(expr, "secretmanager.googleapis.com")
-	hasSecretExtract := strings.Contains(expr, `resource.name.extract("secrets/{secret}")`)
+	hasSecretExtract := strings.Contains(expr, "resource.name.extract(")
 	hasExpectedPattern := strings.Contains(expr, "startsWith(") || strings.Contains(expr, "==")
 
-	return hasSecretManagerResource && hasSecretExtract && hasExpectedPattern
+	return hasSecretExtract && hasExpectedPattern
 }
 
 // ToCanonicalIAMBinding converts an iampb.Binding into our canonical form.

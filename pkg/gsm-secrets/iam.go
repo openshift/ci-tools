@@ -14,16 +14,20 @@ import (
 
 // The two roles need different templates because GCP checks their permissions on different
 // resources. The viewer only holds versions.access, checked on "projects/P/secrets/S/versions/V",
-// so anchoring on "/versions/" makes {s} stop at the secret name and match by equality. The
-// updater also holds secrets.get/update/delete, checked on the bare "projects/P/secrets/S",
-// where that anchor finds nothing and returns ""; the greedy template yields the secret name
-// there and "S/versions/V" on a version, both of which satisfy the prefix match.
+// so anchoring on "/versions/" makes {s} stop at the secret name. The updater also holds
+// secrets.get/update/delete, checked on the bare "projects/P/secrets/S", where that anchor finds
+// nothing and returns ""; anchoring on the "__" delimiter works on both resource types, since
+// extract stops at the first "__" and so yields the bare collection name even for "<c>____index"
+// and nested "<c>__group__field".
+//
+// Matching with "in" rather than chained "==" or startsWith() is what lets one binding cover a
+// whole group: "in" does not count against GCP's limit of 12 logical operators per condition.
 //
 // Dropping the "resource.type" guard is safe: an unmatched template returns "" and the
 // condition is false, so access fails closed.
 const (
 	viewerSecretNameTemplate  = `resource.name.extract("secrets/{s}/versions/")`
-	updaterSecretNameTemplate = `resource.name.extract("secrets/{secret}")`
+	updaterSecretNameTemplate = `resource.name.extract("secrets/{c}__")`
 )
 
 // BuildSecretAccessorRoleConditionExpression builds the IAM condition expression for secret accessor role
@@ -37,39 +41,33 @@ func BuildSecretUpdaterRoleConditionExpression(collection string) string {
 }
 
 // BuildSecretAccessorRoleConditionExpressionForCollections builds the viewer IAM condition
-// expression covering multiple collections. It is used for group bindings, where a group's
-// collections are chunked to keep the number of logical operators within GCP's limits.
+// expression covering multiple collections: each collection's updater service account secret
+// and its index secret, never its data secrets.
 func BuildSecretAccessorRoleConditionExpressionForCollections(collections []string) string {
-	var terms []string
+	var names []string
 	for _, collection := range collections {
-		terms = append(terms,
-			fmt.Sprintf(`%s == "%s%s"`, viewerSecretNameTemplate, collection, UpdaterSASecretSuffix),
-			fmt.Sprintf(`%s == "%s%s"`, viewerSecretNameTemplate, collection, IndexSecretSuffix),
+		names = append(names,
+			fmt.Sprintf("%s%s", collection, UpdaterSASecretSuffix),
+			fmt.Sprintf("%s%s", collection, IndexSecretSuffix),
 		)
 	}
-	return strings.Join(terms, " || ")
+	return fmt.Sprintf("%s in [%s]", viewerSecretNameTemplate, quoteJoin(names))
 }
 
 // BuildSecretUpdaterRoleConditionExpressionForCollections builds the updater IAM condition
-// expression covering multiple collections. It is used for group bindings, where a group's
-// collections are chunked to keep the number of logical operators within GCP's limits.
+// expression covering multiple collections: any secret in any of them.
 func BuildSecretUpdaterRoleConditionExpressionForCollections(collections []string) string {
-	var terms []string
-	for _, collection := range collections {
-		terms = append(terms, fmt.Sprintf(`%s.startsWith("%s__")`, updaterSecretNameTemplate, collection))
-	}
-	return strings.Join(terms, " || ")
+	return fmt.Sprintf("%s in [%s]", updaterSecretNameTemplate, quoteJoin(collections))
 }
 
-// chunkCollections splits a sorted slice of collections into consecutive chunks of at most
-// size. Chunking is deterministic so binding conditions stay stable across reconciler runs.
-func chunkCollections(collections []string, size int) [][]string {
-	var chunks [][]string
-	for i := 0; i < len(collections); i += size {
-		end := min(i+size, len(collections))
-		chunks = append(chunks, collections[i:end])
+// quoteJoin renders values as a comma-separated list of CEL string literals. Collection and
+// secret names are restricted to [a-z0-9_-], so no escaping is needed.
+func quoteJoin(values []string) string {
+	quoted := make([]string, 0, len(values))
+	for _, v := range values {
+		quoted = append(quoted, fmt.Sprintf("%q", v))
 	}
-	return chunks
+	return strings.Join(quoted, ", ")
 }
 
 // GetSecretsViewerConditionTitle returns the condition title for secrets viewer role
@@ -77,24 +75,24 @@ func GetSecretsViewerConditionTitle(collection string) string {
 	return fmt.Sprintf("%s%s", SecretsViewerConditionTitlePrefix, collection)
 }
 
-// GetSecretsViewerGroupConditionTitle returns the viewer condition title for a group binding chunk.
-func GetSecretsViewerGroupConditionTitle(group string, chunkIdx int) string {
-	return fmt.Sprintf("%sgroup %s (set %d)", SecretsViewerConditionTitlePrefix, group, chunkIdx+1)
+// GetSecretsViewerGroupConditionTitle returns the viewer condition title for a group binding.
+func GetSecretsViewerGroupConditionTitle(group string) string {
+	return fmt.Sprintf("%sgroup %s", SecretsViewerConditionTitlePrefix, group)
 }
 
-// GetSecretsUpdaterGroupConditionTitle returns the updater condition title for a group binding chunk.
-func GetSecretsUpdaterGroupConditionTitle(group string, chunkIdx int) string {
-	return fmt.Sprintf("%sgroup %s (set %d)", SecretsUpdaterConditionTitlePrefix, group, chunkIdx+1)
+// GetSecretsUpdaterGroupConditionTitle returns the updater condition title for a group binding.
+func GetSecretsUpdaterGroupConditionTitle(group string) string {
+	return fmt.Sprintf("%sgroup %s", SecretsUpdaterConditionTitlePrefix, group)
 }
 
-// GetSecretsViewerGroupConditionDescription returns the viewer condition description for a group binding chunk.
-func GetSecretsViewerGroupConditionDescription(group string, chunkIdx int) string {
-	return fmt.Sprintf("Managed by %s: Read access to secrets for group %s (set %d)", TestPlatform, group, chunkIdx+1)
+// GetSecretsViewerGroupConditionDescription returns the viewer condition description for a group binding.
+func GetSecretsViewerGroupConditionDescription(group string) string {
+	return fmt.Sprintf("Managed by %s: Read access to secrets for group %s", TestPlatform, group)
 }
 
-// GetSecretsUpdaterGroupConditionDescription returns the updater condition description for a group binding chunk.
-func GetSecretsUpdaterGroupConditionDescription(group string, chunkIdx int) string {
-	return fmt.Sprintf("Managed by %s: Create, update, and delete access to secrets for group %s (set %d)", TestPlatform, group, chunkIdx+1)
+// GetSecretsUpdaterGroupConditionDescription returns the updater condition description for a group binding.
+func GetSecretsUpdaterGroupConditionDescription(group string) string {
+	return fmt.Sprintf("Managed by %s: Create, update, and delete access to secrets for group %s", TestPlatform, group)
 }
 
 // GetSecretsUpdaterConditionTitle returns the condition title for secrets updater role
@@ -133,7 +131,9 @@ func IsManagedBinding(b *iampb.Binding) bool {
 
 	expr := b.Condition.Expression
 	hasSecretExtract := strings.Contains(expr, "resource.name.extract(")
-	hasExpectedPattern := strings.Contains(expr, "startsWith(") || strings.Contains(expr, "==")
+	hasExpectedPattern := strings.Contains(expr, " in [") ||
+		strings.Contains(expr, "startsWith(") ||
+		strings.Contains(expr, "==")
 
 	return hasSecretExtract && hasExpectedPattern
 }

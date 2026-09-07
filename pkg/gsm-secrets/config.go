@@ -16,9 +16,8 @@ import (
 //
 // Collections owned by a normal ("claimed") group each get an updater service account, its SA
 // secret, an index secret, and service-account-scoped viewer/updater bindings limited to that
-// single collection. Each owning group additionally gets its own viewer/updater bindings; a
-// group's collections are chunked (at most MaxCollectionsPerGroupBinding per binding) so no
-// single binding exceeds GCP's IAM limits on operators per condition and bindings per role+member.
+// single collection. Each owning group additionally gets one viewer and one updater binding
+// covering all of its collections.
 //
 // Collections owned only by an "unclaimed" group (see group.Target.Unclaimed) are kept in the
 // active-collection set so their migrated data secrets are not deleted, but they get no service
@@ -104,8 +103,8 @@ func GetDesiredState(configFile string, config Config) ([]ServiceAccountInfo, ma
 		})
 	}
 
-	// Per claimed group: viewer/updater bindings for the group principal, chunked so each
-	// binding condition stays within GCP's IAM limits.
+	// Per claimed group: one viewer and one updater binding covering all of the group's
+	// collections, however many it owns.
 	for _, name := range groupNames {
 		groupCfg := groupConfig.Groups[name]
 		if groupCfg.Unclaimed || len(groupCfg.SecretCollections) == 0 {
@@ -118,26 +117,24 @@ func GetDesiredState(configFile string, config Config) ([]ServiceAccountInfo, ma
 		copy(collections, groupCfg.SecretCollections)
 		sort.Strings(collections)
 
-		for chunkIdx, chunk := range chunkCollections(collections, MaxCollectionsPerGroupBinding) {
-			desiredIAMBindings = append(desiredIAMBindings, &iampb.Binding{
-				Role:    config.GetSecretAccessorRole(),
-				Members: groupMembers,
-				Condition: &expr.Expr{
-					Expression:  BuildSecretAccessorRoleConditionExpressionForCollections(chunk),
-					Title:       GetSecretsViewerGroupConditionTitle(name, chunkIdx),
-					Description: GetSecretsViewerGroupConditionDescription(name, chunkIdx),
-				},
-			})
-			desiredIAMBindings = append(desiredIAMBindings, &iampb.Binding{
-				Role:    config.GetSecretUpdaterRole(),
-				Members: groupMembers,
-				Condition: &expr.Expr{
-					Expression:  BuildSecretUpdaterRoleConditionExpressionForCollections(chunk),
-					Title:       GetSecretsUpdaterGroupConditionTitle(name, chunkIdx),
-					Description: GetSecretsUpdaterGroupConditionDescription(name, chunkIdx),
-				},
-			})
-		}
+		desiredIAMBindings = append(desiredIAMBindings, &iampb.Binding{
+			Role:    config.GetSecretAccessorRole(),
+			Members: groupMembers,
+			Condition: &expr.Expr{
+				Expression:  BuildSecretAccessorRoleConditionExpressionForCollections(collections),
+				Title:       GetSecretsViewerGroupConditionTitle(name),
+				Description: GetSecretsViewerGroupConditionDescription(name),
+			},
+		})
+		desiredIAMBindings = append(desiredIAMBindings, &iampb.Binding{
+			Role:    config.GetSecretUpdaterRole(),
+			Members: groupMembers,
+			Condition: &expr.Expr{
+				Expression:  BuildSecretUpdaterRoleConditionExpressionForCollections(collections),
+				Title:       GetSecretsUpdaterGroupConditionTitle(name),
+				Description: GetSecretsUpdaterGroupConditionDescription(name),
+			},
+		})
 	}
 
 	return desiredSAs, desiredSecrets, desiredIAMBindings, desiredCollections, nil

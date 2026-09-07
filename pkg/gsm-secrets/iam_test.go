@@ -168,43 +168,31 @@ func TestToCanonicalIAMBinding(t *testing.T) {
 	}
 }
 
-func TestChunkCollections(t *testing.T) {
+func TestBuildConditionExpressions(t *testing.T) {
 	testCases := []struct {
-		name        string
-		collections []string
-		size        int
-		expected    [][]string
+		name            string
+		collections     []string
+		expectedViewer  string
+		expectedUpdater string
 	}{
 		{
-			name:        "empty",
-			collections: nil,
-			size:        5,
-			expected:    nil,
+			name:            "single collection",
+			collections:     []string{"alpha"},
+			expectedViewer:  `resource.name.extract("secrets/{s}/versions/") in ["alpha__updater-service-account", "alpha____index"]`,
+			expectedUpdater: `resource.name.extract("secrets/{c}__") in ["alpha"]`,
 		},
 		{
-			name:        "fewer than size",
-			collections: []string{"a", "b"},
-			size:        5,
-			expected:    [][]string{{"a", "b"}},
-		},
-		{
-			name:        "exact multiple of size",
-			collections: []string{"a", "b", "c", "d"},
-			size:        2,
-			expected:    [][]string{{"a", "b"}, {"c", "d"}},
-		},
-		{
-			name:        "size with remainder",
-			collections: []string{"a", "b", "c", "d", "e"},
-			size:        2,
-			expected:    [][]string{{"a", "b"}, {"c", "d"}, {"e"}},
+			name:            "multiple collections",
+			collections:     []string{"alpha", "beta"},
+			expectedViewer:  `resource.name.extract("secrets/{s}/versions/") in ["alpha__updater-service-account", "alpha____index", "beta__updater-service-account", "beta____index"]`,
+			expectedUpdater: `resource.name.extract("secrets/{c}__") in ["alpha", "beta"]`,
 		},
 	}
 
 	for _, tc := range testCases {
 		t.Run(tc.name, func(t *testing.T) {
-			actual := chunkCollections(tc.collections, tc.size)
-			testhelper.Diff(t, "chunks", actual, tc.expected)
+			testhelper.Diff(t, "viewer", BuildSecretAccessorRoleConditionExpressionForCollections(tc.collections), tc.expectedViewer)
+			testhelper.Diff(t, "updater", BuildSecretUpdaterRoleConditionExpressionForCollections(tc.collections), tc.expectedUpdater)
 		})
 	}
 }
@@ -301,26 +289,26 @@ func TestIsManagedBinding(t *testing.T) {
 			expected: false,
 		},
 		{
-			name: "group viewer binding chunk",
+			name: "group viewer binding",
 			binding: &iampb.Binding{
 				Role:    config.GetSecretAccessorRole(),
 				Members: []string{"group:team-x@redhat.com"},
 				Condition: &expr.Expr{
-					Title:       GetSecretsViewerGroupConditionTitle("team-x", 0),
-					Description: GetSecretsViewerGroupConditionDescription("team-x", 0),
+					Title:       GetSecretsViewerGroupConditionTitle("team-x"),
+					Description: GetSecretsViewerGroupConditionDescription("team-x"),
 					Expression:  BuildSecretAccessorRoleConditionExpressionForCollections([]string{"a", "b"}),
 				},
 			},
 			expected: true,
 		},
 		{
-			name: "group updater binding chunk",
+			name: "group updater binding",
 			binding: &iampb.Binding{
 				Role:    config.GetSecretUpdaterRole(),
 				Members: []string{"group:team-x@redhat.com"},
 				Condition: &expr.Expr{
-					Title:       GetSecretsUpdaterGroupConditionTitle("team-x", 1),
-					Description: GetSecretsUpdaterGroupConditionDescription("team-x", 1),
+					Title:       GetSecretsUpdaterGroupConditionTitle("team-x"),
+					Description: GetSecretsUpdaterGroupConditionDescription("team-x"),
 					Expression:  BuildSecretUpdaterRoleConditionExpressionForCollections([]string{"a", "b"}),
 				},
 			},

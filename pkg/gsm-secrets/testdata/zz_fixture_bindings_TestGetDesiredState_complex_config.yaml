@@ -1,30 +1,4 @@
 - condition:
-    expression: resource.name.extract("secrets/{s}/versions/") in ["alpha-secrets__updater-service-account",
-      "alpha-secrets____index"]
-    title: 'tp-viewer: alpha-secrets'
-  members:
-  - serviceAccount:alpha-secrets-updater@test-project.iam.gserviceaccount.com
-  role: projects/test-project/roles/openshift_ci_secrets_viewer
-- condition:
-    expression: resource.name.extract("secrets/{c}__") in ["alpha-secrets"]
-    title: 'tp-updater: alpha-secrets'
-  members:
-  - serviceAccount:alpha-secrets-updater@test-project.iam.gserviceaccount.com
-  role: projects/test-project/roles/openshift_ci_secrets_updater
-- condition:
-    expression: resource.name.extract("secrets/{s}/versions/") in ["beta-delta-secrets__updater-service-account",
-      "beta-delta-secrets____index"]
-    title: 'tp-viewer: beta-delta-secrets'
-  members:
-  - serviceAccount:beta-delta-secrets-updater@test-project.iam.gserviceaccount.com
-  role: projects/test-project/roles/openshift_ci_secrets_viewer
-- condition:
-    expression: resource.name.extract("secrets/{c}__") in ["beta-delta-secrets"]
-    title: 'tp-updater: beta-delta-secrets'
-  members:
-  - serviceAccount:beta-delta-secrets-updater@test-project.iam.gserviceaccount.com
-  role: projects/test-project/roles/openshift_ci_secrets_updater
-- condition:
     expression: resource.name.extract("secrets/{s}/versions/") in ["epsilon-secrets__updater-service-account",
       "epsilon-secrets____index"]
     title: 'tp-viewer: epsilon-secrets'

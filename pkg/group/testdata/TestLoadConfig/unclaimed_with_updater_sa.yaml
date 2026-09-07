@@ -1,0 +1,7 @@
+groups:
+  test-platform-gsm-unclaimed-secrets:
+    unclaimed: true
+    secret_collections:
+    - orphan-secrets
+    updater_service_accounts:
+    - orphan-secrets

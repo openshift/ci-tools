@@ -12,6 +12,8 @@ groups:
     - app.ci
     secret_collections:
     - alpha-secrets
+    updater_service_accounts:
+    - alpha-secrets
   team-noop:
     cluster_groups:
     - dp-managed

@@ -68,12 +68,16 @@ func DiffSecrets(desiredSecrets, actualSecrets map[string]GCPSecret, desiredColl
 	}
 
 	for _, secret := range actualSecrets {
-		if desiredCollections[secret.Collection] {
+		if !desiredCollections[secret.Collection] {
+			toDelete = append(toDelete, secret)
+			logrus.Debugf("Scheduling secret '%s' for deletion (collection '%s' not in config)", secret.Name, secret.Collection)
 			continue
 		}
 
-		toDelete = append(toDelete, secret)
-		logrus.Debugf("Scheduling secret '%s' for deletion (collection '%s' not in config)", secret.Name, secret.Collection)
+		if _, wanted := desiredSecrets[secret.Name]; !wanted && secret.Type == SecretTypeSA {
+			toDelete = append(toDelete, secret)
+			logrus.Debugf("Scheduling secret '%s' for deletion (collection '%s' has no updater service account)", secret.Name, secret.Collection)
+		}
 	}
 	slices.SortFunc(toDelete, func(a, b GCPSecret) int {
 		return strings.Compare(a.Name, b.Name)

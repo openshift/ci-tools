@@ -14,10 +14,13 @@ import (
 
 // GetDesiredState parses the configuration file and builds the desired state specifications.
 //
-// Collections owned by a normal ("claimed") group each get an updater service account, its SA
-// secret, an index secret, and service-account-scoped viewer/updater bindings limited to that
-// single collection. Each owning group additionally gets one viewer and one updater binding
-// covering all of its collections.
+// Collections owned by a normal ("claimed") group each get an index secret, and their owning
+// group gets one viewer and one updater binding covering all of its collections.
+//
+// A collection additionally gets an updater service account, its SA secret, and
+// service-account-scoped viewer/updater bindings only if the group opted into one for it via
+// group.Target.UpdaterServiceAccounts. Group members are unaffected either way: the group
+// bindings already cover every collection the group owns.
 //
 // Collections owned only by an "unclaimed" group (see group.Target.Unclaimed) are kept in the
 // active-collection set so their migrated data secrets are not deleted, but they get no service
@@ -38,6 +41,7 @@ func GetDesiredState(configFile string, config Config) ([]ServiceAccountInfo, ma
 
 	claimedCollections := sets.New[string]()
 	unclaimedCollections := sets.New[string]()
+	collectionsWithSA := sets.New[string]()
 	for _, name := range groupNames {
 		groupCfg := groupConfig.Groups[name]
 		if groupCfg.Unclaimed {
@@ -45,6 +49,7 @@ func GetDesiredState(configFile string, config Config) ([]ServiceAccountInfo, ma
 			continue
 		}
 		claimedCollections.Insert(groupCfg.SecretCollections...)
+		collectionsWithSA.Insert(groupCfg.UpdaterServiceAccounts...)
 	}
 
 	var desiredSAs []ServiceAccountInfo
@@ -58,11 +63,17 @@ func GetDesiredState(configFile string, config Config) ([]ServiceAccountInfo, ma
 		desiredCollections[collection] = true
 	}
 
-	// Per claimed collection: an updater service account, its SA secret, an index secret, and
-	// service-account-scoped viewer/updater bindings limited to that single collection. The
-	// service account is given its own bindings rather than being grouped with the owning group,
-	// so its access stays scoped to exactly one collection.
 	for _, collection := range sets.List(claimedCollections) {
+		desiredSecrets[GetIndexSecretName(collection)] = GCPSecret{
+			Name:       GetIndexSecretName(collection),
+			Type:       SecretTypeIndex,
+			Collection: collection,
+		}
+
+		if !collectionsWithSA.Has(collection) {
+			continue
+		}
+
 		desiredSAs = append(desiredSAs, ServiceAccountInfo{
 			Email:       GetUpdaterSAEmail(collection, config),
 			DisplayName: GetUpdaterSADisplayName(collection),
@@ -70,18 +81,14 @@ func GetDesiredState(configFile string, config Config) ([]ServiceAccountInfo, ma
 			Collection:  collection,
 			Description: GetUpdaterSADescription(collection),
 		})
-
 		desiredSecrets[GetUpdaterSASecretName(collection)] = GCPSecret{
 			Name:       GetUpdaterSASecretName(collection),
 			Type:       SecretTypeSA,
 			Collection: collection,
 		}
-		desiredSecrets[GetIndexSecretName(collection)] = GCPSecret{
-			Name:       GetIndexSecretName(collection),
-			Type:       SecretTypeIndex,
-			Collection: collection,
-		}
 
+		// The service account gets its own bindings rather than joining the owning group's, so
+		// its access stays scoped to exactly one collection.
 		saMembers := []string{fmt.Sprintf("serviceAccount:%s", GetUpdaterSAEmail(collection, config))}
 		desiredIAMBindings = append(desiredIAMBindings, &iampb.Binding{
 			Role:    config.GetSecretAccessorRole(),

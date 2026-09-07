@@ -49,6 +49,8 @@ const (
 	lockObjectName  = "gsm-secret-sync-e2e-lock"
 
 	multiCollectionGroup = "test-platform-gsm-secrets-owners"
+	// the only collection in testdata/config-create.yaml asking for an updater service account
+	saCollection = "alpha-secrets"
 )
 
 var lockObjectBackoff = wait.Backoff{
@@ -432,6 +434,19 @@ func TestInitialCreate(t *testing.T) {
 	}
 	if groupBindings != 2 {
 		t.Errorf("expected 2 bindings for group %s, got %d", multiCollectionGroup, groupBindings)
+	}
+
+	// Only collections listed under updater_service_accounts get one. alpha-secrets asked for
+	// one; the collections owned by multiCollectionGroup did not.
+	for _, sa := range actualState.ServiceAccounts {
+		if sa.Collection != saCollection {
+			t.Errorf("unexpected service account for collection %q, which did not ask for one: %s", sa.Collection, sa.Email)
+		}
+	}
+	if !slices.ContainsFunc(actualState.ServiceAccounts, func(sa gsm.ServiceAccountInfo) bool {
+		return sa.Collection == saCollection
+	}) {
+		t.Errorf("no service account for collection %q, which asked for one", saCollection)
 	}
 }
 

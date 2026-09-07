@@ -10,6 +10,8 @@ groups:
     secret_collections:
     - collection-alpha
     - shared-collection
+    updater_service_accounts:
+    - collection-alpha
   team-beta:
     secret_collections:
     - some-collection-with-a-very-long-name

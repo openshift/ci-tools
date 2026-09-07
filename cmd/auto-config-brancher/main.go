@@ -44,6 +44,8 @@ type options struct {
 	assign      string
 	whitelist   string
 
+	managedReposConfig string
+
 	promotion.FutureOptions
 	flagutil.GitHubOptions
 }
@@ -58,6 +60,7 @@ func parseOptions() options {
 	fs.StringVar(&o.targetDir, "target-dir", "", "The directory containing the target repo.")
 	fs.StringVar(&o.assign, "assign", githubTeam, "The github username or group name to assign the created pull request to.")
 	fs.StringVar(&o.whitelist, "whitelist-file", "", "The path of the whitelisted repositories file.")
+	fs.StringVar(&o.managedReposConfig, "managed-repos-config", "", "Path to a YAML file passed through to ci-operator-prowgen's --managed-repos-config, to skip generating jobs for org/repo (and, optionally, specific branches within them) that are managed elsewhere (e.g. onboarded onto EFS).")
 	fs.BoolVar(&o.selfApprove, "self-approve", false, "Self-approve the PR by adding the `approved` and `lgtm` labels. Requires write permissions on the repo.")
 	o.AddFlags(fs)
 	o.AllowAnonymous = true
@@ -123,6 +126,21 @@ type step struct {
 	arguments []string
 }
 
+// prowgenArgs builds the argument list for the ci-operator-prowgen step. The
+// --managed-repos-config flag is only added when configured, so this
+// remains a no-op (behaves exactly like today) until a config is wired up.
+func prowgenArgs(o options) []string {
+	args := []string{
+		"--from-dir", o.ConfigDir,
+		"--to-dir", "./ci-operator/jobs",
+		"--registry", "./ci-operator/step-registry",
+	}
+	if o.managedReposConfig != "" {
+		args = append(args, "--managed-repos-config", o.managedReposConfig)
+	}
+	return args
+}
+
 func main() {
 	o := parseOptions()
 	if err := validateOptions(o); err != nil {
@@ -172,12 +190,8 @@ func main() {
 			arguments: []string{"--config-dir", o.ConfigDir, "--confirm"},
 		},
 		{
-			command: "/usr/bin/ci-operator-prowgen",
-			arguments: []string{
-				"--from-dir", o.ConfigDir,
-				"--to-dir", "./ci-operator/jobs",
-				"--registry", "./ci-operator/step-registry",
-			},
+			command:   "/usr/bin/ci-operator-prowgen",
+			arguments: prowgenArgs(o),
 		},
 		{
 			command: "/usr/bin/private-prow-configs-mirror",

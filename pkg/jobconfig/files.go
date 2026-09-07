@@ -1,6 +1,7 @@
 package jobconfig
 
 import (
+	"errors"
 	"fmt"
 	"io/fs"
 	"os"
@@ -275,8 +276,10 @@ func readFromFile(path string) (*prowconfig.JobConfig, error) {
 // WriteToDir takes a JobConfig and a target directory, and writes the Prow job configuration
 // into files in that directory. Jobs are sharded by branch and by type. If
 // target files already exist and contain Prow job configuration, the jobs will
-// be merged. Jobs will be pruned based on the provided Generator that match the matchLabels set
-func WriteToDir(jobDir, org, repo string, jobConfig *prowconfig.JobConfig, generator Generator, matchLabels labels.Set) error {
+// be merged. When pruneAll is true, all existing files in the directory are
+// scanned and stale jobs are pruned. When false, only files being written are
+// touched and no pruning is performed.
+func WriteToDir(jobDir, org, repo string, jobConfig *prowconfig.JobConfig, generator Generator, matchLabels labels.Set, writeFunc func(string, *prowconfig.JobConfig) error, pruneAll bool) error {
 	allJobs := sets.Set[string]{}
 	files := map[string]*prowconfig.JobConfig{}
 	key := fmt.Sprintf("%s/%s", org, repo)
@@ -286,9 +289,7 @@ func WriteToDir(jobDir, org, repo string, jobConfig *prowconfig.JobConfig, gener
 		allJobs.Insert(job.Name)
 		branch := "main"
 		if len(job.Branches) > 0 {
-			branch = job.Branches[0]
-			// branches may be regexps, strip regexp characters and trailing dashes / slashes
-			branch = MakeRegexFilenameLabel(branch)
+			branch = MakeRegexFilenameLabel(job.Branches[0])
 		}
 		file := fmt.Sprintf("%s-%s-%s-presubmits.yaml", org, repo, branch)
 		if _, ok := files[file]; ok {
@@ -305,9 +306,7 @@ func WriteToDir(jobDir, org, repo string, jobConfig *prowconfig.JobConfig, gener
 		allJobs.Insert(job.Name)
 		branch := "main"
 		if len(job.Branches) > 0 {
-			branch = job.Branches[0]
-			// branches may be regexps, strip regexp characters and trailing dashes / slashes
-			branch = MakeRegexFilenameLabel(branch)
+			branch = MakeRegexFilenameLabel(job.Branches[0])
 		}
 		file := fmt.Sprintf("%s-%s-%s-postsubmits.yaml", org, repo, branch)
 		if _, ok := files[file]; ok {
@@ -319,10 +318,7 @@ func WriteToDir(jobDir, org, repo string, jobConfig *prowconfig.JobConfig, gener
 		}
 	}
 	for _, job := range jobConfig.Periodics {
-		if len(job.ExtraRefs) == 0 {
-			continue
-		}
-		if job.ExtraRefs[0].Org != org || job.ExtraRefs[0].Repo != repo {
+		if len(job.ExtraRefs) == 0 || job.ExtraRefs[0].Org != org || job.ExtraRefs[0].Repo != repo {
 			continue
 		}
 		job.Labels[string(generator)] = string(newlyGenerated)
@@ -330,41 +326,58 @@ func WriteToDir(jobDir, org, repo string, jobConfig *prowconfig.JobConfig, gener
 		allJobs.Insert(job.Name)
 		branch := MakeRegexFilenameLabel(job.ExtraRefs[0].BaseRef)
 		file := fmt.Sprintf("%s-%s-%s-periodics.yaml", org, repo, branch)
-		if _, ok := files[file]; ok {
-			files[file].Periodics = append(files[file].Periodics, job)
-		} else {
-			files[file] = &prowconfig.JobConfig{Periodics: []prowconfig.Periodic{job}}
+		if _, ok := files[file]; !ok {
+			files[file] = &prowconfig.JobConfig{}
 		}
+		files[file].Periodics = append(files[file].Periodics, job)
 	}
 
 	jobDirForComponent := filepath.Join(jobDir, org, repo)
 	if err := os.MkdirAll(jobDirForComponent, os.ModePerm); err != nil {
 		return err
 	}
-	if err := OperateOnJobConfigSubdir(jobDirForComponent, "", make(sets.Set[string]), func(jobConfig *prowconfig.JobConfig, info *Info) error {
-		file := filepath.Base(info.Filename)
-		if generated, ok := files[file]; ok {
-			delete(files, file)
-			if len(generated.PresubmitsStatic) != 0 || len(generated.PostsubmitsStatic) != 0 || len(generated.Periodics) != 0 {
-				mergeJobConfig(jobConfig, generated, allJobs)
-				sortConfigFields(jobConfig)
+	if pruneAll {
+		if err := OperateOnJobConfigSubdir(jobDirForComponent, "", make(sets.Set[string]), func(jobConfig *prowconfig.JobConfig, info *Info) error {
+			file := filepath.Base(info.Filename)
+			if generated, ok := files[file]; ok {
+				delete(files, file)
+				if len(generated.PresubmitsStatic) != 0 || len(generated.PostsubmitsStatic) != 0 || len(generated.Periodics) != 0 {
+					mergeJobConfig(jobConfig, generated, allJobs)
+					sortConfigFields(jobConfig)
+				}
+			}
+			jobConfig, err := Prune(jobConfig, generator, matchLabels)
+			if err != nil {
+				return err
+			}
+			return writeFunc(info.Filename, jobConfig)
+		}); err != nil {
+			return err
+		}
+	} else {
+		for file, generated := range files {
+			path := filepath.Join(jobDirForComponent, file)
+			existing, err := readFromFile(path)
+			if err != nil && !errors.Is(err, os.ErrNotExist) {
+				return fmt.Errorf("failed to read existing job config at %s: %w", path, err)
+			}
+			if existing != nil {
+				mergeJobConfig(existing, generated, allJobs)
+				sortConfigFields(existing)
+				files[file] = existing
 			}
 		}
-		jobConfig, err := Prune(jobConfig, generator, matchLabels)
-		if err != nil {
-			return err
-		}
-		return WriteToFile(info.Filename, jobConfig)
-	}); err != nil {
-		return err
 	}
 	for file, jobConfig := range files {
-		jobConfig, err := Prune(jobConfig, generator, matchLabels)
-		if err != nil {
-			return err
+		if pruneAll {
+			var err error
+			jobConfig, err = Prune(jobConfig, generator, matchLabels)
+			if err != nil {
+				return err
+			}
 		}
 		sortConfigFields(jobConfig)
-		if err := WriteToFile(filepath.Join(jobDirForComponent, file), jobConfig); err != nil {
+		if err := writeFunc(filepath.Join(jobDirForComponent, file), jobConfig); err != nil {
 			return err
 		}
 	}
@@ -590,23 +603,64 @@ func sortPodSpec(spec *v1.PodSpec) {
 	}
 }
 
-// WriteToFile writes Prow job config to a YAML file
-func WriteToFile(path string, jobConfig *prowconfig.JobConfig) error {
+func removeIfEmpty(path string, jobConfig *prowconfig.JobConfig) (bool, error) {
 	if len(jobConfig.PresubmitsStatic) == 0 && len(jobConfig.PostsubmitsStatic) == 0 && len(jobConfig.Periodics) == 0 {
 		if err := os.Remove(path); err != nil && !os.IsNotExist(err) {
-			return err
+			return true, err
 		}
-		return nil
+		return true, nil
+	}
+	return false, nil
+}
+
+// WriteToFile writes Prow job config to a YAML file
+func WriteToFile(path string, jobConfig *prowconfig.JobConfig) error {
+	if removed, err := removeIfEmpty(path, jobConfig); removed {
+		return err
 	}
 	jobConfigAsYaml, err := yaml.Marshal(*jobConfig)
 	if err != nil {
 		return fmt.Errorf("failed to marshal the job config (%w)", err)
 	}
-	if err := os.WriteFile(path, jobConfigAsYaml, 0664); err != nil {
+	return os.WriteFile(path, jobConfigAsYaml, 0664)
+}
+
+// WriteToFileAtomic is WriteToFile via a temp file + rename, so concurrent
+// readers of path never see a partial write.
+func WriteToFileAtomic(path string, jobConfig *prowconfig.JobConfig) error {
+	if removed, err := removeIfEmpty(path, jobConfig); removed {
 		return err
 	}
+	jobConfigAsYaml, err := yaml.Marshal(*jobConfig)
+	if err != nil {
+		return fmt.Errorf("failed to marshal the job config (%w)", err)
+	}
 
-	return nil
+	dir := filepath.Dir(path)
+	tmp, err := os.CreateTemp(dir, "."+filepath.Base(path)+".tmp-")
+	if err != nil {
+		return fmt.Errorf("failed to create temp file: %w", err)
+	}
+	tmpPath := tmp.Name()
+	closed := false
+	defer func() {
+		if !closed {
+			_ = tmp.Close()
+		}
+		_ = os.Remove(tmpPath)
+	}()
+
+	if err := tmp.Chmod(0664); err != nil {
+		return fmt.Errorf("failed to set permissions on temp file: %w", err)
+	}
+	if _, err := tmp.Write(jobConfigAsYaml); err != nil {
+		return fmt.Errorf("failed to write temp file: %w", err)
+	}
+	if err := tmp.Close(); err != nil {
+		return fmt.Errorf("failed to close temp file: %w", err)
+	}
+	closed = true
+	return os.Rename(tmpPath, path)
 }
 
 var regexParts = regexp.MustCompile(`[^\w\-.]+`)

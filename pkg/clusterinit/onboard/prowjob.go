@@ -55,7 +55,9 @@ func (s *prowJobStep) Run(ctx context.Context) error {
 		metadata.Repo,
 		&config,
 		generator,
-		map[string]string{jobconfig.LabelBuildFarm: s.clusterInstall.ClusterName})
+		map[string]string{jobconfig.LabelBuildFarm: s.clusterInstall.ClusterName},
+		jobconfig.WriteToFile,
+		true)
 }
 
 func (s *prowJobStep) generatePeriodic(metadata *api.Metadata, clusterName string, osd bool, unmanaged bool) prowconfig.Periodic {

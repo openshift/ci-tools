@@ -47,6 +47,8 @@ const (
 	// GCS lock bucket configuration
 	gcsBucketEnvVar = "GCS_E2E_LOCK_BUCKET"
 	lockObjectName  = "gsm-secret-sync-e2e-lock"
+
+	multiCollectionGroup = "test-platform-gsm-secrets-owners"
 )
 
 var lockObjectBackoff = wait.Backoff{
@@ -417,6 +419,20 @@ func TestInitialCreate(t *testing.T) {
 	if !tr.compareStates(actualState, expectedState) {
 		t.Fatal("initial create test failed")
 	}
+
+	// A group gets exactly one viewer and one updater binding however many collections it
+	// owns; the old operator-limited form split this group across several.
+	groupBindings := 0
+	for _, binding := range actualState.IAMBindings {
+		for _, member := range binding.Members {
+			if member == fmt.Sprintf("group:%s@redhat.com", multiCollectionGroup) {
+				groupBindings++
+			}
+		}
+	}
+	if groupBindings != 2 {
+		t.Errorf("expected 2 bindings for group %s, got %d", multiCollectionGroup, groupBindings)
+	}
 }
 
 func TestIdempotency(t *testing.T) {
@@ -540,9 +556,10 @@ func TestUnclaimedCollectionPreserved(t *testing.T) {
 		}
 	}
 
-	// No managed IAM binding may reference the unclaimed collection.
+	// No managed IAM binding may reference the unclaimed collection. The updater lists the
+	// bare collection and the viewer lists its secrets, so match the start of either form.
 	for _, binding := range state.IAMBindings {
-		if binding.Condition != nil && strings.Contains(binding.Condition.Expression, unclaimedCollection+"__") {
+		if binding.Condition != nil && strings.Contains(binding.Condition.Expression, `"`+unclaimedCollection) {
 			t.Errorf("unexpected managed IAM binding referencing unclaimed collection: %s", binding.Condition.Title)
 		}
 	}

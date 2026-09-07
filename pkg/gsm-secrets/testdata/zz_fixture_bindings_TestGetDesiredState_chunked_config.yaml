@@ -1,13 +1,7 @@
 - condition:
     description: 'Managed by test platform: Read access to secrets in at-01 collection'
-    expression: |-
-      (
-        resource.type == "secretmanager.googleapis.com/SecretVersion" ||
-        resource.type == "secretmanager.googleapis.com/Secret"
-      ) && (
-        resource.name.extract("secrets/{secret}") == "at-01__updater-service-account" ||
-        resource.name.extract("secrets/{secret}") == "at-01____index"
-      )
+    expression: resource.name.extract("secrets/{s}/versions/") == "at-01__updater-service-account"
+      || resource.name.extract("secrets/{s}/versions/") == "at-01____index"
     title: Read access to secrets for at-01
   members:
   - serviceAccount:at-01-updater@test-project.iam.gserviceaccount.com
@@ -15,22 +9,15 @@
 - condition:
     description: 'Managed by test platform: Create, update, and delete access to secrets
       in at-01 collection'
-    expression: "(\n  resource.type == \"secretmanager.googleapis.com/SecretVersion\"
-      ||\n  resource.type == \"secretmanager.googleapis.com/Secret\"\n) && \n  resource.name.extract(\"secrets/{secret}\").startsWith(\"at-01__\")"
+    expression: resource.name.extract("secrets/{secret}").startsWith("at-01__")
     title: Create, update, and delete access for at-01
   members:
   - serviceAccount:at-01-updater@test-project.iam.gserviceaccount.com
   role: projects/test-project/roles/openshift_ci_secrets_updater
 - condition:
     description: 'Managed by test platform: Read access to secrets in bt-01 collection'
-    expression: |-
-      (
-        resource.type == "secretmanager.googleapis.com/SecretVersion" ||
-        resource.type == "secretmanager.googleapis.com/Secret"
-      ) && (
-        resource.name.extract("secrets/{secret}") == "bt-01__updater-service-account" ||
-        resource.name.extract("secrets/{secret}") == "bt-01____index"
-      )
+    expression: resource.name.extract("secrets/{s}/versions/") == "bt-01__updater-service-account"
+      || resource.name.extract("secrets/{s}/versions/") == "bt-01____index"
     title: Read access to secrets for bt-01
   members:
   - serviceAccount:bt-01-updater@test-project.iam.gserviceaccount.com
@@ -38,22 +25,15 @@
 - condition:
     description: 'Managed by test platform: Create, update, and delete access to secrets
       in bt-01 collection'
-    expression: "(\n  resource.type == \"secretmanager.googleapis.com/SecretVersion\"
-      ||\n  resource.type == \"secretmanager.googleapis.com/Secret\"\n) && \n  resource.name.extract(\"secrets/{secret}\").startsWith(\"bt-01__\")"
+    expression: resource.name.extract("secrets/{secret}").startsWith("bt-01__")
     title: Create, update, and delete access for bt-01
   members:
   - serviceAccount:bt-01-updater@test-project.iam.gserviceaccount.com
   role: projects/test-project/roles/openshift_ci_secrets_updater
 - condition:
     description: 'Managed by test platform: Read access to secrets in bt-02 collection'
-    expression: |-
-      (
-        resource.type == "secretmanager.googleapis.com/SecretVersion" ||
-        resource.type == "secretmanager.googleapis.com/Secret"
-      ) && (
-        resource.name.extract("secrets/{secret}") == "bt-02__updater-service-account" ||
-        resource.name.extract("secrets/{secret}") == "bt-02____index"
-      )
+    expression: resource.name.extract("secrets/{s}/versions/") == "bt-02__updater-service-account"
+      || resource.name.extract("secrets/{s}/versions/") == "bt-02____index"
     title: Read access to secrets for bt-02
   members:
   - serviceAccount:bt-02-updater@test-project.iam.gserviceaccount.com
@@ -61,22 +41,15 @@
 - condition:
     description: 'Managed by test platform: Create, update, and delete access to secrets
       in bt-02 collection'
-    expression: "(\n  resource.type == \"secretmanager.googleapis.com/SecretVersion\"
-      ||\n  resource.type == \"secretmanager.googleapis.com/Secret\"\n) && \n  resource.name.extract(\"secrets/{secret}\").startsWith(\"bt-02__\")"
+    expression: resource.name.extract("secrets/{secret}").startsWith("bt-02__")
     title: Create, update, and delete access for bt-02
   members:
   - serviceAccount:bt-02-updater@test-project.iam.gserviceaccount.com
   role: projects/test-project/roles/openshift_ci_secrets_updater
 - condition:
     description: 'Managed by test platform: Read access to secrets in bt-03 collection'
-    expression: |-
-      (
-        resource.type == "secretmanager.googleapis.com/SecretVersion" ||
-        resource.type == "secretmanager.googleapis.com/Secret"
-      ) && (
-        resource.name.extract("secrets/{secret}") == "bt-03__updater-service-account" ||
-        resource.name.extract("secrets/{secret}") == "bt-03____index"
-      )
+    expression: resource.name.extract("secrets/{s}/versions/") == "bt-03__updater-service-account"
+      || resource.name.extract("secrets/{s}/versions/") == "bt-03____index"
     title: Read access to secrets for bt-03
   members:
   - serviceAccount:bt-03-updater@test-project.iam.gserviceaccount.com
@@ -84,22 +57,15 @@
 - condition:
     description: 'Managed by test platform: Create, update, and delete access to secrets
       in bt-03 collection'
-    expression: "(\n  resource.type == \"secretmanager.googleapis.com/SecretVersion\"
-      ||\n  resource.type == \"secretmanager.googleapis.com/Secret\"\n) && \n  resource.name.extract(\"secrets/{secret}\").startsWith(\"bt-03__\")"
+    expression: resource.name.extract("secrets/{secret}").startsWith("bt-03__")
     title: Create, update, and delete access for bt-03
   members:
   - serviceAccount:bt-03-updater@test-project.iam.gserviceaccount.com
   role: projects/test-project/roles/openshift_ci_secrets_updater
 - condition:
     description: 'Managed by test platform: Read access to secrets in bt-04 collection'
-    expression: |-
-      (
-        resource.type == "secretmanager.googleapis.com/SecretVersion" ||
-        resource.type == "secretmanager.googleapis.com/Secret"
-      ) && (
-        resource.name.extract("secrets/{secret}") == "bt-04__updater-service-account" ||
-        resource.name.extract("secrets/{secret}") == "bt-04____index"
-      )
+    expression: resource.name.extract("secrets/{s}/versions/") == "bt-04__updater-service-account"
+      || resource.name.extract("secrets/{s}/versions/") == "bt-04____index"
     title: Read access to secrets for bt-04
   members:
   - serviceAccount:bt-04-updater@test-project.iam.gserviceaccount.com
@@ -107,22 +73,15 @@
 - condition:
     description: 'Managed by test platform: Create, update, and delete access to secrets
       in bt-04 collection'
-    expression: "(\n  resource.type == \"secretmanager.googleapis.com/SecretVersion\"
-      ||\n  resource.type == \"secretmanager.googleapis.com/Secret\"\n) && \n  resource.name.extract(\"secrets/{secret}\").startsWith(\"bt-04__\")"
+    expression: resource.name.extract("secrets/{secret}").startsWith("bt-04__")
     title: Create, update, and delete access for bt-04
   members:
   - serviceAccount:bt-04-updater@test-project.iam.gserviceaccount.com
   role: projects/test-project/roles/openshift_ci_secrets_updater
 - condition:
     description: 'Managed by test platform: Read access to secrets in bt-05 collection'
-    expression: |-
-      (
-        resource.type == "secretmanager.googleapis.com/SecretVersion" ||
-        resource.type == "secretmanager.googleapis.com/Secret"
-      ) && (
-        resource.name.extract("secrets/{secret}") == "bt-05__updater-service-account" ||
-        resource.name.extract("secrets/{secret}") == "bt-05____index"
-      )
+    expression: resource.name.extract("secrets/{s}/versions/") == "bt-05__updater-service-account"
+      || resource.name.extract("secrets/{s}/versions/") == "bt-05____index"
     title: Read access to secrets for bt-05
   members:
   - serviceAccount:bt-05-updater@test-project.iam.gserviceaccount.com
@@ -130,22 +89,15 @@
 - condition:
     description: 'Managed by test platform: Create, update, and delete access to secrets
       in bt-05 collection'
-    expression: "(\n  resource.type == \"secretmanager.googleapis.com/SecretVersion\"
-      ||\n  resource.type == \"secretmanager.googleapis.com/Secret\"\n) && \n  resource.name.extract(\"secrets/{secret}\").startsWith(\"bt-05__\")"
+    expression: resource.name.extract("secrets/{secret}").startsWith("bt-05__")
     title: Create, update, and delete access for bt-05
   members:
   - serviceAccount:bt-05-updater@test-project.iam.gserviceaccount.com
   role: projects/test-project/roles/openshift_ci_secrets_updater
 - condition:
     description: 'Managed by test platform: Read access to secrets in bt-06 collection'
-    expression: |-
-      (
-        resource.type == "secretmanager.googleapis.com/SecretVersion" ||
-        resource.type == "secretmanager.googleapis.com/Secret"
-      ) && (
-        resource.name.extract("secrets/{secret}") == "bt-06__updater-service-account" ||
-        resource.name.extract("secrets/{secret}") == "bt-06____index"
-      )
+    expression: resource.name.extract("secrets/{s}/versions/") == "bt-06__updater-service-account"
+      || resource.name.extract("secrets/{s}/versions/") == "bt-06____index"
     title: Read access to secrets for bt-06
   members:
   - serviceAccount:bt-06-updater@test-project.iam.gserviceaccount.com
@@ -153,22 +105,15 @@
 - condition:
     description: 'Managed by test platform: Create, update, and delete access to secrets
       in bt-06 collection'
-    expression: "(\n  resource.type == \"secretmanager.googleapis.com/SecretVersion\"
-      ||\n  resource.type == \"secretmanager.googleapis.com/Secret\"\n) && \n  resource.name.extract(\"secrets/{secret}\").startsWith(\"bt-06__\")"
+    expression: resource.name.extract("secrets/{secret}").startsWith("bt-06__")
     title: Create, update, and delete access for bt-06
   members:
   - serviceAccount:bt-06-updater@test-project.iam.gserviceaccount.com
   role: projects/test-project/roles/openshift_ci_secrets_updater
 - condition:
     description: 'Managed by test platform: Read access to secrets in bt-07 collection'
-    expression: |-
-      (
-        resource.type == "secretmanager.googleapis.com/SecretVersion" ||
-        resource.type == "secretmanager.googleapis.com/Secret"
-      ) && (
-        resource.name.extract("secrets/{secret}") == "bt-07__updater-service-account" ||
-        resource.name.extract("secrets/{secret}") == "bt-07____index"
-      )
+    expression: resource.name.extract("secrets/{s}/versions/") == "bt-07__updater-service-account"
+      || resource.name.extract("secrets/{s}/versions/") == "bt-07____index"
     title: Read access to secrets for bt-07
   members:
   - serviceAccount:bt-07-updater@test-project.iam.gserviceaccount.com
@@ -176,22 +121,15 @@
 - condition:
     description: 'Managed by test platform: Create, update, and delete access to secrets
       in bt-07 collection'
-    expression: "(\n  resource.type == \"secretmanager.googleapis.com/SecretVersion\"
-      ||\n  resource.type == \"secretmanager.googleapis.com/Secret\"\n) && \n  resource.name.extract(\"secrets/{secret}\").startsWith(\"bt-07__\")"
+    expression: resource.name.extract("secrets/{secret}").startsWith("bt-07__")
     title: Create, update, and delete access for bt-07
   members:
   - serviceAccount:bt-07-updater@test-project.iam.gserviceaccount.com
   role: projects/test-project/roles/openshift_ci_secrets_updater
 - condition:
     description: 'Managed by test platform: Read access to secrets in bt-08 collection'
-    expression: |-
-      (
-        resource.type == "secretmanager.googleapis.com/SecretVersion" ||
-        resource.type == "secretmanager.googleapis.com/Secret"
-      ) && (
-        resource.name.extract("secrets/{secret}") == "bt-08__updater-service-account" ||
-        resource.name.extract("secrets/{secret}") == "bt-08____index"
-      )
+    expression: resource.name.extract("secrets/{s}/versions/") == "bt-08__updater-service-account"
+      || resource.name.extract("secrets/{s}/versions/") == "bt-08____index"
     title: Read access to secrets for bt-08
   members:
   - serviceAccount:bt-08-updater@test-project.iam.gserviceaccount.com
@@ -199,22 +137,15 @@
 - condition:
     description: 'Managed by test platform: Create, update, and delete access to secrets
       in bt-08 collection'
-    expression: "(\n  resource.type == \"secretmanager.googleapis.com/SecretVersion\"
-      ||\n  resource.type == \"secretmanager.googleapis.com/Secret\"\n) && \n  resource.name.extract(\"secrets/{secret}\").startsWith(\"bt-08__\")"
+    expression: resource.name.extract("secrets/{secret}").startsWith("bt-08__")
     title: Create, update, and delete access for bt-08
   members:
   - serviceAccount:bt-08-updater@test-project.iam.gserviceaccount.com
   role: projects/test-project/roles/openshift_ci_secrets_updater
 - condition:
     description: 'Managed by test platform: Read access to secrets in bt-09 collection'
-    expression: |-
-      (
-        resource.type == "secretmanager.googleapis.com/SecretVersion" ||
-        resource.type == "secretmanager.googleapis.com/Secret"
-      ) && (
-        resource.name.extract("secrets/{secret}") == "bt-09__updater-service-account" ||
-        resource.name.extract("secrets/{secret}") == "bt-09____index"
-      )
+    expression: resource.name.extract("secrets/{s}/versions/") == "bt-09__updater-service-account"
+      || resource.name.extract("secrets/{s}/versions/") == "bt-09____index"
     title: Read access to secrets for bt-09
   members:
   - serviceAccount:bt-09-updater@test-project.iam.gserviceaccount.com
@@ -222,22 +153,15 @@
 - condition:
     description: 'Managed by test platform: Create, update, and delete access to secrets
       in bt-09 collection'
-    expression: "(\n  resource.type == \"secretmanager.googleapis.com/SecretVersion\"
-      ||\n  resource.type == \"secretmanager.googleapis.com/Secret\"\n) && \n  resource.name.extract(\"secrets/{secret}\").startsWith(\"bt-09__\")"
+    expression: resource.name.extract("secrets/{secret}").startsWith("bt-09__")
     title: Create, update, and delete access for bt-09
   members:
   - serviceAccount:bt-09-updater@test-project.iam.gserviceaccount.com
   role: projects/test-project/roles/openshift_ci_secrets_updater
 - condition:
     description: 'Managed by test platform: Read access to secrets in bt-10 collection'
-    expression: |-
-      (
-        resource.type == "secretmanager.googleapis.com/SecretVersion" ||
-        resource.type == "secretmanager.googleapis.com/Secret"
-      ) && (
-        resource.name.extract("secrets/{secret}") == "bt-10__updater-service-account" ||
-        resource.name.extract("secrets/{secret}") == "bt-10____index"
-      )
+    expression: resource.name.extract("secrets/{s}/versions/") == "bt-10__updater-service-account"
+      || resource.name.extract("secrets/{s}/versions/") == "bt-10____index"
     title: Read access to secrets for bt-10
   members:
   - serviceAccount:bt-10-updater@test-project.iam.gserviceaccount.com
@@ -245,22 +169,15 @@
 - condition:
     description: 'Managed by test platform: Create, update, and delete access to secrets
       in bt-10 collection'
-    expression: "(\n  resource.type == \"secretmanager.googleapis.com/SecretVersion\"
-      ||\n  resource.type == \"secretmanager.googleapis.com/Secret\"\n) && \n  resource.name.extract(\"secrets/{secret}\").startsWith(\"bt-10__\")"
+    expression: resource.name.extract("secrets/{secret}").startsWith("bt-10__")
     title: Create, update, and delete access for bt-10
   members:
   - serviceAccount:bt-10-updater@test-project.iam.gserviceaccount.com
   role: projects/test-project/roles/openshift_ci_secrets_updater
 - condition:
     description: 'Managed by test platform: Read access to secrets in bt-11 collection'
-    expression: |-
-      (
-        resource.type == "secretmanager.googleapis.com/SecretVersion" ||
-        resource.type == "secretmanager.googleapis.com/Secret"
-      ) && (
-        resource.name.extract("secrets/{secret}") == "bt-11__updater-service-account" ||
-        resource.name.extract("secrets/{secret}") == "bt-11____index"
-      )
+    expression: resource.name.extract("secrets/{s}/versions/") == "bt-11__updater-service-account"
+      || resource.name.extract("secrets/{s}/versions/") == "bt-11____index"
     title: Read access to secrets for bt-11
   members:
   - serviceAccount:bt-11-updater@test-project.iam.gserviceaccount.com
@@ -268,22 +185,15 @@
 - condition:
     description: 'Managed by test platform: Create, update, and delete access to secrets
       in bt-11 collection'
-    expression: "(\n  resource.type == \"secretmanager.googleapis.com/SecretVersion\"
-      ||\n  resource.type == \"secretmanager.googleapis.com/Secret\"\n) && \n  resource.name.extract(\"secrets/{secret}\").startsWith(\"bt-11__\")"
+    expression: resource.name.extract("secrets/{secret}").startsWith("bt-11__")
     title: Create, update, and delete access for bt-11
   members:
   - serviceAccount:bt-11-updater@test-project.iam.gserviceaccount.com
   role: projects/test-project/roles/openshift_ci_secrets_updater
 - condition:
     description: 'Managed by test platform: Read access to secrets in bt-12 collection'
-    expression: |-
-      (
-        resource.type == "secretmanager.googleapis.com/SecretVersion" ||
-        resource.type == "secretmanager.googleapis.com/Secret"
-      ) && (
-        resource.name.extract("secrets/{secret}") == "bt-12__updater-service-account" ||
-        resource.name.extract("secrets/{secret}") == "bt-12____index"
-      )
+    expression: resource.name.extract("secrets/{s}/versions/") == "bt-12__updater-service-account"
+      || resource.name.extract("secrets/{s}/versions/") == "bt-12____index"
     title: Read access to secrets for bt-12
   members:
   - serviceAccount:bt-12-updater@test-project.iam.gserviceaccount.com
@@ -291,22 +201,15 @@
 - condition:
     description: 'Managed by test platform: Create, update, and delete access to secrets
       in bt-12 collection'
-    expression: "(\n  resource.type == \"secretmanager.googleapis.com/SecretVersion\"
-      ||\n  resource.type == \"secretmanager.googleapis.com/Secret\"\n) && \n  resource.name.extract(\"secrets/{secret}\").startsWith(\"bt-12__\")"
+    expression: resource.name.extract("secrets/{secret}").startsWith("bt-12__")
     title: Create, update, and delete access for bt-12
   members:
   - serviceAccount:bt-12-updater@test-project.iam.gserviceaccount.com
   role: projects/test-project/roles/openshift_ci_secrets_updater
 - condition:
     description: 'Managed by test platform: Read access to secrets in st-01 collection'
-    expression: |-
-      (
-        resource.type == "secretmanager.googleapis.com/SecretVersion" ||
-        resource.type == "secretmanager.googleapis.com/Secret"
-      ) && (
-        resource.name.extract("secrets/{secret}") == "st-01__updater-service-account" ||
-        resource.name.extract("secrets/{secret}") == "st-01____index"
-      )
+    expression: resource.name.extract("secrets/{s}/versions/") == "st-01__updater-service-account"
+      || resource.name.extract("secrets/{s}/versions/") == "st-01____index"
     title: Read access to secrets for st-01
   members:
   - serviceAccount:st-01-updater@test-project.iam.gserviceaccount.com
@@ -314,8 +217,7 @@
 - condition:
     description: 'Managed by test platform: Create, update, and delete access to secrets
       in st-01 collection'
-    expression: "(\n  resource.type == \"secretmanager.googleapis.com/SecretVersion\"
-      ||\n  resource.type == \"secretmanager.googleapis.com/Secret\"\n) && \n  resource.name.extract(\"secrets/{secret}\").startsWith(\"st-01__\")"
+    expression: resource.name.extract("secrets/{secret}").startsWith("st-01__")
     title: Create, update, and delete access for st-01
   members:
   - serviceAccount:st-01-updater@test-project.iam.gserviceaccount.com
@@ -323,16 +225,10 @@
 - condition:
     description: 'Managed by test platform: Read access to secrets for group another-team
       (set 1)'
-    expression: |-
-      (
-        resource.type == "secretmanager.googleapis.com/SecretVersion" ||
-        resource.type == "secretmanager.googleapis.com/Secret"
-      ) && (
-        resource.name.extract("secrets/{secret}") == "at-01__updater-service-account" ||
-        resource.name.extract("secrets/{secret}") == "at-01____index" ||
-        resource.name.extract("secrets/{secret}") == "bt-01__updater-service-account" ||
-        resource.name.extract("secrets/{secret}") == "bt-01____index"
-      )
+    expression: resource.name.extract("secrets/{s}/versions/") == "at-01__updater-service-account"
+      || resource.name.extract("secrets/{s}/versions/") == "at-01____index" || resource.name.extract("secrets/{s}/versions/")
+      == "bt-01__updater-service-account" || resource.name.extract("secrets/{s}/versions/")
+      == "bt-01____index"
     title: Read access to secrets for group another-team (set 1)
   members:
   - group:another-team@redhat.com
@@ -340,14 +236,8 @@
 - condition:
     description: 'Managed by test platform: Create, update, and delete access to secrets
       for group another-team (set 1)'
-    expression: |-
-      (
-        resource.type == "secretmanager.googleapis.com/SecretVersion" ||
-        resource.type == "secretmanager.googleapis.com/Secret"
-      ) && (
-        resource.name.extract("secrets/{secret}").startsWith("at-01__") ||
-        resource.name.extract("secrets/{secret}").startsWith("bt-01__")
-      )
+    expression: resource.name.extract("secrets/{secret}").startsWith("at-01__") ||
+      resource.name.extract("secrets/{secret}").startsWith("bt-01__")
     title: Create, update, and delete access for group another-team (set 1)
   members:
   - group:another-team@redhat.com
@@ -355,22 +245,14 @@
 - condition:
     description: 'Managed by test platform: Read access to secrets for group big-team
       (set 1)'
-    expression: |-
-      (
-        resource.type == "secretmanager.googleapis.com/SecretVersion" ||
-        resource.type == "secretmanager.googleapis.com/Secret"
-      ) && (
-        resource.name.extract("secrets/{secret}") == "bt-01__updater-service-account" ||
-        resource.name.extract("secrets/{secret}") == "bt-01____index" ||
-        resource.name.extract("secrets/{secret}") == "bt-02__updater-service-account" ||
-        resource.name.extract("secrets/{secret}") == "bt-02____index" ||
-        resource.name.extract("secrets/{secret}") == "bt-03__updater-service-account" ||
-        resource.name.extract("secrets/{secret}") == "bt-03____index" ||
-        resource.name.extract("secrets/{secret}") == "bt-04__updater-service-account" ||
-        resource.name.extract("secrets/{secret}") == "bt-04____index" ||
-        resource.name.extract("secrets/{secret}") == "bt-05__updater-service-account" ||
-        resource.name.extract("secrets/{secret}") == "bt-05____index"
-      )
+    expression: resource.name.extract("secrets/{s}/versions/") == "bt-01__updater-service-account"
+      || resource.name.extract("secrets/{s}/versions/") == "bt-01____index" || resource.name.extract("secrets/{s}/versions/")
+      == "bt-02__updater-service-account" || resource.name.extract("secrets/{s}/versions/")
+      == "bt-02____index" || resource.name.extract("secrets/{s}/versions/") == "bt-03__updater-service-account"
+      || resource.name.extract("secrets/{s}/versions/") == "bt-03____index" || resource.name.extract("secrets/{s}/versions/")
+      == "bt-04__updater-service-account" || resource.name.extract("secrets/{s}/versions/")
+      == "bt-04____index" || resource.name.extract("secrets/{s}/versions/") == "bt-05__updater-service-account"
+      || resource.name.extract("secrets/{s}/versions/") == "bt-05____index"
     title: Read access to secrets for group big-team (set 1)
   members:
   - group:big-team@redhat.com
@@ -378,17 +260,9 @@
 - condition:
     description: 'Managed by test platform: Create, update, and delete access to secrets
       for group big-team (set 1)'
-    expression: |-
-      (
-        resource.type == "secretmanager.googleapis.com/SecretVersion" ||
-        resource.type == "secretmanager.googleapis.com/Secret"
-      ) && (
-        resource.name.extract("secrets/{secret}").startsWith("bt-01__") ||
-        resource.name.extract("secrets/{secret}").startsWith("bt-02__") ||
-        resource.name.extract("secrets/{secret}").startsWith("bt-03__") ||
-        resource.name.extract("secrets/{secret}").startsWith("bt-04__") ||
-        resource.name.extract("secrets/{secret}").startsWith("bt-05__")
-      )
+    expression: resource.name.extract("secrets/{secret}").startsWith("bt-01__") ||
+      resource.name.extract("secrets/{secret}").startsWith("bt-02__") || resource.name.extract("secrets/{secret}").startsWith("bt-03__")
+      || resource.name.extract("secrets/{secret}").startsWith("bt-04__") || resource.name.extract("secrets/{secret}").startsWith("bt-05__")
     title: Create, update, and delete access for group big-team (set 1)
   members:
   - group:big-team@redhat.com
@@ -396,22 +270,14 @@
 - condition:
     description: 'Managed by test platform: Read access to secrets for group big-team
       (set 2)'
-    expression: |-
-      (
-        resource.type == "secretmanager.googleapis.com/SecretVersion" ||
-        resource.type == "secretmanager.googleapis.com/Secret"
-      ) && (
-        resource.name.extract("secrets/{secret}") == "bt-06__updater-service-account" ||
-        resource.name.extract("secrets/{secret}") == "bt-06____index" ||
-        resource.name.extract("secrets/{secret}") == "bt-07__updater-service-account" ||
-        resource.name.extract("secrets/{secret}") == "bt-07____index" ||
-        resource.name.extract("secrets/{secret}") == "bt-08__updater-service-account" ||
-        resource.name.extract("secrets/{secret}") == "bt-08____index" ||
-        resource.name.extract("secrets/{secret}") == "bt-09__updater-service-account" ||
-        resource.name.extract("secrets/{secret}") == "bt-09____index" ||
-        resource.name.extract("secrets/{secret}") == "bt-10__updater-service-account" ||
-        resource.name.extract("secrets/{secret}") == "bt-10____index"
-      )
+    expression: resource.name.extract("secrets/{s}/versions/") == "bt-06__updater-service-account"
+      || resource.name.extract("secrets/{s}/versions/") == "bt-06____index" || resource.name.extract("secrets/{s}/versions/")
+      == "bt-07__updater-service-account" || resource.name.extract("secrets/{s}/versions/")
+      == "bt-07____index" || resource.name.extract("secrets/{s}/versions/") == "bt-08__updater-service-account"
+      || resource.name.extract("secrets/{s}/versions/") == "bt-08____index" || resource.name.extract("secrets/{s}/versions/")
+      == "bt-09__updater-service-account" || resource.name.extract("secrets/{s}/versions/")
+      == "bt-09____index" || resource.name.extract("secrets/{s}/versions/") == "bt-10__updater-service-account"
+      || resource.name.extract("secrets/{s}/versions/") == "bt-10____index"
     title: Read access to secrets for group big-team (set 2)
   members:
   - group:big-team@redhat.com
@@ -419,17 +285,9 @@
 - condition:
     description: 'Managed by test platform: Create, update, and delete access to secrets
       for group big-team (set 2)'
-    expression: |-
-      (
-        resource.type == "secretmanager.googleapis.com/SecretVersion" ||
-        resource.type == "secretmanager.googleapis.com/Secret"
-      ) && (
-        resource.name.extract("secrets/{secret}").startsWith("bt-06__") ||
-        resource.name.extract("secrets/{secret}").startsWith("bt-07__") ||
-        resource.name.extract("secrets/{secret}").startsWith("bt-08__") ||
-        resource.name.extract("secrets/{secret}").startsWith("bt-09__") ||
-        resource.name.extract("secrets/{secret}").startsWith("bt-10__")
-      )
+    expression: resource.name.extract("secrets/{secret}").startsWith("bt-06__") ||
+      resource.name.extract("secrets/{secret}").startsWith("bt-07__") || resource.name.extract("secrets/{secret}").startsWith("bt-08__")
+      || resource.name.extract("secrets/{secret}").startsWith("bt-09__") || resource.name.extract("secrets/{secret}").startsWith("bt-10__")
     title: Create, update, and delete access for group big-team (set 2)
   members:
   - group:big-team@redhat.com
@@ -437,16 +295,10 @@
 - condition:
     description: 'Managed by test platform: Read access to secrets for group big-team
       (set 3)'
-    expression: |-
-      (
-        resource.type == "secretmanager.googleapis.com/SecretVersion" ||
-        resource.type == "secretmanager.googleapis.com/Secret"
-      ) && (
-        resource.name.extract("secrets/{secret}") == "bt-11__updater-service-account" ||
-        resource.name.extract("secrets/{secret}") == "bt-11____index" ||
-        resource.name.extract("secrets/{secret}") == "bt-12__updater-service-account" ||
-        resource.name.extract("secrets/{secret}") == "bt-12____index"
-      )
+    expression: resource.name.extract("secrets/{s}/versions/") == "bt-11__updater-service-account"
+      || resource.name.extract("secrets/{s}/versions/") == "bt-11____index" || resource.name.extract("secrets/{s}/versions/")
+      == "bt-12__updater-service-account" || resource.name.extract("secrets/{s}/versions/")
+      == "bt-12____index"
     title: Read access to secrets for group big-team (set 3)
   members:
   - group:big-team@redhat.com
@@ -454,14 +306,8 @@
 - condition:
     description: 'Managed by test platform: Create, update, and delete access to secrets
       for group big-team (set 3)'
-    expression: |-
-      (
-        resource.type == "secretmanager.googleapis.com/SecretVersion" ||
-        resource.type == "secretmanager.googleapis.com/Secret"
-      ) && (
-        resource.name.extract("secrets/{secret}").startsWith("bt-11__") ||
-        resource.name.extract("secrets/{secret}").startsWith("bt-12__")
-      )
+    expression: resource.name.extract("secrets/{secret}").startsWith("bt-11__") ||
+      resource.name.extract("secrets/{secret}").startsWith("bt-12__")
     title: Create, update, and delete access for group big-team (set 3)
   members:
   - group:big-team@redhat.com
@@ -469,14 +315,8 @@
 - condition:
     description: 'Managed by test platform: Read access to secrets for group small-team
       (set 1)'
-    expression: |-
-      (
-        resource.type == "secretmanager.googleapis.com/SecretVersion" ||
-        resource.type == "secretmanager.googleapis.com/Secret"
-      ) && (
-        resource.name.extract("secrets/{secret}") == "st-01__updater-service-account" ||
-        resource.name.extract("secrets/{secret}") == "st-01____index"
-      )
+    expression: resource.name.extract("secrets/{s}/versions/") == "st-01__updater-service-account"
+      || resource.name.extract("secrets/{s}/versions/") == "st-01____index"
     title: Read access to secrets for group small-team (set 1)
   members:
   - group:small-team@redhat.com
@@ -484,13 +324,7 @@
 - condition:
     description: 'Managed by test platform: Create, update, and delete access to secrets
       for group small-team (set 1)'
-    expression: |-
-      (
-        resource.type == "secretmanager.googleapis.com/SecretVersion" ||
-        resource.type == "secretmanager.googleapis.com/Secret"
-      ) && (
-        resource.name.extract("secrets/{secret}").startsWith("st-01__")
-      )
+    expression: resource.name.extract("secrets/{secret}").startsWith("st-01__")
     title: Create, update, and delete access for group small-team (set 1)
   members:
   - group:small-team@redhat.com

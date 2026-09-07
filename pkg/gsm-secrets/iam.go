@@ -77,37 +77,17 @@ func GetSecretsViewerConditionTitle(collection string) string {
 
 // GetSecretsViewerGroupConditionTitle returns the viewer condition title for a group binding.
 func GetSecretsViewerGroupConditionTitle(group string) string {
-	return fmt.Sprintf("%sgroup %s", SecretsViewerConditionTitlePrefix, group)
+	return fmt.Sprintf("%s%s", SecretsViewerConditionTitlePrefix, group)
 }
 
 // GetSecretsUpdaterGroupConditionTitle returns the updater condition title for a group binding.
 func GetSecretsUpdaterGroupConditionTitle(group string) string {
-	return fmt.Sprintf("%sgroup %s", SecretsUpdaterConditionTitlePrefix, group)
-}
-
-// GetSecretsViewerGroupConditionDescription returns the viewer condition description for a group binding.
-func GetSecretsViewerGroupConditionDescription(group string) string {
-	return fmt.Sprintf("Managed by %s: Read access to secrets for group %s", TestPlatform, group)
-}
-
-// GetSecretsUpdaterGroupConditionDescription returns the updater condition description for a group binding.
-func GetSecretsUpdaterGroupConditionDescription(group string) string {
-	return fmt.Sprintf("Managed by %s: Create, update, and delete access to secrets for group %s", TestPlatform, group)
+	return fmt.Sprintf("%s%s", SecretsUpdaterConditionTitlePrefix, group)
 }
 
 // GetSecretsUpdaterConditionTitle returns the condition title for secrets updater role
 func GetSecretsUpdaterConditionTitle(collection string) string {
 	return fmt.Sprintf("%s%s", SecretsUpdaterConditionTitlePrefix, collection)
-}
-
-// GetSecretsViewerConditionDescription returns the condition description for secrets viewer role
-func GetSecretsViewerConditionDescription(collection string) string {
-	return fmt.Sprintf(SecretsViewerConditionDescriptionTemplate, TestPlatform, collection)
-}
-
-// GetSecretsUpdaterConditionDescription returns the condition description for secrets updater role
-func GetSecretsUpdaterConditionDescription(collection string) string {
-	return fmt.Sprintf(SecretsUpdaterConditionDescriptionTemplate, TestPlatform, collection)
 }
 
 // IsManagedBinding checks if an IAM binding is managed by this tool.

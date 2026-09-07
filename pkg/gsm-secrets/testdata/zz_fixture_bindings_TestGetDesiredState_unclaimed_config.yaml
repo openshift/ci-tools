@@ -1,48 +1,39 @@
 - condition:
-    description: 'Managed by test platform: Read access to secrets in claimed-a collection'
     expression: resource.name.extract("secrets/{s}/versions/") in ["claimed-a__updater-service-account",
       "claimed-a____index"]
-    title: Read access to secrets for claimed-a
+    title: 'tp-viewer: claimed-a'
   members:
   - serviceAccount:claimed-a-updater@test-project.iam.gserviceaccount.com
   role: projects/test-project/roles/openshift_ci_secrets_viewer
 - condition:
-    description: 'Managed by test platform: Create, update, and delete access to secrets
-      in claimed-a collection'
     expression: resource.name.extract("secrets/{c}__") in ["claimed-a"]
-    title: Create, update, and delete access for claimed-a
+    title: 'tp-updater: claimed-a'
   members:
   - serviceAccount:claimed-a-updater@test-project.iam.gserviceaccount.com
   role: projects/test-project/roles/openshift_ci_secrets_updater
 - condition:
-    description: 'Managed by test platform: Read access to secrets in claimed-b collection'
     expression: resource.name.extract("secrets/{s}/versions/") in ["claimed-b__updater-service-account",
       "claimed-b____index"]
-    title: Read access to secrets for claimed-b
+    title: 'tp-viewer: claimed-b'
   members:
   - serviceAccount:claimed-b-updater@test-project.iam.gserviceaccount.com
   role: projects/test-project/roles/openshift_ci_secrets_viewer
 - condition:
-    description: 'Managed by test platform: Create, update, and delete access to secrets
-      in claimed-b collection'
     expression: resource.name.extract("secrets/{c}__") in ["claimed-b"]
-    title: Create, update, and delete access for claimed-b
+    title: 'tp-updater: claimed-b'
   members:
   - serviceAccount:claimed-b-updater@test-project.iam.gserviceaccount.com
   role: projects/test-project/roles/openshift_ci_secrets_updater
 - condition:
-    description: 'Managed by test platform: Read access to secrets for group owner-team'
     expression: resource.name.extract("secrets/{s}/versions/") in ["claimed-a__updater-service-account",
       "claimed-a____index", "claimed-b__updater-service-account", "claimed-b____index"]
-    title: Read access to secrets for group owner-team
+    title: 'tp-viewer: owner-team'
   members:
   - group:owner-team@redhat.com
   role: projects/test-project/roles/openshift_ci_secrets_viewer
 - condition:
-    description: 'Managed by test platform: Create, update, and delete access to secrets
-      for group owner-team'
     expression: resource.name.extract("secrets/{c}__") in ["claimed-a", "claimed-b"]
-    title: Create, update, and delete access for group owner-team
+    title: 'tp-updater: owner-team'
   members:
   - group:owner-team@redhat.com
   role: projects/test-project/roles/openshift_ci_secrets_updater

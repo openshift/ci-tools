@@ -1,115 +1,91 @@
 - condition:
-    description: 'Managed by test platform: Read access to secrets in alpha-secrets
-      collection'
     expression: resource.name.extract("secrets/{s}/versions/") in ["alpha-secrets__updater-service-account",
       "alpha-secrets____index"]
-    title: Read access to secrets for alpha-secrets
+    title: 'tp-viewer: alpha-secrets'
   members:
   - serviceAccount:alpha-secrets-updater@test-project.iam.gserviceaccount.com
   role: projects/test-project/roles/openshift_ci_secrets_viewer
 - condition:
-    description: 'Managed by test platform: Create, update, and delete access to secrets
-      in alpha-secrets collection'
     expression: resource.name.extract("secrets/{c}__") in ["alpha-secrets"]
-    title: Create, update, and delete access for alpha-secrets
+    title: 'tp-updater: alpha-secrets'
   members:
   - serviceAccount:alpha-secrets-updater@test-project.iam.gserviceaccount.com
   role: projects/test-project/roles/openshift_ci_secrets_updater
 - condition:
-    description: 'Managed by test platform: Read access to secrets in beta-delta-secrets
-      collection'
     expression: resource.name.extract("secrets/{s}/versions/") in ["beta-delta-secrets__updater-service-account",
       "beta-delta-secrets____index"]
-    title: Read access to secrets for beta-delta-secrets
+    title: 'tp-viewer: beta-delta-secrets'
   members:
   - serviceAccount:beta-delta-secrets-updater@test-project.iam.gserviceaccount.com
   role: projects/test-project/roles/openshift_ci_secrets_viewer
 - condition:
-    description: 'Managed by test platform: Create, update, and delete access to secrets
-      in beta-delta-secrets collection'
     expression: resource.name.extract("secrets/{c}__") in ["beta-delta-secrets"]
-    title: Create, update, and delete access for beta-delta-secrets
+    title: 'tp-updater: beta-delta-secrets'
   members:
   - serviceAccount:beta-delta-secrets-updater@test-project.iam.gserviceaccount.com
   role: projects/test-project/roles/openshift_ci_secrets_updater
 - condition:
-    description: 'Managed by test platform: Read access to secrets in epsilon-secrets
-      collection'
     expression: resource.name.extract("secrets/{s}/versions/") in ["epsilon-secrets__updater-service-account",
       "epsilon-secrets____index"]
-    title: Read access to secrets for epsilon-secrets
+    title: 'tp-viewer: epsilon-secrets'
   members:
   - serviceAccount:epsilon-secrets-updater@test-project.iam.gserviceaccount.com
   role: projects/test-project/roles/openshift_ci_secrets_viewer
 - condition:
-    description: 'Managed by test platform: Create, update, and delete access to secrets
-      in epsilon-secrets collection'
     expression: resource.name.extract("secrets/{c}__") in ["epsilon-secrets"]
-    title: Create, update, and delete access for epsilon-secrets
+    title: 'tp-updater: epsilon-secrets'
   members:
   - serviceAccount:epsilon-secrets-updater@test-project.iam.gserviceaccount.com
   role: projects/test-project/roles/openshift_ci_secrets_updater
 - condition:
-    description: 'Managed by test platform: Read access to secrets for group team-alpha'
     expression: resource.name.extract("secrets/{s}/versions/") in ["alpha-secrets__updater-service-account",
       "alpha-secrets____index"]
-    title: Read access to secrets for group team-alpha
+    title: 'tp-viewer: team-alpha'
   members:
   - group:team-alpha@redhat.com
   role: projects/test-project/roles/openshift_ci_secrets_viewer
 - condition:
-    description: 'Managed by test platform: Create, update, and delete access to secrets
-      for group team-alpha'
     expression: resource.name.extract("secrets/{c}__") in ["alpha-secrets"]
-    title: Create, update, and delete access for group team-alpha
+    title: 'tp-updater: team-alpha'
   members:
   - group:team-alpha@redhat.com
   role: projects/test-project/roles/openshift_ci_secrets_updater
 - condition:
-    description: 'Managed by test platform: Read access to secrets for group team-beta'
     expression: resource.name.extract("secrets/{s}/versions/") in ["beta-delta-secrets__updater-service-account",
       "beta-delta-secrets____index"]
-    title: Read access to secrets for group team-beta
+    title: 'tp-viewer: team-beta'
   members:
   - group:team-beta@redhat.com
   role: projects/test-project/roles/openshift_ci_secrets_viewer
 - condition:
-    description: 'Managed by test platform: Create, update, and delete access to secrets
-      for group team-beta'
     expression: resource.name.extract("secrets/{c}__") in ["beta-delta-secrets"]
-    title: Create, update, and delete access for group team-beta
+    title: 'tp-updater: team-beta'
   members:
   - group:team-beta@redhat.com
   role: projects/test-project/roles/openshift_ci_secrets_updater
 - condition:
-    description: 'Managed by test platform: Read access to secrets for group team-delta'
     expression: resource.name.extract("secrets/{s}/versions/") in ["beta-delta-secrets__updater-service-account",
       "beta-delta-secrets____index"]
-    title: Read access to secrets for group team-delta
+    title: 'tp-viewer: team-delta'
   members:
   - group:team-delta@redhat.com
   role: projects/test-project/roles/openshift_ci_secrets_viewer
 - condition:
-    description: 'Managed by test platform: Create, update, and delete access to secrets
-      for group team-delta'
     expression: resource.name.extract("secrets/{c}__") in ["beta-delta-secrets"]
-    title: Create, update, and delete access for group team-delta
+    title: 'tp-updater: team-delta'
   members:
   - group:team-delta@redhat.com
   role: projects/test-project/roles/openshift_ci_secrets_updater
 - condition:
-    description: 'Managed by test platform: Read access to secrets for group team-epsilon'
     expression: resource.name.extract("secrets/{s}/versions/") in ["epsilon-secrets__updater-service-account",
       "epsilon-secrets____index"]
-    title: Read access to secrets for group team-epsilon
+    title: 'tp-viewer: team-epsilon'
   members:
   - group:team-epsilon@redhat.com
   role: projects/test-project/roles/openshift_ci_secrets_viewer
 - condition:
-    description: 'Managed by test platform: Create, update, and delete access to secrets
-      for group team-epsilon'
     expression: resource.name.extract("secrets/{c}__") in ["epsilon-secrets"]
-    title: Create, update, and delete access for group team-epsilon
+    title: 'tp-updater: team-epsilon'
   members:
   - group:team-epsilon@redhat.com
   role: projects/test-project/roles/openshift_ci_secrets_updater

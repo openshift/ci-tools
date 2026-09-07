@@ -87,18 +87,16 @@ func GetDesiredState(configFile string, config Config) ([]ServiceAccountInfo, ma
 			Role:    config.GetSecretAccessorRole(),
 			Members: saMembers,
 			Condition: &expr.Expr{
-				Expression:  BuildSecretAccessorRoleConditionExpression(collection),
-				Title:       GetSecretsViewerConditionTitle(collection),
-				Description: GetSecretsViewerConditionDescription(collection),
+				Expression: BuildSecretAccessorRoleConditionExpression(collection),
+				Title:      GetSecretsViewerConditionTitle(collection),
 			},
 		})
 		desiredIAMBindings = append(desiredIAMBindings, &iampb.Binding{
 			Role:    config.GetSecretUpdaterRole(),
 			Members: saMembers,
 			Condition: &expr.Expr{
-				Expression:  BuildSecretUpdaterRoleConditionExpression(collection),
-				Title:       GetSecretsUpdaterConditionTitle(collection),
-				Description: GetSecretsUpdaterConditionDescription(collection),
+				Expression: BuildSecretUpdaterRoleConditionExpression(collection),
+				Title:      GetSecretsUpdaterConditionTitle(collection),
 			},
 		})
 	}
@@ -121,18 +119,16 @@ func GetDesiredState(configFile string, config Config) ([]ServiceAccountInfo, ma
 			Role:    config.GetSecretAccessorRole(),
 			Members: groupMembers,
 			Condition: &expr.Expr{
-				Expression:  BuildSecretAccessorRoleConditionExpressionForCollections(collections),
-				Title:       GetSecretsViewerGroupConditionTitle(name),
-				Description: GetSecretsViewerGroupConditionDescription(name),
+				Expression: BuildSecretAccessorRoleConditionExpressionForCollections(collections),
+				Title:      GetSecretsViewerGroupConditionTitle(name),
 			},
 		})
 		desiredIAMBindings = append(desiredIAMBindings, &iampb.Binding{
 			Role:    config.GetSecretUpdaterRole(),
 			Members: groupMembers,
 			Condition: &expr.Expr{
-				Expression:  BuildSecretUpdaterRoleConditionExpressionForCollections(collections),
-				Title:       GetSecretsUpdaterGroupConditionTitle(name),
-				Description: GetSecretsUpdaterGroupConditionDescription(name),
+				Expression: BuildSecretUpdaterRoleConditionExpressionForCollections(collections),
+				Title:      GetSecretsUpdaterGroupConditionTitle(name),
 			},
 		})
 	}

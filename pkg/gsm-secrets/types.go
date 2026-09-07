@@ -15,8 +15,6 @@ import (
 )
 
 const (
-	TestPlatform = "test platform"
-
 	GCPMaxServiceAccountIDLength = 30
 	// GCPMinServiceAccountIDLength is the minimum length GCP allows for a service account ID.
 	GCPMinServiceAccountIDLength = 6
@@ -28,13 +26,11 @@ const (
 	ServiceAccountIDSuffix          = "-updater"
 	ServiceAccountDescriptionPrefix = "Updater service account for secret collection: "
 
-	// IAM binding condition title prefixes
-	SecretsViewerConditionTitlePrefix  = "Read access to secrets for "
-	SecretsUpdaterConditionTitlePrefix = "Create, update, and delete access for "
-
-	// IAM binding condition description templates
-	SecretsViewerConditionDescriptionTemplate  = "Managed by %s: Read access to secrets in %s collection"
-	SecretsUpdaterConditionDescriptionTemplate = "Managed by %s: Create, update, and delete access to secrets in %s collection"
+	// IAM binding condition title prefixes. These mark which bindings on the two custom roles
+	// belong to the reconciler, so they must stay distinctive: anything without one is treated
+	// as hand-made and left alone.
+	SecretsViewerConditionTitlePrefix  = "tp-viewer: "
+	SecretsUpdaterConditionTitlePrefix = "tp-updater: "
 )
 
 type Config struct {

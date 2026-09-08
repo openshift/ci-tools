@@ -5,7 +5,9 @@ import (
 	"context"
 	"errors"
 	"fmt"
+	"os"
 	"os/exec"
+	"path/filepath"
 	"strings"
 	"sync"
 	"syscall"
@@ -313,6 +315,117 @@ func TestTransientReleaseExtractionErrorPattern(t *testing.T) {
 			got := command.Run() == nil
 			if got != testCase.transient {
 				t.Fatalf("classification = %t, want %t for %q", got, testCase.transient, testCase.output)
+			}
+		})
+	}
+}
+
+func TestReleaseExtractionCommandsClassifiesRegistryLoginFailures(t *testing.T) {
+	binDir := t.TempDir()
+	fakeOC := filepath.Join(binDir, "oc")
+	if err := os.WriteFile(fakeOC, []byte(`#!/bin/sh
+case "$1 $2" in
+"registry login")
+	printf '%s\n' "${LOGIN_STDERR:-}" >&2
+	exit "${LOGIN_STATUS:-0}"
+	;;
+"adm release")
+	printf '%s' "${EXTRACT_STDOUT:-}"
+	exit 0
+	;;
+"get configmap")
+	exit 1
+	;;
+esac
+exit 0
+`), 0755); err != nil {
+		t.Fatalf("write fake oc: %v", err)
+	}
+
+	for _, testCase := range []struct {
+		name              string
+		loginStatus       int
+		loginStderr       string
+		wantStatus        int
+		extractOutput     string
+		wantExtractOutput bool
+	}{
+		{name: "TLS timeout is transient", loginStatus: 17, loginStderr: "TLS handshake timeout", wantStatus: transientReleaseExtractionExitCode},
+		{name: "504 is transient", loginStatus: 18, loginStderr: "received unexpected HTTP status: 504 Gateway Timeout", wantStatus: transientReleaseExtractionExitCode},
+		{name: "authentication failure is permanent", loginStatus: 23, loginStderr: "unauthorized: authentication required", wantStatus: 23},
+		{name: "successful login preserves extraction output", extractOutput: "image-references-content", wantExtractOutput: true},
+	} {
+		t.Run(testCase.name, func(t *testing.T) {
+			artifactDir := t.TempDir()
+			command := exec.Command("bash", "-c", releaseExtractionCommands("release-images-latest", "registry.test/release:latest"))
+			command.Env = append(os.Environ(),
+				"PATH="+binDir+":"+os.Getenv("PATH"),
+				"ARTIFACT_DIR="+artifactDir,
+				fmt.Sprintf("LOGIN_STATUS=%d", testCase.loginStatus),
+				"LOGIN_STDERR="+testCase.loginStderr,
+				"EXTRACT_STDOUT="+testCase.extractOutput,
+			)
+			err := command.Run()
+			gotStatus := 0
+			if err != nil {
+				var exitErr *exec.ExitError
+				if !errors.As(err, &exitErr) {
+					t.Fatalf("run extraction command: %v", err)
+				}
+				gotStatus = exitErr.ExitCode()
+			}
+			if gotStatus != testCase.wantStatus {
+				t.Fatalf("exit status = %d, want %d", gotStatus, testCase.wantStatus)
+			}
+			if testCase.wantExtractOutput {
+				output, err := os.ReadFile(filepath.Join(artifactDir, "release-images-latest"))
+				if err != nil {
+					t.Fatalf("read extraction output: %v", err)
+				}
+				if string(output) != testCase.extractOutput {
+					t.Fatalf("extraction output = %q, want %q", output, testCase.extractOutput)
+				}
+			}
+		})
+	}
+}
+
+func TestCLIBootstrapCommandsClassifyTransientFailures(t *testing.T) {
+	binDir := t.TempDir()
+	fakeCVO := filepath.Join(binDir, "cluster-version-operator")
+	if err := os.WriteFile(fakeCVO, []byte(`#!/bin/sh
+printf '%s\n' "${CLI_STDERR:-}" >&2
+printf '%s' "${CLI_OUTPUT:-}"
+exit "${CLI_STATUS:-0}"
+`), 0755); err != nil {
+		t.Fatalf("write fake cluster-version-operator: %v", err)
+	}
+
+	for _, testCase := range []struct {
+		name       string
+		status     int
+		stderr     string
+		wantStatus int
+	}{
+		{name: "transient registry failure", status: 17, stderr: "TLS handshake timeout", wantStatus: transientReleaseExtractionExitCode},
+		{name: "permanent payload failure", status: 19, stderr: "manifest unknown", wantStatus: 19},
+	} {
+		t.Run(testCase.name, func(t *testing.T) {
+			terminationLog := filepath.Join(t.TempDir(), "termination-log")
+			commands := strings.Replace(cliBootstrapCommands(), "/dev/termination-log", terminationLog, 1)
+			command := exec.Command("sh", "-c", commands)
+			command.Env = append(os.Environ(),
+				"PATH="+binDir+":"+os.Getenv("PATH"),
+				fmt.Sprintf("CLI_STATUS=%d", testCase.status),
+				"CLI_STDERR="+testCase.stderr,
+			)
+			err := command.Run()
+			var exitErr *exec.ExitError
+			if !errors.As(err, &exitErr) {
+				t.Fatalf("expected exit status %d, got %v", testCase.wantStatus, err)
+			}
+			if got := exitErr.ExitCode(); got != testCase.wantStatus {
+				t.Fatalf("exit status = %d, want %d", got, testCase.wantStatus)
 			}
 		})
 	}
@@ -722,6 +835,115 @@ func TestReleaseExtractionCleanupFailureStopsRetry(t *testing.T) {
 	waitForReleasePodDeleteCalls(t, client, 2)
 }
 
+func cliBootstrapPodStatus(exitCode int32, message string) corev1.PodStatus {
+	phase := corev1.PodSucceeded
+	if exitCode != 0 {
+		phase = corev1.PodFailed
+	}
+	return corev1.PodStatus{
+		Phase: phase,
+		ContainerStatuses: []corev1.ContainerStatus{{
+			Name: releaseExtractionContainerName,
+			State: corev1.ContainerState{Terminated: &corev1.ContainerStateTerminated{
+				ExitCode: exitCode,
+				Message:  message,
+			}},
+		}},
+	}
+}
+
+func TestCLIBootstrapRetryLifecycle(t *testing.T) {
+	cleanupErr := errors.New("CLI bootstrap pod deletion failed")
+	for _, testCase := range []struct {
+		name             string
+		statuses         []corev1.PodStatus
+		deleteErr        error
+		wantCreates      int
+		wantDeletedUIDs  []types.UID
+		wantMessage      string
+		wantErr          error
+		wantErrSubstring string
+		wantSleeps       int
+	}{
+		{
+			name: "transient failure is deleted and a fresh pod recovers",
+			statuses: []corev1.PodStatus{
+				cliBootstrapPodStatus(transientReleaseExtractionExitCode, ""),
+				cliBootstrapPodStatus(0, testCLIImage),
+			},
+			wantCreates:     2,
+			wantDeletedUIDs: []types.UID{"release-pod-1"},
+			wantMessage:     testCLIImage,
+			wantSleeps:      1,
+		},
+		{
+			name:             "permanent failure stops without retry",
+			statuses:         []corev1.PodStatus{cliBootstrapPodStatus(19, "")},
+			wantCreates:      1,
+			wantErrSubstring: "failed",
+		},
+		{
+			name:             "cleanup failure stops without retry",
+			statuses:         []corev1.PodStatus{cliBootstrapPodStatus(transientReleaseExtractionExitCode, "")},
+			deleteErr:        cleanupErr,
+			wantCreates:      1,
+			wantErr:          cleanupErr,
+			wantErrSubstring: "cannot retry safely",
+		},
+	} {
+		t.Run(testCase.name, func(t *testing.T) {
+			client := newReleasePodLifecycleClient(t, testCase.statuses...)
+			client.deleteErr = testCase.deleteErr
+			jobSpec := &api.JobSpec{}
+			jobSpec.SetNamespace("test-namespace")
+			step := &importReleaseStep{name: api.LatestReleaseName, client: client, jobSpec: jobSpec}
+			var sleeps int
+			pod, err := step.runCLIBootstrapWithRetries(context.Background(), "release-images-latest-cli", []time.Duration{0}, func(context.Context, time.Duration) error {
+				sleeps++
+				return nil
+			})
+			if testCase.wantErr == nil && testCase.wantErrSubstring == "" && err != nil {
+				t.Fatalf("CLI bootstrap retry failed: %v", err)
+			}
+			if testCase.wantErr != nil && !errors.Is(err, testCase.wantErr) {
+				t.Fatalf("error = %v, want cause %v", err, testCase.wantErr)
+			}
+			if testCase.wantErrSubstring != "" && (err == nil || !strings.Contains(err.Error(), testCase.wantErrSubstring)) {
+				t.Fatalf("error = %v, want substring %q", err, testCase.wantErrSubstring)
+			}
+			if client.createCount != testCase.wantCreates {
+				t.Fatalf("pod creates = %d, want %d", client.createCount, testCase.wantCreates)
+			}
+			if fmt.Sprint(client.deletedUIDs) != fmt.Sprint(testCase.wantDeletedUIDs) {
+				t.Fatalf("deleted UIDs = %v, want %v", client.deletedUIDs, testCase.wantDeletedUIDs)
+			}
+			if sleeps != testCase.wantSleeps {
+				t.Fatalf("retry sleeps = %d, want %d", sleeps, testCase.wantSleeps)
+			}
+			if testCase.wantMessage != "" {
+				if pod == nil || len(pod.Status.ContainerStatuses) != 1 || pod.Status.ContainerStatuses[0].State.Terminated == nil || pod.Status.ContainerStatuses[0].State.Terminated.Message != testCase.wantMessage {
+					t.Fatalf("successful pod output was not retained: %#v", pod)
+				}
+				if len(client.CreatedPods) != 2 || client.CreatedPods[0] == client.CreatedPods[1] || client.CreatedPods[0].UID == client.CreatedPods[1].UID {
+					t.Fatalf("retries did not use fresh pod objects and UIDs: %#v", client.CreatedPods)
+				}
+				replacement := &corev1.Pod{}
+				key := ctrlruntimeclient.ObjectKey{Namespace: "test-namespace", Name: "release-images-latest-cli"}
+				if err := client.Get(context.Background(), key, replacement); err != nil {
+					t.Fatalf("get successful replacement pod: %v", err)
+				}
+				if err := ciutil.DeletePodWithUID(context.Background(), client, client.CreatedPods[0]); err != nil {
+					t.Fatalf("stale CLI cleanup should preserve replacement: %v", err)
+				}
+				current := &corev1.Pod{}
+				if err := client.Get(context.Background(), key, current); err != nil || current.UID != replacement.UID {
+					t.Fatalf("stale CLI cleanup affected replacement: pod=%#v err=%v", current, err)
+				}
+			}
+		})
+	}
+}
+
 func TestReleaseExtractionPendingImagePullIsNotRetried(t *testing.T) {
 	pending := corev1.PodStatus{Phase: corev1.PodPending, ContainerStatuses: []corev1.ContainerStatus{{
 		Name: releaseExtractionContainerName,
@@ -828,7 +1050,7 @@ func TestExtractAndTagCLIImageWaitsForSpecVisibility(t *testing.T) {
 
 	ctx, cancel := context.WithTimeout(context.Background(), time.Second)
 	defer cancel()
-	got, err := step.extractAndTagCLIImage(ctx, targetCLI, streamName)
+	got, err := step.extractAndTagCLIImage(ctx, targetCLI, streamName, nil)
 	if err != nil {
 		t.Fatalf("extract and tag CLI image: %v", err)
 	}

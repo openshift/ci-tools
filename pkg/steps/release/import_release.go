@@ -175,28 +175,95 @@ func transientReleaseExtractionPodError(pod *coreapi.Pod, runErr error) error {
 	return runErr
 }
 
-func runReleaseExtractionWithRetries(ctx context.Context, name string, step api.Step, client ctrlruntimeclient.Client, retryDelays []time.Duration, sleep releaseImportSleep) error {
-	return retryReleaseExtraction(ctx, name, retryDelays, sleep, func(ctx context.Context) error {
-		err := step.Run(ctx)
+type releasePodRun func(context.Context) (*coreapi.Pod, error)
+
+func runReleasePodWithRetries(ctx context.Context, name string, client ctrlruntimeclient.Client, retryDelays []time.Duration, sleep releaseImportSleep, run releasePodRun) (*coreapi.Pod, error) {
+	var result *coreapi.Pod
+	err := retryReleaseExtraction(ctx, name, retryDelays, sleep, func(ctx context.Context) error {
+		pod, err := run(ctx)
+		if pod != nil {
+			result = pod
+		}
 		if err == nil {
 			return nil
 		}
-		var podStepErr *steps.PodStepError
-		if !errors.As(err, &podStepErr) || podStepErr == nil {
-			return err
-		}
-		classifiedErr := transientReleaseExtractionPodError(podStepErr.Pod, err)
+		classifiedErr := transientReleaseExtractionPodError(pod, err)
 		var transientErr *transientReleaseExtractionError
 		if !errors.As(classifiedErr, &transientErr) || transientErr == nil {
 			return classifiedErr
 		}
-		if err := util.DeletePodWithUID(ctx, client, podStepErr.Pod); err != nil {
+		if err := util.DeletePodWithUID(ctx, client, pod); err != nil {
 			// Preserve the extraction cause without its transient marker: a new
 			// attempt is unsafe until cleanup confirms that this pod UID is gone.
 			return fmt.Errorf("failed to confirm transient release extraction pod cleanup, cannot retry safely: %w", errors.Join(err, transientErr.err))
 		}
 		return classifiedErr
 	})
+	return result, err
+}
+
+func runReleaseExtractionWithRetries(ctx context.Context, name string, step api.Step, client ctrlruntimeclient.Client, retryDelays []time.Duration, sleep releaseImportSleep) error {
+	_, err := runReleasePodWithRetries(ctx, name, client, retryDelays, sleep, func(ctx context.Context) (*coreapi.Pod, error) {
+		err := step.Run(ctx)
+		if err == nil {
+			return nil, nil
+		}
+		var podStepErr *steps.PodStepError
+		if !errors.As(err, &podStepErr) || podStepErr == nil {
+			return nil, err
+		}
+		return podStepErr.Pod, err
+	})
+	return err
+}
+
+func releaseExtractionCommands(target, pullSpec string) string {
+	return fmt.Sprintf(`
+set -euo pipefail
+export HOME=/tmp
+export XDG_RUNTIME_DIR=/tmp/run
+mkdir -p $HOME/.docker "${XDG_RUNTIME_DIR}"
+if [[ -d /pull ]]; then
+	cp /pull/.dockerconfigjson $HOME/.docker/config.json
+fi
+login_error=${ARTIFACT_DIR}/%s-login-error.log
+set +e
+oc registry login --to $HOME/.docker/config.json 2> "${login_error}"
+login_status=$?
+set -e
+cat "${login_error}" >&2
+if (( login_status != 0 )); then
+	if grep -Eqi '(%s)' "${login_error}"; then
+		exit %d
+	fi
+	exit "${login_status}"
+fi
+extract_error=${ARTIFACT_DIR}/%s-extract-error.log
+set +e
+oc adm release extract --from=%q --file=image-references > ${ARTIFACT_DIR}/%s 2> "${extract_error}"
+extract_status=$?
+set -e
+cat "${extract_error}" >&2
+if (( extract_status != 0 )); then
+	# Exit 75 is reserved for failures that are safe to retry in a fresh pod.
+	# Authorization, invalid references, and malformed payloads retain the
+	# original exit status and fail immediately.
+	if grep -Eqi '(%s)' "${extract_error}"; then
+		exit %d
+	fi
+	exit "${extract_status}"
+fi
+# while release creation may happen more than once in the lifetime of a test
+# namespace, only one release creation Pod will ever run at once. Therefore,
+# while actions editing the output ConfigMap may race if done from ci-operator
+# itself, these actions cannot race from this Pod, as all active ci-operator
+# processes will launch and wait for but one release Pod. Here, we need to
+# delete any previously-existing ConfigMap if we're re-importing the release.
+if oc get configmap release-%s; then
+	oc delete configmap release-%s
+fi
+oc create configmap release-%s --from-file=%s.yaml=${ARTIFACT_DIR}/%s
+`, target, transientReleaseExtractionErrorPattern, transientReleaseExtractionExitCode, target, pullSpec, target, transientReleaseExtractionErrorPattern, transientReleaseExtractionExitCode, target, target, target, target, target)
 }
 
 func (s *importReleaseStep) Inputs() (api.InputDefinition, error) {
@@ -260,7 +327,7 @@ func (s *importReleaseStep) run(ctx context.Context) error {
 	// get the CLI image from the payload (since we need it to run oc adm release extract)
 	target := fmt.Sprintf("release-images-%s", s.name)
 
-	cliImage, err := s.getCLIImage(ctx, target, streamName)
+	cliImage, err := s.getCLIImage(ctx, target, streamName, retryDelays)
 	if err != nil {
 		return fmt.Errorf("failed to get CLI image: %w", err)
 	}
@@ -272,41 +339,7 @@ func (s *importReleaseStep) run(ctx context.Context) error {
 			MountPath: "/pull",
 		}}
 	}
-	commands := fmt.Sprintf(`
-set -euo pipefail
-export HOME=/tmp
-export XDG_RUNTIME_DIR=/tmp/run
-mkdir -p $HOME/.docker "${XDG_RUNTIME_DIR}"
-if [[ -d /pull ]]; then
-	cp /pull/.dockerconfigjson $HOME/.docker/config.json
-fi
-oc registry login --to $HOME/.docker/config.json
-extract_error=${ARTIFACT_DIR}/%s-extract-error.log
-set +e
-oc adm release extract --from=%q --file=image-references > ${ARTIFACT_DIR}/%s 2> "${extract_error}"
-extract_status=$?
-set -e
-cat "${extract_error}" >&2
-if (( extract_status != 0 )); then
-	# Exit 75 is reserved for failures that are safe to retry in a fresh pod.
-	# Authorization, invalid references, and malformed payloads retain the
-	# original exit status and fail immediately.
-	if grep -Eqi '(%s)' "${extract_error}"; then
-		exit %d
-	fi
-	exit "${extract_status}"
-fi
-# while release creation may happen more than once in the lifetime of a test
-# namespace, only one release creation Pod will ever run at once. Therefore,
-# while actions editing the output ConfigMap may race if done from ci-operator
-# itself, these actions cannot race from this Pod, as all active ci-operator
-# processes will launch and wait for but one release Pod. Here, we need to
-# delete any previously-existing ConfigMap if we're re-importing the release.
-if oc get configmap release-%s; then
-	oc delete configmap release-%s
-fi
-oc create configmap release-%s --from-file=%s.yaml=${ARTIFACT_DIR}/%s
-`, target, pullSpec, target, transientReleaseExtractionErrorPattern, transientReleaseExtractionExitCode, target, target, target, target, target)
+	commands := releaseExtractionCommands(target, pullSpec)
 
 	// run adm release extract and grab the raw image-references from the payload
 	podConfig := steps.PodStepConfiguration{
@@ -578,8 +611,23 @@ func (s *importReleaseStep) resolveCLIImage(ctx context.Context, targetCLI, stre
 	return s.resolveCLIImageFromStream(ctx, streamName)
 }
 
-func (s *importReleaseStep) extractAndTagCLIImage(ctx context.Context, targetCLI, streamName string) (*api.ImageStreamTagReference, error) {
-	pod, err := steps.RunPod(ctx, s.client, &coreapi.Pod{
+func cliBootstrapCommands() string {
+	return fmt.Sprintf(`
+bootstrap_error=/tmp/cli-bootstrap-error.log
+cluster-version-operator image cli > /dev/termination-log 2> "${bootstrap_error}"
+bootstrap_status=$?
+cat "${bootstrap_error}" >&2
+if [ "${bootstrap_status}" -ne 0 ]; then
+	if grep -Eqi '(%s)' "${bootstrap_error}"; then
+		exit %d
+	fi
+	exit "${bootstrap_status}"
+fi
+`, transientReleaseExtractionErrorPattern, transientReleaseExtractionExitCode)
+}
+
+func (s *importReleaseStep) cliBootstrapPod(targetCLI string) *coreapi.Pod {
+	return &coreapi.Pod{
 		ObjectMeta: meta.ObjectMeta{
 			Name:      targetCLI,
 			Namespace: s.jobSpec.Namespace(),
@@ -591,11 +639,23 @@ func (s *importReleaseStep) extractAndTagCLIImage(ctx context.Context, targetCLI
 				{
 					Name:    "release",
 					Image:   fmt.Sprintf("release:%s", s.name), // the cluster will resolve this relative ref for us when we create Pods with it
-					Command: []string{"/bin/sh", "-c", "cluster-version-operator image cli > /dev/termination-log"},
+					Command: []string{"/bin/sh", "-c", cliBootstrapCommands()},
 				},
 			},
 		},
-	}, true)
+	}
+}
+
+func (s *importReleaseStep) runCLIBootstrapWithRetries(ctx context.Context, targetCLI string, retryDelays []time.Duration, sleep releaseImportSleep) (*coreapi.Pod, error) {
+	return runReleasePodWithRetries(ctx, targetCLI, s.client, retryDelays, sleep, func(ctx context.Context) (*coreapi.Pod, error) {
+		// RunPod mutates the pod with server state, so every retry must start
+		// from a newly constructed object after the previous UID is confirmed gone.
+		return steps.RunPod(ctx, s.client, s.cliBootstrapPod(targetCLI), true)
+	})
+}
+
+func (s *importReleaseStep) extractAndTagCLIImage(ctx context.Context, targetCLI, streamName string, retryDelays []time.Duration) (*api.ImageStreamTagReference, error) {
+	pod, err := s.runCLIBootstrapWithRetries(ctx, targetCLI, retryDelays, sleepForReleaseImportRetry)
 	if err != nil {
 		return nil, fmt.Errorf("unable to find the 'cli' image in the provided release image: %w", err)
 	}
@@ -642,7 +702,7 @@ func (s *importReleaseStep) extractAndTagCLIImage(ctx context.Context, targetCLI
 	return &cliImageRef, nil
 }
 
-func (s *importReleaseStep) getCLIImage(ctx context.Context, target, streamName string) (*api.ImageStreamTagReference, error) {
+func (s *importReleaseStep) getCLIImage(ctx context.Context, target, streamName string, retryDelays []time.Duration) (*api.ImageStreamTagReference, error) {
 	if s.overrideCLIReleaseExtractImage != nil {
 
 		// Setting the lookup policy on the imagestreamtag doesn't do anything, it gets happily reset to false so we have to
@@ -704,5 +764,5 @@ func (s *importReleaseStep) getCLIImage(ctx context.Context, target, streamName 
 		return cliRef, nil
 	}
 
-	return s.extractAndTagCLIImage(ctx, targetCLI, streamName)
+	return s.extractAndTagCLIImage(ctx, targetCLI, streamName, retryDelays)
 }

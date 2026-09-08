@@ -76,7 +76,7 @@ func NewHandler(client ControlClient, options Options) (*Handler, error) {
 		return nil, errors.New("dispatcher command channel ID is required")
 	}
 	if options.Timeout == 0 {
-		options.Timeout = 10 * time.Second
+		options.Timeout = 30 * time.Second
 	}
 	if options.PollInterval == 0 {
 		options.PollInterval = 5 * time.Second

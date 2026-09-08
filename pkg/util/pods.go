@@ -74,7 +74,25 @@ func CreateOrRestartPod(ctx context.Context, podClient ctrlruntimeclient.Client,
 		}
 		return true, nil
 	}); err != nil {
-		return nil, fmt.Errorf("unable to create pod: %w", err)
+		createErr := fmt.Errorf("unable to create pod: %w", err)
+		if !isAmbiguousPodCreateError(err) {
+			return nil, createErr
+		}
+
+		// The API server may have persisted the pod before the create response
+		// was lost. Reconcile by name to recover the server-assigned UID. Return
+		// both the pod and the original error so callers can arrange UID-safe
+		// cleanup without treating the failed create as a successful run.
+		created := &corev1.Pod{}
+		reconcileCtx, cancel := context.WithTimeout(context.WithoutCancel(ctx), 5*time.Second)
+		defer cancel()
+		if getErr := podClient.Get(reconcileCtx, ctrlruntimeclient.ObjectKey{Namespace: namespace, Name: name}, created); getErr != nil {
+			return nil, errors.Join(createErr, fmt.Errorf("could not reconcile ambiguous pod creation: %w", getErr))
+		}
+		if created.UID == "" {
+			return nil, errors.Join(createErr, errors.New("could not reconcile ambiguous pod creation without a UID"))
+		}
+		return created, createErr
 	}
 	return pod, nil
 }
@@ -158,6 +176,12 @@ func deletePodWithUID(ctx context.Context, podClient ctrlruntimeclient.Client, p
 }
 
 func isRetryablePodRequestError(err error) bool {
+	return isAmbiguousPodCreateError(err) ||
+		kerrors.IsTooManyRequests(err) ||
+		kerrors.IsServiceUnavailable(err)
+}
+
+func isAmbiguousPodCreateError(err error) bool {
 	return utilnet.IsConnectionReset(err) ||
 		utilnet.IsConnectionRefused(err) ||
 		utilnet.IsHTTP2ConnectionLost(err) ||

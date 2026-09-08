@@ -8,11 +8,17 @@ import (
 	"strings"
 	"syscall"
 	"testing"
+	"time"
 
 	"github.com/sirupsen/logrus"
 
 	corev1 "k8s.io/api/core/v1"
+	kerrors "k8s.io/apimachinery/pkg/api/errors"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
+	"k8s.io/apimachinery/pkg/types"
+	ctrlruntimeclient "sigs.k8s.io/controller-runtime/pkg/client"
+
+	"github.com/openshift/ci-tools/pkg/kubernetes"
 )
 
 type podStepTypedNilCause struct{}
@@ -106,5 +112,160 @@ func TestPodCleanupErrorClass(t *testing.T) {
 				t.Fatalf("podCleanupErrorClass() = %q, want %q", got, testCase.want)
 			}
 		})
+	}
+}
+
+type podDeleteAttempt struct {
+	preconditionUID types.UID
+	err             error
+}
+
+type lostCreateResponsePodClient struct {
+	kubernetes.PodClient
+	commitCreate bool
+	createErr    error
+	createdUID   types.UID
+	deleteCalls  chan podDeleteAttempt
+}
+
+func (c *lostCreateResponsePodClient) Create(ctx context.Context, obj ctrlruntimeclient.Object, opts ...ctrlruntimeclient.CreateOption) error {
+	pod, ok := obj.(*corev1.Pod)
+	if !ok || !c.commitCreate {
+		return c.createErr
+	}
+	stored := pod.DeepCopy()
+	stored.UID = c.createdUID
+	if err := c.PodClient.Create(ctx, stored, opts...); err != nil {
+		return err
+	}
+	return c.createErr
+}
+
+func (c *lostCreateResponsePodClient) Delete(ctx context.Context, obj ctrlruntimeclient.Object, opts ...ctrlruntimeclient.DeleteOption) error {
+	deleteOptions := &ctrlruntimeclient.DeleteOptions{}
+	deleteOptions.ApplyOptions(opts)
+	var preconditionUID types.UID
+	if deleteOptions.Preconditions != nil && deleteOptions.Preconditions.UID != nil {
+		preconditionUID = *deleteOptions.Preconditions.UID
+	}
+
+	current := &corev1.Pod{}
+	err := c.PodClient.Get(ctx, ctrlruntimeclient.ObjectKeyFromObject(obj), current)
+	if err == nil && current.UID != preconditionUID {
+		err = kerrors.NewConflict(corev1.Resource("pods"), obj.GetName(), errors.New("UID precondition mismatch"))
+	} else if err == nil {
+		err = c.PodClient.Delete(ctx, current, opts...)
+	}
+	c.deleteCalls <- podDeleteAttempt{preconditionUID: preconditionUID, err: err}
+	return err
+}
+
+func newLostCreateResponsePodStep(namespace string, commitCreate bool, createErr error) (*podStep, *lostCreateResponsePodClient) {
+	step, _ := preparePodStep(namespace)
+	client := &lostCreateResponsePodClient{
+		PodClient:    step.client,
+		commitCreate: commitCreate,
+		createErr:    createErr,
+		createdUID:   types.UID("created-uid"),
+		deleteCalls:  make(chan podDeleteAttempt, 1),
+	}
+	step.client = client
+	return step, client
+}
+
+func waitForPodDeleteAttempt(t *testing.T, client *lostCreateResponsePodClient) podDeleteAttempt {
+	t.Helper()
+	select {
+	case attempt := <-client.deleteCalls:
+		return attempt
+	case <-time.After(time.Second):
+		t.Fatal("timed out waiting for pod cancellation cleanup")
+		return podDeleteAttempt{}
+	}
+}
+
+func TestPodStepCleansUpReconciledLostCreateResponse(t *testing.T) {
+	const namespace = "test-namespace"
+	ctx, cancel := context.WithCancel(context.Background())
+	step, client := newLostCreateResponsePodStep(namespace, true, syscall.ECONNRESET)
+
+	err := step.run(ctx)
+	if !errors.Is(err, syscall.ECONNRESET) {
+		t.Fatalf("expected lost create response, got %v", err)
+	}
+	created := &corev1.Pod{}
+	key := ctrlruntimeclient.ObjectKey{Namespace: namespace, Name: step.config.As}
+	if err := client.Get(context.Background(), key, created); err != nil || created.UID != client.createdUID {
+		t.Fatalf("expected committed pod before cancellation, pod=%#v err=%v", created, err)
+	}
+
+	cancel()
+	attempt := waitForPodDeleteAttempt(t, client)
+	if attempt.err != nil {
+		t.Fatalf("recovered pod cleanup failed: %v", attempt.err)
+	}
+	if attempt.preconditionUID != client.createdUID {
+		t.Fatalf("cleanup UID precondition = %q, want %q", attempt.preconditionUID, client.createdUID)
+	}
+	if err := client.Get(context.Background(), key, &corev1.Pod{}); !kerrors.IsNotFound(err) {
+		t.Fatalf("committed pod was orphaned after cancellation: %v", err)
+	}
+}
+
+func TestPodStepLostCreateCleanupPreservesReplacement(t *testing.T) {
+	const namespace = "test-namespace"
+	ctx, cancel := context.WithCancel(context.Background())
+	step, client := newLostCreateResponsePodStep(namespace, true, syscall.ECONNRESET)
+	if err := step.run(ctx); !errors.Is(err, syscall.ECONNRESET) {
+		t.Fatalf("expected lost create response, got %v", err)
+	}
+
+	key := ctrlruntimeclient.ObjectKey{Namespace: namespace, Name: step.config.As}
+	original := &corev1.Pod{}
+	if err := client.PodClient.Get(context.Background(), key, original); err != nil {
+		t.Fatalf("get original pod: %v", err)
+	}
+	if err := client.PodClient.Delete(context.Background(), original); err != nil {
+		t.Fatalf("delete original pod while arranging replacement: %v", err)
+	}
+	replacement := original.DeepCopy()
+	replacement.ResourceVersion = ""
+	replacement.UID = types.UID("replacement-uid")
+	if err := client.PodClient.Create(context.Background(), replacement); err != nil {
+		t.Fatalf("create replacement pod: %v", err)
+	}
+
+	cancel()
+	attempt := waitForPodDeleteAttempt(t, client)
+	if !kerrors.IsConflict(attempt.err) {
+		t.Fatalf("expected stale UID precondition conflict, got %v", attempt.err)
+	}
+	if attempt.preconditionUID != client.createdUID {
+		t.Fatalf("cleanup UID precondition = %q, want original %q", attempt.preconditionUID, client.createdUID)
+	}
+	current := &corev1.Pod{}
+	if err := client.Get(context.Background(), key, current); err != nil || current.UID != replacement.UID {
+		t.Fatalf("replacement was affected by stale cleanup, pod=%#v err=%v", current, err)
+	}
+}
+
+func TestPodStepPermanentCreateFailureDoesNotRegisterCleanup(t *testing.T) {
+	const namespace = "test-namespace"
+	ctx, cancel := context.WithCancel(context.Background())
+	badRequest := kerrors.NewBadRequest("invalid pod")
+	step, client := newLostCreateResponsePodStep(namespace, false, badRequest)
+	if err := step.run(ctx); !kerrors.IsBadRequest(err) {
+		t.Fatalf("expected permanent create failure, got %v", err)
+	}
+	cancel()
+
+	select {
+	case attempt := <-client.deleteCalls:
+		t.Fatalf("permanent create failure unexpectedly registered cleanup: %#v", attempt)
+	default:
+	}
+	key := ctrlruntimeclient.ObjectKey{Namespace: namespace, Name: step.config.As}
+	if err := client.Get(context.Background(), key, &corev1.Pod{}); !kerrors.IsNotFound(err) {
+		t.Fatalf("permanent create failure left a pod behind: %v", err)
 	}
 }

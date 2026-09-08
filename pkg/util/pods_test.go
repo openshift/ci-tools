@@ -20,6 +20,91 @@ import (
 	"github.com/openshift/ci-tools/pkg/testhelper"
 )
 
+func TestCreateOrRestartPodCreateOutcomes(t *testing.T) {
+	const (
+		namespace = "test-ns"
+		name      = "test-pod"
+	)
+	newPod := func() *corev1.Pod {
+		return &corev1.Pod{
+			ObjectMeta: metav1.ObjectMeta{Namespace: namespace, Name: name},
+			Spec:       corev1.PodSpec{Containers: []corev1.Container{{Name: "test", Image: "test"}}},
+		}
+	}
+
+	t.Run("normal create", func(t *testing.T) {
+		client := fakectrlruntimeclient.NewClientBuilder().Build()
+		requested := newPod()
+		created, err := CreateOrRestartPod(context.Background(), client, requested)
+		if err != nil || created != requested {
+			t.Fatalf("normal create returned pod=%#v err=%v", created, err)
+		}
+	})
+
+	t.Run("already existing pod is recovered", func(t *testing.T) {
+		existing := newPod()
+		existing.UID = types.UID("existing-uid")
+		client := fakectrlruntimeclient.NewClientBuilder().WithObjects(existing).Build()
+		created, err := CreateOrRestartPod(context.Background(), client, newPod())
+		if err != nil {
+			t.Fatalf("existing pod recovery failed: %v", err)
+		}
+		if created == nil || created.UID != existing.UID {
+			t.Fatalf("recovered pod UID = %q, want %q", created.UID, existing.UID)
+		}
+	})
+
+	t.Run("committed create with lost response is reconciled after cancellation", func(t *testing.T) {
+		ctx, cancel := context.WithCancel(context.Background())
+		var createCalls int
+		client := fakectrlruntimeclient.NewClientBuilder().WithInterceptorFuncs(interceptor.Funcs{
+			Create: func(ctx context.Context, client ctrlruntimeclient.WithWatch, obj ctrlruntimeclient.Object, opts ...ctrlruntimeclient.CreateOption) error {
+				createCalls++
+				stored := obj.(*corev1.Pod).DeepCopy()
+				stored.UID = types.UID("created-uid")
+				if err := client.Create(ctx, stored, opts...); err != nil {
+					return err
+				}
+				cancel()
+				return syscall.ECONNRESET
+			},
+		}).Build()
+
+		created, err := CreateOrRestartPod(ctx, client, newPod())
+		if !errors.Is(err, syscall.ECONNRESET) {
+			t.Fatalf("expected original lost-response error, got %v", err)
+		}
+		if created == nil || created.UID != "created-uid" {
+			t.Fatalf("reconciled pod UID = %q, want created-uid", created.UID)
+		}
+		if createCalls != 1 {
+			t.Fatalf("create calls = %d, want 1", createCalls)
+		}
+	})
+
+	t.Run("permanent create failure is not reconciled", func(t *testing.T) {
+		var getCalls int
+		badRequest := apierrors.NewBadRequest("invalid pod")
+		client := fakectrlruntimeclient.NewClientBuilder().WithInterceptorFuncs(interceptor.Funcs{
+			Create: func(context.Context, ctrlruntimeclient.WithWatch, ctrlruntimeclient.Object, ...ctrlruntimeclient.CreateOption) error {
+				return badRequest
+			},
+			Get: func(ctx context.Context, client ctrlruntimeclient.WithWatch, key ctrlruntimeclient.ObjectKey, obj ctrlruntimeclient.Object, opts ...ctrlruntimeclient.GetOption) error {
+				getCalls++
+				return client.Get(ctx, key, obj, opts...)
+			},
+		}).Build()
+
+		created, err := CreateOrRestartPod(context.Background(), client, newPod())
+		if created != nil || !apierrors.IsBadRequest(err) {
+			t.Fatalf("permanent failure returned pod=%#v err=%v", created, err)
+		}
+		if getCalls != 1 {
+			t.Fatalf("GET calls = %d, want only the initial completed-pod check", getCalls)
+		}
+	})
+}
+
 func TestWaitForCompletedPodDeletion(t *testing.T) {
 	const namespace = "test-ns"
 	const name = "test-pod"
@@ -244,6 +329,110 @@ func TestDeletePodWithUIDReconcilesAmbiguousDeletion(t *testing.T) {
 			t.Fatalf("calls delete=%d get=%d, want delete=1 get=3", deleteCalls, getCalls)
 		}
 	})
+
+	for _, statusCase := range []struct {
+		name string
+		err  func() error
+	}{
+		{name: "429", err: func() error { return apierrors.NewTooManyRequests("busy", 0) }},
+		{name: "503", err: func() error { return apierrors.NewServiceUnavailable("unavailable") }},
+	} {
+		statusCase := statusCase
+		t.Run("temporary "+statusCase.name+" DELETE retries then succeeds", func(t *testing.T) {
+			var deleteCalls, getCalls int
+			client := fakectrlruntimeclient.NewClientBuilder().WithObjects(observed.DeepCopy()).WithInterceptorFuncs(interceptor.Funcs{
+				Delete: func(ctx context.Context, client ctrlruntimeclient.WithWatch, obj ctrlruntimeclient.Object, opts ...ctrlruntimeclient.DeleteOption) error {
+					deleteCalls++
+					if deleteCalls == 1 {
+						return statusCase.err()
+					}
+					return client.Delete(ctx, obj, opts...)
+				},
+				Get: func(ctx context.Context, client ctrlruntimeclient.WithWatch, key ctrlruntimeclient.ObjectKey, obj ctrlruntimeclient.Object, opts ...ctrlruntimeclient.GetOption) error {
+					getCalls++
+					return client.Get(ctx, key, obj, opts...)
+				},
+			}).Build()
+
+			if err := deletePodWithUID(context.Background(), client, observed, wait.Backoff{Steps: 3}); err != nil {
+				t.Fatalf("temporary DELETE did not recover: %v", err)
+			}
+			if deleteCalls != 2 || getCalls != 2 {
+				t.Fatalf("calls delete=%d get=%d, want 2 each", deleteCalls, getCalls)
+			}
+		})
+
+		t.Run("temporary "+statusCase.name+" DELETE exhausts boundedly", func(t *testing.T) {
+			var deleteCalls, getCalls int
+			lastErr := statusCase.err()
+			client := fakectrlruntimeclient.NewClientBuilder().WithInterceptorFuncs(interceptor.Funcs{
+				Delete: func(context.Context, ctrlruntimeclient.WithWatch, ctrlruntimeclient.Object, ...ctrlruntimeclient.DeleteOption) error {
+					deleteCalls++
+					return lastErr
+				},
+				Get: func(_ context.Context, _ ctrlruntimeclient.WithWatch, _ ctrlruntimeclient.ObjectKey, obj ctrlruntimeclient.Object, _ ...ctrlruntimeclient.GetOption) error {
+					getCalls++
+					observed.DeepCopyInto(obj.(*corev1.Pod))
+					return nil
+				},
+			}).Build()
+
+			err := deletePodWithUID(context.Background(), client, observed, wait.Backoff{Steps: 3})
+			if !wait.Interrupted(err) || !errors.Is(err, lastErr) {
+				t.Fatalf("expected bounded DELETE status failure, got %v", err)
+			}
+			if deleteCalls != 3 || getCalls != 3 {
+				t.Fatalf("calls delete=%d get=%d, want 3 each", deleteCalls, getCalls)
+			}
+		})
+
+		t.Run("temporary "+statusCase.name+" confirmation GET retries then succeeds", func(t *testing.T) {
+			var deleteCalls, getCalls int
+			client := fakectrlruntimeclient.NewClientBuilder().WithInterceptorFuncs(interceptor.Funcs{
+				Delete: func(context.Context, ctrlruntimeclient.WithWatch, ctrlruntimeclient.Object, ...ctrlruntimeclient.DeleteOption) error {
+					deleteCalls++
+					return nil
+				},
+				Get: func(context.Context, ctrlruntimeclient.WithWatch, ctrlruntimeclient.ObjectKey, ctrlruntimeclient.Object, ...ctrlruntimeclient.GetOption) error {
+					getCalls++
+					if getCalls == 1 {
+						return statusCase.err()
+					}
+					return apierrors.NewNotFound(corev1.Resource("pods"), name)
+				},
+			}).Build()
+
+			if err := deletePodWithUID(context.Background(), client, observed, wait.Backoff{Steps: 3}); err != nil {
+				t.Fatalf("temporary confirmation GET did not recover: %v", err)
+			}
+			if deleteCalls != 1 || getCalls != 2 {
+				t.Fatalf("calls delete=%d get=%d, want delete=1 get=2", deleteCalls, getCalls)
+			}
+		})
+
+		t.Run("temporary "+statusCase.name+" confirmation GET exhausts boundedly", func(t *testing.T) {
+			var deleteCalls, getCalls int
+			lastErr := statusCase.err()
+			client := fakectrlruntimeclient.NewClientBuilder().WithInterceptorFuncs(interceptor.Funcs{
+				Delete: func(context.Context, ctrlruntimeclient.WithWatch, ctrlruntimeclient.Object, ...ctrlruntimeclient.DeleteOption) error {
+					deleteCalls++
+					return nil
+				},
+				Get: func(context.Context, ctrlruntimeclient.WithWatch, ctrlruntimeclient.ObjectKey, ctrlruntimeclient.Object, ...ctrlruntimeclient.GetOption) error {
+					getCalls++
+					return lastErr
+				},
+			}).Build()
+
+			err := deletePodWithUID(context.Background(), client, observed, wait.Backoff{Steps: 3})
+			if !wait.Interrupted(err) || !errors.Is(err, lastErr) {
+				t.Fatalf("expected bounded confirmation status failure, got %v", err)
+			}
+			if deleteCalls != 1 || getCalls != 3 {
+				t.Fatalf("calls delete=%d get=%d, want delete=1 get=3", deleteCalls, getCalls)
+			}
+		})
+	}
 }
 
 func TestDeletePodWithUIDSameUIDConflictFails(t *testing.T) {

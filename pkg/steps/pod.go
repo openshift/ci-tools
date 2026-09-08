@@ -193,20 +193,23 @@ func (s *podStep) run(ctx context.Context) error {
 	s.client.MetricsAgent().StoreMachinesSnapshot(pod)
 
 	pod, err = util.CreateOrRestartPod(ctx, s.client, pod)
+	if pod != nil {
+		// Register cleanup only once the API-assigned UID is known. This also
+		// covers an ambiguous create whose response was lost but whose pod was
+		// recovered by CreateOrRestartPod. A later attempt may reuse the name,
+		// so deleting by name alone is unsafe.
+		cleanupPod := pod.DeepCopy()
+		go func() {
+			<-ctx.Done()
+			logrus.Infof("cleanup: Deleting %s pod %s", s.name, s.config.As)
+			if err := util.DeletePodWithUID(CleanupCtx, s.client, cleanupPod); err != nil {
+				logPodCleanupError(s.name, cleanupPod.Name, err)
+			}
+		}()
+	}
 	if err != nil {
 		return fmt.Errorf("failed to create or restart %s pod: %w", s.name, err)
 	}
-
-	// Register cleanup only after creation, when the API-assigned UID is known.
-	// A later attempt may reuse the name, so deleting by name alone is unsafe.
-	cleanupPod := pod.DeepCopy()
-	go func() {
-		<-ctx.Done()
-		logrus.Infof("cleanup: Deleting %s pod %s", s.name, s.config.As)
-		if err := util.DeletePodWithUID(CleanupCtx, s.client, cleanupPod); err != nil {
-			logPodCleanupError(s.name, cleanupPod.Name, err)
-		}
-	}()
 
 	defer func() {
 		s.subTests = testCaseNotifier.SubTests(s.Description() + " - ")

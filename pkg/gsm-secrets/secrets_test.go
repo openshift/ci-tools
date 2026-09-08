@@ -52,17 +52,22 @@ func TestVerifyIndexSecretContent(t *testing.T) {
 		expectedError error
 	}{
 		{
-			name:    "test-collection-updater-sa",
-			payload: fmt.Appendf(nil, "- updater-service-account"),
+			name:    "empty",
+			payload: fmt.Appendf(nil, "[]"),
 		},
 		{
-			name:    "test-collection-updater-sa-with-newline",
-			payload: fmt.Appendf(nil, "- updater-service-account\n"),
+			name:    "empty with newline",
+			payload: fmt.Appendf(nil, "[]\n"),
 		},
 		{
-			name:          "test-collection-updater-sa-with-multiple-lines",
-			payload:       fmt.Appendf(nil, "- updater-service-account\n- another-service-account"),
-			expectedError: fmt.Errorf("index secret content mismatch: expected %q, got %q", "- updater-service-account\n- another-service-account", "- updater-service-account\n- another-service-account"),
+			name:          "not empty",
+			payload:       fmt.Appendf(nil, "- a-secret\n- another-secret"),
+			expectedError: fmt.Errorf("index secret content mismatch"),
+		},
+		{
+			name:          "legacy updater service account entry",
+			payload:       fmt.Appendf(nil, "- updater-service-account"),
+			expectedError: fmt.Errorf("index secret content mismatch"),
 		},
 	}
 

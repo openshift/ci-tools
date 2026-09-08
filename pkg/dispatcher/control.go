@@ -53,7 +53,7 @@ func (o *ControlOptions) defaults() {
 		o.MaxTTL = 24 * time.Hour
 	}
 	if o.MaxDrainTTL == 0 {
-		o.MaxDrainTTL = 2 * time.Hour
+		o.MaxDrainTTL = 24 * time.Hour
 	}
 	if o.PlanTTL == 0 {
 		o.PlanTTL = 15 * time.Minute
@@ -962,7 +962,7 @@ type ControlClient struct {
 
 // NewControlClient creates a dispatcher control API client with bounded requests.
 func NewControlClient(baseURL string, token func() []byte) *ControlClient {
-	return &ControlClient{baseURL: strings.TrimSuffix(baseURL, "/"), token: token, client: &http.Client{Timeout: 10 * time.Second}}
+	return &ControlClient{baseURL: strings.TrimSuffix(baseURL, "/"), token: token, client: &http.Client{Timeout: 30 * time.Second}}
 }
 
 func (c *ControlClient) request(ctx context.Context, method, path string, input, output interface{}) error {

@@ -150,7 +150,7 @@ func TestHandlerDefaultTimeoutCoversControlClientTimeout(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	if handler.options.Timeout < 10*time.Second {
+	if handler.options.Timeout < 30*time.Second {
 		t.Fatalf("default command timeout %s is shorter than the control client timeout", handler.options.Timeout)
 	}
 }

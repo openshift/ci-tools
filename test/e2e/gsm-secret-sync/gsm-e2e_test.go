@@ -564,11 +564,14 @@ func TestUnclaimedCollectionPreserved(t *testing.T) {
 		}
 	}
 
-	// No managed SA/index secret may be created for the unclaimed collection.
+	// The unclaimed collection gets an index secret, but no SA secret.
 	for name, s := range state.Secrets {
-		if s.Collection == unclaimedCollection && (s.Type == gsm.SecretTypeSA || s.Type == gsm.SecretTypeIndex) {
-			t.Errorf("unexpected managed secret for unclaimed collection: %s (type %v)", name, s.Type)
+		if s.Collection == unclaimedCollection && s.Type == gsm.SecretTypeSA {
+			t.Errorf("unexpected service account secret for unclaimed collection: %s", name)
 		}
+	}
+	if _, ok := state.Secrets[gsm.GetIndexSecretName(unclaimedCollection)]; !ok {
+		t.Errorf("no index secret for unclaimed collection %q", unclaimedCollection)
 	}
 
 	// No managed IAM binding may reference the unclaimed collection. The updater lists the

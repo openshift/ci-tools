@@ -14,6 +14,7 @@ import (
 	kerrors "k8s.io/apimachinery/pkg/api/errors"
 	"k8s.io/apimachinery/pkg/api/resource"
 	meta "k8s.io/apimachinery/pkg/apis/meta/v1"
+	utilnet "k8s.io/apimachinery/pkg/util/net"
 	"k8s.io/apimachinery/pkg/util/sets"
 	ctrlruntimeclient "sigs.k8s.io/controller-runtime/pkg/client"
 	v1 "sigs.k8s.io/prow/pkg/apis/prowjobs/v1"
@@ -94,8 +95,52 @@ type PodStepError struct {
 	err error
 }
 
-func (e *PodStepError) Error() string { return e.err.Error() }
-func (e *PodStepError) Unwrap() error { return e.err }
+func (e *PodStepError) Error() string {
+	if e == nil {
+		return "pod step failed"
+	}
+	return util.ErrorStringOrDefault(e.err, "pod step failed")
+}
+
+func (e *PodStepError) Unwrap() error {
+	if e == nil || util.IsNilError(e.err) {
+		return nil
+	}
+	return e.err
+}
+
+func podCleanupErrorClass(err error) string {
+	switch {
+	case utilnet.IsConnectionReset(err):
+		return "connection_reset"
+	case utilnet.IsConnectionRefused(err):
+		return "connection_refused"
+	case utilnet.IsHTTP2ConnectionLost(err):
+		return "http2_connection_lost"
+	case utilnet.IsProbableEOF(err):
+		return "connection_closed"
+	case utilnet.IsTimeout(err), kerrors.IsServerTimeout(err), kerrors.IsTimeout(err):
+		return "api_timeout"
+	case kerrors.IsUnauthorized(err):
+		return "unauthorized"
+	case kerrors.IsForbidden(err):
+		return "forbidden"
+	case kerrors.IsConflict(err):
+		return "conflict"
+	case kerrors.IsNotFound(err):
+		return "not_found"
+	default:
+		return "unknown"
+	}
+}
+
+func logPodCleanupError(stepName, podName string, err error) {
+	logrus.WithFields(logrus.Fields{
+		"error_class": podCleanupErrorClass(err),
+		"pod":         podName,
+		"step":        stepName,
+	}).Warn("Could not delete pod during cleanup.")
+}
 
 func (s *podStep) Inputs() (api.InputDefinition, error) {
 	return nil, nil
@@ -159,7 +204,7 @@ func (s *podStep) run(ctx context.Context) error {
 		<-ctx.Done()
 		logrus.Infof("cleanup: Deleting %s pod %s", s.name, s.config.As)
 		if err := util.DeletePodWithUID(CleanupCtx, s.client, cleanupPod); err != nil {
-			logrus.WithError(err).Warnf("Could not delete %s pod.", s.name)
+			logPodCleanupError(s.name, cleanupPod.Name, err)
 		}
 	}()
 

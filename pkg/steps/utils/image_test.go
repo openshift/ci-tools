@@ -343,6 +343,47 @@ func TestImportTagWithRetryDelaysPreservesTransientExhaustionCause(t *testing.T)
 	}
 }
 
+type imageImportTypedNilCause struct{}
+
+func (*imageImportTypedNilCause) Error() string { panic("typed nil cause must not be formatted") }
+
+func TestTransientImageImportErrorNilSafety(t *testing.T) {
+	cause := errors.New("registry unavailable")
+	normal := &transientImageImportError{err: cause}
+	if normal.Error() != cause.Error() || !errors.Is(normal, cause) {
+		t.Fatalf("normal wrapper did not preserve its cause: %v", normal)
+	}
+	var target *transientImageImportError
+	if !errors.As(normal, &target) || target != normal {
+		t.Fatalf("errors.As did not preserve normal wrapper identity: %#v", target)
+	}
+
+	var nilWrapper *transientImageImportError
+	var typedNilCause *imageImportTypedNilCause
+	for _, testCase := range []struct {
+		name string
+		err  *transientImageImportError
+	}{
+		{name: "nil receiver", err: nilWrapper},
+		{name: "nil cause", err: &transientImageImportError{}},
+		{name: "typed nil cause", err: &transientImageImportError{err: typedNilCause}},
+	} {
+		t.Run(testCase.name, func(t *testing.T) {
+			if got := testCase.err.Error(); got != "transient image import error" {
+				t.Fatalf("Error() = %q, want nil-safe fallback", got)
+			}
+			if got := testCase.err.Unwrap(); got != nil {
+				t.Fatalf("Unwrap() = %v, want nil", got)
+			}
+		})
+	}
+
+	var typedNil *transientImageImportError
+	if isTransientImageImportError(typedNil) {
+		t.Fatal("typed nil wrapper must not be classified as a transient image import error")
+	}
+}
+
 type outageImageImportClient struct {
 	ctrlruntimeclient.Client
 	now          func() time.Duration

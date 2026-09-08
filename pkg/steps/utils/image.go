@@ -342,12 +342,23 @@ type transientImageImportError struct {
 	err error
 }
 
-func (e *transientImageImportError) Error() string { return e.err.Error() }
-func (e *transientImageImportError) Unwrap() error { return e.err }
+func (e *transientImageImportError) Error() string {
+	if e == nil {
+		return "transient image import error"
+	}
+	return util.ErrorStringOrDefault(e.err, "transient image import error")
+}
+
+func (e *transientImageImportError) Unwrap() error {
+	if e == nil || util.IsNilError(e.err) {
+		return nil
+	}
+	return e.err
+}
 
 func isTransientImageImportError(err error) bool {
 	var transientErr *transientImageImportError
-	return errors.As(err, &transientErr)
+	return errors.As(err, &transientErr) && transientErr != nil
 }
 
 func isRetryableImageImportAPIError(err error) bool {

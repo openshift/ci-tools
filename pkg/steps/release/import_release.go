@@ -96,8 +96,19 @@ type transientReleaseExtractionError struct {
 	err error
 }
 
-func (e *transientReleaseExtractionError) Error() string { return e.err.Error() }
-func (e *transientReleaseExtractionError) Unwrap() error { return e.err }
+func (e *transientReleaseExtractionError) Error() string {
+	if e == nil {
+		return "transient release extraction error"
+	}
+	return util.ErrorStringOrDefault(e.err, "transient release extraction error")
+}
+
+func (e *transientReleaseExtractionError) Unwrap() error {
+	if e == nil || util.IsNilError(e.err) {
+		return nil
+	}
+	return e.err
+}
 
 func retryReleaseExtraction(ctx context.Context, name string, retryDelays []time.Duration, sleep releaseImportSleep, run func(context.Context) error) error {
 	start := time.Now()
@@ -126,7 +137,7 @@ func retryReleaseExtraction(ctx context.Context, name string, retryDelays []time
 			return fmt.Errorf("release extraction pod %s canceled after attempt %d: %w", name, attempt+1, ctxErr)
 		}
 		var transientErr *transientReleaseExtractionError
-		if !errors.As(err, &transientErr) {
+		if !errors.As(err, &transientErr) || transientErr == nil {
 			return fmt.Errorf("release extraction pod %s failed on attempt %d: %w", name, attempt+1, err)
 		}
 		if attempt == len(retryDelays) {
@@ -171,12 +182,12 @@ func runReleaseExtractionWithRetries(ctx context.Context, name string, step api.
 			return nil
 		}
 		var podStepErr *steps.PodStepError
-		if !errors.As(err, &podStepErr) {
+		if !errors.As(err, &podStepErr) || podStepErr == nil {
 			return err
 		}
 		classifiedErr := transientReleaseExtractionPodError(podStepErr.Pod, err)
 		var transientErr *transientReleaseExtractionError
-		if !errors.As(classifiedErr, &transientErr) {
+		if !errors.As(classifiedErr, &transientErr) || transientErr == nil {
 			return classifiedErr
 		}
 		if err := util.DeletePodWithUID(ctx, client, podStepErr.Pod); err != nil {

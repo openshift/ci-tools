@@ -41,6 +41,17 @@ import (
 
 const testCLIImage = "quay.io/test/cli:latest"
 
+type releaseTypedNilCause struct{}
+
+func (*releaseTypedNilCause) Error() string { panic("typed nil cause must not be formatted") }
+
+type releaseErrorStep struct {
+	api.Step
+	err error
+}
+
+func (s releaseErrorStep) Run(context.Context) error { return s.err }
+
 func deterministicReleaseImportRetryDelays() []time.Duration {
 	return []time.Duration{
 		time.Second,
@@ -52,6 +63,63 @@ func deterministicReleaseImportRetryDelays() []time.Duration {
 		64 * time.Second,
 		128 * time.Second,
 	}
+}
+
+func TestTransientReleaseExtractionErrorNilSafety(t *testing.T) {
+	cause := errors.New("registry unavailable")
+	normal := &transientReleaseExtractionError{err: cause}
+	if normal.Error() != cause.Error() || !errors.Is(normal, cause) {
+		t.Fatalf("normal wrapper did not preserve its cause: %v", normal)
+	}
+	var target *transientReleaseExtractionError
+	if !errors.As(normal, &target) || target != normal {
+		t.Fatalf("errors.As did not preserve normal wrapper identity: %#v", target)
+	}
+
+	var nilWrapper *transientReleaseExtractionError
+	var typedNilCause *releaseTypedNilCause
+	for _, testCase := range []struct {
+		name string
+		err  *transientReleaseExtractionError
+	}{
+		{name: "nil receiver", err: nilWrapper},
+		{name: "nil cause", err: &transientReleaseExtractionError{}},
+		{name: "typed nil cause", err: &transientReleaseExtractionError{err: typedNilCause}},
+	} {
+		t.Run(testCase.name, func(t *testing.T) {
+			if got := testCase.err.Error(); got != "transient release extraction error" {
+				t.Fatalf("Error() = %q, want nil-safe fallback", got)
+			}
+			if got := testCase.err.Unwrap(); got != nil {
+				t.Fatalf("Unwrap() = %v, want nil", got)
+			}
+		})
+	}
+}
+
+func TestReleaseExtractionTypedNilMatchesStopSafely(t *testing.T) {
+	t.Run("transient extraction error", func(t *testing.T) {
+		var typedNil *transientReleaseExtractionError
+		attempts := 0
+		err := retryReleaseExtraction(context.Background(), "release-images-latest", []time.Duration{0}, func(context.Context, time.Duration) error {
+			t.Fatal("typed nil transient error must not be retried")
+			return nil
+		}, func(context.Context) error {
+			attempts++
+			return typedNil
+		})
+		if err == nil || attempts != 1 {
+			t.Fatalf("typed nil transient error did not stop safely: err=%v attempts=%d", err, attempts)
+		}
+	})
+
+	t.Run("pod step error", func(t *testing.T) {
+		var typedNil *steps.PodStepError
+		err := runReleaseExtractionWithRetries(context.Background(), "release-images-latest", releaseErrorStep{err: typedNil}, nil, nil, sleepForReleaseImportRetry)
+		if err == nil {
+			t.Fatal("typed nil PodStepError unexpectedly succeeded")
+		}
+	})
 }
 
 func TestRetryReleaseExtractionRecoversAfterVirtualTwoMinuteOutage(t *testing.T) {

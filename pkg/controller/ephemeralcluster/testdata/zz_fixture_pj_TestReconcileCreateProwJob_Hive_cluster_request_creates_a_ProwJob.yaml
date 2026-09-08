@@ -2,13 +2,13 @@ items:
 - metadata:
     annotations:
       prow.k8s.io/context: ""
-      prow.k8s.io/job: ephemeralcluster-ci-task-run-name
+      prow.k8s.io/job: ephemeralcluster-ci-ec
     labels:
       ci.openshift.io/ephemeral-cluster: ec
       created-by-prow: "true"
       pj-rehearse.openshift.io/can-be-rehearsed: "true"
       prow.k8s.io/context: ""
-      prow.k8s.io/job: ephemeralcluster-ci-task-run-name
+      prow.k8s.io/job: ephemeralcluster-ci-ec
       prow.k8s.io/type: periodic
     name: foobar
     namespace: ci
@@ -27,7 +27,7 @@ items:
         entrypoint: entrypoint
         initupload: initupload
         sidecar: sidecar
-    job: ephemeralcluster-ci-task-run-name
+    job: ephemeralcluster-ci-ec
     namespace: ci
     pod_spec:
       containers:

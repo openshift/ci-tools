@@ -2,7 +2,6 @@ metadata:
   annotations:
     ephemeralcluster.ci.openshift.io/konflux-cluster: kcluster
     ephemeralcluster.ci.openshift.io/konflux-tenant: ktenant
-    ephemeralcluster.ci.openshift.io/pipeline-run-name: pipeline-run-name
   finalizers:
   - ephemeralcluster.ci.openshift.io/dependent-prowjob
   name: ec

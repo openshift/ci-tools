@@ -38,6 +38,21 @@ func TestLoadConfig(t *testing.T) {
 			file:        filepath.Join("testdata", "TestLoadConfig", "duplicate_secret_collection.yaml"),
 			expectedErr: fmt.Errorf("failed to validate config file: secret collection 'wildfly-charts-secrets' is listed more than once for group 'test-platform-gsm-secrets-owners' in the configuration file"),
 		},
+		{
+			name:        "an updater service account can only be requested for a collection the group owns",
+			file:        filepath.Join("testdata", "TestLoadConfig", "updater_sa_not_a_collection.yaml"),
+			expectedErr: fmt.Errorf("failed to validate config file: group 'test-platform-gsm-secrets-owners' requests an updater service account for 'not-mine', which is not one of its secret collections"),
+		},
+		{
+			name:        "a collection cannot be listed twice under updater_service_accounts",
+			file:        filepath.Join("testdata", "TestLoadConfig", "duplicate_updater_sa.yaml"),
+			expectedErr: fmt.Errorf("failed to validate config file: secret collection 'test-platform-infra' is listed more than once under updater_service_accounts for group 'test-platform-gsm-secrets-owners' in the configuration file"),
+		},
+		{
+			name:        "an unclaimed group cannot request updater service accounts",
+			file:        filepath.Join("testdata", "TestLoadConfig", "unclaimed_with_updater_sa.yaml"),
+			expectedErr: fmt.Errorf("failed to validate config file: unclaimed group 'test-platform-gsm-unclaimed-secrets' cannot request updater service accounts"),
+		},
 	}
 	for _, tc := range testCases {
 		t.Run(tc.name, func(t *testing.T) {

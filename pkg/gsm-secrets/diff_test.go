@@ -320,6 +320,22 @@ func TestDiffSecrets(t *testing.T) {
 			},
 		},
 		{
+			name:               "collection gives up its updater service account",
+			desiredCollections: map[string]bool{testCollection: true},
+			desiredSecrets:     map[string]GCPSecret{indexSecret.Name: indexSecret},
+			actualSecrets: map[string]GCPSecret{
+				SAsecret.Name:    SAsecret,
+				indexSecret.Name: indexSecret,
+				"test-collection__group__data": {
+					Name:       "test-collection__group__data",
+					Type:       SecretTypeGeneric,
+					Collection: testCollection,
+				},
+			},
+			expectedToCreate: map[string]GCPSecret{},
+			expectedToDelete: []GCPSecret{SAsecret},
+		},
+		{
 			name: "mixed operations - create some, delete others",
 			desiredCollections: map[string]bool{
 				"new-collection": true,

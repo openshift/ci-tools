@@ -12,32 +12,6 @@
   - serviceAccount:collection-alpha-updater@test-project.iam.gserviceaccount.com
   role: projects/test-project/roles/openshift_ci_secrets_updater
 - condition:
-    expression: resource.name.extract("secrets/{s}/versions/") in ["shared-collection__updater-service-account",
-      "shared-collection____index"]
-    title: 'tp-viewer: shared-collection'
-  members:
-  - serviceAccount:shared-collection-updater@test-project.iam.gserviceaccount.com
-  role: projects/test-project/roles/openshift_ci_secrets_viewer
-- condition:
-    expression: resource.name.extract("secrets/{c}__") in ["shared-collection"]
-    title: 'tp-updater: shared-collection'
-  members:
-  - serviceAccount:shared-collection-updater@test-project.iam.gserviceaccount.com
-  role: projects/test-project/roles/openshift_ci_secrets_updater
-- condition:
-    expression: resource.name.extract("secrets/{s}/versions/") in ["some-collection-with-a-very-long-name__updater-service-account",
-      "some-collection-with-a-very-long-name____index"]
-    title: 'tp-viewer: some-collection-with-a-very-long-name'
-  members:
-  - serviceAccount:ynbbgzp1q3u3iwp8edyqix-updater@test-project.iam.gserviceaccount.com
-  role: projects/test-project/roles/openshift_ci_secrets_viewer
-- condition:
-    expression: resource.name.extract("secrets/{c}__") in ["some-collection-with-a-very-long-name"]
-    title: 'tp-updater: some-collection-with-a-very-long-name'
-  members:
-  - serviceAccount:ynbbgzp1q3u3iwp8edyqix-updater@test-project.iam.gserviceaccount.com
-  role: projects/test-project/roles/openshift_ci_secrets_updater
-- condition:
     expression: resource.name.extract("secrets/{s}/versions/") in ["collection-alpha__updater-service-account",
       "collection-alpha____index", "shared-collection__updater-service-account", "shared-collection____index"]
     title: 'tp-viewer: team-alpha'

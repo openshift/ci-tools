@@ -45,3 +45,5 @@ groups:
     rename_to: yet-another-name
     secret_collections:
     - epsilon-secrets
+    updater_service_accounts:
+    - epsilon-secrets

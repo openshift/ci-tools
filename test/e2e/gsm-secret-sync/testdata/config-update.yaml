@@ -13,6 +13,8 @@ groups:
     secret_collections:
     - alpha-secrets
     - new-secrets
+    updater_service_accounts:
+    - new-secrets
   test-platform-statuspage:
     cluster_groups:
     - dp-managed

@@ -1,31 +1,5 @@
 - condition:
     expression: resource.name.extract("secrets/{s}/versions/") in ["claimed-a__updater-service-account",
-      "claimed-a____index"]
-    title: 'tp-viewer: claimed-a'
-  members:
-  - serviceAccount:claimed-a-updater@test-project.iam.gserviceaccount.com
-  role: projects/test-project/roles/openshift_ci_secrets_viewer
-- condition:
-    expression: resource.name.extract("secrets/{c}__") in ["claimed-a"]
-    title: 'tp-updater: claimed-a'
-  members:
-  - serviceAccount:claimed-a-updater@test-project.iam.gserviceaccount.com
-  role: projects/test-project/roles/openshift_ci_secrets_updater
-- condition:
-    expression: resource.name.extract("secrets/{s}/versions/") in ["claimed-b__updater-service-account",
-      "claimed-b____index"]
-    title: 'tp-viewer: claimed-b'
-  members:
-  - serviceAccount:claimed-b-updater@test-project.iam.gserviceaccount.com
-  role: projects/test-project/roles/openshift_ci_secrets_viewer
-- condition:
-    expression: resource.name.extract("secrets/{c}__") in ["claimed-b"]
-    title: 'tp-updater: claimed-b'
-  members:
-  - serviceAccount:claimed-b-updater@test-project.iam.gserviceaccount.com
-  role: projects/test-project/roles/openshift_ci_secrets_updater
-- condition:
-    expression: resource.name.extract("secrets/{s}/versions/") in ["claimed-a__updater-service-account",
       "claimed-a____index", "claimed-b__updater-service-account", "claimed-b____index"]
     title: 'tp-viewer: owner-team'
   members:

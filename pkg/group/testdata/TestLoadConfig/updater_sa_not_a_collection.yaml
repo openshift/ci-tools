@@ -1,0 +1,6 @@
+groups:
+  test-platform-gsm-secrets-owners:
+    secret_collections:
+    - test-platform-infra
+    updater_service_accounts:
+    - not-mine

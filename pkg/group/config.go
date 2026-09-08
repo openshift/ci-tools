@@ -38,6 +38,10 @@ type Target struct {
 	// The gsm-secret-sync reconciler keeps these collections' secrets alive but creates no
 	// updater service account and no IAM bindings for them until they are moved under a normal group.
 	Unclaimed bool `json:"unclaimed,omitempty" yaml:"unclaimed,omitempty"`
+	// UpdaterServiceAccounts lists the secret collections, a subset of SecretCollections, that
+	// get their own updater service account. Group members can already write to every collection
+	// the group owns; a service account is for automation that cannot authenticate as one of them.
+	UpdaterServiceAccounts []string `json:"updater_service_accounts,omitempty" yaml:"updater_service_accounts,omitempty"`
 }
 
 func (t Target) ResolveClusters(cg map[string][]string) sets.Set[string] {
@@ -89,6 +93,19 @@ func (c *Config) validate() error {
 				return fmt.Errorf("secret collection '%s' is listed more than once for group '%s' in the configuration file", collection, k)
 			}
 			seen.Insert(collection)
+		}
+		withSA := sets.New[string]()
+		for _, collection := range v.UpdaterServiceAccounts {
+			if !seen.Has(collection) {
+				return fmt.Errorf("group '%s' requests an updater service account for '%s', which is not one of its secret collections", k, collection)
+			}
+			if withSA.Has(collection) {
+				return fmt.Errorf("secret collection '%s' is listed more than once under updater_service_accounts for group '%s' in the configuration file", collection, k)
+			}
+			withSA.Insert(collection)
+		}
+		if v.Unclaimed && len(v.UpdaterServiceAccounts) > 0 {
+			return fmt.Errorf("unclaimed group '%s' cannot request updater service accounts", k)
 		}
 	}
 	return nil

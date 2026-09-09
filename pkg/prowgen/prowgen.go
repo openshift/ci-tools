@@ -3,6 +3,7 @@ package prowgen
 import (
 	"fmt"
 	"hash/fnv"
+	"strings"
 
 	"k8s.io/apimachinery/pkg/util/sets"
 	prowv1 "sigs.k8s.io/prow/pkg/apis/prowjobs/v1"
@@ -50,6 +51,7 @@ func GenerateJobs(configSpec *cioperatorapi.ReleaseBuildConfiguration, info *cio
 			if err != nil {
 				return nil, fmt.Errorf("new prowjob builder: %w", err)
 			}
+			injectCapabilities(g.base.Labels, projectImageCapabilitiesForTest(configSpec, element))
 
 			name := element.As
 			if shardCount > 1 {
@@ -461,4 +463,137 @@ func injectCapabilitiesForImgJobs(g *prowJobBaseBuilder, imagesConfig []cioperat
 			g.WithLabel(fmt.Sprintf("capability/%s", c), c)
 		}
 	}
+}
+
+// projectImageCapabilitiesForTest returns capabilities declared by project
+// images selected through the common generated-test paths. Tests with a cluster
+// profile wait for [images], which contains every non-optional project image;
+// other tests can select a project image directly or through its From/Inputs.
+// Synthetic operator bundle and index image dependencies are not modeled here.
+func projectImageCapabilitiesForTest(config *cioperatorapi.ReleaseBuildConfiguration, test cioperatorapi.TestStepConfiguration) []string {
+	images := make(map[string]*cioperatorapi.ProjectDirectoryImageBuildStepConfiguration, len(config.Images.Items))
+	for i := range config.Images.Items {
+		image := &config.Images.Items[i]
+		images[string(image.To)] = image
+	}
+
+	requiredImages := sets.New[string]()
+	requireAllImages := false
+	var claimRelease *cioperatorapi.ClaimRelease
+	if test.ClusterClaim != nil {
+		claimRelease = test.ClusterClaim.ClaimRelease(test.As)
+	}
+
+	addDependency := func(dependency cioperatorapi.StepDependency, overrides cioperatorapi.DependencyOverrides) {
+		if dependency.PullSpec != "" || dependencyHasPullSpecOverride(dependency, overrides) {
+			return
+		}
+		stream, name, _ := config.DependencyParts(dependency, claimRelease)
+		switch {
+		case stream == cioperatorapi.PipelineImageStream:
+			if _, ok := images[name]; ok {
+				requiredImages.Insert(name)
+			}
+		case cioperatorapi.IsReleasePayloadStream(stream):
+			if releaseIncludesBuiltImages(config, name) {
+				requireAllImages = true
+			}
+		}
+	}
+
+	if container := test.ContainerTestConfiguration; container != nil {
+		addDependency(cioperatorapi.StepDependency{Name: string(container.From)}, nil)
+	}
+	if multiStage := test.MultiStageTestConfigurationLiteral; multiStage != nil {
+		// A cluster profile exposes IMAGE_FORMAT and RELEASE_IMAGE_LATEST. The
+		// former is provided by [images], so every non-optional image is built.
+		if multiStage.ClusterProfileLiteral != nil {
+			requireAllImages = true
+		}
+		for _, steps := range [][]cioperatorapi.LiteralTestStep{multiStage.Pre, multiStage.Test, multiStage.Post} {
+			for _, step := range steps {
+				if step.FromImage == nil {
+					addDependency(cioperatorapi.StepDependency{Name: step.From}, nil)
+				}
+				for _, dependency := range step.Dependencies {
+					addDependency(dependency, multiStage.DependencyOverrides)
+				}
+			}
+		}
+	}
+	if multiStage := test.MultiStageTestConfiguration; multiStage != nil {
+		// GenerateJobs normally receives registry-resolved literal steps, but
+		// preserve the same behavior for callers that pass inline steps.
+		if multiStage.ClusterProfile != "" {
+			requireAllImages = true
+		}
+		for env, dependency := range multiStage.Dependencies {
+			addDependency(cioperatorapi.StepDependency{Name: dependency, Env: env}, multiStage.DependencyOverrides)
+		}
+		for _, steps := range [][]cioperatorapi.TestStep{multiStage.Pre, multiStage.Test, multiStage.Post} {
+			for _, step := range steps {
+				if step.LiteralTestStep == nil {
+					continue
+				}
+				if step.FromImage == nil {
+					addDependency(cioperatorapi.StepDependency{Name: step.From}, nil)
+				}
+				for _, dependency := range step.Dependencies {
+					addDependency(dependency, multiStage.DependencyOverrides)
+				}
+			}
+		}
+	}
+
+	if requireAllImages {
+		for _, image := range config.Images.Items {
+			if !image.Optional {
+				requiredImages.Insert(string(image.To))
+			}
+		}
+	}
+
+	// Follow image-to-image dependencies. Every project image also depends on
+	// src, but src has no independent capability declaration.
+	for pending := requiredImages.UnsortedList(); len(pending) > 0; pending = pending[1:] {
+		image := images[pending[0]]
+		if image == nil {
+			continue
+		}
+		dependencies := sets.New[string](string(image.From))
+		for input := range image.Inputs {
+			dependencies.Insert(input)
+		}
+		for dependency := range dependencies {
+			if _, ok := images[dependency]; ok && !requiredImages.Has(dependency) {
+				requiredImages.Insert(dependency)
+				pending = append(pending, dependency)
+			}
+		}
+	}
+
+	capabilities := sets.New[string]()
+	for imageName := range requiredImages {
+		capabilities.Insert(images[imageName].AllCapabilities()...)
+	}
+	return sets.List(capabilities)
+}
+
+func dependencyHasPullSpecOverride(dependency cioperatorapi.StepDependency, overrides cioperatorapi.DependencyOverrides) bool {
+	for name, pullSpec := range overrides {
+		if pullSpec != "" && strings.EqualFold(dependency.Env, name) {
+			return true
+		}
+	}
+	return false
+}
+
+func releaseIncludesBuiltImages(config *cioperatorapi.ReleaseBuildConfiguration, name string) bool {
+	// With tag_specification, ci-operator assembles "latest" with all built
+	// images for backwards compatibility.
+	if name == cioperatorapi.LatestReleaseName && config.ReleaseTagConfiguration != nil {
+		return true
+	}
+	release, ok := config.Releases[name]
+	return ok && release.Integration != nil && release.Integration.IncludeBuiltImages
 }

@@ -708,6 +708,12 @@ func TestJUnitNameForPod(t *testing.T) {
 	if name != "Run multi-stage step ipi-install-install-stableinitial" {
 		t.Errorf("unexpected JUnit name: %q", name)
 	}
+
+	_, err = step.junitNameForPod(nil)
+	wantErr := `multi-stage test "e2e-aws" cannot determine JUnit name for nil pod`
+	if err == nil || err.Error() != wantErr {
+		t.Fatalf("expected %q, got %v", wantErr, err)
+	}
 }
 
 func TestRunPodRequiresStepMetadataLabel(t *testing.T) {

@@ -209,6 +209,9 @@ func (s *multiStageTestStep) runPod(ctx context.Context, pod *coreapi.Pod, notif
 }
 
 func (s *multiStageTestStep) junitNameForPod(pod *coreapi.Pod) (string, error) {
+	if pod == nil {
+		return "", fmt.Errorf("multi-stage test %q cannot determine JUnit name for nil pod", s.name)
+	}
 	stepName := pod.Labels[base_steps.LabelMetadataStep]
 	if stepName == "" {
 		return "", fmt.Errorf("multi-stage test %q pod %q is missing required label %q", s.name, pod.Name, base_steps.LabelMetadataStep)

@@ -4,7 +4,10 @@
 package multi_stage
 
 import (
+	"bytes"
 	"os"
+	"path/filepath"
+	"regexp"
 	"strings"
 	"testing"
 
@@ -20,19 +23,29 @@ const (
 	multiRefJobSpec = `JOB_SPEC={"type":"presubmit","job":"pull-ci-test-test-master-success","buildid":"0","prowjobid":"uuid","refs":{"org":"test","repo":"test","base_ref":"master","base_sha":"6d231cc37652e85e0f0e25c21088b73d644d89ad","pulls":[{"number":1234,"author":"a-developer","sha":"538680dfd2f6cff3b3506c80ca182dcb0dd22a58"}]},"extra_refs":[{"org":"test","repo":"test","base_ref":"master","base_sha":"6d231cc37652e85e0f0e25c21088b73d644d89ad","pulls":[{"number":1234,"author":"a-developer","sha":"538680dfd2f6cff3b3506c80ca182dcb0dd22a58"}]},{"org":"test","repo":"another","base_ref":"master","base_sha":"6d231cc37652e85e0f0e25c21088b73d644d89ad","pulls":[{"number":1298,"author":"a-developer","sha":"538680dfd2f6cff3b3506c80ca182dcb0dd22a58"}]}],"decoration_config":{"timeout":"4h0m0s","grace_period":"30m0s","utility_images":{"clonerefs":"quay-proxy.ci.openshift.org/openshift/ci:ci_clonerefs_latest","initupload":"quay-proxy.ci.openshift.org/openshift/ci:ci_initupload_latest","entrypoint":"quay-proxy.ci.openshift.org/openshift/ci:ci_entrypoint_latest","sidecar":"quay-proxy.ci.openshift.org/openshift/ci:ci_sidecar_latest"},"resources":{"clonerefs":{"limits":{"memory":"3Gi"},"requests":{"cpu":"100m","memory":"500Mi"}},"initupload":{"limits":{"memory":"200Mi"},"requests":{"cpu":"100m","memory":"50Mi"}},"place_entrypoint":{"limits":{"memory":"100Mi"},"requests":{"cpu":"100m","memory":"25Mi"}},"sidecar":{"limits":{"memory":"2Gi"},"requests":{"cpu":"100m","memory":"250Mi"}}},"gcs_configuration":{"bucket":"test-platform-results","path_strategy":"single","default_org":"openshift","default_repo":"origin","mediaTypes":{"log":"text/plain"}},"gcs_credentials_secret":"gce-sa-credentials-gcs-publisher"}}`
 )
 
+var junitTimeRegex = regexp.MustCompile(`time=".*"`)
+
 func TestMultiStage(t *testing.T) {
 	rawConfig, err := os.ReadFile("config.yaml")
 	if err != nil {
 		t.Fatalf("failed to read config file: %v", err)
 	}
 	var testCases = []struct {
-		name     string
-		args     []string
-		env      []string
-		success  bool
-		needHive bool
-		output   []string
+		name          string
+		args          []string
+		env           []string
+		success       bool
+		needHive      bool
+		output        []string
+		junitOperator string
 	}{
+		{
+			name:          "JUnit output for a multi-stage workflow",
+			args:          []string{"--unresolved-config=junit.yaml", "--target=junit"},
+			env:           []string{defaultJobSpec},
+			success:       true,
+			junitOperator: "multi-stage-junit_operator.xml",
+		},
 		{
 			name:    "fetching full config for simple container test from resolver",
 			args:    []string{"--target=success"},
@@ -245,6 +258,18 @@ func TestMultiStage(t *testing.T) {
 				t.Fatalf("%s: didn't expect an error from ci-operator: %v; output:\n%v", testCase.name, err, string(output))
 			}
 			cmd.VerboseOutputContains(t, testCase.name, testCase.output...)
+			if testCase.junitOperator != "" {
+				outputJUnit := filepath.Join(cmd.ArtifactDir(), "junit_operator.xml")
+				raw, err := os.ReadFile(outputJUnit)
+				if err != nil {
+					t.Fatalf("could not read JUnit artifact: %v", err)
+				}
+				normalizedJUnit := append(bytes.TrimRight(junitTimeRegex.ReplaceAll(raw, []byte(`time="whatever"`)), "\n"), '\n')
+				if err := os.WriteFile(outputJUnit, normalizedJUnit, 0755); err != nil {
+					t.Fatalf("could not normalize JUnit artifact: %v", err)
+				}
+				framework.CompareWithFixture(t, filepath.Join("artifacts", testCase.junitOperator), outputJUnit)
+			}
 		}, framework.ConfigResolver(framework.ConfigResolverOptions{
 			ConfigPath:              "configs",
 			RegistryPath:            "registry",

@@ -1,0 +1,38 @@
+<testsuites>
+  <testsuite name="step graph" tests="10" skipped="0" failures="0" time="whatever">
+    <properties></properties>
+    <testcase name="Find the input image os and tag it into the pipeline" time="whatever">
+      <properties></properties>
+    </testcase>
+    <testcase name="Run multi-stage step ipi-install-install-stableinitial" time="whatever">
+      <properties></properties>
+    </testcase>
+    <testcase name="Run multi-stage step post0" time="whatever">
+      <properties></properties>
+    </testcase>
+    <testcase name="Run multi-stage step post1" time="whatever">
+      <properties></properties>
+    </testcase>
+    <testcase name="Run multi-stage step pre0" time="whatever">
+      <properties></properties>
+    </testcase>
+    <testcase name="Run multi-stage step test0" time="whatever">
+      <properties></properties>
+    </testcase>
+    <testcase name="Run multi-stage step test1" time="whatever">
+      <properties></properties>
+    </testcase>
+    <testcase name="Run multi-stage test post phase" time="whatever">
+      <properties></properties>
+      <system-out>The collected steps of multi-stage phase post.</system-out>
+    </testcase>
+    <testcase name="Run multi-stage test pre phase" time="whatever">
+      <properties></properties>
+      <system-out>The collected steps of multi-stage phase pre.</system-out>
+    </testcase>
+    <testcase name="Run multi-stage test test phase" time="whatever">
+      <properties></properties>
+      <system-out>The collected steps of multi-stage phase test.</system-out>
+    </testcase>
+  </testsuite>
+</testsuites>

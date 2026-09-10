@@ -47,6 +47,14 @@ func TestValidateAlertProxyEndpointURL(t *testing.T) {
 			t.Errorf("validateAlertProxyEndpointURL(%q) succeeded", value)
 		}
 	}
+	const marker = "do-not-log"
+	err := validateAlertProxyEndpointURL("https://user:"+marker+"@example.invalid/interactions?token="+marker, "/interactions")
+	if err == nil {
+		t.Fatal("sensitive endpoint succeeded validation")
+	}
+	if strings.Contains(err.Error(), marker) {
+		t.Fatalf("validation error exposed endpoint data: %v", err)
+	}
 }
 
 func TestAlertProxyOptionValidation(t *testing.T) {

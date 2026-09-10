@@ -7,6 +7,7 @@ import (
 	"crypto/sha256"
 	"encoding/hex"
 	"encoding/json"
+	"errors"
 	"fmt"
 	"io"
 	"net/http"
@@ -209,6 +210,17 @@ func observeResult(observe func(string), result string) {
 	}
 }
 
+func redactedRelayError(operation string, err error) error {
+	switch {
+	case errors.Is(err, context.Canceled):
+		return fmt.Errorf("%s: %w", operation, context.Canceled)
+	case errors.Is(err, context.DeadlineExceeded):
+		return fmt.Errorf("%s: %w", operation, context.DeadlineExceeded)
+	default:
+		return fmt.Errorf("%s failed", operation)
+	}
+}
+
 func (r *Relay) relay(ctx context.Context, target string, headers http.Header, body []byte, issuedAt int64) (*Response, error) {
 	if r == nil || r.secret == nil {
 		return nil, fmt.Errorf("alert-proxy relay secret is not configured")
@@ -220,7 +232,7 @@ func (r *Relay) relay(ctx context.Context, target string, headers http.Header, b
 
 	request, err := http.NewRequestWithContext(ctx, http.MethodPost, target, bytes.NewReader(body))
 	if err != nil {
-		return nil, fmt.Errorf("create alert-proxy relay request: %w", err)
+		return nil, redactedRelayError("create alert-proxy relay request", err)
 	}
 	request.Header = headers.Clone()
 	if request.Header == nil {
@@ -232,12 +244,12 @@ func (r *Relay) relay(ctx context.Context, target string, headers http.Header, b
 
 	response, err := r.client.Do(request)
 	if err != nil {
-		return nil, fmt.Errorf("forward request to alert-proxy: %w", err)
+		return nil, redactedRelayError("forward request to alert-proxy", err)
 	}
 	defer response.Body.Close()
 	responseBody, err := io.ReadAll(io.LimitReader(response.Body, maxResponseBytes+1))
 	if err != nil {
-		return nil, fmt.Errorf("read alert-proxy response: %w", err)
+		return nil, redactedRelayError("read alert-proxy response", err)
 	}
 	if len(responseBody) > maxResponseBytes {
 		return nil, fmt.Errorf("alert-proxy response exceeds %d bytes", maxResponseBytes)

@@ -4,9 +4,11 @@ import (
 	"bytes"
 	"context"
 	"encoding/json"
+	"errors"
 	"io"
 	"net/http"
 	"net/http/httptest"
+	"strings"
 	"sync/atomic"
 	"testing"
 	"time"
@@ -107,6 +109,24 @@ func TestRelayInteraction(t *testing.T) {
 	rotated := <-requests
 	if rotated.header.Get(SignatureHeader) == request.header.Get(SignatureHeader) || secretReads != 2 {
 		t.Fatalf("secret rotation was not observed: reads=%d signatures=(%q, %q)", secretReads, request.header.Get(SignatureHeader), rotated.header.Get(SignatureHeader))
+	}
+}
+
+type roundTripperFunc func(*http.Request) (*http.Response, error)
+
+func (f roundTripperFunc) RoundTrip(request *http.Request) (*http.Response, error) {
+	return f(request)
+}
+
+func TestRelayErrorsDoNotExposeTarget(t *testing.T) {
+	const marker = "do-not-log"
+	relay := NewRelay(func() []byte { return []byte("secret") })
+	relay.client.Transport = roundTripperFunc(func(*http.Request) (*http.Response, error) {
+		return nil, errors.New("transport error containing " + marker)
+	})
+	_, err := relay.RelayInteraction(context.Background(), "https://user:"+marker+"@example.invalid/interactions?token="+marker, nil, nil)
+	if err == nil || strings.Contains(err.Error(), marker) {
+		t.Fatalf("relay error exposed request data: %v", err)
 	}
 }
 

@@ -4,6 +4,7 @@ import (
 	"bytes"
 	"context"
 	"encoding/json"
+	"errors"
 	"flag"
 	"fmt"
 	"io"
@@ -118,23 +119,23 @@ const (
 func validateAlertProxyEndpointURL(value, expectedPath string) error {
 	parsed, err := url.ParseRequestURI(value)
 	if err != nil || !parsed.IsAbs() || parsed.Host == "" {
-		return fmt.Errorf("must be an absolute URL: %q", value)
+		return errors.New("must be an absolute URL")
 	}
 	if parsed.User != nil || parsed.RawQuery != "" || parsed.Fragment != "" {
-		return fmt.Errorf("must not contain user information, a query, or a fragment: %q", value)
+		return errors.New("must not contain user information, a query, or a fragment")
 	}
 	if parsed.Scheme != "http" && parsed.Scheme != "https" {
-		return fmt.Errorf("scheme must be HTTP or HTTPS: %q", value)
+		return errors.New("scheme must be HTTP or HTTPS")
 	}
 	host := strings.ToLower(strings.TrimSuffix(parsed.Hostname(), "."))
 	if host != alertProxyServiceHost && host != alertProxyServiceFullyQualifiedHost {
-		return fmt.Errorf("must target the alert-proxy service in namespace ci: %q", value)
+		return errors.New("must target the alert-proxy service in namespace ci")
 	}
 	if parsed.Port() != alertProxyServicePort {
-		return fmt.Errorf("must target alert-proxy service port %s: %q", alertProxyServicePort, value)
+		return fmt.Errorf("must target alert-proxy service port %s", alertProxyServicePort)
 	}
 	if parsed.EscapedPath() != expectedPath {
-		return fmt.Errorf("path must be %s: %q", expectedPath, value)
+		return fmt.Errorf("path must be %s", expectedPath)
 	}
 	return nil
 }

@@ -586,51 +586,51 @@ func TestJUnit(t *testing.T) {
 	}{{
 		name: "no step fails",
 		expected: []string{
-			"Run multi-stage step pre0",
-			"Run multi-stage step ipi-install-install-stableinitial",
+			"Run multi-stage step pre:pre0",
+			"Run multi-stage step pre:ipi-install-install-stableinitial",
 			"Run multi-stage test pre phase",
-			"Run multi-stage step test0",
-			"Run multi-stage step test1",
+			"Run multi-stage step test:test0",
+			"Run multi-stage step test:test1",
 			"Run multi-stage test test phase",
-			"Run multi-stage step post0",
-			"Run multi-stage step post1",
+			"Run multi-stage step post:post0",
+			"Run multi-stage step post:post1",
 			"Run multi-stage test post phase",
 		},
 	}, {
 		name:     "failure in a pre step",
 		failures: sets.New[string](multiStageTestAlias + "-pre0"),
 		expected: []string{
-			"Run multi-stage step pre0",
+			"Run multi-stage step pre:pre0",
 			"Run multi-stage test pre phase",
-			"Run multi-stage step post0",
-			"Run multi-stage step post1",
+			"Run multi-stage step post:post0",
+			"Run multi-stage step post:post1",
 			"Run multi-stage test post phase",
 		},
 	}, {
 		name:     "failure in a test step",
 		failures: sets.New[string](multiStageTestAlias + "-test0"),
 		expected: []string{
-			"Run multi-stage step pre0",
-			"Run multi-stage step ipi-install-install-stableinitial",
+			"Run multi-stage step pre:pre0",
+			"Run multi-stage step pre:ipi-install-install-stableinitial",
 			"Run multi-stage test pre phase",
-			"Run multi-stage step test0",
+			"Run multi-stage step test:test0",
 			"Run multi-stage test test phase",
-			"Run multi-stage step post0",
-			"Run multi-stage step post1",
+			"Run multi-stage step post:post0",
+			"Run multi-stage step post:post1",
 			"Run multi-stage test post phase",
 		},
 	}, {
 		name:     "failure in a post step",
 		failures: sets.New[string](multiStageTestAlias + "-post1"),
 		expected: []string{
-			"Run multi-stage step pre0",
-			"Run multi-stage step ipi-install-install-stableinitial",
+			"Run multi-stage step pre:pre0",
+			"Run multi-stage step pre:ipi-install-install-stableinitial",
 			"Run multi-stage test pre phase",
-			"Run multi-stage step test0",
-			"Run multi-stage step test1",
+			"Run multi-stage step test:test0",
+			"Run multi-stage step test:test1",
 			"Run multi-stage test test phase",
-			"Run multi-stage step post0",
-			"Run multi-stage step post1",
+			"Run multi-stage step post:post0",
+			"Run multi-stage step post:post1",
 			"Run multi-stage test post phase",
 		},
 	}} {
@@ -701,15 +701,15 @@ func TestJUnitNameForPod(t *testing.T) {
 		Labels: map[string]string{steps.LabelMetadataStep: "ipi-install-install-stableinitial"},
 	}}
 
-	name, err := step.junitNameForPod(pod)
+	name, err := step.junitNameForPod("pre", pod)
 	if err != nil {
 		t.Fatalf("unexpected error: %v", err)
 	}
-	if name != "Run multi-stage step ipi-install-install-stableinitial" {
+	if name != "Run multi-stage step pre:ipi-install-install-stableinitial" {
 		t.Errorf("unexpected JUnit name: %q", name)
 	}
 
-	_, err = step.junitNameForPod(nil)
+	_, err = step.junitNameForPod("pre", nil)
 	wantErr := `multi-stage test "e2e-aws" cannot determine JUnit name for nil pod`
 	if err == nil || err.Error() != wantErr {
 		t.Fatalf("expected %q, got %v", wantErr, err)
@@ -718,7 +718,7 @@ func TestJUnitNameForPod(t *testing.T) {
 
 func TestRunPodRequiresStepMetadataLabel(t *testing.T) {
 	step := &multiStageTestStep{name: "e2e-aws"}
-	err := step.runPod(context.Background(), &v1.Pod{ObjectMeta: metav1.ObjectMeta{Name: "generated-step"}}, nil, 0)
+	err := step.runPod(context.Background(), "test", &v1.Pod{ObjectMeta: metav1.ObjectMeta{Name: "generated-step"}}, nil, 0)
 	want := `multi-stage test "e2e-aws" pod "generated-step" is missing required label "ci.openshift.io/metadata.step"`
 	if err == nil || err.Error() != want {
 		t.Fatalf("expected %q, got %v", want, err)

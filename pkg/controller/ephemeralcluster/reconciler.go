@@ -392,6 +392,7 @@ func (r *reconciler) generateCIOperatorConfig(log *logrus.Entry, ec *ephemeralcl
 	}
 
 	return &api.ReleaseBuildConfiguration{
+		Prowgen: &api.ProwgenOverrides{EnableSecretsStoreCSIDriver: true},
 		InputConfiguration: api.InputConfiguration{
 			BuildRootImage: ec.Spec.CIOperator.BuildRootImage,
 			BaseImages:     baseImages,

@@ -2,7 +2,9 @@ package main
 
 import (
 	"bytes"
+	"context"
 	"encoding/json"
+	"errors"
 	"flag"
 	"fmt"
 	"io"
@@ -40,6 +42,7 @@ import (
 	"github.com/openshift/ci-tools/pkg/dispatcher"
 	"github.com/openshift/ci-tools/pkg/jira"
 	"github.com/openshift/ci-tools/pkg/pagerdutyutil"
+	alertproxyforward "github.com/openshift/ci-tools/pkg/slack/alertproxy"
 	dispatchcommand "github.com/openshift/ci-tools/pkg/slack/dispatcher"
 	eventhandler "github.com/openshift/ci-tools/pkg/slack/events"
 	"github.com/openshift/ci-tools/pkg/slack/events/helpdesk"
@@ -78,6 +81,11 @@ type options struct {
 	enableDispatchCapacity        bool
 	enableDispatchDrain           bool
 	enableDispatchCapabilityScope bool
+
+	alertProxyInteractionURL      string
+	alertProxyMentionURL          string
+	alertProxyForwarderSecretPath string
+	alertProxyChannelID           string
 }
 
 func validateDispatcherControlURL(value string) error {
@@ -100,6 +108,36 @@ func validateDispatcherControlURL(value string) error {
 	default:
 		return fmt.Errorf("scheme must be HTTPS, or HTTP for an in-cluster Kubernetes service: %q", value)
 	}
+}
+
+const (
+	alertProxyServiceHost               = "alert-proxy.ci.svc"
+	alertProxyServiceFullyQualifiedHost = "alert-proxy.ci.svc.cluster.local"
+	alertProxyServicePort               = "8080"
+)
+
+func validateAlertProxyEndpointURL(value, expectedPath string) error {
+	parsed, err := url.ParseRequestURI(value)
+	if err != nil || !parsed.IsAbs() || parsed.Host == "" {
+		return errors.New("must be an absolute URL")
+	}
+	if parsed.User != nil || parsed.RawQuery != "" || parsed.Fragment != "" {
+		return errors.New("must not contain user information, a query, or a fragment")
+	}
+	if parsed.Scheme != "http" && parsed.Scheme != "https" {
+		return errors.New("scheme must be HTTP or HTTPS")
+	}
+	host := strings.ToLower(strings.TrimSuffix(parsed.Hostname(), "."))
+	if host != alertProxyServiceHost && host != alertProxyServiceFullyQualifiedHost {
+		return errors.New("must target the alert-proxy service in namespace ci")
+	}
+	if parsed.Port() != alertProxyServicePort {
+		return fmt.Errorf("must target alert-proxy service port %s", alertProxyServicePort)
+	}
+	if parsed.EscapedPath() != expectedPath {
+		return fmt.Errorf("path must be %s", expectedPath)
+	}
+	return nil
 }
 
 func (o *options) Validate() error {
@@ -136,6 +174,27 @@ func (o *options) Validate() error {
 	}
 	if o.enableDispatchCapabilityScope && !o.enableDispatchCapacity {
 		return fmt.Errorf("--enable-dispatch-capability-scope requires --enable-dispatch-capacity")
+	}
+
+	hasAlertProxyEndpoint := o.alertProxyInteractionURL != "" || o.alertProxyMentionURL != ""
+	if o.alertProxyInteractionURL != "" {
+		if err := validateAlertProxyEndpointURL(o.alertProxyInteractionURL, "/interactions"); err != nil {
+			return fmt.Errorf("invalid --alert-proxy-interaction-url: %w", err)
+		}
+	}
+	if o.alertProxyMentionURL != "" {
+		if err := validateAlertProxyEndpointURL(o.alertProxyMentionURL, "/mentions"); err != nil {
+			return fmt.Errorf("invalid --alert-proxy-mention-url: %w", err)
+		}
+		if o.alertProxyChannelID == "" {
+			return fmt.Errorf("--alert-proxy-channel-id is required when alert-proxy mentions are configured")
+		}
+	}
+	if hasAlertProxyEndpoint && o.alertProxyForwarderSecretPath == "" {
+		return fmt.Errorf("--alert-proxy-forwarder-secret-path is required when an alert-proxy endpoint is configured")
+	}
+	if !hasAlertProxyEndpoint && o.alertProxyForwarderSecretPath != "" {
+		return fmt.Errorf("an alert-proxy endpoint URL is required when --alert-proxy-forwarder-secret-path is set")
 	}
 
 	for _, group := range []flagutil.OptionGroup{&o.instrumentationOptions, &o.jiraOptions, &o.pagerDutyOptions, &o.prowconfig} {
@@ -176,6 +235,10 @@ func gatherOptions(fs *flag.FlagSet, args ...string) options {
 	fs.BoolVar(&o.enableDispatchCapacity, "enable-dispatch-capacity", false, "Enable applying and cancelling whole-cluster capacity overrides after shadow validation.")
 	fs.BoolVar(&o.enableDispatchDrain, "enable-dispatch-drain", false, "Enable whole-cluster drains after capacity operations meet their SLO.")
 	fs.BoolVar(&o.enableDispatchCapabilityScope, "enable-dispatch-capability-scope", false, "Enable capability-scoped controls after metadata coverage is audited.")
+	fs.StringVar(&o.alertProxyInteractionURL, "alert-proxy-interaction-url", "", "Full in-cluster URL for forwarding alert-proxy Slack interactions. Empty disables forwarding.")
+	fs.StringVar(&o.alertProxyMentionURL, "alert-proxy-mention-url", "", "Full in-cluster URL for forwarding @dptp-bot ci-alerts mentions. Empty disables forwarding.")
+	fs.StringVar(&o.alertProxyForwarderSecretPath, "alert-proxy-forwarder-secret-path", "", "Path to the HMAC secret used only for alert-proxy forwarding.")
+	fs.StringVar(&o.alertProxyChannelID, "alert-proxy-channel-id", "CHY2E1BL4", "Immutable Slack channel ID for #ops-testplatform.")
 
 	if err := fs.Parse(args); err != nil {
 		logrus.WithError(err).Fatal("Could not parse args.")
@@ -194,10 +257,15 @@ var (
 		Name: "slack_bot_dispatch_command_denials_total",
 		Help: "Number of tp-dispatch mentions rejected at the Slack channel boundary.",
 	})
+	alertProxyForwards = prometheus.NewCounterVec(prometheus.CounterOpts{
+		Name: "slack_bot_interaction_forwards_total",
+		Help: "Number of alert-proxy Slack callbacks forwarded by kind and result.",
+	}, []string{"kind", "result"})
 )
 
 func init() {
 	prometheus.MustRegister(dispatchCommandDenials)
+	prometheus.MustRegister(alertProxyForwards)
 }
 
 func addSchemes() error {
@@ -238,6 +306,9 @@ func main() {
 	if o.dispatcherControlTokenPath != "" {
 		secretPaths = append(secretPaths, o.dispatcherControlTokenPath)
 	}
+	if o.alertProxyForwarderSecretPath != "" {
+		secretPaths = append(secretPaths, o.alertProxyForwarderSecretPath)
+	}
 	if err := secret.Add(secretPaths...); err != nil {
 		logrus.WithError(err).Fatal("Error starting secrets agent.")
 	}
@@ -270,6 +341,7 @@ func main() {
 	}
 
 	eventRoutes := eventrouter.ForEvents(slackClient, issueFiler, kubeClient, configAgent.Config, gcsClient, keywordsConfig, o.helpdeskAlias, o.forumChannelId, o.reviewRequestWorkflowID, o.namespace, o.supportRequestChannelID, o.supportRequestThreshold, o.requireWorkflowsInForum)
+	var dispatchMentionHandler eventhandler.PartialHandler
 	if o.dispatcherControlURL != "" {
 		controlClient := dispatcher.NewControlClient(o.dispatcherControlURL, secret.GetTokenGenerator(o.dispatcherControlTokenPath))
 		dispatchHandler, err := dispatchcommand.NewHandler(controlClient, dispatchcommand.Options{
@@ -288,8 +360,20 @@ func main() {
 			logrus.WithError(err).Fatal("Failed to configure dispatcher Slack mentions")
 		}
 		go dispatchHandler.Run(interrupts.Context())
-		eventRoutes = eventhandler.MultiHandler(dispatchHandler.MentionHandler(), eventhandler.PartialFromHandler(eventRoutes))
+		dispatchMentionHandler = dispatchHandler.MentionHandler()
 	}
+
+	var alertProxyRelay *alertproxyforward.Relay
+	var alertProxyMentionHandler eventhandler.PartialHandler
+	if o.alertProxyForwarderSecretPath != "" {
+		alertProxyRelay = alertproxyforward.NewRelay(secret.GetTokenGenerator(o.alertProxyForwarderSecretPath))
+	}
+	if o.alertProxyMentionURL != "" {
+		alertProxyMentionHandler = alertProxyRelay.MentionHandler(o.alertProxyMentionURL, o.alertProxyChannelID, func(result string) {
+			alertProxyForwards.WithLabelValues("mention", result).Inc()
+		})
+	}
+	eventRoutes = composeEventRoutes(eventRoutes, alertProxyMentionHandler, dispatchMentionHandler)
 
 	metrics.ExposeMetrics("slack-bot", config.PushGateway{}, o.instrumentationOptions.MetricsPort)
 	simplifier := simplifypath.NewSimplifier(l("", // shadow element mimicing the root
@@ -307,7 +391,7 @@ func main() {
 	mux := http.NewServeMux()
 	// handle the root to allow for a simple uptime probe
 	mux.Handle("/", handler(http.HandlerFunc(func(writer http.ResponseWriter, request *http.Request) { writer.WriteHeader(http.StatusOK) })))
-	mux.Handle("/slack/interactive-endpoint", handler(handleInteraction(secret.GetTokenGenerator(o.slackSigningSecretPath), interactionrouter.ForModals(issueFiler, slackClient))))
+	mux.Handle("/slack/interactive-endpoint", handler(handleInteraction(secret.GetTokenGenerator(o.slackSigningSecretPath), o.alertProxyInteractionURL, alertProxyRelay, slackClient, interactionrouter.ForModals(issueFiler, slackClient))))
 	mux.Handle("/slack/events-endpoint", handler(handleEvent(secret.GetTokenGenerator(o.slackSigningSecretPath), eventRoutes)))
 	server := &http.Server{Addr: ":" + strconv.Itoa(o.port), Handler: mux}
 
@@ -362,6 +446,23 @@ func verifiedBody(logger *logrus.Entry, request *http.Request, signingSecret fun
 	return body, true
 }
 
+// composeEventRoutes keeps the reserved ci-alerts route ahead of the optional
+// dispatcher route and the generic mention handler inside base.
+func composeEventRoutes(base eventhandler.Handler, alertProxy, dispatcher eventhandler.PartialHandler) eventhandler.Handler {
+	var routes []eventhandler.PartialHandler
+	if alertProxy != nil {
+		routes = append(routes, alertProxy)
+	}
+	if dispatcher != nil {
+		routes = append(routes, dispatcher)
+	}
+	if len(routes) == 0 {
+		return base
+	}
+	routes = append(routes, eventhandler.PartialFromHandler(base))
+	return eventhandler.MultiHandler(routes...)
+}
+
 func handleEvent(signingSecret func() []byte, handler eventhandler.Handler) http.HandlerFunc {
 	return func(writer http.ResponseWriter, request *http.Request) {
 		logger := logrus.WithField("api", "events")
@@ -407,11 +508,16 @@ func handleEvent(signingSecret func() []byte, handler eventhandler.Handler) http
 	}
 }
 
-func handleInteraction(signingSecret func() []byte, handler interactionhandler.Handler) http.HandlerFunc {
+type ephemeralMessenger interface {
+	PostEphemeralContext(ctx context.Context, channelID, userID string, options ...slack.MsgOption) (string, error)
+}
+
+func handleInteraction(signingSecret func() []byte, proxyURL string, relay *alertproxyforward.Relay, messenger ephemeralMessenger, handler interactionhandler.Handler) http.HandlerFunc {
 	return func(writer http.ResponseWriter, request *http.Request) {
 		logger := logrus.WithField("api", "interactionhandler")
 		logger.Debug("Got an interaction payload.")
-		if _, ok := verifiedBody(logger, request, signingSecret); !ok {
+		body, ok := verifiedBody(logger, request, signingSecret)
+		if !ok {
 			writer.WriteHeader(http.StatusInternalServerError)
 			return
 		}
@@ -425,6 +531,31 @@ func handleInteraction(signingSecret func() []byte, handler interactionhandler.H
 		}
 		logger.WithField("interaction", callback).Trace("Read an interaction payload.")
 		logger = logger.WithFields(fieldsFor(&callback))
+
+		if proxyURL != "" && alertproxyforward.Claims(&callback) {
+			response, err := relay.RelayInteraction(request.Context(), proxyURL, request.Header, body)
+			if err != nil || response.StatusCode < http.StatusOK || response.StatusCode >= http.StatusMultipleChoices {
+				alertProxyForwards.WithLabelValues("interaction", "error").Inc()
+				if err != nil {
+					logger.WithError(err).Error("Failed to forward alert-proxy interaction")
+				} else {
+					logger.WithField("status", response.StatusCode).Error("Alert-proxy interaction endpoint returned an error")
+				}
+				writer.WriteHeader(http.StatusOK)
+				postAlertProxyUnavailable(messenger, &callback, logger)
+				return
+			}
+			alertProxyForwards.WithLabelValues("interaction", "success").Inc()
+			if contentType := response.Header.Get("Content-Type"); contentType != "" {
+				writer.Header().Set("Content-Type", contentType)
+			}
+			writer.Header().Set("Content-Length", strconv.Itoa(len(response.Body)))
+			writer.WriteHeader(response.StatusCode)
+			if _, err := writer.Write(response.Body); err != nil {
+				logger.WithError(err).Error("Failed to send alert-proxy interaction response")
+			}
+			return
+		}
 		response, err := handler.Handle(&callback, logger)
 		if err != nil {
 			logger.WithError(err).Error("Failed to handle interaction payload.")
@@ -440,6 +571,30 @@ func handleInteraction(signingSecret func() []byte, handler interactionhandler.H
 			logger.WithError(err).Error("Failed to send interaction payload response.")
 		}
 	}
+}
+
+func postAlertProxyUnavailable(messenger ephemeralMessenger, callback *slack.InteractionCallback, logger *logrus.Entry) {
+	if messenger == nil {
+		return
+	}
+	channelID := callback.Channel.ID
+	if channelID == "" {
+		channelID = callback.Container.ChannelID
+	}
+	if channelID == "" || callback.User.ID == "" {
+		logger.Warn("Cannot post alert-proxy unavailable response without a Slack channel and user")
+		return
+	}
+	go func() {
+		ctx, cancel := context.WithTimeout(context.Background(), 2*time.Second)
+		defer cancel()
+		if _, err := messenger.PostEphemeralContext(
+			ctx, channelID, callback.User.ID,
+			slack.MsgOptionText("Alert actions are temporarily unavailable. Please try again.", false),
+		); err != nil {
+			logger.WithError(err).Warn("Failed to post alert-proxy unavailable response")
+		}
+	}()
 }
 
 func fieldsFor(interactionCallback *slack.InteractionCallback) logrus.Fields {

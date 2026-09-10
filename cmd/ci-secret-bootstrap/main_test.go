@@ -4456,11 +4456,10 @@ func TestConstructDockerConfigJSONFromGSM(t *testing.T) {
 
 func TestMergeSecretMaps(t *testing.T) {
 	testCases := []struct {
-		name          string
-		vaultSecrets  map[string][]*coreapi.Secret
-		gsmSecrets    map[string][]*coreapi.Secret
-		expected      map[string][]*coreapi.Secret
-		expectedError string
+		name         string
+		vaultSecrets map[string][]*coreapi.Secret
+		gsmSecrets   map[string][]*coreapi.Secret
+		expected     map[string][]*coreapi.Secret
 	}{
 		{
 			name:         "both maps empty",
@@ -4629,21 +4628,7 @@ func TestMergeSecretMaps(t *testing.T) {
 
 	for _, tc := range testCases {
 		t.Run(tc.name, func(t *testing.T) {
-			actual, err := mergeSecretMaps(tc.vaultSecrets, tc.gsmSecrets)
-
-			if tc.expectedError != "" {
-				if err == nil {
-					t.Fatalf("expected error containing %q, got nil", tc.expectedError)
-				}
-				if !strings.Contains(err.Error(), tc.expectedError) {
-					t.Fatalf("expected error containing %q, got %q", tc.expectedError, err.Error())
-				}
-			} else {
-				if err != nil {
-					t.Fatalf("unexpected error: %v", err)
-				}
-			}
-
+			actual := mergeSecretMaps(tc.vaultSecrets, tc.gsmSecrets)
 			equal(t, "merged secrets", tc.expected, actual)
 		})
 	}

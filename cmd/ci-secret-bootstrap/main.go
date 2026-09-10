@@ -1261,10 +1261,7 @@ func reconcileSecrets(o options, vaultClient secrets.ReadOnlyClient, gsmClient *
 		}
 
 		if gsmSecretsMap != nil {
-			secretsMap, err = mergeSecretMaps(secretsMap, gsmSecretsMap)
-			if err != nil {
-				errs = append(errs, err)
-			}
+			secretsMap = mergeSecretMaps(secretsMap, gsmSecretsMap)
 		}
 	}
 
@@ -1296,12 +1293,12 @@ func reconcileSecrets(o options, vaultClient secrets.ReadOnlyClient, gsmClient *
 // secret is produced by both sources the GSM copy wins and the Vault copy is dropped. Overrides
 // are logged at warning level (they are expected while a secret exists in both systems), not
 // returned as errors, so an overlapping secret does not fail the whole sync.
-func mergeSecretMaps(vaultSecrets, gsmSecrets map[string][]*coreapi.Secret) (map[string][]*coreapi.Secret, error) {
+func mergeSecretMaps(vaultSecrets, gsmSecrets map[string][]*coreapi.Secret) map[string][]*coreapi.Secret {
 	if len(gsmSecrets) == 0 {
-		return vaultSecrets, nil
+		return vaultSecrets
 	}
 	if len(vaultSecrets) == 0 {
-		return gsmSecrets, nil
+		return gsmSecrets
 	}
 
 	// Track the position of each secret per cluster so the merged output is deterministic:
@@ -1341,7 +1338,7 @@ func mergeSecretMaps(vaultSecrets, gsmSecrets map[string][]*coreapi.Secret) (map
 		}
 	}
 
-	return merged, nil
+	return merged
 }
 
 // collectionGroupKey is used to track auto-discovered fields for a collection+group pair

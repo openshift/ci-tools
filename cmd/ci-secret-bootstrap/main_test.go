@@ -4456,11 +4456,10 @@ func TestConstructDockerConfigJSONFromGSM(t *testing.T) {
 
 func TestMergeSecretMaps(t *testing.T) {
 	testCases := []struct {
-		name          string
-		vaultSecrets  map[string][]*coreapi.Secret
-		gsmSecrets    map[string][]*coreapi.Secret
-		expected      map[string][]*coreapi.Secret
-		expectedError string
+		name         string
+		vaultSecrets map[string][]*coreapi.Secret
+		gsmSecrets   map[string][]*coreapi.Secret
+		expected     map[string][]*coreapi.Secret
 	}{
 		{
 			name:         "both maps empty",
@@ -4516,7 +4515,7 @@ func TestMergeSecretMaps(t *testing.T) {
 			},
 		},
 		{
-			name: "conflict - same secret in both (vault wins)",
+			name: "conflict - same secret in both (gsm wins)",
 			vaultSecrets: map[string][]*coreapi.Secret{
 				"build01": {
 					{
@@ -4537,36 +4536,34 @@ func TestMergeSecretMaps(t *testing.T) {
 				"build01": {
 					{
 						ObjectMeta: metav1.ObjectMeta{Name: "shared-secret", Namespace: "ci"},
-						Data:       map[string][]byte{"key": []byte("vault-value")},
+						Data:       map[string][]byte{"key": []byte("gsm-value")},
 					},
 				},
 			},
-			expectedError: "conflict: GSM secret ci/shared-secret on cluster build01 conflicts with Vault",
 		},
 		{
-			name: "multiple conflicts",
+			name: "multiple conflicts (gsm wins)",
 			vaultSecrets: map[string][]*coreapi.Secret{
 				"build01": {
-					{ObjectMeta: metav1.ObjectMeta{Name: "secret1", Namespace: "ci"}},
-					{ObjectMeta: metav1.ObjectMeta{Name: "secret2", Namespace: "ci"}},
+					{ObjectMeta: metav1.ObjectMeta{Name: "secret1", Namespace: "ci"}, Data: map[string][]byte{"key": []byte("vault-value")}},
+					{ObjectMeta: metav1.ObjectMeta{Name: "secret2", Namespace: "ci"}, Data: map[string][]byte{"key": []byte("vault-value")}},
 				},
 			},
 			gsmSecrets: map[string][]*coreapi.Secret{
 				"build01": {
-					{ObjectMeta: metav1.ObjectMeta{Name: "secret1", Namespace: "ci"}},
-					{ObjectMeta: metav1.ObjectMeta{Name: "secret2", Namespace: "ci"}},
+					{ObjectMeta: metav1.ObjectMeta{Name: "secret1", Namespace: "ci"}, Data: map[string][]byte{"key": []byte("gsm-value")}},
+					{ObjectMeta: metav1.ObjectMeta{Name: "secret2", Namespace: "ci"}, Data: map[string][]byte{"key": []byte("gsm-value")}},
 				},
 			},
 			expected: map[string][]*coreapi.Secret{
 				"build01": {
-					{ObjectMeta: metav1.ObjectMeta{Name: "secret1", Namespace: "ci"}},
-					{ObjectMeta: metav1.ObjectMeta{Name: "secret2", Namespace: "ci"}},
+					{ObjectMeta: metav1.ObjectMeta{Name: "secret1", Namespace: "ci"}, Data: map[string][]byte{"key": []byte("gsm-value")}},
+					{ObjectMeta: metav1.ObjectMeta{Name: "secret2", Namespace: "ci"}, Data: map[string][]byte{"key": []byte("gsm-value")}},
 				},
 			},
-			expectedError: "conflict: GSM secret ci/secret1 on cluster build01 conflicts with Vault",
 		},
 		{
-			name: "mixed - some conflicts, some no conflicts",
+			name: "mixed - some conflicts, some no conflicts (gsm wins conflicts)",
 			vaultSecrets: map[string][]*coreapi.Secret{
 				"build01": {
 					{ObjectMeta: metav1.ObjectMeta{Name: "vault-only", Namespace: "ci"}},
@@ -4582,11 +4579,10 @@ func TestMergeSecretMaps(t *testing.T) {
 			expected: map[string][]*coreapi.Secret{
 				"build01": {
 					{ObjectMeta: metav1.ObjectMeta{Name: "vault-only", Namespace: "ci"}},
-					{ObjectMeta: metav1.ObjectMeta{Name: "shared", Namespace: "ci"}, Data: map[string][]byte{"key": []byte("vault-value")}},
+					{ObjectMeta: metav1.ObjectMeta{Name: "shared", Namespace: "ci"}, Data: map[string][]byte{"key": []byte("gsm-value")}},
 					{ObjectMeta: metav1.ObjectMeta{Name: "gsm-only", Namespace: "ci"}},
 				},
 			},
-			expectedError: "conflict: GSM secret ci/shared on cluster build01 conflicts with Vault",
 		},
 		{
 			name: "different clusters",
@@ -4632,21 +4628,7 @@ func TestMergeSecretMaps(t *testing.T) {
 
 	for _, tc := range testCases {
 		t.Run(tc.name, func(t *testing.T) {
-			actual, err := mergeSecretMaps(tc.vaultSecrets, tc.gsmSecrets)
-
-			if tc.expectedError != "" {
-				if err == nil {
-					t.Fatalf("expected error containing %q, got nil", tc.expectedError)
-				}
-				if !strings.Contains(err.Error(), tc.expectedError) {
-					t.Fatalf("expected error containing %q, got %q", tc.expectedError, err.Error())
-				}
-			} else {
-				if err != nil {
-					t.Fatalf("unexpected error: %v", err)
-				}
-			}
-
+			actual := mergeSecretMaps(tc.vaultSecrets, tc.gsmSecrets)
 			equal(t, "merged secrets", tc.expected, actual)
 		})
 	}

@@ -1261,10 +1261,7 @@ func reconcileSecrets(o options, vaultClient secrets.ReadOnlyClient, gsmClient *
 		}
 
 		if gsmSecretsMap != nil {
-			secretsMap, err = mergeSecretMaps(secretsMap, gsmSecretsMap)
-			if err != nil {
-				errs = append(errs, err)
-			}
+			secretsMap = mergeSecretMaps(secretsMap, gsmSecretsMap)
 		}
 	}
 
@@ -1291,52 +1288,57 @@ func reconcileSecrets(o options, vaultClient secrets.ReadOnlyClient, gsmClient *
 	return errs
 }
 
-// mergeSecretMaps combines Vault and GSM secret maps, with Vault taking precedence on conflicts.
-// Returns the merged map and any conflict errors encountered.
-func mergeSecretMaps(vaultSecrets, gsmSecrets map[string][]*coreapi.Secret) (map[string][]*coreapi.Secret, error) {
+// mergeSecretMaps combines Vault and GSM secret maps, with GSM taking precedence on conflicts.
+// GSM is the authoritative source during and after the Vault->GSM migration, so when the same
+// secret is produced by both sources the GSM copy wins and the Vault copy is dropped. Overrides
+// are logged at warning level (they are expected while a secret exists in both systems), not
+// returned as errors, so an overlapping secret does not fail the whole sync.
+func mergeSecretMaps(vaultSecrets, gsmSecrets map[string][]*coreapi.Secret) map[string][]*coreapi.Secret {
 	if len(gsmSecrets) == 0 {
-		return vaultSecrets, nil
+		return vaultSecrets
 	}
 	if len(vaultSecrets) == 0 {
-		return gsmSecrets, nil
+		return gsmSecrets
 	}
 
-	vaultIndex := make(map[string]map[types.NamespacedName]bool)
-	for cluster, secretList := range vaultSecrets {
-		if vaultIndex[cluster] == nil {
-			vaultIndex[cluster] = make(map[types.NamespacedName]bool)
+	// Track the position of each secret per cluster so the merged output is deterministic:
+	// Vault secrets keep their original order, GSM-only secrets are appended after them, and a
+	// GSM secret that overrides a Vault secret keeps the Vault entry's position.
+	byCluster := make(map[string]map[types.NamespacedName]*coreapi.Secret)
+	order := make(map[string][]types.NamespacedName)
+
+	insert := func(cluster string, secret *coreapi.Secret, fromGSM bool) {
+		nsName := types.NamespacedName{Namespace: secret.Namespace, Name: secret.Name}
+		if byCluster[cluster] == nil {
+			byCluster[cluster] = make(map[types.NamespacedName]*coreapi.Secret)
 		}
+		if _, exists := byCluster[cluster][nsName]; !exists {
+			order[cluster] = append(order[cluster], nsName)
+		} else if fromGSM {
+			logrus.Warnf("GSM secret %s/%s on cluster %s overrides Vault (GSM takes precedence)", secret.Namespace, secret.Name, cluster)
+		}
+		byCluster[cluster][nsName] = secret
+	}
+
+	for cluster, secretList := range vaultSecrets {
 		for _, secret := range secretList {
-			nsName := types.NamespacedName{Namespace: secret.Namespace, Name: secret.Name}
-			vaultIndex[cluster][nsName] = true
+			insert(cluster, secret, false)
 		}
 	}
-
-	var errs []error
-	merged := make(map[string][]*coreapi.Secret)
-
-	for cluster, secretList := range vaultSecrets {
-		merged[cluster] = make([]*coreapi.Secret, len(secretList))
-		copy(merged[cluster], secretList)
-	}
-
 	for cluster, secretList := range gsmSecrets {
 		for _, secret := range secretList {
-			nsName := types.NamespacedName{Namespace: secret.Namespace, Name: secret.Name}
-
-			if vaultIndex[cluster] != nil && vaultIndex[cluster][nsName] {
-				errs = append(errs, fmt.Errorf(
-					"conflict: GSM secret %s/%s on cluster %s conflicts with Vault (Vault takes precedence)",
-					secret.Namespace, secret.Name, cluster,
-				))
-				continue
-			}
-
-			merged[cluster] = append(merged[cluster], secret)
+			insert(cluster, secret, true)
 		}
 	}
 
-	return merged, utilerrors.NewAggregate(errs)
+	merged := make(map[string][]*coreapi.Secret, len(byCluster))
+	for cluster, nsNames := range order {
+		for _, nsName := range nsNames {
+			merged[cluster] = append(merged[cluster], byCluster[cluster][nsName])
+		}
+	}
+
+	return merged
 }
 
 // collectionGroupKey is used to track auto-discovered fields for a collection+group pair

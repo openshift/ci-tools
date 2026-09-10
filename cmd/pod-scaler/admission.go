@@ -1290,6 +1290,7 @@ func applyAuthoritativeLimitDecrease(recommended, configured *corev1.ResourceReq
 				}
 			}
 			if !mode.apply {
+				recordAuthoritativeDecrease(decreaseModeDryRun, field, target.resourceType, workloadType, configuredValue, determined, reductionCapped)
 				fieldLogger.WithFields(logrus.Fields{
 					"event":                "authoritative_decrease_dry_run",
 					"workloadClass":        workloadClass,
@@ -1300,6 +1301,7 @@ func applyAuthoritativeLimitDecrease(recommended, configured *corev1.ResourceReq
 				}).Infof("authoritative %s decrease dry-run", target.resourceType)
 				continue
 			}
+			recordAuthoritativeDecrease(decreaseModeApplied, field, target.resourceType, workloadType, configuredValue, determined, reductionCapped)
 			fieldLogger.WithFields(logrus.Fields{
 				"event":                "authoritative_decrease_applied",
 				"workloadClass":        workloadClass,

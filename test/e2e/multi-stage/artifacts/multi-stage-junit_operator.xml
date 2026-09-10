@@ -1,16 +1,25 @@
 <testsuites>
-  <testsuite name="step graph" tests="7" skipped="0" failures="0" time="whatever">
+  <testsuite name="step graph" tests="10" skipped="0" failures="0" time="whatever">
     <properties></properties>
     <testcase name="Find the input image os and tag it into the pipeline" time="whatever">
       <properties></properties>
     </testcase>
-    <testcase name="Run multi-stage step check-shared-dir" time="whatever">
+    <testcase name="Run multi-stage step ipi-install-install-stableinitial" time="whatever">
       <properties></properties>
     </testcase>
-    <testcase name="Run multi-stage step create-kubeconfig" time="whatever">
+    <testcase name="Run multi-stage step post0" time="whatever">
       <properties></properties>
     </testcase>
-    <testcase name="Run multi-stage step observer" time="whatever">
+    <testcase name="Run multi-stage step post1" time="whatever">
+      <properties></properties>
+    </testcase>
+    <testcase name="Run multi-stage step pre0" time="whatever">
+      <properties></properties>
+    </testcase>
+    <testcase name="Run multi-stage step test0" time="whatever">
+      <properties></properties>
+    </testcase>
+    <testcase name="Run multi-stage step test1" time="whatever">
       <properties></properties>
     </testcase>
     <testcase name="Run multi-stage test post phase" time="whatever">

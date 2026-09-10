@@ -77,6 +77,17 @@ func (n *TestCaseNotifier) Done(podName string) <-chan struct{} { return n.neste
 // Invoking SubTests clears the last pod, so subsequent calls will return no
 // tests unless Notify() has been called in the meantime.
 func (n *TestCaseNotifier) SubTests(prefix string) []*junit.TestCase {
+	return n.subTests(func(containerName string) string {
+		return fmt.Sprintf("%scontainer %s", prefix, containerName)
+	})
+}
+
+// SubTestsWithName returns subtests with the provided exact name.
+func (n *TestCaseNotifier) SubTestsWithName(name string) []*junit.TestCase {
+	return n.subTests(func(string) string { return name })
+}
+
+func (n *TestCaseNotifier) subTests(nameForContainer func(string) string) []*junit.TestCase {
 	if n.lastPod == nil {
 		return nil
 	}
@@ -115,7 +126,7 @@ func (n *TestCaseNotifier) SubTests(prefix string) []*junit.TestCase {
 			lastFinished = t.StartedAt.Time
 		}
 		test := &junit.TestCase{
-			Name:     fmt.Sprintf("%scontainer %s", prefix, status.Name),
+			Name:     nameForContainer(status.Name),
 			Duration: t.FinishedAt.Sub(lastFinished).Seconds(),
 		}
 		lastFinished = t.FinishedAt.Time

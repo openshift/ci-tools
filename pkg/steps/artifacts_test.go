@@ -11,7 +11,6 @@ import (
 	coreapi "k8s.io/api/core/v1"
 	"k8s.io/apimachinery/pkg/api/equality"
 	meta "k8s.io/apimachinery/pkg/apis/meta/v1"
-	"k8s.io/apimachinery/pkg/util/diff"
 	fakectrlruntimeclient "sigs.k8s.io/controller-runtime/pkg/client/fake"
 	prowv1 "sigs.k8s.io/prow/pkg/apis/prowjobs/v1"
 
@@ -481,9 +480,44 @@ func TestTestCaseNotifier_SubTests(t *testing.T) {
 			}
 			tests := n.SubTests(tt.prefix)
 			if !reflect.DeepEqual(tt.wantTests, tests) {
-				t.Fatalf("unexpected: %s", diff.Diff(tt.wantTests, tests))
+				t.Fatalf("unexpected test cases (-want +got):\n%s", cmp.Diff(tt.wantTests, tests))
 			}
 		})
+	}
+}
+
+func TestTestCaseNotifier_SubTestsWithName(t *testing.T) {
+	n := &TestCaseNotifier{
+		nested: util.NopNotifier,
+		lastPod: &coreapi.Pod{
+			ObjectMeta: meta.ObjectMeta{
+				Annotations: map[string]string{annotationContainersForSubTestResults: "test"},
+			},
+			Status: coreapi.PodStatus{
+				ContainerStatuses: []coreapi.ContainerStatus{{
+					Name: "test",
+					State: coreapi.ContainerState{Terminated: &coreapi.ContainerStateTerminated{
+						ExitCode:   1,
+						Message:    "step failed",
+						StartedAt:  meta.Time{Time: time.Unix(100, 0)},
+						FinishedAt: meta.Time{Time: time.Unix(130, 0)},
+					}},
+				}},
+			},
+		},
+	}
+
+	want := []*junit.TestCase{{
+		Name:          "Run multi-stage step ipi-install-install-stableinitial",
+		Duration:      30,
+		FailureOutput: &junit.FailureOutput{Output: "step failed"},
+	}}
+	got := n.SubTestsWithName("Run multi-stage step ipi-install-install-stableinitial")
+	if diff := cmp.Diff(want, got); diff != "" {
+		t.Fatalf("unexpected test cases (-want +got):\n%s", diff)
+	}
+	if got := n.SubTestsWithName("unused"); got != nil {
+		t.Fatalf("expected the notifier to clear the completed pod, got %#v", got)
 	}
 }
 
@@ -620,7 +654,7 @@ func TestAddArtifactsToPod(t *testing.T) {
 		t.Run(tc.testID, func(t *testing.T) {
 			addArtifactsToPod(tc.pod)
 			if !equality.Semantic.DeepEqual(tc.pod, tc.expected) {
-				t.Fatal(diff.Diff(tc.pod, tc.expected))
+				t.Fatalf("unexpected pod (-want +got):\n%s", cmp.Diff(tc.expected, tc.pod))
 			}
 
 		})
@@ -630,7 +664,7 @@ func TestAddArtifactsToPod(t *testing.T) {
 func TestArtifactsContainer(t *testing.T) {
 	artifacts := artifactsContainer()
 	if !reflect.DeepEqual(artifacts, testArtifactsContainer) {
-		t.Fatal(diff.Diff(artifacts, testArtifactsContainer))
+		t.Fatalf("unexpected artifacts container (-want +got):\n%s", cmp.Diff(testArtifactsContainer, artifacts))
 	}
 }
 

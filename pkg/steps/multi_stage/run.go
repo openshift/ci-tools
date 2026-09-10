@@ -46,7 +46,7 @@ func (s *multiStageTestStep) runSteps(
 			s.flags |= hasPrevErrs
 		}
 	}()
-	if err := s.runPods(ctx, pods, bestEffortSteps); err != nil {
+	if err := s.runPods(ctx, phase, pods, bestEffortSteps); err != nil {
 		errs = append(errs, err)
 	}
 	select {
@@ -81,10 +81,10 @@ func (s *multiStageTestStep) runSteps(
 	return err
 }
 
-func (s *multiStageTestStep) runPods(ctx context.Context, pods []coreapi.Pod, bestEffortSteps sets.Set[string]) error {
+func (s *multiStageTestStep) runPods(ctx context.Context, phase string, pods []coreapi.Pod, bestEffortSteps sets.Set[string]) error {
 	var errs []error
 	for _, pod := range pods {
-		err := s.runPod(ctx, &pod, base_steps.NewTestCaseNotifier(util.NopNotifier), util.WaitForPodFlag(0))
+		err := s.runPod(ctx, phase, &pod, base_steps.NewTestCaseNotifier(util.NopNotifier), util.WaitForPodFlag(0))
 		if err == nil {
 			continue
 		}
@@ -113,7 +113,7 @@ func (s *multiStageTestStep) runObservers(ctx, textCtx context.Context, pods []c
 			}
 		}(pod)
 		go func(p coreapi.Pod) {
-			err := s.runPod(textCtx, &p, base_steps.NewTestCaseNotifier(util.NopNotifier), util.Interruptible)
+			err := s.runPod(textCtx, "observer", &p, base_steps.NewTestCaseNotifier(util.NopNotifier), util.Interruptible)
 			if ctx.Err() == nil {
 				// when the observer is cancelled, we get an error here that we need to ignore, as it's not an error
 				// for the Pod to be deleted when it's cancelled, it's just expected
@@ -134,8 +134,8 @@ func (s *multiStageTestStep) runObservers(ctx, textCtx context.Context, pods []c
 	done <- struct{}{}
 }
 
-func (s *multiStageTestStep) runPod(ctx context.Context, pod *coreapi.Pod, notifier *base_steps.TestCaseNotifier, flags util.WaitForPodFlag) error {
-	junitName, err := s.junitNameForPod(pod)
+func (s *multiStageTestStep) runPod(ctx context.Context, phase string, pod *coreapi.Pod, notifier *base_steps.TestCaseNotifier, flags util.WaitForPodFlag) error {
+	junitName, err := s.junitNameForPod(phase, pod)
 	if err != nil {
 		return err
 	}
@@ -208,7 +208,7 @@ func (s *multiStageTestStep) runPod(ctx context.Context, pod *coreapi.Pod, notif
 	return nil
 }
 
-func (s *multiStageTestStep) junitNameForPod(pod *coreapi.Pod) (string, error) {
+func (s *multiStageTestStep) junitNameForPod(phase string, pod *coreapi.Pod) (string, error) {
 	if pod == nil {
 		return "", fmt.Errorf("multi-stage test %q cannot determine JUnit name for nil pod", s.name)
 	}
@@ -216,5 +216,5 @@ func (s *multiStageTestStep) junitNameForPod(pod *coreapi.Pod) (string, error) {
 	if stepName == "" {
 		return "", fmt.Errorf("multi-stage test %q pod %q is missing required label %q", s.name, pod.Name, base_steps.LabelMetadataStep)
 	}
-	return fmt.Sprintf("Run multi-stage step %s", stepName), nil
+	return fmt.Sprintf("Run multi-stage step %s:%s", phase, stepName), nil
 }

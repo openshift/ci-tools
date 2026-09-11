@@ -456,7 +456,7 @@ func TestResolveAndCreateGSMSecrets(t *testing.T) {
 			},
 			enableCSI:     true,
 			gsmConfig:     nil,
-			expectedError: "GSM client was not initialized - credentials file may be missing",
+			expectedError: "gsm client was not initialized - ensure --gsm-config and --gsm-credentials-file are provided",
 		},
 		{
 			name: "default mount paths when not specified",

@@ -831,25 +831,80 @@ func overrideMultiStageParams(o *options) error {
 	return nil
 }
 
-// applyEnvOverrides processes environment variables with override prefixes and applies them to the test configurations.
-// It checks for environment variables that start with "MULTISTAGE_PARAM_OVERRIDE_" and applies them to the environment settings of each test.
-func applyEnvOverrides(o *options) {
-	for _, envVar := range os.Environ() {
-		if !strings.HasPrefix(envVar, "MULTISTAGE_PARAM_OVERRIDE_") {
-			continue
+// multiStageParamOverridePrefix is the legacy prefix used to request a multi-stage parameter override.
+const multiStageParamOverridePrefix = "MULTISTAGE_PARAM_OVERRIDE_"
+
+// overridableParamNames returns parameter names, across all Pre/Test/Post steps and
+// observers of ms, declared with Overridable: true.
+func overridableParamNames(ms *api.MultiStageTestConfigurationLiteral) sets.Set[string] {
+	names := sets.New[string]()
+	for _, steps := range [][]api.LiteralTestStep{ms.Pre, ms.Test, ms.Post} {
+		for _, step := range steps {
+			for _, param := range step.Environment {
+				if param.Overridable {
+					names.Insert(param.Name)
+				}
+			}
 		}
+	}
+	for _, observer := range ms.Observers {
+		for _, param := range observer.Environment {
+			if param.Overridable {
+				names.Insert(param.Name)
+			}
+		}
+	}
+	return names
+}
+
+// applyEnvOverrides applies trigger-time multi-stage parameter overrides from the environment.
+// Two forms are supported: the legacy "MULTISTAGE_PARAM_OVERRIDE_<NAME>" prefix (kept for backwards
+// compatibility, and takes precedence if both forms are set), and a plain "<NAME>" variable, honored
+// only if some step declares that parameter with Overridable: true. Both forms populate ParamOverrides,
+// which generateParams (pkg/steps/multi_stage/gen.go) applies only to opted-in parameters.
+func applyEnvOverrides(o *options) {
+	envPairs := make(map[string]string)
+	for _, envVar := range os.Environ() {
 		parts := strings.SplitN(envVar, "=", 2)
 		if len(parts) != 2 {
 			continue
 		}
-		key, value := parts[0], parts[1]
-		for _, test := range o.configSpec.Tests {
-			if test.MultiStageTestConfigurationLiteral != nil {
-				if test.MultiStageTestConfigurationLiteral.Environment == nil {
-					test.MultiStageTestConfigurationLiteral.Environment = make(api.TestEnvironment)
-				}
-				test.MultiStageTestConfigurationLiteral.Environment[key] = value
+		envPairs[parts[0]] = parts[1]
+	}
+
+	for _, test := range o.configSpec.Tests {
+		ms := test.MultiStageTestConfigurationLiteral
+		if ms == nil {
+			continue
+		}
+
+		for key, value := range envPairs {
+			if !strings.HasPrefix(key, multiStageParamOverridePrefix) {
+				continue
 			}
+			if ms.Environment == nil {
+				ms.Environment = make(api.TestEnvironment)
+			}
+			ms.Environment[key] = value
+
+			if ms.ParamOverrides == nil {
+				ms.ParamOverrides = make(api.TestEnvironment)
+			}
+			ms.ParamOverrides[strings.TrimPrefix(key, multiStageParamOverridePrefix)] = value
+		}
+
+		for name := range overridableParamNames(ms) {
+			if _, alreadySet := ms.ParamOverrides[name]; alreadySet {
+				continue // prefixed form already set this parameter and takes precedence.
+			}
+			value, ok := envPairs[name]
+			if !ok {
+				continue
+			}
+			if ms.ParamOverrides == nil {
+				ms.ParamOverrides = make(api.TestEnvironment)
+			}
+			ms.ParamOverrides[name] = value
 		}
 	}
 }

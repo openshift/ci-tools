@@ -5,6 +5,7 @@ import (
 	"errors"
 	"fmt"
 	"net/http"
+	"regexp"
 	"strings"
 	"time"
 
@@ -170,7 +171,7 @@ func withGCPPropagationDelay(operation string, fn func()) {
 }
 
 // ExecuteActions performs the actual resource changes in GCP based on the computed diff.
-func (a *Actions) ExecuteActions(ctx context.Context, iamClient IAMClient, secretsClient SecretManagerClient, projectsClient ResourceManagerClient) {
+func (a *Actions) ExecuteActions(ctx context.Context, iamClient IAMClient, secretsClient SecretManagerClient, projectsClient ResourceManagerClient) error {
 	if len(a.SAsToCreate) > 0 {
 		logrus.Infof("Creating %d service accounts", len(a.SAsToCreate))
 		withGCPPropagationDelay("service account creation", func() {
@@ -185,13 +186,17 @@ func (a *Actions) ExecuteActions(ctx context.Context, iamClient IAMClient, secre
 		})
 	}
 
+	var skippedGroups []string
 	if a.ConsolidatedIAMPolicy != nil {
 		logrus.Infof("Updating IAM policy with %d bindings", len(a.ConsolidatedIAMPolicy.Bindings))
+		var applyErr error
 		withGCPPropagationDelay("IAM policy update", func() {
-			if err := a.ApplyPolicy(ctx, projectsClient); err != nil {
-				logrus.WithError(err).Fatal("Failed to apply IAM policy")
-			}
+			skippedGroups, applyErr = a.ApplyPolicy(ctx, projectsClient)
 		})
+		if applyErr != nil {
+			// Deleting principals the policy still binds would leave it inconsistent.
+			return applyErr
+		}
 	}
 
 	if len(a.SAsToDelete) > 0 {
@@ -208,6 +213,13 @@ func (a *Actions) ExecuteActions(ctx context.Context, iamClient IAMClient, secre
 			a.DeleteObsoleteSecrets(ctx, secretsClient)
 		})
 	}
+
+	if len(skippedGroups) > 0 {
+		logrus.Info("Every other change was applied successfully, the run fails only to flag the Rover group(s) with no Google group")
+		return fmt.Errorf("no Google group exists for %d Rover group(s): %s; their secret collections keep every secret but are reconciled as if unclaimed, so no member of those groups can access them until the Google group is created or the collections are moved under a group which has one", len(skippedGroups), strings.Join(skippedGroups, ", "))
+	}
+
+	return nil
 }
 
 func (a *Actions) CreateServiceAccounts(ctx context.Context, client IAMClient) {
@@ -335,21 +347,91 @@ func (a *Actions) CreateSecrets(ctx context.Context, secretsClient SecretManager
 	}
 }
 
-func (a *Actions) ApplyPolicy(ctx context.Context, client ResourceManagerClient) error {
-	req := &iampb.SetIamPolicyRequest{
-		Resource: GetProjectResourceIdNumber(a.Config.ProjectIdNumber),
-		Policy:   a.ConsolidatedIAMPolicy,
-	}
-	_, err := client.SetIamPolicy(ctx, req)
-	if err != nil {
-		if s, ok := status.FromError(err); ok && s.Code() == codes.FailedPrecondition {
-			return fmt.Errorf("IAM policy update failed due to concurrent changes: %w", err)
-		}
-		return fmt.Errorf("failed to apply IAM policy: %w", err)
-	}
+var nonExistentGroupPattern = regexp.MustCompile(`^Group (\S+@\S+) does not exist\.?$`)
 
-	logrus.Debug("Successfully applied IAM policy")
-	return nil
+// More than a handful of groups failing to resolve at once points at a directory sync outage
+// rather than at stale configuration, and giving up writes nothing at all.
+const maxUnresolvableGroups = 10
+
+// ApplyPolicy writes the consolidated policy to the project. GCP rejects the whole policy when
+// any single member cannot be resolved, so a group it reports as non-existent is dropped,
+// the policy write is retried, and the dropped groups are returned.
+func (a *Actions) ApplyPolicy(ctx context.Context, client ResourceManagerClient) ([]string, error) {
+	var skippedGroups []string
+	for {
+		req := &iampb.SetIamPolicyRequest{
+			Resource: GetProjectResourceIdNumber(a.Config.ProjectIdNumber),
+			Policy:   a.ConsolidatedIAMPolicy,
+		}
+		_, err := client.SetIamPolicy(ctx, req)
+		if err == nil {
+			logrus.Info("Successfully applied IAM policy")
+			for _, group := range skippedGroups {
+				logrus.WithField("group", group).Warnf("Rover group has no Google group. The secrets in collections '%s' remain preserved, but no member of the group can access them until the Google group exists", strings.Join(a.GroupCollections[group], ", "))
+			}
+			return skippedGroups, nil
+		}
+
+		s, ok := status.FromError(err)
+		if ok && s.Code() == codes.FailedPrecondition {
+			return skippedGroups, fmt.Errorf("IAM policy update failed due to concurrent changes: %w", err)
+		}
+		if !ok || s.Code() != codes.InvalidArgument {
+			return skippedGroups, fmt.Errorf("failed to apply IAM policy: %w", err)
+		}
+
+		email, found := parseNonExistentGroup(s.Message())
+		if !found {
+			logrus.WithField("message", s.Message()).Debug("IAM policy rejected with an invalid argument that is not a non-existent group")
+			return skippedGroups, fmt.Errorf("failed to apply IAM policy: %w", err)
+		}
+
+		if len(skippedGroups) >= maxUnresolvableGroups {
+			return skippedGroups, fmt.Errorf("failed to apply IAM policy, more than %d groups could not be resolved, refusing to drop more: %w", maxUnresolvableGroups, err)
+		}
+
+		member := fmt.Sprintf("group:%s", email)
+		// Nothing to drop means retrying would resubmit the very same policy forever.
+		if !removeMemberFromManagedBindings(a.ConsolidatedIAMPolicy, member) {
+			return skippedGroups, fmt.Errorf("failed to apply IAM policy: GCP rejected group '%s', which none of the bindings created by this tool grant access to, so it must come from a manually created binding: %w", email, err)
+		}
+		skippedGroups = append(skippedGroups, email)
+	}
+}
+
+func parseNonExistentGroup(message string) (string, bool) {
+	matches := nonExistentGroupPattern.FindStringSubmatch(strings.TrimSpace(message))
+	if matches == nil {
+		return "", false
+	}
+	return matches[1], true
+}
+
+func removeMemberFromManagedBindings(policy *iampb.Policy, member string) bool {
+	removed := false
+	var bindings []*iampb.Binding
+	for _, binding := range policy.Bindings {
+		if !IsManagedBinding(binding) {
+			bindings = append(bindings, binding)
+			continue
+		}
+
+		members := make([]string, 0, len(binding.Members))
+		for _, m := range binding.Members {
+			if m == member {
+				removed = true
+				continue
+			}
+			members = append(members, m)
+		}
+		if len(members) == 0 {
+			continue
+		}
+		binding.Members = members
+		bindings = append(bindings, binding)
+	}
+	policy.Bindings = bindings
+	return removed
 }
 
 func (a *Actions) DeleteObsoleteSecrets(ctx context.Context, client SecretManagerClient) {

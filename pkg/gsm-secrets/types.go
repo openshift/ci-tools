@@ -106,6 +106,7 @@ type Actions struct {
 	SecretsToCreate       map[string]GCPSecret
 	SecretsToDelete       []GCPSecret
 	ConsolidatedIAMPolicy *iampb.Policy
+	GroupCollections      map[string][]string
 }
 
 func GetConfigFromEnv() (Config, error) {

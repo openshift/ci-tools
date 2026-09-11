@@ -17,9 +17,11 @@ func ComputeDiff(
 	desiredIAMBindings []*iampb.Binding,
 	actualIAMPolicy *iampb.Policy,
 	desiredCollections map[string]bool,
+	groupCollections map[string][]string,
 ) Actions {
 	actions := Actions{
-		Config: config,
+		Config:           config,
+		GroupCollections: groupCollections,
 	}
 
 	actions.SAsToCreate, actions.SAsToDelete = DiffServiceAccounts(desiredSAs, actualSAs)

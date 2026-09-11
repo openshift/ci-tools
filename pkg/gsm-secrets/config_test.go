@@ -43,7 +43,7 @@ func TestGetDesiredState(t *testing.T) {
 
 	for _, tc := range testCases {
 		t.Run(tc.name, func(t *testing.T) {
-			serviceAccounts, secrets, bindings, collections, err := GetDesiredState(tc.configFile, config)
+			serviceAccounts, secrets, bindings, collections, groupCollections, err := GetDesiredState(tc.configFile, config)
 			if err != nil {
 				t.Fatalf("GetDesiredState() failed: %v", err)
 			}
@@ -52,6 +52,7 @@ func TestGetDesiredState(t *testing.T) {
 			testhelper.CompareWithFixture(t, secrets, testhelper.WithPrefix("secrets-"))
 			testhelper.CompareWithFixture(t, bindings, testhelper.WithPrefix("bindings-"))
 			testhelper.CompareWithFixture(t, collections, testhelper.WithPrefix("collections-"))
+			testhelper.CompareWithFixture(t, groupCollections, testhelper.WithPrefix("group-collections-"))
 		})
 	}
 }

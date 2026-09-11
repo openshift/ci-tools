@@ -1,0 +1,6 @@
+team-alpha@redhat.com:
+- collection-alpha
+- shared-collection
+team-beta@redhat.com:
+- shared-collection
+- some-collection-with-a-very-long-name

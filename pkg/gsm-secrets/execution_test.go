@@ -6,15 +6,19 @@ import (
 	"fmt"
 	"maps"
 	"net/http"
+	"sort"
 	"strings"
 	"testing"
 	"time"
 
 	"cloud.google.com/go/iam/admin/apiv1/adminpb"
+	"cloud.google.com/go/iam/apiv1/iampb"
 	secretmanagerpb "cloud.google.com/go/secretmanager/apiv1/secretmanagerpb"
+	"github.com/google/go-cmp/cmp"
 	gax "github.com/googleapis/gax-go/v2"
 	"go.uber.org/mock/gomock"
 	"google.golang.org/api/googleapi"
+	"google.golang.org/genproto/googleapis/type/expr"
 	"google.golang.org/grpc/codes"
 	"google.golang.org/grpc/status"
 
@@ -631,6 +635,225 @@ func TestListSecretFieldsValidation(t *testing.T) {
 			if actuallyIncluded != tc.shouldInclude {
 				t.Errorf("%s: Secret %q - expected included=%v, got included=%v (parts=%d, expected=%d)",
 					tc.description, tc.secretID, tc.shouldInclude, actuallyIncluded, len(parts), expectedParts)
+			}
+		})
+	}
+}
+
+func TestApplyPolicy(t *testing.T) {
+	config := Config{
+		ProjectIdString: "test-project",
+		ProjectIdNumber: "123456789",
+	}
+
+	newPolicy := func() *iampb.Policy {
+		return &iampb.Policy{
+			Version: 3,
+			Etag:    []byte("etag"),
+			Bindings: []*iampb.Binding{
+				{
+					Role:    config.GetSecretAccessorRole(),
+					Members: []string{"group:good-team@redhat.com"},
+					Condition: &expr.Expr{
+						Title:      GetSecretsViewerGroupConditionTitle("good-team"),
+						Expression: BuildSecretAccessorRoleConditionExpression("good-collection"),
+					},
+				},
+				{
+					Role:    config.GetSecretUpdaterRole(),
+					Members: []string{"group:missing-team@redhat.com"},
+					Condition: &expr.Expr{
+						Title:      GetSecretsUpdaterGroupConditionTitle("missing-team"),
+						Expression: BuildSecretUpdaterRoleConditionExpression("missing-collection"),
+					},
+				},
+				{
+					Role:    config.GetSecretAccessorRole(),
+					Members: []string{"group:other-missing@redhat.com", "serviceAccount:collection-updater@test-project.iam.gserviceaccount.com"},
+					Condition: &expr.Expr{
+						Title:      GetSecretsViewerConditionTitle("collection"),
+						Expression: BuildSecretAccessorRoleConditionExpression("collection"),
+					},
+				},
+				// Hand-made grant on the same role.
+				{
+					Role:    config.GetSecretAccessorRole(),
+					Members: []string{"group:exception-team@redhat.com"},
+					Condition: &expr.Expr{
+						Title:      "EXCEPTION: manually granted access",
+						Expression: BuildSecretAccessorRoleConditionExpression("legacy-collection"),
+					},
+				},
+			},
+		}
+	}
+
+	nonExistentGroup := func(email string) error {
+		return status.Errorf(codes.InvalidArgument, "Group %s does not exist.", email)
+	}
+
+	newCrowdedPolicy := func() *iampb.Policy {
+		var members []string
+		for i := range maxUnresolvableGroups + 2 {
+			members = append(members, fmt.Sprintf("group:g%02d@redhat.com", i))
+		}
+		return &iampb.Policy{
+			Version: 3,
+			Etag:    []byte("etag"),
+			Bindings: []*iampb.Binding{{
+				Role:    config.GetSecretAccessorRole(),
+				Members: members,
+				Condition: &expr.Expr{
+					Title:      GetSecretsViewerGroupConditionTitle("crowded"),
+					Expression: BuildSecretAccessorRoleConditionExpression("crowded-collection"),
+				},
+			}},
+		}
+	}
+	var tooManyMissingErrors []error
+	var tooManySkipped []string
+	var tooManyMembersLeft []string
+	for i := 0; i <= maxUnresolvableGroups; i++ {
+		email := fmt.Sprintf("g%02d@redhat.com", i)
+		tooManyMissingErrors = append(tooManyMissingErrors, nonExistentGroup(email))
+		if i < maxUnresolvableGroups {
+			tooManySkipped = append(tooManySkipped, email)
+		} else {
+			tooManyMembersLeft = append(tooManyMembersLeft, "group:"+email)
+		}
+	}
+	tooManyMembersLeft = append(tooManyMembersLeft, fmt.Sprintf("group:g%02d@redhat.com", maxUnresolvableGroups+1))
+
+	testCases := []struct {
+		name                 string
+		policy               *iampb.Policy
+		setPolicyErrors      []error
+		expectError          bool
+		expectedSkippedGroup []string
+		expectedCalls        int
+		expectedMembers      []string
+	}{
+		{
+			name:            "policy applied on first try",
+			setPolicyErrors: []error{nil},
+			expectedCalls:   1,
+			expectedMembers: []string{"group:exception-team@redhat.com", "group:good-team@redhat.com", "group:missing-team@redhat.com", "group:other-missing@redhat.com", "serviceAccount:collection-updater@test-project.iam.gserviceaccount.com"},
+		},
+		{
+			name:                 "group without a Google group is dropped and the rest is applied",
+			setPolicyErrors:      []error{nonExistentGroup("missing-team@redhat.com"), nil},
+			expectedSkippedGroup: []string{"missing-team@redhat.com"},
+			expectedCalls:        2,
+			expectedMembers:      []string{"group:exception-team@redhat.com", "group:good-team@redhat.com", "group:other-missing@redhat.com", "serviceAccount:collection-updater@test-project.iam.gserviceaccount.com"},
+		},
+		{
+			name:                 "every group without a Google group is dropped, shared bindings keep their other members",
+			setPolicyErrors:      []error{nonExistentGroup("missing-team@redhat.com"), nonExistentGroup("other-missing@redhat.com"), nil},
+			expectedSkippedGroup: []string{"missing-team@redhat.com", "other-missing@redhat.com"},
+			expectedCalls:        3,
+			expectedMembers:      []string{"group:exception-team@redhat.com", "group:good-team@redhat.com", "serviceAccount:collection-updater@test-project.iam.gserviceaccount.com"},
+		},
+		{
+			name:            "concurrent policy change is not retried",
+			setPolicyErrors: []error{status.Error(codes.FailedPrecondition, "etag mismatch")},
+			expectError:     true,
+			expectedCalls:   1,
+			expectedMembers: []string{"group:exception-team@redhat.com", "group:good-team@redhat.com", "group:missing-team@redhat.com", "group:other-missing@redhat.com", "serviceAccount:collection-updater@test-project.iam.gserviceaccount.com"},
+		},
+		{
+			name:            "unrelated invalid argument is not retried",
+			setPolicyErrors: []error{status.Error(codes.InvalidArgument, "Role roles/nonexistent is not supported for this resource.")},
+			expectError:     true,
+			expectedCalls:   1,
+			expectedMembers: []string{"group:exception-team@redhat.com", "group:good-team@redhat.com", "group:missing-team@redhat.com", "group:other-missing@redhat.com", "serviceAccount:collection-updater@test-project.iam.gserviceaccount.com"},
+		},
+		{
+			name:            "message merely quoting the diagnostic does not drop a binding",
+			setPolicyErrors: []error{status.Error(codes.InvalidArgument, "Invalid condition title 'Group good-team@redhat.com does not exist' for binding.")},
+			expectError:     true,
+			expectedCalls:   1,
+			expectedMembers: []string{"group:exception-team@redhat.com", "group:good-team@redhat.com", "group:missing-team@redhat.com", "group:other-missing@redhat.com", "serviceAccount:collection-updater@test-project.iam.gserviceaccount.com"},
+		},
+		{
+			name:            "rejected group that is not part of the policy does not loop",
+			setPolicyErrors: []error{nonExistentGroup("not-in-policy@redhat.com")},
+			expectError:     true,
+			expectedCalls:   1,
+			expectedMembers: []string{"group:exception-team@redhat.com", "group:good-team@redhat.com", "group:missing-team@redhat.com", "group:other-missing@redhat.com", "serviceAccount:collection-updater@test-project.iam.gserviceaccount.com"},
+		},
+		{
+			name:                 "dropping stops once too many groups turn out to be unresolvable",
+			policy:               newCrowdedPolicy(),
+			setPolicyErrors:      tooManyMissingErrors,
+			expectError:          true,
+			expectedSkippedGroup: tooManySkipped,
+			expectedCalls:        maxUnresolvableGroups + 1,
+			expectedMembers:      tooManyMembersLeft,
+		},
+		{
+			name:            "rejected group of a binding we do not manage is never dropped",
+			setPolicyErrors: []error{nonExistentGroup("exception-team@redhat.com")},
+			expectError:     true,
+			expectedCalls:   1,
+			expectedMembers: []string{"group:exception-team@redhat.com", "group:good-team@redhat.com", "group:missing-team@redhat.com", "group:other-missing@redhat.com", "serviceAccount:collection-updater@test-project.iam.gserviceaccount.com"},
+		},
+	}
+
+	for _, tc := range testCases {
+		t.Run(tc.name, func(t *testing.T) {
+			mockCtrl := gomock.NewController(t)
+			defer mockCtrl.Finish()
+
+			mockClient := NewMockResourceManagerClient(mockCtrl)
+			policy := tc.policy
+			if policy == nil {
+				policy = newPolicy()
+			}
+			actions := Actions{
+				Config:                config,
+				ConsolidatedIAMPolicy: policy,
+				GroupCollections: map[string][]string{
+					"good-team@redhat.com":     {"good-collection"},
+					"missing-team@redhat.com":  {"missing-collection", "another-missing-collection"},
+					"other-missing@redhat.com": {"collection"},
+				},
+			}
+
+			callCount := 0
+			mockClient.EXPECT().
+				SetIamPolicy(gomock.Any(), gomock.Any()).
+				DoAndReturn(func(ctx context.Context, req *iampb.SetIamPolicyRequest, opts ...gax.CallOption) (*iampb.Policy, error) {
+					if expected := GetProjectResourceIdNumber(config.ProjectIdNumber); req.Resource != expected {
+						t.Errorf("expected resource %s, got %s", expected, req.Resource)
+					}
+					err := tc.setPolicyErrors[callCount]
+					callCount++
+					if err != nil {
+						return nil, err
+					}
+					return req.Policy, nil
+				}).
+				Times(tc.expectedCalls)
+
+			skippedGroups, err := actions.ApplyPolicy(context.Background(), mockClient)
+			if tc.expectError && err == nil {
+				t.Fatal("expected an error, got nil")
+			}
+			if !tc.expectError && err != nil {
+				t.Fatalf("unexpected error: %v", err)
+			}
+
+			if diff := cmp.Diff(tc.expectedSkippedGroup, skippedGroups); diff != "" {
+				t.Errorf("skipped groups differ from expected, diff: %s", diff)
+			}
+
+			var members []string
+			for _, binding := range actions.ConsolidatedIAMPolicy.Bindings {
+				members = append(members, binding.Members...)
+			}
+			sort.Strings(members)
+			if diff := cmp.Diff(tc.expectedMembers, members); diff != "" {
+				t.Errorf("members left in the policy differ from expected, diff: %s", diff)
 			}
 		})
 	}

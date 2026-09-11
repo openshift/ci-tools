@@ -695,7 +695,7 @@ func (tr *testRunner) getActualGCPStateWithRetry(expectedState GCPState) GCPStat
 
 // getExpectedState reads a test config file and derives the expected state
 func getExpectedState(configPath string, config gsm.Config) (GCPState, error) {
-	desiredSAs, desiredSecrets, desiredIAMBindings, _, err := gsm.GetDesiredState(configPath, config)
+	desiredSAs, desiredSecrets, desiredIAMBindings, _, _, err := gsm.GetDesiredState(configPath, config)
 	if err != nil {
 		return GCPState{}, fmt.Errorf("failed to get desired state from config %s: %w", configPath, err)
 	}

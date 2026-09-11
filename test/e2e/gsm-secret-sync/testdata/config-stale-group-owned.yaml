@@ -1,0 +1,5 @@
+groups:
+  test-platform-ci-admins:
+    secret_collections:
+    - kept-secrets
+    - moved-secrets

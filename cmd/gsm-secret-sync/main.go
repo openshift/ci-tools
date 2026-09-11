@@ -82,7 +82,7 @@ func main() {
 
 	logrus.Info("Starting reconciliation")
 
-	desiredSAs, desiredSecrets, desiredIAMBindings, desiredCollections, err := gsm.GetDesiredState(o.configFile, config)
+	desiredSAs, desiredSecrets, desiredIAMBindings, desiredCollections, groupCollections, err := gsm.GetDesiredState(o.configFile, config)
 	if err != nil {
 		logrus.WithError(err).Fatal("Failed to parse configuration file")
 	}
@@ -125,11 +125,13 @@ func main() {
 		logrus.WithError(err).Fatal("Failed to get current secrets")
 	}
 
-	actions := gsm.ComputeDiff(config, desiredSAs, actualSAs, desiredSecrets, actualSecrets, desiredIAMBindings, policy, desiredCollections)
+	actions := gsm.ComputeDiff(config, desiredSAs, actualSAs, desiredSecrets, actualSecrets, desiredIAMBindings, policy, desiredCollections, groupCollections)
 
 	logChangeSummary(actions)
 	if !o.dryRun {
-		actions.ExecuteActions(ctx, iamClient, secretsClient, projectsClient)
+		if err := actions.ExecuteActions(ctx, iamClient, secretsClient, projectsClient); err != nil {
+			logrus.WithError(err).Fatal("Reconciliation failed")
+		}
 		logrus.Info("Reconciliation completed successfully")
 	} else {
 		logrus.Info("Dry run mode - no changes applied")

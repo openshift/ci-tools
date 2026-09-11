@@ -1,0 +1,8 @@
+groups:
+  test-platform-ci-admins:
+    secret_collections:
+    - kept-secrets
+  # No Google group exists for this Rover group, so GCP rejects every binding naming it.
+  test-platform-gsm-no-such-group:
+    secret_collections:
+    - moved-secrets

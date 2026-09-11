@@ -20,6 +20,16 @@ The tool operates on a declarative configuration file that serves as the **sourc
 3. **IAM Policy Sync**: Configures conditional IAM bindings for viewer and updater roles
 4. **State Reconciliation**: Compares desired vs actual state and applies necessary changes
 
+### Rover groups without a Google group
+
+A secret collection can only be shared with a Rover group that also has a `<group>@redhat.com`
+Google group; GCP refuses to grant access to anything else. Collections under such a group keep
+all of their secrets, but nobody in the group can access them until the Google group exists or
+the collections are moved under a group which has one. The reconciler reports these groups by
+name and fixes their access on its next run, no manual step needed.
+
+See [Adding a new secret to CI GSM](https://docs.ci.openshift.org/how-tos/adding-a-new-secret-to-ci-gsm/#step-1-create-a-secret-collection).
+
 ## Usage
 
 ```bash

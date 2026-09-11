@@ -1,0 +1,8 @@
+team-alpha@redhat.com:
+- alpha-secrets
+team-beta@redhat.com:
+- beta-delta-secrets
+team-delta@redhat.com:
+- beta-delta-secrets
+team-epsilon@redhat.com:
+- epsilon-secrets

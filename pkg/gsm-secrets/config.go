@@ -13,24 +13,12 @@ import (
 )
 
 // GetDesiredState parses the configuration file and builds the desired state specifications.
-//
-// Collections owned by a normal ("claimed") group each get an index secret, and their owning
-// group gets one viewer and one updater binding covering all of its collections.
-//
-// A collection additionally gets an updater service account, its SA secret, and
-// service-account-scoped viewer/updater bindings only if the group opted into one for it via
-// group.Target.UpdaterServiceAccounts. Group members are unaffected either way: the group
-// bindings already cover every collection the group owns.
-//
-// Collections owned only by an "unclaimed" group (see group.Target.Unclaimed) get an index
-// secret and nothing else: no service account, no SA secret and no bindings, until they are
-// moved under a normal group.
-//
-// Returns desired service account specs, secret specs, IAM binding specs, and the set of active collections.
-func GetDesiredState(configFile string, config Config) ([]ServiceAccountInfo, map[string]GCPSecret, []*iampb.Binding, map[string]bool, error) {
+// Returns desired service account specs, secret specs, IAM binding specs, the set of active
+// collections, and the collections each claimed group's e-mail owns.
+func GetDesiredState(configFile string, config Config) ([]ServiceAccountInfo, map[string]GCPSecret, []*iampb.Binding, map[string]bool, map[string][]string, error) {
 	groupConfig, err := group.LoadConfig(configFile)
 	if err != nil {
-		return nil, nil, nil, nil, fmt.Errorf("failed to load file: %w", err)
+		return nil, nil, nil, nil, nil, fmt.Errorf("failed to load file: %w", err)
 	}
 
 	var groupNames []string
@@ -118,6 +106,7 @@ func GetDesiredState(configFile string, config Config) ([]ServiceAccountInfo, ma
 
 	// Per claimed group: one viewer and one updater binding covering all of the group's
 	// collections, however many it owns.
+	groupCollections := make(map[string][]string)
 	for _, name := range groupNames {
 		groupCfg := groupConfig.Groups[name]
 		if groupCfg.Unclaimed || len(groupCfg.SecretCollections) == 0 {
@@ -129,6 +118,7 @@ func GetDesiredState(configFile string, config Config) ([]ServiceAccountInfo, ma
 		collections := make([]string, len(groupCfg.SecretCollections))
 		copy(collections, groupCfg.SecretCollections)
 		sort.Strings(collections)
+		groupCollections[email] = collections
 
 		desiredIAMBindings = append(desiredIAMBindings, &iampb.Binding{
 			Role:    config.GetSecretAccessorRole(),
@@ -148,5 +138,5 @@ func GetDesiredState(configFile string, config Config) ([]ServiceAccountInfo, ma
 		})
 	}
 
-	return desiredSAs, desiredSecrets, desiredIAMBindings, desiredCollections, nil
+	return desiredSAs, desiredSecrets, desiredIAMBindings, desiredCollections, groupCollections, nil
 }

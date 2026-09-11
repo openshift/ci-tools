@@ -583,8 +583,109 @@ func TestUnclaimedCollectionPreserved(t *testing.T) {
 	}
 }
 
+// TestSecretsSurviveMoveToStaleGroup verifies that moving a collection under a Rover group which
+// has no Google group keeps every secret of that collection, while the collections of the groups
+// which do have one are still reconciled.
+func TestSecretsSurviveMoveToStaleGroup(t *testing.T) {
+	const (
+		movedCollection = "moved-secrets"
+		keptCollection  = "kept-secrets"
+		staleGroup      = "test-platform-gsm-no-such-group@redhat.com"
+		newOwnerGroup   = multiCollectionGroup + "@redhat.com"
+	)
+	dataSecretName := fmt.Sprintf("%s__someteam__token", movedCollection)
+
+	if err := tr.runReconcilerTool("testdata/config-stale-group-owned.yaml"); err != nil {
+		t.Fatalf("failed to run reconciler tool: %v", err)
+	}
+
+	// Simulates a credential the owning team added while the collection was theirs.
+	if err := gsm.CreateOrUpdateSecret(tr.ctx, tr.secretsClient, tr.config.ProjectIdNumber, dataSecretName, []byte("secret-value"), nil, nil); err != nil {
+		t.Fatalf("failed to seed data secret %s: %v", dataSecretName, err)
+	}
+
+	output, err := tr.runReconcilerToolWithOutput("testdata/config-stale-group-moved.yaml")
+	if err == nil {
+		t.Fatal("expected the reconciler to fail on the Rover group without a Google group")
+	}
+	if !strings.Contains(output, staleGroup) {
+		t.Errorf("reconciler output does not report the group without a Google group:\n%s", output)
+	}
+
+	// Both secrets of the moved collection must have survived the move.
+	for _, name := range []string{dataSecretName, gsm.GetIndexSecretName(movedCollection)} {
+		secretPath := fmt.Sprintf("%s/secrets/%s", gsm.GetProjectResourceIdNumber(tr.config.ProjectIdNumber), name)
+		if _, err := tr.secretsClient.GetSecret(tr.ctx, &secretmanagerpb.GetSecretRequest{Name: secretPath}); err != nil {
+			t.Errorf("secret %s of the moved collection was not preserved: %v", name, err)
+		}
+	}
+
+	policy, err := gsm.GetProjectIAMPolicy(tr.ctx, tr.resourceManagerClient, tr.config.ProjectIdNumber)
+	if err != nil {
+		t.Fatalf("failed to get project IAM policy: %v", err)
+	}
+
+	// The rest of the policy must have been applied despite the rejected group, otherwise one
+	// stale group blocks every other collection. The moved collection may not be left in the
+	// bindings of its previous owner either, which is what proves the policy was rewritten
+	// rather than rejected as a whole.
+	keptCollectionBindings := 0
+	for _, binding := range policy.Bindings {
+		if slices.Contains(binding.Members, fmt.Sprintf("group:%s", staleGroup)) {
+			t.Errorf("unexpected IAM binding for the group without a Google group: %s", binding.Condition.GetTitle())
+		}
+		// The updater condition lists the bare collection and the viewer one its secrets, so
+		// match the start of either form.
+		if strings.Contains(binding.Condition.GetExpression(), `"`+movedCollection) {
+			t.Errorf("IAM binding %q still grants access to the moved collection", binding.Condition.GetTitle())
+		}
+		if strings.Contains(binding.Condition.GetExpression(), `"`+keptCollection) {
+			keptCollectionBindings++
+		}
+	}
+	if keptCollectionBindings == 0 {
+		t.Errorf("no IAM binding for collection %q, the rejected group blocked the whole policy", keptCollection)
+	}
+
+	// Moving the collection to a group which does have a Google group grants it access, and the
+	// secrets are still the ones seeded before the collection ever changed hands.
+	if err := tr.runReconcilerTool("testdata/config-stale-group-reclaimed.yaml"); err != nil {
+		t.Fatalf("failed to run reconciler tool after the collection was reclaimed: %v", err)
+	}
+
+	for _, name := range []string{dataSecretName, gsm.GetIndexSecretName(movedCollection)} {
+		secretPath := fmt.Sprintf("%s/secrets/%s", gsm.GetProjectResourceIdNumber(tr.config.ProjectIdNumber), name)
+		if _, err := tr.secretsClient.GetSecret(tr.ctx, &secretmanagerpb.GetSecretRequest{Name: secretPath}); err != nil {
+			t.Errorf("secret %s did not survive the collection being reclaimed: %v", name, err)
+		}
+	}
+
+	policy, err = gsm.GetProjectIAMPolicy(tr.ctx, tr.resourceManagerClient, tr.config.ProjectIdNumber)
+	if err != nil {
+		t.Fatalf("failed to get project IAM policy: %v", err)
+	}
+
+	newOwnerBindings := 0
+	for _, binding := range policy.Bindings {
+		if slices.Contains(binding.Members, fmt.Sprintf("group:%s", newOwnerGroup)) &&
+			strings.Contains(binding.Condition.GetExpression(), `"`+movedCollection) {
+			newOwnerBindings++
+		}
+	}
+	if newOwnerBindings != 2 {
+		t.Errorf("expected a viewer and an updater binding on %q for group %s, got %d", movedCollection, newOwnerGroup, newOwnerBindings)
+	}
+}
+
 // runReconcilerTool runs the reconciler tool's binary with the given config path
 func (tr *testRunner) runReconcilerTool(configPath string) error {
+	_, err := tr.runReconcilerToolWithOutput(configPath)
+	return err
+}
+
+// runReconcilerToolWithOutput also returns the combined output, for tests which assert on what a
+// failing run reported.
+func (tr *testRunner) runReconcilerToolWithOutput(configPath string) (string, error) {
 	credFile := os.Getenv(credentialsEnvVar)
 	cmd := exec.Command(tr.binaryPath,
 		"--config", configPath,
@@ -600,12 +701,12 @@ func (tr *testRunner) runReconcilerTool(configPath string) error {
 	output, err := cmd.CombinedOutput()
 	logrus.Infof("Reconciler output:\n%s", string(output))
 	if err != nil {
-		return fmt.Errorf("google secret manager sync failed: %w\n", err)
+		return string(output), fmt.Errorf("google secret manager sync failed: %w\n", err)
 	}
 	if *logLevel == "debug" {
 		fmt.Print(string(output))
 	}
-	return nil
+	return string(output), nil
 }
 
 // getActualGCPState returns the current state of resources in the GCP project.

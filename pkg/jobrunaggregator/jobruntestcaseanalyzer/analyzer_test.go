@@ -4,6 +4,7 @@ import (
 	"context"
 	"errors"
 	"testing"
+	"time"
 
 	"github.com/spf13/pflag"
 	"github.com/stretchr/testify/assert"
@@ -117,6 +118,7 @@ func createJobs() []jobrunaggregatorapi.JobRowWithVariants {
 
 type analyzerTestJobRun struct {
 	jobrunaggregatorapi.JobRunInfo
+	jobName     string
 	id          string
 	humanURL    string
 	artifactURL string
@@ -125,6 +127,7 @@ type analyzerTestJobRun struct {
 	events      *[]string
 }
 
+func (j *analyzerTestJobRun) GetJobName() string        { return j.jobName }
 func (j *analyzerTestJobRun) GetJobRunID() string       { return j.id }
 func (j *analyzerTestJobRun) GetHumanURL() string       { return j.humanURL }
 func (j *analyzerTestJobRun) GetGCSArtifactURL() string { return j.artifactURL }
@@ -142,11 +145,8 @@ func (j *analyzerTestJobRun) ClearAllContent() {
 	}
 }
 
-func nestedTestSuites(id testIdentifier, failure bool) *junit.TestSuites {
-	testCase := &junit.TestCase{Name: id.testName}
-	if failure {
-		testCase.FailureOutput = &junit.FailureOutput{Message: "failed"}
-	}
+func nestedTestSuitesWithTestCase(id testIdentifier, testCase *junit.TestCase) *junit.TestSuites {
+	testCase.Name = id.testName
 
 	child := &junit.TestSuite{Name: id.testSuites[len(id.testSuites)-1], TestCases: []*junit.TestCase{testCase}}
 	for i := len(id.testSuites) - 2; i >= 0; i-- {
@@ -155,12 +155,21 @@ func nestedTestSuites(id testIdentifier, failure bool) *junit.TestSuites {
 	return &junit.TestSuites{Suites: []*junit.TestSuite{child}}
 }
 
+func nestedTestSuites(id testIdentifier, failure bool) *junit.TestSuites {
+	testCase := &junit.TestCase{}
+	if failure {
+		testCase.FailureOutput = &junit.FailureOutput{Message: "failed"}
+	}
+	return nestedTestSuitesWithTestCase(id, testCase)
+}
+
 func TestMinimumRequiredPassesTestCaseCheckerIncrementalFold(t *testing.T) {
 	id := testIdentifier{testSuites: []string{"outer", "inner"}, testName: "target test"}
 	jobRuns := []*analyzerTestJobRun{
 		{id: "pass", humanURL: "https://prow/pass", artifactURL: "https://gcs/pass", testSuites: nestedTestSuites(id, false)},
 		{id: "fail", humanURL: "https://prow/fail", artifactURL: "https://gcs/fail", testSuites: nestedTestSuites(id, true)},
-		{id: "skip", humanURL: "https://prow/skip", artifactURL: "https://gcs/skip", testSuites: &junit.TestSuites{Suites: []*junit.TestSuite{{Name: "other"}}}},
+		{id: "skip", humanURL: "https://prow/skip", artifactURL: "https://gcs/skip", testSuites: nestedTestSuitesWithTestCase(id, &junit.TestCase{SkipMessage: &junit.SkipMessage{Message: "not applicable"}})},
+		{id: "absent", humanURL: "https://prow/absent", artifactURL: "https://gcs/absent", testSuites: &junit.TestSuites{Suites: []*junit.TestSuite{{Name: "other"}}}},
 	}
 
 	for _, tc := range []struct {
@@ -196,28 +205,40 @@ func TestMinimumRequiredPassesTestCaseCheckerIncrementalFold(t *testing.T) {
 			require.NoError(t, yaml.Unmarshal([]byte(testCase.SystemOut), details))
 			assert.Equal(t, "target test", details.Name)
 			assert.Equal(t, "outer"+jobrunaggregatorlib.TestSuitesSeparator+"inner", details.TestSuiteName)
-			assert.Equal(t, "Total job runs: 3, passes: 1, failures: 1, skips 1", details.Summary)
+			assert.Equal(t, "Total job runs: 4, passes: 1, failures: 1, skips: 2, unfinished: 0, missing JUnit: 0", details.Summary)
 			require.Len(t, details.Passes, 1)
 			require.Len(t, details.Failures, 1)
-			require.Len(t, details.Skips, 1)
+			require.Len(t, details.Skips, 2)
 			assert.Equal(t, "pass", details.Passes[0].JobRunID)
 			assert.Equal(t, "https://prow/pass", details.Passes[0].HumanURL)
 			assert.Equal(t, "https://gcs/pass", details.Passes[0].GCSArtifactURL)
 			assert.Equal(t, "fail", details.Failures[0].JobRunID)
 			assert.Equal(t, "skip", details.Skips[0].JobRunID)
+			assert.Equal(t, "absent", details.Skips[1].JobRunID)
 		})
 	}
 }
 
 type recordingTestCaseChecker struct {
-	events *[]string
-	added  []string
+	events     *[]string
+	added      []string
+	incomplete []string
 }
 
 func (c *recordingTestCaseChecker) AddJobRun(jobRun jobrunaggregatorapi.JobRunInfo, _ *junit.TestSuites) {
 	id := jobRun.GetJobRunID()
 	c.added = append(c.added, id)
 	*c.events = append(*c.events, "add:"+id)
+}
+
+func (c *recordingTestCaseChecker) AddIncompleteJobRun(jobRun jobrunaggregatorapi.JobRunInfo, status incompleteJobRunStatus) {
+	id := jobRun.GetJobRunID()
+	label := "missing-junit"
+	if status == jobRunUnfinished {
+		label = "unfinished"
+	}
+	c.incomplete = append(c.incomplete, label+":"+id)
+	*c.events = append(*c.events, "incomplete:"+label+":"+id)
 }
 
 func (c *recordingTestCaseChecker) TestSuite() *junit.TestSuite {
@@ -228,23 +249,76 @@ func (c *recordingTestCaseChecker) TestSuite() *junit.TestSuite {
 func TestRunTestCaseCheckersProcessesAndCleansIncrementally(t *testing.T) {
 	events := []string{}
 	checker := &recordingTestCaseChecker{events: &events}
-	options := &JobRunTestCaseAnalyzerOptions{testCaseCheckers: []TestCaseChecker{checker}}
+	options := &JobRunTestCaseAnalyzerOptions{testCaseCheckers: []incompleteTestCaseChecker{checker}}
 	suites := &junit.TestSuites{Suites: []*junit.TestSuite{{Name: "suite"}}}
 	finished := &analyzerTestJobRun{id: "finished", testSuites: suites, events: &events}
 	readError := &analyzerTestJobRun{id: "read-error", err: errors.New("could not read junit"), events: &events}
+	missingJUnit := &analyzerTestJobRun{id: "missing-junit", testSuites: &junit.TestSuites{}, events: &events}
 	unfinished := &analyzerTestJobRun{id: "unfinished", testSuites: suites, events: &events}
 
-	got := options.runTestCaseCheckers(context.Background(), []jobrunaggregatorapi.JobRunInfo{finished, readError}, []jobrunaggregatorapi.JobRunInfo{unfinished})
+	got := options.runTestCaseCheckers(context.Background(), []jobrunaggregatorapi.JobRunInfo{finished, readError, missingJUnit}, []jobrunaggregatorapi.JobRunInfo{unfinished})
 
 	assert.Equal(t, []string{
 		"get:finished", "add:finished", "clear:finished",
-		"get:read-error",
-		"get:unfinished", "add:unfinished", "clear:unfinished",
+		"get:read-error", "incomplete:missing-junit:read-error", "clear:read-error",
+		"get:missing-junit", "incomplete:missing-junit:missing-junit", "clear:missing-junit",
+		"incomplete:unfinished:unfinished",
 		"suite",
-	}, events, "each successful job run must be folded and cleared before the next is fetched; read errors are skipped")
-	assert.Equal(t, []string{"finished", "unfinished"}, checker.added)
+	}, events, "finished runs are cleared incrementally while incomplete runs retain their distinct status")
+	assert.Equal(t, []string{"finished"}, checker.added)
+	assert.Equal(t, []string{"missing-junit:read-error", "missing-junit:missing-junit", "unfinished:unfinished"}, checker.incomplete)
 	assert.Equal(t, "payload-cross-jobs", got.Name)
-	assert.Equal(t, uint(2), got.NumTests)
+	assert.Equal(t, uint(1), got.NumTests)
 	assert.Zero(t, got.NumFailed)
 	require.Len(t, got.Children, 1)
+}
+
+func TestIncompleteJobRunsDoNotCountAsPassesOrSkips(t *testing.T) {
+	id := testIdentifier{testSuites: []string{"step graph"}, testName: "Run test phase"}
+	checker := newMinimumRequiredPassesTestCaseChecker(id, "", 1)
+	options := &JobRunTestCaseAnalyzerOptions{testCaseCheckers: []incompleteTestCaseChecker{checker}}
+	missingJUnit := &analyzerTestJobRun{id: "missing-junit", testSuites: &junit.TestSuites{}}
+	unfinished := &analyzerTestJobRun{id: "unfinished"}
+
+	suite := options.runTestCaseCheckers(context.Background(), []jobrunaggregatorapi.JobRunInfo{missingJUnit}, []jobrunaggregatorapi.JobRunInfo{unfinished})
+	require.Len(t, suite.Children, 1)
+	require.Len(t, suite.Children[0].Children, 1)
+	require.Len(t, suite.Children[0].Children[0].TestCases, 1)
+	testCase := suite.Children[0].Children[0].TestCases[0]
+	require.NotNil(t, testCase.FailureOutput, "incomplete inputs must not satisfy the minimum-success rule")
+
+	details := &jobrunaggregatorlib.TestCaseDetails{}
+	require.NoError(t, yaml.Unmarshal([]byte(testCase.SystemOut), details))
+	assert.Equal(t, "Total job runs: 2, passes: 0, failures: 0, skips: 0, unfinished: 1, missing JUnit: 1", details.Summary)
+	assert.Empty(t, details.Passes)
+	assert.Empty(t, details.Failures)
+	assert.Empty(t, details.Skips)
+	require.Len(t, details.Unfinished, 1)
+	require.Len(t, details.MissingJUnits, 1)
+	assert.Equal(t, "unfinished", details.Unfinished[0].JobRunID)
+	assert.Equal(t, "missing-junit", details.MissingJUnits[0].JobRunID)
+}
+
+func TestResultCollectionDeadlineAllowsFiveHourCompletion(t *testing.T) {
+	jobStart := time.Date(2026, time.September, 1, 12, 0, 0, 0, time.UTC)
+	lateCompletion := jobStart.Add(5 * time.Hour)
+	deadline := resultCollectionDeadline(jobStart, maxTimeout)
+
+	assert.Equal(t, jobStart.Add(5*time.Hour+10*time.Minute), deadline)
+	assert.True(t, lateCompletion.Before(deadline), "a result completing at five hours must remain eligible")
+}
+
+func validAnalyzerFlags(timeout time.Duration) *JobRunsTestCaseAnalyzerFlags {
+	flags := NewJobRunsTestCaseAnalyzerFlags()
+	flags.Authentication.GoogleServiceAccountCredentialFile = "unused-test-credential"
+	flags.TestGroup = overallTestGroup
+	flags.PayloadTag = "test-payload"
+	flags.Timeout = timeout
+	return flags
+}
+
+func TestValidateTimeoutBudget(t *testing.T) {
+	assert.NoError(t, validAnalyzerFlags(maxTimeout).Validate())
+	assert.EqualError(t, validAnalyzerFlags(maxTimeout+time.Second).Validate(), "timeout value of 5h30m1s is out of range, valid value should be at most 5h30m0s")
+	assert.EqualError(t, validAnalyzerFlags(resultProcessingReserve).Validate(), "timeout value of 20m0s must be greater than the 20m0s result processing reserve")
 }

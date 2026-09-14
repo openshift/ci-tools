@@ -25,16 +25,18 @@ import (
 )
 
 type options struct {
-	logLevelRaw      string
-	logLevel         logrus.Level
-	manifestDirRaw   flagutil.Strings
-	manifestDirs     sets.Set[string]
-	ldapServer       string
-	validateSubjects bool
-	printConfig      bool
-	groupsFile       string
-	configFile       string
-	githubUsersFile  string
+	logLevelRaw          string
+	logLevel             logrus.Level
+	manifestDirRaw       flagutil.Strings
+	manifestDirs         sets.Set[string]
+	ldapServer           string
+	ldapBindDN           string
+	ldapBindPasswordFile string
+	validateSubjects     bool
+	printConfig          bool
+	groupsFile           string
+	configFile           string
+	githubUsersFile      string
 }
 
 func parseOptions() *options {
@@ -45,6 +47,8 @@ func parseOptions() *options {
 	fs.BoolVar(&opts.validateSubjects, "validate-subjects", false, "Whether to validate subjects such as group and users in the manifests")
 	fs.BoolVar(&opts.printConfig, "print-config", false, "Print the config, removing spaces, comments and ordering the keys.")
 	fs.StringVar(&opts.ldapServer, "ldap-server", "ldap.corp.redhat.com", "LDAP server")
+	fs.StringVar(&opts.ldapBindDN, "ldap-bind-dn", "", "LDAP bind DN (or LDAP_BIND_DN)")
+	fs.StringVar(&opts.ldapBindPasswordFile, "ldap-bind-password-file", "", "File containing LDAP bind password (or LDAP_BIND_PASSWORD)")
 	fs.StringVar(&opts.groupsFile, "groups-file", "/tmp/groups.yaml", "The file to store the groups in yaml format")
 	fs.StringVar(&opts.configFile, "config-file", "", "The yaml file storing the config file for the groups")
 	fs.StringVar(&opts.githubUsersFile, "github-users-file", "", "File used to store GitHub users")
@@ -61,14 +65,44 @@ func (o *options) validate() error {
 	}
 	o.logLevel = level
 
-	values := o.manifestDirRaw.Strings()
-	if len(values) == 0 {
+	if len(o.manifestDirRaw.Strings()) == 0 && o.manifestDirs.Len() == 0 {
 		return fmt.Errorf("--manifest-dir must be set")
 	}
 	if o.validateSubjects && o.githubUsersFile != "" {
 		return fmt.Errorf("--github-users-file cannot be set when --validate-subjects is true")
 	}
+	if o.needsLDAP() {
+		if err := o.requireLDAPBindCredentials(); err != nil {
+			return err
+		}
+	}
 	return nil
+}
+
+func (o *options) needsLDAP() bool {
+	return !o.validateSubjects && !o.printConfig
+}
+
+func (o *options) requireLDAPBindCredentials() error {
+	dn, password, err := ldapCredentials(o.ldapBindDN, o.ldapBindPasswordFile)
+	if err != nil {
+		return err
+	}
+	if dn == "" || password == "" {
+		return fmt.Errorf("LDAP bind credentials are required (set --ldap-bind-dn and --ldap-bind-password-file or LDAP_BIND_DN and LDAP_BIND_PASSWORD)")
+	}
+	return nil
+}
+
+func (o *options) dialLDAPServer() (*ldapv3.Conn, error) {
+	if err := o.requireLDAPBindCredentials(); err != nil {
+		return nil, err
+	}
+	bindDN, bindPassword, err := ldapCredentials(o.ldapBindDN, o.ldapBindPasswordFile)
+	if err != nil {
+		return nil, err
+	}
+	return dialLDAP(o.ldapServer, bindDN, bindPassword)
 }
 
 func addSchemes() error {
@@ -127,14 +161,14 @@ func main() {
 	}
 
 	// validate runs as a presubmit which does not have access to Red Hat Intranet
-	var conn *ldapv3.Conn
-	if !opts.validateSubjects {
-		c, err := ldapv3.DialURL(fmt.Sprintf("ldap://%s", opts.ldapServer))
+	var conn ldapConn
+	if opts.needsLDAP() {
+		c, err := opts.dialLDAPServer()
 		if err != nil {
-			logrus.Fatal(err)
+			logrus.WithError(err).Fatal("failed to connect to LDAP")
 		}
 		conn = c
-		defer conn.Close()
+		defer c.Close()
 	}
 
 	groupCollector := newYamlGroupCollector(opts.validateSubjects)

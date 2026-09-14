@@ -19,8 +19,10 @@ clusters.
 
 ## How it works
 
-`sync-rover-groups` collects the groups in the manifests and resolves their members by querying the Red Hat LDAP server, 
+`sync-rover-groups` collects the groups in the manifests and resolves their members by querying the Red Hat LDAP server,
 and saves the resolved groups in a file.
+
+LDAP bind is required when resolving Rover groups (`--ldap-bind-dn` / `--ldap-bind-password-file`, or `LDAP_BIND_DN` / `LDAP_BIND_PASSWORD`). `--validate-subjects` and `--print-config` do not use LDAP.
 
 ## How is it deployed
 

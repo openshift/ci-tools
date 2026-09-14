@@ -180,6 +180,34 @@ func TestWithPresubmitFrom(t *testing.T) {
 			expected:     &ReleaseBuildConfiguration{InputConfiguration: InputConfiguration{Releases: map[string]UnresolvedRelease{LatestReleaseName: {Release: &Release{Version: "4.9.base"}}}}},
 			defaultTests: true,
 		},
+		{
+			name:         "enable_secrets_store_csi_driver from source is added to a base without prowgen",
+			base:         &ReleaseBuildConfiguration{},
+			source:       &ReleaseBuildConfiguration{Prowgen: &ProwgenOverrides{EnableSecretsStoreCSIDriver: true}},
+			expected:     &ReleaseBuildConfiguration{Prowgen: &ProwgenOverrides{EnableSecretsStoreCSIDriver: true}},
+			defaultTests: true,
+		},
+		{
+			name:         "enable_secrets_store_csi_driver from source does not clobber other prowgen options in base",
+			base:         &ReleaseBuildConfiguration{Prowgen: &ProwgenOverrides{Private: true}},
+			source:       &ReleaseBuildConfiguration{Prowgen: &ProwgenOverrides{EnableSecretsStoreCSIDriver: true}},
+			expected:     &ReleaseBuildConfiguration{Prowgen: &ProwgenOverrides{Private: true, EnableSecretsStoreCSIDriver: true}},
+			defaultTests: true,
+		},
+		{
+			name:         "prowgen options other than enable_secrets_store_csi_driver are not taken from source",
+			base:         &ReleaseBuildConfiguration{},
+			source:       &ReleaseBuildConfiguration{Prowgen: &ProwgenOverrides{Private: true}},
+			expected:     &ReleaseBuildConfiguration{},
+			defaultTests: true,
+		},
+		{
+			name:         "enable_secrets_store_csi_driver from base is kept when source does not set it",
+			base:         &ReleaseBuildConfiguration{Prowgen: &ProwgenOverrides{EnableSecretsStoreCSIDriver: true}},
+			source:       &ReleaseBuildConfiguration{},
+			expected:     &ReleaseBuildConfiguration{Prowgen: &ProwgenOverrides{EnableSecretsStoreCSIDriver: true}},
+			defaultTests: true,
+		},
 	}
 	for _, tc := range testCases {
 		t.Run(tc.name, func(t *testing.T) {

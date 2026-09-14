@@ -299,13 +299,13 @@ func TestIncompleteJobRunsDoNotCountAsPassesOrSkips(t *testing.T) {
 	assert.Equal(t, "missing-junit", details.MissingJUnits[0].JobRunID)
 }
 
-func TestResultCollectionDeadlineAllowsFiveHourCompletion(t *testing.T) {
+func TestResultCollectionDeadlineReservesProcessingTime(t *testing.T) {
 	jobStart := time.Date(2026, time.September, 1, 12, 0, 0, 0, time.UTC)
-	lateCompletion := jobStart.Add(5 * time.Hour)
+	lateCompletion := jobStart.Add(5*time.Hour + 20*time.Minute)
 	deadline := resultCollectionDeadline(jobStart, maxTimeout)
 
-	assert.Equal(t, jobStart.Add(5*time.Hour+10*time.Minute), deadline)
-	assert.True(t, lateCompletion.Before(deadline), "a result completing at five hours must remain eligible")
+	assert.Equal(t, jobStart.Add(5*time.Hour+30*time.Minute), deadline)
+	assert.True(t, lateCompletion.Before(deadline), "a result completing within the collection window must remain eligible")
 }
 
 func validAnalyzerFlags(timeout time.Duration) *JobRunsTestCaseAnalyzerFlags {
@@ -319,6 +319,6 @@ func validAnalyzerFlags(timeout time.Duration) *JobRunsTestCaseAnalyzerFlags {
 
 func TestValidateTimeoutBudget(t *testing.T) {
 	assert.NoError(t, validAnalyzerFlags(maxTimeout).Validate())
-	assert.EqualError(t, validAnalyzerFlags(maxTimeout+time.Second).Validate(), "timeout value of 5h30m1s is out of range, valid value should be at most 5h30m0s")
+	assert.EqualError(t, validAnalyzerFlags(maxTimeout+time.Second).Validate(), "timeout value of 5h50m1s is out of range, valid value should be at most 5h50m0s")
 	assert.EqualError(t, validAnalyzerFlags(resultProcessingReserve).Validate(), "timeout value of 20m0s must be greater than the 20m0s result processing reserve")
 }

@@ -5,6 +5,7 @@ import (
 
 	"github.com/openshift/ci-tools/pkg/api"
 	gsm "github.com/openshift/ci-tools/pkg/gsm-secrets"
+	"github.com/openshift/ci-tools/pkg/secrets"
 )
 
 // GSMConfiguration contains all Google Secret Manager (GSM) related configuration
@@ -14,6 +15,7 @@ type GSMConfiguration struct {
 	CredentialsFile string
 	Client          *secretmanager.Client
 	ProjectConfig   gsm.Config
+	Censor          *secrets.DynamicCensor
 }
 
 // CollectionGroupKey identifies a unique (collection, group) pair for caching discovered fields.

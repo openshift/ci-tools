@@ -1031,6 +1031,7 @@ func (o *options) Run() (errs []error) {
 			CredentialsFile: o.gsmCredentialsFile,
 			ProjectConfig:   o.gsmProjectConfig,
 			Client:          gsmClient,
+			Censor:          o.censor,
 		}
 	}
 

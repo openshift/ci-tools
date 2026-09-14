@@ -302,6 +302,9 @@ func (s *multiStageTestStep) run(ctx context.Context) error {
 			if err := s.createSPCs(ctx, gsmCredentials); err != nil {
 				return fmt.Errorf("failed to create SecretProviderClass objects: %w", err)
 			}
+			if err := csi_secrets.RegisterGSMCredentialsForCensoring(ctx, s.gsm.Client, s.gsm.ProjectConfig, s.gsm.Censor, gsmCredentials); err != nil {
+				return fmt.Errorf("failed to register GSM credentials for censoring: %w", err)
+			}
 		}
 	} else {
 		// Legacy path - only K8s Secrets are expected and old credentials stanza is used

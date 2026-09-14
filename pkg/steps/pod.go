@@ -524,6 +524,10 @@ func (s *podStep) resolveAndCreateGSMSecrets(ctx context.Context) error {
 				return fmt.Errorf("could not create SecretProviderClass: %w", err)
 			}
 		}
+		if err := csi_secrets.RegisterGSMCredentialsForCensoring(ctx, s.config.GSMConfig.Client,
+			s.config.GSMConfig.ProjectConfig, s.config.GSMConfig.Censor, gsmCredentials); err != nil {
+			return fmt.Errorf("failed to register GSM credentials for censoring: %w", err)
+		}
 	}
 
 	s.resolvedGSMCredentials = gsmCredentials

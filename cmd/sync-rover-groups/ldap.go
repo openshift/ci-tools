@@ -1,7 +1,9 @@
 package main
 
 import (
+	"crypto/tls"
 	"fmt"
+	"net"
 	"os"
 	"strings"
 
@@ -170,6 +172,19 @@ func dialLDAP(server, bindDN, password string) (*ldapv3.Conn, error) {
 	conn, err := ldapv3.DialURL(fmt.Sprintf("ldap://%s", server))
 	if err != nil {
 		return nil, fmt.Errorf("dial ldap server %s: %w", server, err)
+	}
+
+	hostname := server
+	if h, _, err := net.SplitHostPort(hostname); err == nil {
+		hostname = h
+	}
+	tlsConfig := &tls.Config{
+		ServerName:         hostname,
+		InsecureSkipVerify: false,
+	}
+	if err := conn.StartTLS(tlsConfig); err != nil {
+		conn.Close()
+		return nil, fmt.Errorf("failed to upgrade connection with starttls %s: %w", server, err)
 	}
 	if err := conn.Bind(bindDN, password); err != nil {
 		conn.Close()

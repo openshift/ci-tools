@@ -9,6 +9,7 @@ presubmits:
     decorate: true
     decoration_config:
       skip_cloning: true
+    job_queue_name: queue
     labels:
       ci.openshift.io/generator: prowgen
       pj-rehearse.openshift.io/can-be-rehearsed: "true"

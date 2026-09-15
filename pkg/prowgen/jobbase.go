@@ -209,6 +209,9 @@ func NewProwJobBaseBuilderForTest(configSpec *cioperatorapi.ReleaseBuildConfigur
 			)
 		}
 	}
+
+	p.base.JobQueueName = test.JobQueueName
+
 	return p, nil
 }
 

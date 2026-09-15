@@ -17,12 +17,13 @@ import (
 type Validator struct {
 	validClusterProfiles    *api.ClusterProfiles
 	validClusterClaimOwners api.ClusterClaimOwnersMap
+	validJobQueues          *api.JobQueueConfig
 	// hasTrapCache avoids redundant regexp searches on step commands.
 	hasTrapCache map[string]bool
 }
 
 // NewValidator creates an object that optimizes bulk validations.
-func NewValidator(clusterProfiles *api.ClusterProfiles, clusterClaimOwners api.ClusterClaimOwnersMap) Validator {
+func NewValidator(clusterProfiles *api.ClusterProfiles, clusterClaimOwners api.ClusterClaimOwnersMap, jobQueues *api.JobQueueConfig) Validator {
 	v := Validator{
 		hasTrapCache:         make(map[string]bool),
 		validClusterProfiles: clusterProfiles,
@@ -31,6 +32,7 @@ func NewValidator(clusterProfiles *api.ClusterProfiles, clusterClaimOwners api.C
 	if clusterClaimOwners != nil {
 		v.validClusterClaimOwners = clusterClaimOwners
 	}
+	v.validJobQueues = jobQueues
 
 	return v
 }
@@ -248,6 +250,9 @@ func validateExternalConfiguration(ctx *configContext, externalImages map[string
 
 func (v *Validator) ValidateTestStepConfiguration(ctx *configContext, config *api.ReleaseBuildConfiguration, resolved bool) []error {
 	var validationErrors []error
+	if v.validJobQueues != nil {
+		validationErrors = ValidateJobQueueReferences(config.Tests, *v.validJobQueues)
+	}
 
 	releases := sets.New[string]()
 	for name := range config.Releases {

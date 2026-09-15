@@ -12,6 +12,7 @@ resources:
 tests:
 - as: test
   commands: make test
+  job_queue_name: queue
   container:
     from: src
 zz_generated_metadata:

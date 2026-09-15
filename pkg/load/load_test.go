@@ -4,6 +4,7 @@ import (
 	"os"
 	"path/filepath"
 	"reflect"
+	"strings"
 	"testing"
 
 	"github.com/ghodss/yaml"
@@ -460,6 +461,118 @@ func TestClusterClaimOwnersConfig(t *testing.T) {
 			actual, _ := ClusterClaimOwnersConfig(tmpFile.Name())
 			if !reflect.DeepEqual(tc.expected, actual) {
 				t.Errorf("\nExpected: %v, \nActual: %v", tc.expected, actual)
+			}
+		})
+	}
+}
+
+func writeJobQueueTestFile(t *testing.T, root, name, content string) {
+	t.Helper()
+	path := filepath.Join(root, name)
+	if err := os.MkdirAll(filepath.Dir(path), 0755); err != nil {
+		t.Fatalf("create parent directory for %s: %v", name, err)
+	}
+	if err := os.WriteFile(path, []byte(content), 0644); err != nil {
+		t.Fatalf("write %s: %v", name, err)
+	}
+}
+
+func TestJobQueuesEmptyPath(t *testing.T) {
+	actual, err := JobQueues("")
+	if err != nil {
+		t.Fatalf("empty path must load an empty configuration: %v", err)
+	}
+	expected := api.JobQueueConfig{JobQueues: map[string]api.JobQueue{}}
+	if diff := cmp.Diff(expected, actual); diff != "" {
+		t.Errorf("loaded job queues differ from expected (-want +got):\n%s", diff)
+	}
+}
+
+func TestJobQueues(t *testing.T) {
+	root := t.TempDir()
+	files := map[string]string{
+		"README.md":                          "Job queue documentation",
+		"shiftstack/OWNERS":                  "approvers:\n- shiftstack-team\n",
+		"shiftstack/job-queues.yaml":         "job_queues:\n  shiftstack:\n    capacity: 10\n    description: Shiftstack leases\n",
+		"other/nested/job-queues-config.yml": "job_queues:\n  other:\n    capacity: 0\n    description: Paused queue\n",
+	}
+	for name, content := range files {
+		writeJobQueueTestFile(t, root, name, content)
+	}
+
+	actual, err := JobQueues(root)
+	if err != nil {
+		t.Fatalf("load job queues: %v", err)
+	}
+	expected := api.JobQueueConfig{JobQueues: map[string]api.JobQueue{
+		"shiftstack": {Capacity: 10, Description: "Shiftstack leases"},
+		"other":      {Capacity: 0, Description: "Paused queue"},
+	}}
+	if diff := cmp.Diff(expected, actual); diff != "" {
+		t.Errorf("loaded job queues differ from expected (-want +got):\n%s", diff)
+	}
+}
+
+func TestJobQueuesErrors(t *testing.T) {
+	testCases := []struct {
+		name          string
+		files         map[string]string
+		errorContains []string
+	}{
+		{
+			name:          "no definitions",
+			files:         map[string]string{"README.md": "documentation"},
+			errorContains: []string{"no job queue definitions"},
+		},
+		{
+			name:          "empty map",
+			files:         map[string]string{"team/job-queues.yaml": "job_queues: {}\n"},
+			errorContains: []string{"team/job-queues.yaml", "must define at least one job queue"},
+		},
+		{
+			name:          "malformed yaml",
+			files:         map[string]string{"team/job-queues.yaml": "job_queues: [\n"},
+			errorContains: []string{"team/job-queues.yaml", "decode"},
+		},
+		{
+			name:          "unknown field",
+			files:         map[string]string{"team/job-queues.yaml": "unknown: true\njob_queues:\n  queue:\n    capacity: 1\n    description: queue\n"},
+			errorContains: []string{"team/job-queues.yaml", "unknown"},
+		},
+		{
+			name:          "blank description",
+			files:         map[string]string{"team/job-queues.yaml": "job_queues:\n  queue:\n    capacity: 1\n    description: '  '\n"},
+			errorContains: []string{"queue", "description must not be empty"},
+		},
+		{
+			name:          "negative capacity",
+			files:         map[string]string{"team/job-queues.yaml": "job_queues:\n  queue:\n    capacity: -1\n    description: queue\n"},
+			errorContains: []string{"queue", "capacity must not be negative"},
+		},
+		{
+			name: "duplicate",
+			files: map[string]string{
+				"alpha/job-queues.yaml": "job_queues:\n  shared:\n    capacity: 1\n    description: alpha\n",
+				"beta/job-queues.yaml":  "job_queues:\n  shared:\n    capacity: 2\n    description: beta\n",
+			},
+			errorContains: []string{"shared", "alpha/job-queues.yaml", "beta/job-queues.yaml"},
+		},
+	}
+
+	for _, tc := range testCases {
+		t.Run(tc.name, func(t *testing.T) {
+			root := t.TempDir()
+			for name, content := range tc.files {
+				writeJobQueueTestFile(t, root, name, content)
+			}
+			_, err := JobQueues(root)
+			if err == nil {
+				t.Fatal("expected an error")
+			}
+			for _, expected := range tc.errorContains {
+				if !strings.Contains(err.Error(), expected) {
+					t.Errorf("expected error %q to contain %q", err, expected)
+				}
 			}
 		})
 	}

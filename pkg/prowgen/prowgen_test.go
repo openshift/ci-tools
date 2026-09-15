@@ -1029,6 +1029,21 @@ func TestGenerateJobs(t *testing.T) {
 			},
 		},
 		{
+			id: "job queue name is propagated to all test job types",
+			config: &ciop.ReleaseBuildConfiguration{
+				Tests: []ciop.TestStepConfiguration{
+					{As: "presubmit", Commands: "true", ContainerTestConfiguration: &ciop.ContainerTestConfiguration{From: "src"}, JobQueueName: "queue"},
+					{As: "periodic", Commands: "true", ContainerTestConfiguration: &ciop.ContainerTestConfiguration{From: "src"}, Cron: utilpointer.String(cron), Presubmit: true, JobQueueName: "queue"},
+					{As: "postsubmit", Commands: "true", ContainerTestConfiguration: &ciop.ContainerTestConfiguration{From: "src"}, Postsubmit: true, JobQueueName: "queue"},
+				},
+			},
+			repoInfo: &ciop.Metadata{
+				Org:    "organization",
+				Repo:   "repository",
+				Branch: "branch",
+			},
+		},
+		{
 			id: "postsubmit with max_concurrency from test config",
 			config: &ciop.ReleaseBuildConfiguration{
 				Tests: []ciop.TestStepConfiguration{

@@ -206,7 +206,7 @@ func Registry(root string, flags RegistryFlag) (registry.ReferenceByName, regist
 		return nil, nil, nil, api.ClusterProfiles{}, nil, nil, nil, err
 	}
 	// validate the integrity of each reference
-	v := validation.NewValidator(nil, nil)
+	v := validation.NewValidator(nil, nil, nil)
 	var validationErrors []error
 	for _, r := range references {
 		if err := v.IsValidReference(r); err != nil {
@@ -283,4 +283,64 @@ func ClusterClaimOwnersConfig(configPath string) (api.ClusterClaimOwnersMap, err
 		clusterClaimOwnersMap[c.Claim] = c
 	}
 	return clusterClaimOwnersMap, nil
+}
+
+// JobQueues recursively loads job queue definitions from jobQueuePath.
+func JobQueues(jobQueuePath string) (api.JobQueueConfig, error) {
+	result := api.JobQueueConfig{JobQueues: map[string]api.JobQueue{}}
+	if jobQueuePath == "" {
+		return result, nil
+	}
+
+	sources := map[string]string{}
+	if err := filepath.WalkDir(jobQueuePath, func(path string, entry fs.DirEntry, walkErr error) error {
+		if walkErr != nil {
+			return walkErr
+		}
+		if entry.IsDir() {
+			return nil
+		}
+		ext := strings.ToLower(filepath.Ext(path))
+		if ext != ".yaml" && ext != ".yml" {
+			return nil
+		}
+		relativePath, err := filepath.Rel(jobQueuePath, path)
+		if err != nil {
+			return fmt.Errorf("determine relative path for %s: %w", path, err)
+		}
+		data, err := os.ReadFile(path)
+		if err != nil {
+			return fmt.Errorf("read %s: %w", relativePath, err)
+		}
+		var config api.JobQueueConfig
+		if err := yaml.UnmarshalStrict(data, &config); err != nil {
+			return fmt.Errorf("decode %s: %w", relativePath, err)
+		}
+		if len(config.JobQueues) == 0 {
+			return fmt.Errorf("%s must define at least one job queue", relativePath)
+		}
+		for name, queue := range config.JobQueues {
+			if strings.TrimSpace(queue.Description) == "" {
+				return fmt.Errorf("job queue %q in %s: description must not be empty", name, relativePath)
+			}
+			if queue.Capacity < 0 {
+				return fmt.Errorf("job queue %q in %s: capacity must not be negative", name, relativePath)
+			}
+			if previous, exists := sources[name]; exists {
+				return fmt.Errorf("job queue %q is defined in both %s and %s", name, previous, relativePath)
+			}
+			sources[name] = relativePath
+			result.JobQueues[name] = queue
+		}
+
+		return nil
+	}); err != nil {
+		return api.JobQueueConfig{}, err
+
+	}
+	if len(result.JobQueues) == 0 {
+		return api.JobQueueConfig{}, fmt.Errorf("no job queue definitions found in %s", jobQueuePath)
+	}
+
+	return result, nil
 }

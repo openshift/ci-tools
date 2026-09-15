@@ -268,6 +268,22 @@ func TestGenerateJobBase(t *testing.T) {
 	}
 }
 
+func TestProwJobBaseBuilderPropagatesJobQueueName(t *testing.T) {
+	builder, err := NewProwJobBaseBuilderForTest(
+		&ciop.ReleaseBuildConfiguration{},
+		&ciop.Metadata{Org: "org", Repo: "repo", Branch: "main"},
+		newFakePodSpecBuilder(),
+		ciop.TestStepConfiguration{As: "e2e", JobQueueName: "queue"},
+		func(string) (*api.ClusterProfile, error) { return nil, nil },
+	)
+	if err != nil {
+		t.Fatalf("create job base builder: %v", err)
+	}
+	if actual := builder.Build("pull").JobQueueName; actual != "queue" {
+		t.Errorf("expected job queue %q, got %q", "queue", actual)
+	}
+}
+
 func TestNewProwJobBaseBuilderForTest(t *testing.T) {
 	clusterProfileResolver := func(name string) (*api.ClusterProfile, error) {
 		if name == "alibabacloud" {

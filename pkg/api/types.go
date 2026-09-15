@@ -918,6 +918,9 @@ type TestStepConfiguration struct {
 	// MaxConcurrency sets the maximum number of this job running concurrently. 0 means no limit.
 	MaxConcurrency int `json:"max_concurrency,omitempty"`
 
+	// JobQueueName is the shared Prow queue that limits concurrency across jobs.
+	JobQueueName string `json:"job_queue_name,omitempty"`
+
 	// SlackReporterConfig configures Slack notifications for this test's generated jobs.
 	SlackReporterConfig *SlackReporterConfig `json:"reporter_config,omitempty"`
 

@@ -20,12 +20,14 @@ import (
 	"github.com/openshift/ci-tools/pkg/api/shardprowconfig"
 	"github.com/openshift/ci-tools/pkg/config"
 	"github.com/openshift/ci-tools/pkg/prowconfigsharding"
+	"github.com/openshift/ci-tools/pkg/prowconfigutils"
 )
 
 type options struct {
 	prowConfigDir              string
 	shardedProwConfigBaseDir   string
 	shardedPluginConfigBaseDir string
+	jobQueueConfigDir          string
 }
 
 func (o *options) Validate() error {
@@ -41,6 +43,7 @@ func gatherOptions() options {
 	fs.StringVar(&o.prowConfigDir, "prow-config-dir", "", "Path to the Prow configuration directory.")
 	fs.StringVar(&o.shardedProwConfigBaseDir, "sharded-prow-config-base-dir", "", "Basedir for the sharded prow config. If set, org and repo-specific config will get removed from the main prow config and written out in an org/repo tree below the base dir.")
 	fs.StringVar(&o.shardedPluginConfigBaseDir, "sharded-plugin-config-base-dir", "", "Basedir for the sharded plugin config. If set, the plugin config will get sharded")
+	fs.StringVar(&o.jobQueueConfigDir, "job-queue-config-dir", "", "Path to the directory containing job queue definitions")
 	if err := fs.Parse(os.Args[1:]); err != nil {
 		logrus.WithError(err).Fatal("could not parse input")
 	}
@@ -53,7 +56,7 @@ func main() {
 		logrus.WithError(err).Fatal("invalid options")
 	}
 
-	if err := updateProwConfig(o.prowConfigDir, o.shardedProwConfigBaseDir); err != nil {
+	if err := updateProwConfig(o.prowConfigDir, o.shardedProwConfigBaseDir, o.jobQueueConfigDir); err != nil {
 		logrus.WithError(err).Fatal("could not update Prow configuration")
 	}
 
@@ -70,7 +73,7 @@ func (d determinizeProwConfigFunctors) ModifyQuery(*prowconfig.TideQuery, string
 func (d determinizeProwConfigFunctors) GetDataFromProwConfig(*prowconfig.ProwConfig) {
 }
 
-func updateProwConfig(configDir, shardingBaseDir string) error {
+func updateProwConfig(configDir, shardingBaseDir, jobQueueConfigDir string) error {
 	configPath := path.Join(configDir, config.ProwConfigFile)
 	var additionalConfigs []string
 	if shardingBaseDir != "" {
@@ -79,6 +82,9 @@ func updateProwConfig(configDir, shardingBaseDir string) error {
 	config, err := prowconfig.LoadStrict(configPath, "", additionalConfigs, "_prowconfig.yaml")
 	if err != nil {
 		return fmt.Errorf("failed to load Prow config in strict mode: %w", err)
+	}
+	if err := prowconfigutils.ApplyJobQueueConfig(config, jobQueueConfigDir); err != nil {
+		return fmt.Errorf("failed to apply job queue configuration: %w", err)
 	}
 
 	if shardingBaseDir != "" {

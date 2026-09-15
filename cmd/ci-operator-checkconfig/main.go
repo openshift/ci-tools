@@ -34,17 +34,20 @@ type options struct {
 	ciOPConfigAgent    agents.ConfigAgent
 	clusterProfiles    api.ClusterProfiles
 	clusterClaimOwners api.ClusterClaimOwnersMap
+	jobQueues          api.JobQueueConfig
 }
 
 func (o *options) parse() error {
 	var registryDir string
 	var profilesConfigPath string
 	var clusterClaimConfigPath string
+	var jobQueueConfigDir string
 
 	fs := flag.NewFlagSet("", flag.ExitOnError)
 	fs.StringVar(&registryDir, "registry", "", "Path to the step registry directory")
 	fs.StringVar(&profilesConfigPath, "cluster-profiles-config", "", "Path to the cluster profile config file")
 	fs.StringVar(&clusterClaimConfigPath, "cluster-claim-owners-config", "", "Path to the cluster claim owners config file")
+	fs.StringVar(&jobQueueConfigDir, "job-queue-config-dir", "", "Path to the directory containing job queue definitions")
 	o.Options.Bind(fs)
 
 	if err := fs.Parse(os.Args[1:]); err != nil {
@@ -66,6 +69,12 @@ func (o *options) parse() error {
 		return fmt.Errorf("failed to load cluster claim owners config: %w", err)
 	}
 	o.clusterClaimOwners = claimOwners
+
+	jobQueues, err := load.JobQueues(jobQueueConfigDir)
+	if err != nil {
+		return fmt.Errorf("failed to load job queue configuration: %w", err)
+	}
+	o.jobQueues = jobQueues
 
 	ciOPConfigAgent, err := agents.NewConfigAgent(o.ConfigDir, nil, agents.WithOrg(o.Org), agents.WithRepo(o.Repo))
 	if err != nil {
@@ -98,7 +107,7 @@ func (o *options) validate() (ret []error) {
 	outputCh := make(chan promotedTag)
 	errCh := make(chan error)
 	map_ := func() error {
-		validator := validation.NewValidator(&o.clusterProfiles, o.clusterClaimOwners)
+		validator := validation.NewValidator(&o.clusterProfiles, o.clusterClaimOwners, &o.jobQueues)
 		for c := range inputCh {
 			if err := o.validateConfiguration(&validator, outputCh, c); err != nil {
 				errCh <- fmt.Errorf("failed to validate configuration %s: %w", c.Metadata.RelativePath(), err)

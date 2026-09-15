@@ -2,6 +2,8 @@ package main
 
 import (
 	"fmt"
+	"os"
+	"path/filepath"
 	"testing"
 
 	ldapv3 "github.com/go-ldap/ldap/v3"
@@ -76,6 +78,60 @@ func TestResolve(t *testing.T) {
 				if diff := cmp.Diff(tc.expected, actual, testhelper.RuntimeObjectIgnoreRvTypeMeta); diff != "" {
 					t.Errorf("%s differs from expected:\n%s", tc.name, diff)
 				}
+			}
+		})
+	}
+}
+
+func TestLDAPCredentials(t *testing.T) {
+	dir := t.TempDir()
+	pwFile := filepath.Join(dir, "pw")
+	if err := os.WriteFile(pwFile, []byte("from-file\n"), 0600); err != nil {
+		t.Fatal(err)
+	}
+
+	testCases := []struct {
+		name         string
+		bindDN       string
+		passwordFile string
+		envDN        string
+		envPW        string
+		expectedDN   string
+		expectedPW   string
+		expectedErr  error
+	}{
+		{
+			name:       "from env",
+			envDN:      "uid=svc,dc=redhat,dc=com",
+			envPW:      "from-env",
+			expectedDN: "uid=svc,dc=redhat,dc=com",
+			expectedPW: "from-env",
+		},
+		{
+			name:         "from password file",
+			bindDN:       "uid=svc,dc=redhat,dc=com",
+			passwordFile: pwFile,
+			expectedDN:   "uid=svc,dc=redhat,dc=com",
+			expectedPW:   "from-file",
+		},
+	}
+	for _, tc := range testCases {
+		t.Run(tc.name, func(t *testing.T) {
+			t.Setenv("LDAP_BIND_DN", tc.envDN)
+			t.Setenv("LDAP_BIND_PASSWORD", tc.envPW)
+			gotDN, gotPW, err := ldapCredentials(tc.bindDN, tc.passwordFile)
+			if diff := cmp.Diff(tc.expectedErr, err, testhelper.EquateErrorMessage); diff != "" {
+				t.Errorf("%s differs from expected:\n%s", tc.name, diff)
+				return
+			}
+			if err != nil {
+				return
+			}
+			if diff := cmp.Diff(tc.expectedDN, gotDN); diff != "" {
+				t.Errorf("%s bind DN differs from expected:\n%s", tc.name, diff)
+			}
+			if diff := cmp.Diff(tc.expectedPW, gotPW); diff != "" {
+				t.Errorf("%s bind password differs from expected:\n%s", tc.name, diff)
 			}
 		})
 	}

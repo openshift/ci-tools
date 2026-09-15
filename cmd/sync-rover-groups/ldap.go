@@ -2,6 +2,7 @@ package main
 
 import (
 	"fmt"
+	"os"
 	"strings"
 
 	ldapv3 "github.com/go-ldap/ldap/v3"
@@ -145,4 +146,34 @@ func getGitHubID(value string) string {
 		}
 	}
 	return ""
+}
+
+func ldapCredentials(bindDN, passwordFile string) (string, string, error) {
+	dn := strings.TrimSpace(bindDN)
+	if dn == "" {
+		dn = strings.TrimSpace(os.Getenv("LDAP_BIND_DN"))
+	}
+	var password string
+	if passwordFile != "" {
+		raw, err := os.ReadFile(passwordFile)
+		if err != nil {
+			return "", "", fmt.Errorf("read ldap bind password file: %w", err)
+		}
+		password = strings.TrimSpace(string(raw))
+	} else {
+		password = os.Getenv("LDAP_BIND_PASSWORD")
+	}
+	return dn, password, nil
+}
+
+func dialLDAP(server, bindDN, password string) (*ldapv3.Conn, error) {
+	conn, err := ldapv3.DialURL(fmt.Sprintf("ldap://%s", server))
+	if err != nil {
+		return nil, fmt.Errorf("dial ldap server %s: %w", server, err)
+	}
+	if err := conn.Bind(bindDN, password); err != nil {
+		conn.Close()
+		return nil, fmt.Errorf("ldap bind: %w", err)
+	}
+	return conn, nil
 }

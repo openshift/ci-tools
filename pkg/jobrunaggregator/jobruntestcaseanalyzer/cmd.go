@@ -19,7 +19,8 @@ import (
 const (
 	defaultMinimumSuccessfulTestCount int = 1
 	// maxTimeout is our guess of the maximum duration for a job run
-	maxTimeout time.Duration = 4*time.Hour + 35*time.Minute
+	// Increasing timeout as per changes in https://github.com/openshift/release/pull/85106
+	maxTimeout time.Duration = 5*time.Hour + 55*time.Minute
 )
 
 var (

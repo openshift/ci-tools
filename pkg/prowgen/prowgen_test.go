@@ -1029,7 +1029,8 @@ func TestGenerateJobs(t *testing.T) {
 			},
 		},
 		{
-			id: "images job with always_run false is not run on every PR",
+			id:   "images job with always_run false is not run on every PR",
+			keep: true,
 			config: &ciop.ReleaseBuildConfiguration{
 				Images: ciop.ImageConfiguration{
 					Items:     []ciop.ProjectDirectoryImageBuildStepConfiguration{{To: "out", From: "base"}},

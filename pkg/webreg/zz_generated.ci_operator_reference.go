@@ -180,6 +180,12 @@ const ciOperatorReferenceYaml = "# The list of base images describe\n" +
 	"# process. The name of each image is its \"to\" value\n" +
 	"# and can be used to build only a specific image.\n" +
 	"images:\n" +
+	"    # AlwaysRun can be set to false to disable running the auto-generated\n" +
+	"    # images presubmit on every PR. It must then be triggered manually via\n" +
+	"    # `/test images`. This only affects when the Prow job is scheduled; it\n" +
+	"    # does not affect which images are built once the job (or any other job\n" +
+	"    # that requires them, e.g. via include_built_images) does run.\n" +
+	"    always_run: false\n" +
 	"    # BuildIfAffected means images are only built if their corresponding cmd tools are affected by code changes.\n" +
 	"    # When enabled, the tool-detector package analyzes git changes to determine which images should be built.\n" +
 	"    # The image name (To field) should match the cmd tool name for this to work correctly.\n" +

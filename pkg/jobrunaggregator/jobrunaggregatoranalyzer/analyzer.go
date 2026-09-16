@@ -181,6 +181,7 @@ func (o *JobRunAggregatorAnalyzerOptions) Run(ctx context.Context) error {
 
 	currentAggregationJunit := &aggregatedJobRunJunit{
 		jobGCSBucketRoot: filepath.Join("logs", o.jobName),
+		gcsBucket:        o.gcsBucket,
 	}
 	if len(o.explicitGCSPrefix) > 0 {
 		currentAggregationJunit.jobGCSBucketRoot = o.explicitGCSPrefix

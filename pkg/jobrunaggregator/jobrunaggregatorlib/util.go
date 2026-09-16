@@ -37,6 +37,8 @@ func (classicListWatch) IsWatchListSemanticsUnSupported() bool { return true }
 const (
 	JobStateQuerySourceBigQuery = "bigquery"
 	JobStateQuerySourceCluster  = "cluster"
+	// DefaultGCSBucket is the prow artifact bucket used when --google-storage-bucket is omitted.
+	DefaultGCSBucket = "test-platform-results-public"
 	// prowJobJobRunIDLabel is the label in prowJob for the prow job run ID. It is a unique identifier for job runs across different jobs
 	prowJobJobRunIDLabel = "prow.k8s.io/build-id"
 	// prowJobNamespace is the namespace holding the ProwJobs of the CI cluster

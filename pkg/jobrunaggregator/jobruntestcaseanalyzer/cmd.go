@@ -18,8 +18,8 @@ import (
 
 const (
 	defaultMinimumSuccessfulTestCount int = 1
-	// maxTimeout allows a five-and-a-half-hour collection window plus time for result processing.
-	maxTimeout time.Duration = 5*time.Hour + 50*time.Minute
+	// maxTimeout allows a five-hour-and-35-minute collection window plus a 20-minute result-processing reserve.
+	maxTimeout time.Duration = 5*time.Hour + 55*time.Minute
 )
 
 var (

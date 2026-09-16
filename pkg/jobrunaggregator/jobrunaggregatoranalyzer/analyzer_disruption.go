@@ -140,8 +140,8 @@ func disruptionToJUnitTestCase(testCaseName, testSuiteName, jobGCSBucketRoot str
 		Summary:       message,
 	}
 	for _, jobRunID := range failedJobRunIDs {
-		humanURL := jobrunaggregatorapi.GetHumanURLForLocation(path.Join(jobGCSBucketRoot, jobRunID), "test-platform-results")
-		gcsArtifactURL := jobrunaggregatorapi.GetGCSArtifactURLForLocation(path.Join(jobGCSBucketRoot, jobRunID), "test-platform-results")
+		humanURL := jobrunaggregatorapi.GetHumanURLForLocation(path.Join(jobGCSBucketRoot, jobRunID), "test-platform-results-public")
+		gcsArtifactURL := jobrunaggregatorapi.GetGCSArtifactURLForLocation(path.Join(jobGCSBucketRoot, jobRunID), "test-platform-results-public")
 		currDetails.Failures = append(currDetails.Failures, jobrunaggregatorlib.TestCaseFailure{
 			JobRunID:       jobRunID,
 			HumanURL:       humanURL,
@@ -149,8 +149,8 @@ func disruptionToJUnitTestCase(testCaseName, testSuiteName, jobGCSBucketRoot str
 		})
 	}
 	for _, jobRunID := range successfulJobRunIDs {
-		humanURL := jobrunaggregatorapi.GetHumanURLForLocation(path.Join(jobGCSBucketRoot, jobRunID), "test-platform-results")
-		gcsArtifactURL := jobrunaggregatorapi.GetGCSArtifactURLForLocation(path.Join(jobGCSBucketRoot, jobRunID), "test-platform-results")
+		humanURL := jobrunaggregatorapi.GetHumanURLForLocation(path.Join(jobGCSBucketRoot, jobRunID), "test-platform-results-public")
+		gcsArtifactURL := jobrunaggregatorapi.GetGCSArtifactURLForLocation(path.Join(jobGCSBucketRoot, jobRunID), "test-platform-results-public")
 		currDetails.Passes = append(currDetails.Passes, jobrunaggregatorlib.TestCasePass{
 			JobRunID:       jobRunID,
 			HumanURL:       humanURL,

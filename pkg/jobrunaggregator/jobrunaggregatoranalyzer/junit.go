@@ -195,13 +195,13 @@ func aggregateTestCase(testSuiteName string, combined *junit.TestCase, jobGCSBuc
 
 	switch {
 	case toAdd.FailureOutput != nil:
-		humanURL := jobrunaggregatorapi.GetHumanURLForLocation(path.Join(jobGCSBucketRoot, toAddJobRunID), "test-platform-results")
+		humanURL := jobrunaggregatorapi.GetHumanURLForLocation(path.Join(jobGCSBucketRoot, toAddJobRunID), "test-platform-results-public")
 		currDetails.Failures = append(
 			currDetails.Failures,
 			jobrunaggregatorlib.TestCaseFailure{
 				JobRunID:       toAddJobRunID,
 				HumanURL:       humanURL,
-				GCSArtifactURL: jobrunaggregatorapi.GetGCSArtifactURLForLocation(path.Join(jobGCSBucketRoot, toAddJobRunID), "test-platform-results"),
+				GCSArtifactURL: jobrunaggregatorapi.GetGCSArtifactURLForLocation(path.Join(jobGCSBucketRoot, toAddJobRunID), "test-platform-results-public"),
 			})
 
 	case toAdd.SkipMessage != nil:
@@ -209,8 +209,8 @@ func aggregateTestCase(testSuiteName string, combined *junit.TestCase, jobGCSBuc
 			currDetails.Skips,
 			jobrunaggregatorlib.TestCaseSkip{
 				JobRunID:       toAddJobRunID,
-				HumanURL:       jobrunaggregatorapi.GetHumanURLForLocation(path.Join(jobGCSBucketRoot, toAddJobRunID), "test-platform-results"),
-				GCSArtifactURL: jobrunaggregatorapi.GetGCSArtifactURLForLocation(path.Join(jobGCSBucketRoot, toAddJobRunID), "test-platform-results"),
+				HumanURL:       jobrunaggregatorapi.GetHumanURLForLocation(path.Join(jobGCSBucketRoot, toAddJobRunID), "test-platform-results-public"),
+				GCSArtifactURL: jobrunaggregatorapi.GetGCSArtifactURLForLocation(path.Join(jobGCSBucketRoot, toAddJobRunID), "test-platform-results-public"),
 			})
 
 	default:
@@ -218,8 +218,8 @@ func aggregateTestCase(testSuiteName string, combined *junit.TestCase, jobGCSBuc
 			currDetails.Passes,
 			jobrunaggregatorlib.TestCasePass{
 				JobRunID:       toAddJobRunID,
-				HumanURL:       jobrunaggregatorapi.GetHumanURLForLocation(path.Join(jobGCSBucketRoot, toAddJobRunID), "test-platform-results"),
-				GCSArtifactURL: jobrunaggregatorapi.GetGCSArtifactURLForLocation(path.Join(jobGCSBucketRoot, toAddJobRunID), "test-platform-results"),
+				HumanURL:       jobrunaggregatorapi.GetHumanURLForLocation(path.Join(jobGCSBucketRoot, toAddJobRunID), "test-platform-results-public"),
+				GCSArtifactURL: jobrunaggregatorapi.GetGCSArtifactURLForLocation(path.Join(jobGCSBucketRoot, toAddJobRunID), "test-platform-results-public"),
 			})
 
 	}

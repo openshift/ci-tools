@@ -106,7 +106,7 @@ func (o *JobRunAggregatorAnalyzerOptions) CalculateDisruptionTestSuite(ctx conte
 
 			testCaseName := fmt.Sprintf(testCaseNamePattern, backendName)
 			testSuiteName := "aggregated-disruption"
-			junitTestCase, err := disruptionToJUnitTestCase(testCaseName, testSuiteName, jobGCSBucketRoot, failedJobRunIDs, successfulJobRunIDs, status, message)
+			junitTestCase, err := disruptionToJUnitTestCase(testCaseName, testSuiteName, jobGCSBucketRoot, o.gcsBucket, failedJobRunIDs, successfulJobRunIDs, status, message)
 			if err != nil {
 				return nil, err
 			}
@@ -129,7 +129,7 @@ func checkPercentileDisruption(passFailCalculator baseline, percentile, graceSec
 
 type disruptionJunitCheckFunc func(ctx context.Context, jobRunIDToAvailabilityResultForBackend map[string]jobrunaggregatorlib.AvailabilityResult, backend, masterNodesUpdated string) (failedJobRunsIDs []string, successfulJobRunIDs []string, status testCaseStatus, message string, err error)
 
-func disruptionToJUnitTestCase(testCaseName, testSuiteName, jobGCSBucketRoot string, failedJobRunIDs, successfulJobRunIDs []string, status testCaseStatus, message string) (*junit.TestCase, error) {
+func disruptionToJUnitTestCase(testCaseName, testSuiteName, jobGCSBucketRoot, gcsBucket string, failedJobRunIDs, successfulJobRunIDs []string, status testCaseStatus, message string) (*junit.TestCase, error) {
 	junitTestCase := &junit.TestCase{
 		Name: testCaseName,
 	}
@@ -140,8 +140,8 @@ func disruptionToJUnitTestCase(testCaseName, testSuiteName, jobGCSBucketRoot str
 		Summary:       message,
 	}
 	for _, jobRunID := range failedJobRunIDs {
-		humanURL := jobrunaggregatorapi.GetHumanURLForLocation(path.Join(jobGCSBucketRoot, jobRunID), "test-platform-results-public")
-		gcsArtifactURL := jobrunaggregatorapi.GetGCSArtifactURLForLocation(path.Join(jobGCSBucketRoot, jobRunID), "test-platform-results-public")
+		humanURL := jobrunaggregatorapi.GetHumanURLForLocation(path.Join(jobGCSBucketRoot, jobRunID), gcsBucket)
+		gcsArtifactURL := jobrunaggregatorapi.GetGCSArtifactURLForLocation(path.Join(jobGCSBucketRoot, jobRunID), gcsBucket)
 		currDetails.Failures = append(currDetails.Failures, jobrunaggregatorlib.TestCaseFailure{
 			JobRunID:       jobRunID,
 			HumanURL:       humanURL,
@@ -149,8 +149,8 @@ func disruptionToJUnitTestCase(testCaseName, testSuiteName, jobGCSBucketRoot str
 		})
 	}
 	for _, jobRunID := range successfulJobRunIDs {
-		humanURL := jobrunaggregatorapi.GetHumanURLForLocation(path.Join(jobGCSBucketRoot, jobRunID), "test-platform-results-public")
-		gcsArtifactURL := jobrunaggregatorapi.GetGCSArtifactURLForLocation(path.Join(jobGCSBucketRoot, jobRunID), "test-platform-results-public")
+		humanURL := jobrunaggregatorapi.GetHumanURLForLocation(path.Join(jobGCSBucketRoot, jobRunID), gcsBucket)
+		gcsArtifactURL := jobrunaggregatorapi.GetGCSArtifactURLForLocation(path.Join(jobGCSBucketRoot, jobRunID), gcsBucket)
 		currDetails.Passes = append(currDetails.Passes, jobrunaggregatorlib.TestCasePass{
 			JobRunID:       jobRunID,
 			HumanURL:       humanURL,

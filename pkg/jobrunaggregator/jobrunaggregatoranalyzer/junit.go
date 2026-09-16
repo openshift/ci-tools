@@ -43,6 +43,7 @@ func newJobRunJunit(ctx context.Context, jobRun jobrunaggregatorapi.JobRunInfo) 
 
 type aggregatedJobRunJunit struct {
 	jobGCSBucketRoot         string
+	gcsBucket                string
 	aggregationNameToJobRuns map[string][]*jobRunJunit
 
 	combinedJunit *junit.TestSuites
@@ -75,7 +76,7 @@ func (a *aggregatedJobRunJunit) aggregateAllJobRuns() (*junit.TestSuites, error)
 	for _, aggregationName := range sets.StringKeySet(a.aggregationNameToJobRuns).List() {
 		jobRunJunits := a.aggregationNameToJobRuns[aggregationName]
 		for _, currJobRunJunit := range jobRunJunits {
-			if err := combineTestSuites(combined, a.jobGCSBucketRoot, currJobRunJunit.jobRun.GetJobRunID(), currJobRunJunit.combinedJunit); err != nil {
+			if err := combineTestSuites(combined, a.jobGCSBucketRoot, currJobRunJunit.jobRun.GetJobRunID(), a.gcsBucket, currJobRunJunit.combinedJunit); err != nil {
 				return nil, err
 			}
 		}
@@ -89,17 +90,17 @@ func (a *aggregatedJobRunJunit) aggregateAllJobRuns() (*junit.TestSuites, error)
 	return a.combinedJunit, nil
 }
 
-func combineTestSuites(combined *junit.TestSuites, jobGCSBucketRoot, toAddJobRunID string, toAdd *junit.TestSuites) error {
+func combineTestSuites(combined *junit.TestSuites, jobGCSBucketRoot, toAddJobRunID, gcsBucket string, toAdd *junit.TestSuites) error {
 	for _, suiteToAdd := range toAdd.Suites {
 		combinedSuite := ensureSuiteInSuites(combined, suiteToAdd.Name)
-		if err := combineTestSuite([]string{}, combinedSuite, jobGCSBucketRoot, toAddJobRunID, suiteToAdd); err != nil {
+		if err := combineTestSuite([]string{}, combinedSuite, jobGCSBucketRoot, toAddJobRunID, gcsBucket, suiteToAdd); err != nil {
 			return err
 		}
 	}
 	return nil
 }
 
-func combineTestSuite(parentSuiteNames []string, combined *junit.TestSuite, jobGCSBucketRoot, toAddJobRunID string, toAdd *junit.TestSuite) error {
+func combineTestSuite(parentSuiteNames []string, combined *junit.TestSuite, jobGCSBucketRoot, toAddJobRunID, gcsBucket string, toAdd *junit.TestSuite) error {
 	currentSuiteNames := []string{}
 	currentSuiteNames = append(currentSuiteNames, parentSuiteNames...)
 	currentSuiteNames = append(currentSuiteNames, combined.Name)
@@ -107,14 +108,14 @@ func combineTestSuite(parentSuiteNames []string, combined *junit.TestSuite, jobG
 
 	for _, testCaseToAdd := range toAdd.TestCases {
 		combinedTestCase := ensureTestCaseInSuite(combined, testCaseToAdd.Name)
-		if err := aggregateTestCase(suiteAsSingleString, combinedTestCase, jobGCSBucketRoot, toAddJobRunID, testCaseToAdd); err != nil {
+		if err := aggregateTestCase(suiteAsSingleString, combinedTestCase, jobGCSBucketRoot, toAddJobRunID, gcsBucket, testCaseToAdd); err != nil {
 			return err
 		}
 	}
 
 	for _, suiteToAdd := range toAdd.Children {
 		combinedSuite := ensureSuiteInSuite(combined, suiteToAdd.Name)
-		if err := combineTestSuite(currentSuiteNames, combinedSuite, jobGCSBucketRoot, toAddJobRunID, suiteToAdd); err != nil {
+		if err := combineTestSuite(currentSuiteNames, combinedSuite, jobGCSBucketRoot, toAddJobRunID, gcsBucket, suiteToAdd); err != nil {
 			return err
 		}
 	}
@@ -182,7 +183,7 @@ func ensureTestCaseInSuite(o *junit.TestSuite, name string) *junit.TestCase {
 	return ret
 }
 
-func aggregateTestCase(testSuiteName string, combined *junit.TestCase, jobGCSBucketRoot, toAddJobRunID string, toAdd *junit.TestCase) error {
+func aggregateTestCase(testSuiteName string, combined *junit.TestCase, jobGCSBucketRoot, toAddJobRunID, gcsBucket string, toAdd *junit.TestCase) error {
 	currDetails := &jobrunaggregatorlib.TestCaseDetails{
 		Name:          toAdd.Name,
 		TestSuiteName: testSuiteName,
@@ -195,13 +196,13 @@ func aggregateTestCase(testSuiteName string, combined *junit.TestCase, jobGCSBuc
 
 	switch {
 	case toAdd.FailureOutput != nil:
-		humanURL := jobrunaggregatorapi.GetHumanURLForLocation(path.Join(jobGCSBucketRoot, toAddJobRunID), "test-platform-results-public")
+		humanURL := jobrunaggregatorapi.GetHumanURLForLocation(path.Join(jobGCSBucketRoot, toAddJobRunID), gcsBucket)
 		currDetails.Failures = append(
 			currDetails.Failures,
 			jobrunaggregatorlib.TestCaseFailure{
 				JobRunID:       toAddJobRunID,
 				HumanURL:       humanURL,
-				GCSArtifactURL: jobrunaggregatorapi.GetGCSArtifactURLForLocation(path.Join(jobGCSBucketRoot, toAddJobRunID), "test-platform-results-public"),
+				GCSArtifactURL: jobrunaggregatorapi.GetGCSArtifactURLForLocation(path.Join(jobGCSBucketRoot, toAddJobRunID), gcsBucket),
 			})
 
 	case toAdd.SkipMessage != nil:
@@ -209,8 +210,8 @@ func aggregateTestCase(testSuiteName string, combined *junit.TestCase, jobGCSBuc
 			currDetails.Skips,
 			jobrunaggregatorlib.TestCaseSkip{
 				JobRunID:       toAddJobRunID,
-				HumanURL:       jobrunaggregatorapi.GetHumanURLForLocation(path.Join(jobGCSBucketRoot, toAddJobRunID), "test-platform-results-public"),
-				GCSArtifactURL: jobrunaggregatorapi.GetGCSArtifactURLForLocation(path.Join(jobGCSBucketRoot, toAddJobRunID), "test-platform-results-public"),
+				HumanURL:       jobrunaggregatorapi.GetHumanURLForLocation(path.Join(jobGCSBucketRoot, toAddJobRunID), gcsBucket),
+				GCSArtifactURL: jobrunaggregatorapi.GetGCSArtifactURLForLocation(path.Join(jobGCSBucketRoot, toAddJobRunID), gcsBucket),
 			})
 
 	default:
@@ -218,8 +219,8 @@ func aggregateTestCase(testSuiteName string, combined *junit.TestCase, jobGCSBuc
 			currDetails.Passes,
 			jobrunaggregatorlib.TestCasePass{
 				JobRunID:       toAddJobRunID,
-				HumanURL:       jobrunaggregatorapi.GetHumanURLForLocation(path.Join(jobGCSBucketRoot, toAddJobRunID), "test-platform-results-public"),
-				GCSArtifactURL: jobrunaggregatorapi.GetGCSArtifactURLForLocation(path.Join(jobGCSBucketRoot, toAddJobRunID), "test-platform-results-public"),
+				HumanURL:       jobrunaggregatorapi.GetHumanURLForLocation(path.Join(jobGCSBucketRoot, toAddJobRunID), gcsBucket),
+				GCSArtifactURL: jobrunaggregatorapi.GetGCSArtifactURLForLocation(path.Join(jobGCSBucketRoot, toAddJobRunID), gcsBucket),
 			})
 
 	}

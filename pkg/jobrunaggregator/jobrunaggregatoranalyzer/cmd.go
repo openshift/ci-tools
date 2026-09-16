@@ -13,6 +13,7 @@ import (
 	"k8s.io/utils/clock"
 	prowjobclientset "sigs.k8s.io/prow/pkg/client/clientset/versioned"
 
+	"github.com/openshift/ci-tools/pkg/jobrunaggregator/jobrunaggregatorapi"
 	"github.com/openshift/ci-tools/pkg/jobrunaggregator/jobrunaggregatorlib"
 )
 
@@ -64,7 +65,7 @@ func (f *JobRunsAnalyzerFlags) BindFlags(fs *pflag.FlagSet) {
 	fs.StringVar(&f.StaticJobRunIdentifierPath, "static-run-info-path", f.StaticJobRunIdentifierPath, "The optional path to a file containing JSON formatted JobRunIdentifier array used for aggregated analysis")
 	fs.StringVar(&f.StaticJobRunIdentifierJSON, "static-run-info-json", f.StaticJobRunIdentifierJSON, "The optional JSON formatted string of JobRunIdentifier array used for aggregated analysis")
 
-	fs.StringVar(&f.GCSBucket, "google-storage-bucket", "test-platform-results-public", "The optional GCS Bucket holding test artifacts")
+	fs.StringVar(&f.GCSBucket, "google-storage-bucket", jobrunaggregatorapi.DefaultGCSBucket, "The optional GCS Bucket holding test artifacts")
 }
 
 func NewJobRunsAnalyzerCommand() *cobra.Command {

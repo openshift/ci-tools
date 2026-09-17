@@ -41,7 +41,7 @@ func NewGSMSyncDecorator(wrappedVaultClient Client, gcpProjectConfig gsm.Config,
 	}, nil
 }
 
-// SetFieldOnItem syncs a secret field to both Vault and GSM.
+// SetFieldOnItem syncs a secret field to GSM, then Vault when possible.
 // In the 3-level GSM hierarchy (collection__group__field):
 //   - collection: TestPlatformCollection constant ("test-platform-infra")
 //   - group: itemName parameter (e.g., "cluster-init", "build-farm")
@@ -55,17 +55,19 @@ func (g *gsmSyncDecorator) SetFieldOnItem(itemName, fieldName string, fieldValue
 	field := gsmvalidation.NormalizeName(fieldName)
 	secretName := gsm.GetGSMSecretName(TestPlatformCollection, group, field)
 
-	vaultErr := g.Client.SetFieldOnItem(itemName, fieldName, fieldValue)
-	if err := gsm.CreateOrUpdateSecretDestroyingPreviousVersions(g.ctx, g.gsmClient, g.config.ProjectIdNumber, secretName, fieldValue,
-		map[string]string{"jira-project": "dptp"},
-		map[string]string{"request-information": "Created by periodic-ci-secret-generator."},
-	); err != nil {
+	labels := make(map[string]string)
+	labels["jira-project"] = "dptp"
+
+	annotations := make(map[string]string)
+	annotations["request-information"] = "Created by periodic-ci-secret-generator."
+
+	if err := gsm.CreateOrUpdateSecretDestroyingPreviousVersions(g.ctx, g.gsmClient, g.config.ProjectIdNumber, secretName, fieldValue, labels, annotations); err != nil {
 		logrus.WithError(err).Errorf("Failed to sync to GSM: %s", secretName)
-		if vaultErr != nil {
-			return vaultErr
-		}
 		return err
 	}
+	logrus.Debugf("Successfully synced secret '%s' to GSM", secretName)
+
+	vaultErr := g.Client.SetFieldOnItem(itemName, fieldName, fieldValue)
 	if vaultErr != nil && !vaultclient.IsWriteForbidden(vaultErr) {
 		return vaultErr
 	}

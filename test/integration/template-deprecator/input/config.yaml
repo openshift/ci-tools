@@ -2,7 +2,7 @@ plank:
   default_decoration_configs:
     '*':
       gcs_configuration:
-        bucket: test-platform-results
+        bucket: test-platform-results-public
         default_org: openshift
         default_repo: origin
         path_strategy: single

@@ -24,7 +24,7 @@
     context: ci/rehearse/periodic-ci-openshift-release-master-e2e
     decoration_config:
       gcs_configuration:
-        bucket: test-platform-results
+        bucket: test-platform-results-public
         default_org: openshift
         default_repo: origin
         job_url_prefix: https://openshift-gce-devel.appspot.com/build/
@@ -96,7 +96,7 @@
     context: ci/rehearse/periodic-ci-super-duper-e2e
     decoration_config:
       gcs_configuration:
-        bucket: test-platform-results
+        bucket: test-platform-results-public
         default_org: openshift
         default_repo: origin
         job_url_prefix: https://super-duper.appspot.com/build/
@@ -192,7 +192,7 @@
     context: ci/rehearse/periodic-ci-super-duper-no-ciop
     decoration_config:
       gcs_configuration:
-        bucket: test-platform-results
+        bucket: test-platform-results-public
         default_org: openshift
         default_repo: origin
         job_url_prefix: https://super-duper.appspot.com/build/
@@ -269,7 +269,7 @@
     context: ci/rehearse/periodic-ci-super-duper-periodic-with-unresolved-config
     decoration_config:
       gcs_configuration:
-        bucket: test-platform-results
+        bucket: test-platform-results-public
         default_org: openshift
         default_repo: origin
         job_url_prefix: https://super-duper.appspot.com/build/
@@ -349,7 +349,7 @@
     context: ci/rehearse/periodic-ci-super-duper-periodic-with-unresolved-config-no-target
     decoration_config:
       gcs_configuration:
-        bucket: test-platform-results
+        bucket: test-platform-results-public
         default_org: openshift
         default_repo: origin
         job_url_prefix: https://super-duper.appspot.com/build/
@@ -428,7 +428,7 @@
     context: ci/rehearse/periodic-ci-super-trooper-master-changed-and-uses-changed-workflow
     decoration_config:
       gcs_configuration:
-        bucket: test-platform-results
+        bucket: test-platform-results-public
         default_org: openshift
         default_repo: origin
         job_url_prefix: https://openshift-gce-devel.appspot.com/build/
@@ -530,7 +530,7 @@
     context: ci/rehearse/periodic-ci-super-trooper-master-changed-periodic
     decoration_config:
       gcs_configuration:
-        bucket: test-platform-results
+        bucket: test-platform-results-public
         default_org: openshift
         default_repo: origin
         job_url_prefix: https://openshift-gce-devel.appspot.com/build/
@@ -654,7 +654,7 @@
     context: ci/rehearse/super/duper/ciop-cfg-change/custom
     decoration_config:
       gcs_configuration:
-        bucket: test-platform-results
+        bucket: test-platform-results-public
         default_org: openshift
         default_repo: origin
         job_url_prefix: https://super-duper.appspot.com/build/
@@ -742,7 +742,7 @@
     context: ci/rehearse/super/duper/ciop-cfg-change/images
     decoration_config:
       gcs_configuration:
-        bucket: test-platform-results
+        bucket: test-platform-results-public
         default_org: openshift
         default_repo: origin
         job_url_prefix: https://super-duper.appspot.com/build/
@@ -849,7 +849,7 @@
     context: ci/rehearse/super/duper/master/cmd
     decoration_config:
       gcs_configuration:
-        bucket: test-platform-results
+        bucket: test-platform-results-public
         default_org: openshift
         default_repo: origin
         job_url_prefix: https://super-duper.appspot.com/build/
@@ -932,7 +932,7 @@
     context: ci/rehearse/super/duper/master/e2e-aws
     decoration_config:
       gcs_configuration:
-        bucket: test-platform-results
+        bucket: test-platform-results-public
         default_org: openshift
         default_repo: origin
         job_url_prefix: https://super-duper.appspot.com/build/
@@ -1030,7 +1030,7 @@
     context: ci/rehearse/super/trooper/master/e2e-aws
     decoration_config:
       gcs_configuration:
-        bucket: test-platform-results
+        bucket: test-platform-results-public
         default_org: openshift
         default_repo: origin
         job_url_prefix: https://openshift-gce-devel.appspot.com/build/
@@ -1129,7 +1129,7 @@
     context: ci/rehearse/super/trooper/master/multistage
     decoration_config:
       gcs_configuration:
-        bucket: test-platform-results
+        bucket: test-platform-results-public
         default_org: openshift
         default_repo: origin
         job_url_prefix: https://openshift-gce-devel.appspot.com/build/
@@ -1254,7 +1254,7 @@
     context: ci/rehearse/super/trooper/master/multistage2
     decoration_config:
       gcs_configuration:
-        bucket: test-platform-results
+        bucket: test-platform-results-public
         default_org: openshift
         default_repo: origin
         job_url_prefix: https://openshift-gce-devel.appspot.com/build/
@@ -1381,7 +1381,7 @@
     context: ci/rehearse/super/trooper/master/multistage3
     decoration_config:
       gcs_configuration:
-        bucket: test-platform-results
+        bucket: test-platform-results-public
         default_org: openshift
         default_repo: origin
         job_url_prefix: https://openshift-gce-devel.appspot.com/build/
@@ -1506,7 +1506,7 @@
     context: ci/rehearse/super/trooper/master/multistage5
     decoration_config:
       gcs_configuration:
-        bucket: test-platform-results
+        bucket: test-platform-results-public
         default_org: openshift
         default_repo: origin
         job_url_prefix: https://openshift-gce-devel.appspot.com/build/
@@ -1631,7 +1631,7 @@
     context: ci/rehearse/super/trooper/master/unit
     decoration_config:
       gcs_configuration:
-        bucket: test-platform-results
+        bucket: test-platform-results-public
         default_org: openshift
         default_repo: origin
         job_url_prefix: https://openshift-gce-devel.appspot.com/build/
@@ -1746,7 +1746,7 @@
     context: ci/rehearse/uses/observer/master/test-with-changed-observer
     decoration_config:
       gcs_configuration:
-        bucket: test-platform-results
+        bucket: test-platform-results-public
         default_org: openshift
         default_repo: origin
         job_url_prefix: https://openshift-gce-devel.appspot.com/build/
@@ -1870,7 +1870,7 @@
     context: ci/rehearse/uses/observer/master/test-with-changed-observer-commands
     decoration_config:
       gcs_configuration:
-        bucket: test-platform-results
+        bucket: test-platform-results-public
         default_org: openshift
         default_repo: origin
         job_url_prefix: https://openshift-gce-devel.appspot.com/build/
@@ -1994,7 +1994,7 @@
     context: ci/rehearse/uses/observer/master/test-with-changed-observer-workflow
     decoration_config:
       gcs_configuration:
-        bucket: test-platform-results
+        bucket: test-platform-results-public
         default_org: openshift
         default_repo: origin
         job_url_prefix: https://openshift-gce-devel.appspot.com/build/

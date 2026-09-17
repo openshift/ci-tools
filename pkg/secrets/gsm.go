@@ -10,6 +10,7 @@ import (
 
 	gsm "github.com/openshift/ci-tools/pkg/gsm-secrets"
 	gsmvalidation "github.com/openshift/ci-tools/pkg/gsm-validation"
+	"github.com/openshift/ci-tools/pkg/vaultclient"
 )
 
 const (
@@ -50,28 +51,27 @@ func NewGSMSyncDecorator(wrappedVaultClient Client, gcpProjectConfig gsm.Config,
 //
 //	-> GSM secret: test-platform-infra__build-farm__token--dot--txt
 func (g *gsmSyncDecorator) SetFieldOnItem(itemName, fieldName string, fieldValue []byte) error {
-	// Call the original client (Vault)
-	if err := g.Client.SetFieldOnItem(itemName, fieldName, fieldValue); err != nil {
-		return err
-	}
-
 	group := gsmvalidation.NormalizeName(itemName)
 	field := gsmvalidation.NormalizeName(fieldName)
 	secretName := gsm.GetGSMSecretName(TestPlatformCollection, group, field)
 
-	labels := make(map[string]string)
-	labels["jira-project"] = "dptp"
-
-	annotations := make(map[string]string)
-	annotations["request-information"] = "Created by periodic-ci-secret-generator."
-
-	if err := gsm.CreateOrUpdateSecretDestroyingPreviousVersions(g.ctx, g.gsmClient, g.config.ProjectIdNumber, secretName, fieldValue, labels, annotations); err != nil {
+	vaultErr := g.Client.SetFieldOnItem(itemName, fieldName, fieldValue)
+	if err := gsm.CreateOrUpdateSecretDestroyingPreviousVersions(g.ctx, g.gsmClient, g.config.ProjectIdNumber, secretName, fieldValue,
+		map[string]string{"jira-project": "dptp"},
+		map[string]string{"request-information": "Created by periodic-ci-secret-generator."},
+	); err != nil {
 		logrus.WithError(err).Errorf("Failed to sync to GSM: %s", secretName)
-		// Don't fail the Vault write
-	} else {
-		logrus.Debugf("Successfully synced secret '%s' to GSM", secretName)
+		if vaultErr != nil {
+			return vaultErr
+		}
+		return err
 	}
-
+	if vaultErr != nil && !vaultclient.IsWriteForbidden(vaultErr) {
+		return vaultErr
+	}
+	if vaultErr != nil {
+		logrus.WithError(vaultErr).Warnf("Vault write skipped for %s/%s (read-only); GSM sync succeeded", itemName, fieldName)
+	}
 	return nil
 }
 

@@ -3,6 +3,7 @@ package vaultclient
 import (
 	"errors"
 	"net/http"
+	"strings"
 	"time"
 
 	"github.com/hashicorp/vault/api"
@@ -158,6 +159,15 @@ func IsNotFound(err error) bool {
 		return false
 	}
 	return respErr.StatusCode == http.StatusNotFound
+}
+
+// IsWriteForbidden reports whether Vault rejected a write (e.g. read-only during GSM migration).
+func IsWriteForbidden(err error) bool {
+	var respErr *api.ResponseError
+	if errors.As(err, &respErr) && respErr.StatusCode == http.StatusForbidden {
+		return true
+	}
+	return err != nil && strings.Contains(strings.ToLower(err.Error()), "read-only")
 }
 
 type aliasListData struct {

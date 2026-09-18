@@ -10,6 +10,7 @@ import (
 
 	gsm "github.com/openshift/ci-tools/pkg/gsm-secrets"
 	gsmvalidation "github.com/openshift/ci-tools/pkg/gsm-validation"
+	"github.com/openshift/ci-tools/pkg/vaultclient"
 )
 
 const (
@@ -40,7 +41,7 @@ func NewGSMSyncDecorator(wrappedVaultClient Client, gcpProjectConfig gsm.Config,
 	}, nil
 }
 
-// SetFieldOnItem syncs a secret field to both Vault and GSM.
+// SetFieldOnItem syncs a secret field to GSM, then Vault when possible.
 // In the 3-level GSM hierarchy (collection__group__field):
 //   - collection: TestPlatformCollection constant ("test-platform-infra")
 //   - group: itemName parameter (e.g., "cluster-init", "build-farm")
@@ -50,11 +51,6 @@ func NewGSMSyncDecorator(wrappedVaultClient Client, gcpProjectConfig gsm.Config,
 //
 //	-> GSM secret: test-platform-infra__build-farm__token--dot--txt
 func (g *gsmSyncDecorator) SetFieldOnItem(itemName, fieldName string, fieldValue []byte) error {
-	// Call the original client (Vault)
-	if err := g.Client.SetFieldOnItem(itemName, fieldName, fieldValue); err != nil {
-		return err
-	}
-
 	group := gsmvalidation.NormalizeName(itemName)
 	field := gsmvalidation.NormalizeName(fieldName)
 	secretName := gsm.GetGSMSecretName(TestPlatformCollection, group, field)
@@ -67,11 +63,17 @@ func (g *gsmSyncDecorator) SetFieldOnItem(itemName, fieldName string, fieldValue
 
 	if err := gsm.CreateOrUpdateSecretDestroyingPreviousVersions(g.ctx, g.gsmClient, g.config.ProjectIdNumber, secretName, fieldValue, labels, annotations); err != nil {
 		logrus.WithError(err).Errorf("Failed to sync to GSM: %s", secretName)
-		// Don't fail the Vault write
-	} else {
-		logrus.Debugf("Successfully synced secret '%s' to GSM", secretName)
+		return err
 	}
+	logrus.Debugf("Successfully synced secret '%s' to GSM", secretName)
 
+	vaultErr := g.Client.SetFieldOnItem(itemName, fieldName, fieldValue)
+	if vaultErr != nil && !vaultclient.IsWriteForbidden(vaultErr) {
+		return vaultErr
+	}
+	if vaultErr != nil {
+		logrus.WithError(vaultErr).Warnf("Vault write skipped for %s/%s (read-only); GSM sync succeeded", itemName, fieldName)
+	}
 	return nil
 }
 

@@ -18,8 +18,7 @@ import (
 
 const (
 	defaultMinimumSuccessfulTestCount int = 1
-	// maxTimeout is our guess of the maximum duration for a job run
-	// Increasing timeout as per changes in https://github.com/openshift/release/pull/85106
+	// maxTimeout allows a five-hour-and-35-minute collection window plus a 20-minute result-processing reserve.
 	maxTimeout time.Duration = 5*time.Hour + 55*time.Minute
 )
 
@@ -280,7 +279,10 @@ func (f *JobRunsTestCaseAnalyzerFlags) Validate() error {
 	}
 
 	if f.Timeout > maxTimeout {
-		return fmt.Errorf("timeout value of %s is out of range, valid value should be less than %s", f.Timeout, maxTimeout)
+		return fmt.Errorf("timeout value of %s is out of range, valid value should be at most %s", f.Timeout, maxTimeout)
+	}
+	if f.Timeout <= resultProcessingReserve {
+		return fmt.Errorf("timeout value of %s must be greater than the %s result processing reserve", f.Timeout, resultProcessingReserve)
 	}
 
 	if len(f.JobStateQuerySource) > 0 {
@@ -372,7 +374,7 @@ func (f *JobRunsTestCaseAnalyzerFlags) ToOptions(ctx context.Context) (*JobRunTe
 		timeout:             f.Timeout,
 		ciDataClient:        ciDataClient,
 		ciGCSClient:         ciGCSClient,
-		testCaseCheckers:    []TestCaseChecker{newMinimumRequiredPassesTestCaseChecker(testIdentifierOpt, f.testNameSuffix(), f.MinimumSuccessfulTestCount)},
+		testCaseCheckers:    []incompleteTestCaseChecker{newMinimumRequiredPassesTestCaseChecker(testIdentifierOpt, f.testNameSuffix(), f.MinimumSuccessfulTestCount)},
 		testNameSuffix:      f.testNameSuffix(),
 		payloadInvocationID: f.PayloadInvocationID,
 		jobGCSPrefixes:      &f.JobGCSPrefixes,

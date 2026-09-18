@@ -4634,6 +4634,100 @@ func TestMergeSecretMaps(t *testing.T) {
 	}
 }
 
+func TestDropVaultSecretsOwnedByGSM(t *testing.T) {
+	bundle := func(name string, syncToCluster bool, targets ...api.TargetSpec) api.GSMBundle {
+		return api.GSMBundle{Name: name, SyncToCluster: syncToCluster, Targets: targets}
+	}
+	target := func(cluster, namespace string) api.TargetSpec {
+		return api.TargetSpec{Cluster: cluster, Namespace: namespace}
+	}
+	secret := func(name, namespace string) *coreapi.Secret {
+		return &coreapi.Secret{ObjectMeta: metav1.ObjectMeta{Name: name, Namespace: namespace}}
+	}
+	vaultCopy := &coreapi.Secret{
+		ObjectMeta: metav1.ObjectMeta{Name: "migrated", Namespace: "ci"},
+		Data:       map[string][]byte{"key": []byte("from-vault")},
+	}
+	gsmCopy := &coreapi.Secret{
+		ObjectMeta: metav1.ObjectMeta{Name: "migrated", Namespace: "ci"},
+		Data:       map[string][]byte{"key": []byte("from-gsm")},
+	}
+
+	testCases := []struct {
+		name         string
+		vaultSecrets map[string][]*coreapi.Secret
+		gsmSecrets   map[string][]*coreapi.Secret
+		gsmConfig    api.GSMConfig
+		expected     map[string][]*coreapi.Secret
+	}{
+		{
+			name: "Vault copy is kept when no GSM bundle targets the secret",
+			vaultSecrets: map[string][]*coreapi.Secret{
+				"build01": {secret("vault-only", "ci")},
+			},
+			gsmSecrets: map[string][]*coreapi.Secret{},
+			expected: map[string][]*coreapi.Secret{
+				"build01": {secret("vault-only", "ci")},
+			},
+		},
+		{
+			name: "Vault copy is kept when GSM built the secret (mergeSecretMaps overrides it later)",
+			vaultSecrets: map[string][]*coreapi.Secret{
+				"build01": {vaultCopy},
+			},
+			gsmSecrets: map[string][]*coreapi.Secret{
+				"build01": {gsmCopy},
+			},
+			gsmConfig: api.GSMConfig{Bundles: []api.GSMBundle{bundle("migrated", true, target("build01", "ci"))}},
+			expected: map[string][]*coreapi.Secret{
+				"build01": {vaultCopy},
+			},
+		},
+		{
+			name: "Vault copy is dropped when GSM did not successfully build the secret",
+			vaultSecrets: map[string][]*coreapi.Secret{
+				"build01": {secret("some-secret-name", "ci"), secret("vault-only", "ci")},
+			},
+			gsmSecrets: map[string][]*coreapi.Secret{},
+			gsmConfig:  api.GSMConfig{Bundles: []api.GSMBundle{bundle("some-secret-name", true, target("build01", "ci"))}},
+			expected: map[string][]*coreapi.Secret{
+				"build01": {secret("vault-only", "ci")},
+			},
+		},
+		{
+			name: "Vault copy is kept when the GSM bundle is not synced to clusters",
+			vaultSecrets: map[string][]*coreapi.Secret{
+				"build01": {secret("migrated", "ci")},
+			},
+			gsmSecrets: map[string][]*coreapi.Secret{},
+			gsmConfig:  api.GSMConfig{Bundles: []api.GSMBundle{bundle("migrated", false, target("build01", "ci"))}},
+			expected: map[string][]*coreapi.Secret{
+				"build01": {secret("migrated", "ci")},
+			},
+		},
+		{
+			name: "Vault copy is dropped only on the cluster and in the namespace the GSM bundle targets",
+			vaultSecrets: map[string][]*coreapi.Secret{
+				"build01": {secret("migrated", "ci"), secret("migrated", "test-credentials")},
+				"build02": {secret("migrated", "ci")},
+			},
+			gsmSecrets: map[string][]*coreapi.Secret{},
+			gsmConfig:  api.GSMConfig{Bundles: []api.GSMBundle{bundle("migrated", true, target("build01", "ci"))}},
+			expected: map[string][]*coreapi.Secret{
+				"build01": {secret("migrated", "test-credentials")},
+				"build02": {secret("migrated", "ci")},
+			},
+		},
+	}
+
+	for _, tc := range testCases {
+		t.Run(tc.name, func(t *testing.T) {
+			actual := dropVaultSecretsOwnedByGSM(tc.vaultSecrets, tc.gsmSecrets, tc.gsmConfig)
+			equal(t, "filtered vault secrets", tc.expected, actual)
+		})
+	}
+}
+
 func TestGenerateUserSecretLabels(t *testing.T) {
 	testCases := []struct {
 		name          string

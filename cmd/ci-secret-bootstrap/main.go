@@ -1261,6 +1261,10 @@ func reconcileSecrets(o options, vaultClient secrets.ReadOnlyClient, gsmClient *
 		}
 
 		if gsmSecretsMap != nil {
+			// remove Vault secrets that GSM is configured to own but did not
+			// produce (due to any errors), leaving the secret on the cluster untouched
+			// (we don't want to overwrite secrets on clusters from possibly stale Vault sources)
+			secretsMap = dropVaultSecretsOwnedByGSM(secretsMap, gsmSecretsMap, o.gsmConfig)
 			secretsMap = mergeSecretMaps(secretsMap, gsmSecretsMap)
 		}
 	}
@@ -1286,6 +1290,48 @@ func reconcileSecrets(o options, vaultClient secrets.ReadOnlyClient, gsmClient *
 	}
 
 	return errs
+}
+
+func dropVaultSecretsOwnedByGSM(vaultSecrets, gsmSecrets map[string][]*coreapi.Secret, gsmConfig api.GSMConfig) map[string][]*coreapi.Secret {
+	ownedByGSM := make(map[string]map[types.NamespacedName]string)
+	for _, bundle := range gsmConfig.Bundles {
+		if !bundle.SyncToCluster {
+			continue
+		}
+		for _, target := range bundle.Targets {
+			if ownedByGSM[target.Cluster] == nil {
+				ownedByGSM[target.Cluster] = make(map[types.NamespacedName]string)
+			}
+			ownedByGSM[target.Cluster][types.NamespacedName{Namespace: target.Namespace, Name: bundle.Name}] = bundle.Name
+		}
+	}
+
+	constructed := make(map[string]sets.Set[types.NamespacedName], len(gsmSecrets))
+	for cluster, secretList := range gsmSecrets {
+		constructed[cluster] = sets.New[types.NamespacedName]()
+		for _, secret := range secretList {
+			constructed[cluster].Insert(types.NamespacedName{Namespace: secret.Namespace, Name: secret.Name})
+		}
+	}
+
+	result := make(map[string][]*coreapi.Secret, len(vaultSecrets))
+	for cluster, secretList := range vaultSecrets {
+		for _, secret := range secretList {
+			nsName := types.NamespacedName{Namespace: secret.Namespace, Name: secret.Name}
+			if bundle, owned := ownedByGSM[cluster][nsName]; owned && !constructed[cluster].Has(nsName) {
+				logrus.WithFields(logrus.Fields{
+					"bundle":  bundle,
+					"secret":  nsName.String(),
+					"cluster": cluster,
+				}).Error("GSM bundle was not constructed, skipping the update to preserve the secret on the cluster")
+				continue
+			}
+			// only add those Vault secrets that were not configured to come from GSM
+			result[cluster] = append(result[cluster], secret)
+		}
+	}
+
+	return result
 }
 
 // mergeSecretMaps combines Vault and GSM secret maps, with GSM taking precedence on conflicts.

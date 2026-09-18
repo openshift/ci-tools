@@ -33,6 +33,7 @@ type options struct {
 	githubLogin       string
 	githubOrg         string
 	upstreamBranch    string
+	gcsBucket         string
 	prcreation.PRCreationOptions
 	bumper.GitAuthorOptions
 }
@@ -49,6 +50,7 @@ func parseOptions() options {
 	fs.StringVar(&o.allowList, "allow-list", "", "File containing release-type information to override the defaults")
 	fs.StringVar(&o.githubOrg, "github-org", githubOrg, "The github org to use for testing with a dummy repository.")
 	fs.StringVar(&o.upstreamBranch, "upstream-branch", "master", "The repository branch name where the PR will be created.")
+	fs.StringVar(&o.gcsBucket, "google-storage-bucket", "test-platform-results-public", "The optional GCS Bucket holding test artifacts")
 
 	o.GitAuthorOptions.AddFlags(fs)
 	o.PRCreationOptions.AddFlags(fs)
@@ -77,6 +79,7 @@ func main() {
 		"-release-config", o.releaseConfigDir,
 		"-prow-jobs-dir", o.prowJobsDir,
 		"-allow-list", o.allowList,
+		"-google-storage-bucket", o.gcsBucket,
 	}
 
 	fullCommand := fmt.Sprintf("%s %s", command, strings.Join(arguments, " "))

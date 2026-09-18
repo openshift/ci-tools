@@ -1044,13 +1044,13 @@ func getUnusedItems(config secretbootstrap.Config, client secrets.ReadOnlyClient
 				"item":      itemName,
 				"threshold": allowUnusedAfter,
 				"modified":  item.LastChanged(),
-			}).Info("Unused item last modified after threshold")
+			}).Debug("Unused item last modified after threshold")
 			continue
 		}
 
 		if _, ok := cfgComparableItemsByName[itemName]; !ok {
 			if allowUnused.Has(itemName) {
-				l.Info("Unused item allowed by arguments")
+				l.Debug("Unused item allowed by arguments")
 				continue
 			}
 
@@ -1061,7 +1061,7 @@ func getUnusedItems(config secretbootstrap.Config, client secrets.ReadOnlyClient
 		diffFields := item.UnusedFields(cfgComparableItemsByName[itemName].fields)
 		if diffFields.Len() > 0 {
 			if allowUnused.Has(itemName) {
-				l.WithField("fields", strings.Join(sets.List(diffFields), ",")).Info("Unused fields from item are allowed by arguments")
+				l.WithField("fields", strings.Join(sets.List(diffFields), ",")).Debug("Unused fields from item are allowed by arguments")
 				continue
 			}
 
@@ -1073,7 +1073,7 @@ func getUnusedItems(config secretbootstrap.Config, client secrets.ReadOnlyClient
 
 		if superfluousFields := item.SuperfluousFields(); len(superfluousFields) > 0 {
 			if allowUnused.Has(itemName) {
-				l.WithField("superfluousFields", superfluousFields).Info("Superfluous fields from item are allowed by arguments")
+				l.WithField("superfluousFields", superfluousFields).Debug("Superfluous fields from item are allowed by arguments")
 				continue
 			}
 
@@ -1291,7 +1291,7 @@ func reconcileSecrets(o options, vaultClient secrets.ReadOnlyClient, gsmClient *
 // mergeSecretMaps combines Vault and GSM secret maps, with GSM taking precedence on conflicts.
 // GSM is the authoritative source during and after the Vault->GSM migration, so when the same
 // secret is produced by both sources the GSM copy wins and the Vault copy is dropped. Overrides
-// are logged at warning level (they are expected while a secret exists in both systems), not
+// are logged at debug level (they are expected while a secret exists in both systems), not
 // returned as errors, so an overlapping secret does not fail the whole sync.
 func mergeSecretMaps(vaultSecrets, gsmSecrets map[string][]*coreapi.Secret) map[string][]*coreapi.Secret {
 	if len(gsmSecrets) == 0 {
@@ -1315,7 +1315,7 @@ func mergeSecretMaps(vaultSecrets, gsmSecrets map[string][]*coreapi.Secret) map[
 		if _, exists := byCluster[cluster][nsName]; !exists {
 			order[cluster] = append(order[cluster], nsName)
 		} else if fromGSM {
-			logrus.Warnf("GSM secret %s/%s on cluster %s overrides Vault (GSM takes precedence)", secret.Namespace, secret.Name, cluster)
+			logrus.Debugf("GSM secret %s/%s on cluster %s overrides Vault (GSM takes precedence)", secret.Namespace, secret.Name, cluster)
 		}
 		byCluster[cluster][nsName] = secret
 	}
@@ -1524,7 +1524,9 @@ func constructSecretsFromGSM(
 		}
 
 		if bundleHasError {
-			continue // we don't want to construct an incomplete k8s secret, so skip this bundle entirely
+			// skip the whole bundle instead of constructing an incomplete k8s secret
+			logrus.WithField("bundle", bundle.Name).Error("Skipping bundle, its secrets will not be updated on the target clusters")
+			continue
 		}
 
 		if bundle.DockerConfig != nil {

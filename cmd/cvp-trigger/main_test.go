@@ -609,7 +609,7 @@ func Test_toJson(t *testing.T) {
 func Test_getJobArtifactsURL(t *testing.T) {
 	org := "redhat-openshift-ecosystem"
 	repo := "playground"
-	bucket := "test-platform-results"
+	bucket := "test-platform-results-public"
 	browserPrefix := "https://gcsweb-ci.svc.ci.openshift.org/gcs/"
 	jobName := "periodic-ci-redhat-openshift-ecosystem-playground-cvp-ocp-4.4-cvp-common-aws"
 
@@ -655,7 +655,7 @@ func Test_getJobArtifactsURL(t *testing.T) {
 				},
 				config: prowConfig,
 			},
-			want: "https://gcsweb-ci.svc.ci.openshift.org/gcs/test-platform-results/logs/periodic-ci-redhat-openshift-ecosystem-playground-cvp-ocp-4.4-cvp-common-aws/100",
+			want: "https://gcsweb-ci.svc.ci.openshift.org/gcs/test-platform-results-public/logs/periodic-ci-redhat-openshift-ecosystem-playground-cvp-ocp-4.4-cvp-common-aws/100",
 		},
 		{
 			name: "Returns artifacts URL when we have Spec.ExtraRefs",
@@ -676,7 +676,7 @@ func Test_getJobArtifactsURL(t *testing.T) {
 				},
 				config: prowConfig,
 			},
-			want: "https://gcsweb-ci.svc.ci.openshift.org/gcs/test-platform-results/logs/periodic-ci-redhat-openshift-ecosystem-playground-cvp-ocp-4.4-cvp-common-aws/101",
+			want: "https://gcsweb-ci.svc.ci.openshift.org/gcs/test-platform-results-public/logs/periodic-ci-redhat-openshift-ecosystem-playground-cvp-ocp-4.4-cvp-common-aws/101",
 		},
 	}
 	for _, tt := range tests {

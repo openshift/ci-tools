@@ -463,7 +463,7 @@ func TestReconcile(t *testing.T) {
 			createInterceptor := func(omitStatusURL bool) func(ctx context.Context, client ctrlruntimeclient.WithWatch, obj ctrlruntimeclient.Object, opts ...ctrlruntimeclient.CreateOption) error {
 				return func(ctx context.Context, client ctrlruntimeclient.WithWatch, obj ctrlruntimeclient.Object, opts ...ctrlruntimeclient.CreateOption) error {
 					if prowJob, ok := obj.(*prowv1.ProwJob); ok && !omitStatusURL {
-						prowJob.Status.URL = fmt.Sprintf("https://prow.ci.openshift.org/view/gs/test-platform-results/%s", prowJob.Spec.Job)
+						prowJob.Status.URL = fmt.Sprintf("https://prow.ci.openshift.org/view/gs/test-platform-results-public/%s", prowJob.Spec.Job)
 					}
 					return client.Create(ctx, obj, opts...)
 				}

@@ -1029,10 +1029,10 @@ func insertIfNotEmpty(s sets.Set[string], items ...string) sets.Set[string] {
 	return s
 }
 
-func getUnusedItems(config secretbootstrap.Config, client secrets.ReadOnlyClient, allowUnused sets.Set[string], allowUnusedAfter time.Time) error {
+func getUnusedItems(config secretbootstrap.Config, client secrets.ReadOnlyClient, allowUnused sets.Set[string], allowUnusedAfter time.Time) (unusedItems error, err error) {
 	allSecretStoreItems, err := client.GetInUseInformationForAllItems(config.VaultDPTPPrefix)
 	if err != nil {
-		return fmt.Errorf("failed to get in-use information from secret store: %w", err)
+		return nil, fmt.Errorf("failed to get in-use information from secret store: %w", err)
 	}
 	cfgComparableItemsByName := constructConfigItemsByName(config)
 
@@ -1044,13 +1044,13 @@ func getUnusedItems(config secretbootstrap.Config, client secrets.ReadOnlyClient
 				"item":      itemName,
 				"threshold": allowUnusedAfter,
 				"modified":  item.LastChanged(),
-			}).Info("Unused item last modified after threshold")
+			}).Debug("Unused item last modified after threshold")
 			continue
 		}
 
 		if _, ok := cfgComparableItemsByName[itemName]; !ok {
 			if allowUnused.Has(itemName) {
-				l.Info("Unused item allowed by arguments")
+				l.Debug("Unused item allowed by arguments")
 				continue
 			}
 
@@ -1061,7 +1061,7 @@ func getUnusedItems(config secretbootstrap.Config, client secrets.ReadOnlyClient
 		diffFields := item.UnusedFields(cfgComparableItemsByName[itemName].fields)
 		if diffFields.Len() > 0 {
 			if allowUnused.Has(itemName) {
-				l.WithField("fields", strings.Join(sets.List(diffFields), ",")).Info("Unused fields from item are allowed by arguments")
+				l.WithField("fields", strings.Join(sets.List(diffFields), ",")).Debug("Unused fields from item are allowed by arguments")
 				continue
 			}
 
@@ -1073,7 +1073,7 @@ func getUnusedItems(config secretbootstrap.Config, client secrets.ReadOnlyClient
 
 		if superfluousFields := item.SuperfluousFields(); len(superfluousFields) > 0 {
 			if allowUnused.Has(itemName) {
-				l.WithField("superfluousFields", superfluousFields).Info("Superfluous fields from item are allowed by arguments")
+				l.WithField("superfluousFields", superfluousFields).Debug("Superfluous fields from item are allowed by arguments")
 				continue
 			}
 
@@ -1097,7 +1097,7 @@ func getUnusedItems(config secretbootstrap.Config, client secrets.ReadOnlyClient
 		return errs[i] != nil && errs[j] != nil && errs[i].Error() < errs[j].Error()
 	})
 
-	return utilerrors.NewAggregate(errs)
+	return utilerrors.NewAggregate(errs), nil
 }
 
 func (o *options) validateItems(client secrets.ReadOnlyClient) error {
@@ -1261,15 +1261,24 @@ func reconcileSecrets(o options, vaultClient secrets.ReadOnlyClient, gsmClient *
 		}
 
 		if gsmSecretsMap != nil {
+			// remove Vault secrets that GSM is configured to own but did not
+			// produce (due to any errors), leaving the secret on the cluster untouched
+			// (we don't want to overwrite secrets on clusters from possibly stale Vault sources)
+			secretsMap = dropVaultSecretsOwnedByGSM(secretsMap, gsmSecretsMap, o.gsmConfig)
 			secretsMap = mergeSecretMaps(secretsMap, gsmSecretsMap)
 		}
 	}
 
 	if o.validateItemsUsage {
 		unusedGracePeriod := time.Now().AddDate(0, 0, -allowUnusedDays)
-		err := getUnusedItems(o.vaultConfig, vaultClient, o.allowUnused.StringSet(), unusedGracePeriod)
+		unusedItems, err := getUnusedItems(o.vaultConfig, vaultClient, o.allowUnused.StringSet(), unusedGracePeriod)
 		if err != nil {
 			errs = append(errs, err)
+		}
+		// Vault is a frozen fallback after the GSM migration, so unused items are leftovers to
+		// clean up, not a reason to fail the sync.
+		if unusedItems != nil {
+			logrus.WithError(unusedItems).Warn("Unused items in Vault")
 		}
 	}
 
@@ -1288,10 +1297,52 @@ func reconcileSecrets(o options, vaultClient secrets.ReadOnlyClient, gsmClient *
 	return errs
 }
 
+func dropVaultSecretsOwnedByGSM(vaultSecrets, gsmSecrets map[string][]*coreapi.Secret, gsmConfig api.GSMConfig) map[string][]*coreapi.Secret {
+	ownedByGSM := make(map[string]map[types.NamespacedName]string)
+	for _, bundle := range gsmConfig.Bundles {
+		if !bundle.SyncToCluster {
+			continue
+		}
+		for _, target := range bundle.Targets {
+			if ownedByGSM[target.Cluster] == nil {
+				ownedByGSM[target.Cluster] = make(map[types.NamespacedName]string)
+			}
+			ownedByGSM[target.Cluster][types.NamespacedName{Namespace: target.Namespace, Name: bundle.Name}] = bundle.Name
+		}
+	}
+
+	constructed := make(map[string]sets.Set[types.NamespacedName], len(gsmSecrets))
+	for cluster, secretList := range gsmSecrets {
+		constructed[cluster] = sets.New[types.NamespacedName]()
+		for _, secret := range secretList {
+			constructed[cluster].Insert(types.NamespacedName{Namespace: secret.Namespace, Name: secret.Name})
+		}
+	}
+
+	result := make(map[string][]*coreapi.Secret, len(vaultSecrets))
+	for cluster, secretList := range vaultSecrets {
+		for _, secret := range secretList {
+			nsName := types.NamespacedName{Namespace: secret.Namespace, Name: secret.Name}
+			if bundle, owned := ownedByGSM[cluster][nsName]; owned && !constructed[cluster].Has(nsName) {
+				logrus.WithFields(logrus.Fields{
+					"bundle":  bundle,
+					"secret":  nsName.String(),
+					"cluster": cluster,
+				}).Error("GSM bundle was not constructed, skipping the update to preserve the secret on the cluster")
+				continue
+			}
+			// only add those Vault secrets that were not configured to come from GSM
+			result[cluster] = append(result[cluster], secret)
+		}
+	}
+
+	return result
+}
+
 // mergeSecretMaps combines Vault and GSM secret maps, with GSM taking precedence on conflicts.
 // GSM is the authoritative source during and after the Vault->GSM migration, so when the same
 // secret is produced by both sources the GSM copy wins and the Vault copy is dropped. Overrides
-// are logged at warning level (they are expected while a secret exists in both systems), not
+// are logged at debug level (they are expected while a secret exists in both systems), not
 // returned as errors, so an overlapping secret does not fail the whole sync.
 func mergeSecretMaps(vaultSecrets, gsmSecrets map[string][]*coreapi.Secret) map[string][]*coreapi.Secret {
 	if len(gsmSecrets) == 0 {
@@ -1315,7 +1366,7 @@ func mergeSecretMaps(vaultSecrets, gsmSecrets map[string][]*coreapi.Secret) map[
 		if _, exists := byCluster[cluster][nsName]; !exists {
 			order[cluster] = append(order[cluster], nsName)
 		} else if fromGSM {
-			logrus.Warnf("GSM secret %s/%s on cluster %s overrides Vault (GSM takes precedence)", secret.Namespace, secret.Name, cluster)
+			logrus.Debugf("GSM secret %s/%s on cluster %s overrides Vault (GSM takes precedence)", secret.Namespace, secret.Name, cluster)
 		}
 		byCluster[cluster][nsName] = secret
 	}
@@ -1524,7 +1575,9 @@ func constructSecretsFromGSM(
 		}
 
 		if bundleHasError {
-			continue // we don't want to construct an incomplete k8s secret, so skip this bundle entirely
+			// skip the whole bundle instead of constructing an incomplete k8s secret
+			logrus.WithField("bundle", bundle.Name).Error("Skipping bundle, its secrets will not be updated on the target clusters")
+			continue
 		}
 
 		if bundle.DockerConfig != nil {

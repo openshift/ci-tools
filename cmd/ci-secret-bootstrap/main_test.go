@@ -2212,7 +2212,10 @@ func TestGetUnusedItems(t *testing.T) {
 		t.Run(tc.id, func(t *testing.T) {
 			client := vaultClientFromTestItems(tc.items)
 			var actualErrMsg string
-			actualErr := getUnusedItems(tc.config, client, tc.allowItems, threshold)
+			actualErr, err := getUnusedItems(tc.config, client, tc.allowItems, threshold)
+			if err != nil {
+				t.Fatalf("unexpected error: %v", err)
+			}
 			if actualErr != nil {
 				actualErrMsg = actualErr.Error()
 			}

@@ -1029,10 +1029,10 @@ func insertIfNotEmpty(s sets.Set[string], items ...string) sets.Set[string] {
 	return s
 }
 
-func getUnusedItems(config secretbootstrap.Config, client secrets.ReadOnlyClient, allowUnused sets.Set[string], allowUnusedAfter time.Time) error {
+func getUnusedItems(config secretbootstrap.Config, client secrets.ReadOnlyClient, allowUnused sets.Set[string], allowUnusedAfter time.Time) (unusedItems error, err error) {
 	allSecretStoreItems, err := client.GetInUseInformationForAllItems(config.VaultDPTPPrefix)
 	if err != nil {
-		return fmt.Errorf("failed to get in-use information from secret store: %w", err)
+		return nil, fmt.Errorf("failed to get in-use information from secret store: %w", err)
 	}
 	cfgComparableItemsByName := constructConfigItemsByName(config)
 
@@ -1097,7 +1097,7 @@ func getUnusedItems(config secretbootstrap.Config, client secrets.ReadOnlyClient
 		return errs[i] != nil && errs[j] != nil && errs[i].Error() < errs[j].Error()
 	})
 
-	return utilerrors.NewAggregate(errs)
+	return utilerrors.NewAggregate(errs), nil
 }
 
 func (o *options) validateItems(client secrets.ReadOnlyClient) error {
@@ -1271,9 +1271,14 @@ func reconcileSecrets(o options, vaultClient secrets.ReadOnlyClient, gsmClient *
 
 	if o.validateItemsUsage {
 		unusedGracePeriod := time.Now().AddDate(0, 0, -allowUnusedDays)
-		err := getUnusedItems(o.vaultConfig, vaultClient, o.allowUnused.StringSet(), unusedGracePeriod)
+		unusedItems, err := getUnusedItems(o.vaultConfig, vaultClient, o.allowUnused.StringSet(), unusedGracePeriod)
 		if err != nil {
 			errs = append(errs, err)
+		}
+		// Vault is a frozen fallback after the GSM migration, so unused items are leftovers to
+		// clean up, not a reason to fail the sync.
+		if unusedItems != nil {
+			logrus.WithError(unusedItems).Warn("Unused items in Vault")
 		}
 	}
 

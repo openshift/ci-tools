@@ -635,6 +635,37 @@ func TestDiffIAMBindings(t *testing.T) {
 			},
 			expectNoChanges: true,
 		},
+		{
+			name: "desired bindings sharing a condition match the merged binding GCP reports",
+			desiredBindings: []*iampb.Binding{
+				createViewerBinding("alpha", []string{"group:alpha@example.com"}),
+				createViewerBinding("alpha", []string{"serviceAccount:alpha-updater@example.com"}),
+			},
+			actualPolicy: &iampb.Policy{
+				Bindings: []*iampb.Binding{
+					createViewerBinding("alpha", []string{"group:alpha@example.com", "serviceAccount:alpha-updater@example.com"}),
+				},
+				Etag:    []byte("test-etag"),
+				Version: 3,
+			},
+			expectNoChanges: true,
+		},
+		{
+			name: "merged desired binding still detects a missing member",
+			desiredBindings: []*iampb.Binding{
+				createViewerBinding("alpha", []string{"group:alpha@example.com"}),
+				createViewerBinding("alpha", []string{"serviceAccount:alpha-updater@example.com"}),
+			},
+			actualPolicy: &iampb.Policy{
+				Bindings: []*iampb.Binding{
+					createViewerBinding("alpha", []string{"group:alpha@example.com"}),
+				},
+				Etag:    []byte("test-etag"),
+				Version: 3,
+			},
+			expectChanges:    true,
+			expectedBindings: 1,
+		},
 	}
 
 	for _, tc := range testCases {
@@ -668,8 +699,9 @@ func TestDiffIAMBindings(t *testing.T) {
 				}
 
 				// Verify all desired bindings are present
+				expectedBindings := MergeBindingsByCondition(tc.desiredBindings)
 				desiredKeys := make(map[string]bool)
-				for _, desired := range tc.desiredBindings {
+				for _, desired := range expectedBindings {
 					key := ToCanonicalIAMBinding(desired).makeCanonicalKey()
 					desiredKeys[key] = true
 				}
@@ -682,8 +714,8 @@ func TestDiffIAMBindings(t *testing.T) {
 					}
 				}
 
-				if foundDesired != len(tc.desiredBindings) {
-					t.Errorf("Expected %d desired bindings in result, found %d", len(tc.desiredBindings), foundDesired)
+				if foundDesired != len(expectedBindings) {
+					t.Errorf("Expected %d desired bindings in result, found %d", len(expectedBindings), foundDesired)
 				}
 
 				// Verify no obsolete managed bindings remain

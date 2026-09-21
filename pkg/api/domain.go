@@ -37,7 +37,7 @@ const (
 type Service string
 
 const (
-	ServiceBoskos     Service = "boskos-ci"
+	ServiceBoskos     Service = "boskos"
 	ServiceRegistry   Service = "registry"
 	ServiceRPMs       Service = "artifacts-rpms-openshift-origin-ci-rpms"
 	ServiceProw       Service = "prow"
@@ -55,7 +55,7 @@ func URLForService(service Service) string {
 func DomainForService(service Service) string {
 	var serviceDomain string
 	switch service {
-	case ServiceBoskos, ServiceGCSWeb:
+	case ServiceGCSWeb:
 		serviceDomain = ServiceDomainAPPCI
 	case ServiceRPMs:
 		serviceDomain = ServiceDomainAPPCI

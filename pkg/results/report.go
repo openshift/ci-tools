@@ -17,8 +17,8 @@ import (
 )
 
 const (
-	// reportAddress is the default result aggregator address in app.ci
-	reportAddress      = "https://result-aggregator-ci.apps.ci.l2s4.p1.openshiftapps.com"
+	// reportAddress is the default result aggregator vanity URL (core-ci).
+	reportAddress      = "https://result-aggregator.ci.openshift.org"
 	unknownConsoleHost = "unknown"
 )
 

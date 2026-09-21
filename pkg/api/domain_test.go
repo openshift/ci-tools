@@ -17,7 +17,7 @@ func TestDomainForService(t *testing.T) {
 	}{
 		{
 			service:  ServiceBoskos,
-			expected: "boskos-ci.apps.ci.l2s4.p1.openshiftapps.com",
+			expected: "boskos.ci.openshift.org",
 		},
 		{
 			service:  ServiceRPMs,

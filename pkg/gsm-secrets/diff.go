@@ -6,6 +6,8 @@ import (
 
 	"cloud.google.com/go/iam/apiv1/iampb"
 	"github.com/sirupsen/logrus"
+
+	"k8s.io/apimachinery/pkg/util/sets"
 )
 
 func ComputeDiff(
@@ -85,7 +87,42 @@ func DiffSecrets(desiredSecrets, actualSecrets map[string]GCPSecret, desiredColl
 	return toCreate, toDelete
 }
 
+// MergeBindingsByCondition unions the members of bindings sharing a role and condition.
+// GCP stores such bindings merged, so the desired state must be expressed the same way or it
+// never compares equal to the policy GCP reports back.
+func MergeBindingsByCondition(bindings []*iampb.Binding) []*iampb.Binding {
+	type conditionKey struct {
+		role, title, expression string
+	}
+
+	var order []conditionKey
+	members := map[conditionKey]sets.Set[string]{}
+	first := map[conditionKey]*iampb.Binding{}
+
+	for _, binding := range bindings {
+		key := conditionKey{binding.Role, binding.Condition.GetTitle(), binding.Condition.GetExpression()}
+		if _, seen := first[key]; !seen {
+			members[key] = sets.New[string]()
+			first[key] = binding
+			order = append(order, key)
+		}
+		members[key].Insert(binding.Members...)
+	}
+
+	result := make([]*iampb.Binding, 0, len(order))
+	for _, key := range order {
+		result = append(result, &iampb.Binding{
+			Role:      first[key].Role,
+			Members:   sets.List(members[key]),
+			Condition: first[key].Condition,
+		})
+	}
+	return result
+}
+
 func DiffIAMBindings(desiredBindings []*iampb.Binding, actualPolicy *iampb.Policy) *iampb.Policy {
+	desiredBindings = MergeBindingsByCondition(desiredBindings)
+
 	desiredBindingsMap := make(map[string]*iampb.Binding)
 	for _, binding := range desiredBindings {
 		key := ToCanonicalIAMBinding(binding).makeCanonicalKey()

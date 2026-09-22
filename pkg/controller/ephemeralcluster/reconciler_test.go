@@ -642,7 +642,7 @@ func TestReconcile(t *testing.T) {
 		wantErr                             error
 	}{
 		{
-			name: "Kubeconfig ready",
+			name: "Kubeconfig and kubeadmin passwd ready",
 			ec: &ephemeralclusterv1.EphemeralCluster{
 				ObjectMeta: metav1.ObjectMeta{
 					Name:              "foo",
@@ -676,7 +676,10 @@ func TestReconcile(t *testing.T) {
 					},
 					&corev1.Secret{
 						ObjectMeta: metav1.ObjectMeta{Name: EphemeralClusterTestName, Namespace: "ci-op-1234"},
-						Data:       map[string][]byte{"kubeconfig": []byte("kubeconfig")},
+						Data: map[string][]byte{
+							"kubeconfig":         []byte("kubeconfig"),
+							"kubeadmin-password": []byte("password"),
+						},
 					},
 				}
 				c := fake.NewClientBuilder().WithObjects(objs...).WithScheme(scheme).Build()
@@ -691,10 +694,108 @@ func TestReconcile(t *testing.T) {
 				},
 				Data: map[string][]byte{
 					"kubeconfig":        []byte("kubeconfig"),
-					"kubeAdminPassword": {},
+					"kubeAdminPassword": []byte("password"),
 				},
 			},
-			now: ptr.To(parseTime(t, "2025-04-02 12:14:12")),
+			now: new(parseTime(t, "2025-04-02 12:14:12")),
+			wantEC: &ephemeralclusterv1.EphemeralCluster{
+				ObjectMeta: metav1.ObjectMeta{
+					Name:              "foo",
+					Namespace:         "bar",
+					CreationTimestamp: metav1.NewTime(parseTime(t, "2025-04-02 12:12:12")),
+					ResourceVersion:   "1000",
+				},
+				Spec: ephemeralclusterv1.EphemeralClusterSpec{
+					CIOperator: ephemeralclusterv1.CIOperatorSpec{
+						Test: ephemeralclusterv1.TestSpec{Workflow: "e2e-aws"},
+					},
+				},
+				Status: ephemeralclusterv1.EphemeralClusterStatus{
+					Phase:      ephemeralclusterv1.EphemeralClusterReady,
+					ProwJobID:  "pj-123",
+					SecretRef:  "foo-credentials",
+					ProwJobURL: "https://pj-123.html",
+					Conditions: []metav1.Condition{{
+						Type:               ephemeralclusterv1.ProwJobCreating,
+						Status:             metav1.ConditionFalse,
+						Reason:             ephemeralclusterv1.ProwJobProperlyCreatedReason,
+						LastTransitionTime: metav1.NewTime(parseTime(t, "2025-04-02 12:14:12")),
+					}, {
+						Type:               ephemeralclusterv1.ClusterReady,
+						Status:             metav1.ConditionTrue,
+						Reason:             ephemeralclusterv1.CredentialsReadyReason,
+						LastTransitionTime: metav1.NewTime(parseTime(t, "2025-04-02 12:14:12")),
+					}},
+				},
+			},
+			wantRes: reconcile.Result{RequeueAfter: pollingTime},
+			wantEvents: []string{
+				"Normal ClusterReady Cluster credentials are available",
+			},
+			wantProvisioningDurationHistogram: []metric{{
+				Histogram: &histogram{
+					Labels:      []string{"e2e-aws"},
+					SampleCount: 1,
+					Buckets:     histogramBuckets(provisioningDurationBuckets, 1),
+				},
+			}},
+		},
+		{
+			name: "Only Kubeconfig available: object is ready anyway",
+			ec: &ephemeralclusterv1.EphemeralCluster{
+				ObjectMeta: metav1.ObjectMeta{
+					Name:              "foo",
+					Namespace:         "bar",
+					CreationTimestamp: metav1.NewTime(parseTime(t, "2025-04-02 12:12:12")),
+					UID:               types.UID("test-ec-uid"),
+				},
+				Spec: ephemeralclusterv1.EphemeralClusterSpec{
+					CIOperator: ephemeralclusterv1.CIOperatorSpec{
+						Test: ephemeralclusterv1.TestSpec{Workflow: "e2e-aws"},
+					},
+				},
+				Status: ephemeralclusterv1.EphemeralClusterStatus{
+					ProwJobID: "pj-123",
+				},
+			},
+			objs: []ctrlclient.Object{
+				&prowv1.ProwJob{
+					ObjectMeta: metav1.ObjectMeta{Name: "pj-123", Namespace: prowJobNamespace},
+					Spec:       prowv1.ProwJobSpec{Cluster: "build01"},
+					Status:     prowv1.ProwJobStatus{URL: "https://pj-123.html"},
+				},
+			},
+			buildClients: func() map[string]*ctrlruntimetest.FakeClient {
+				objs := []ctrlclient.Object{
+					&corev1.Namespace{
+						ObjectMeta: metav1.ObjectMeta{
+							Labels: map[string]string{steps.LabelJobID: "pj-123"},
+							Name:   "ci-op-1234",
+						},
+					},
+					&corev1.Secret{
+						ObjectMeta: metav1.ObjectMeta{Name: EphemeralClusterTestName, Namespace: "ci-op-1234"},
+						Data: map[string][]byte{
+							"kubeconfig": []byte("kubeconfig"),
+						},
+					},
+				}
+				c := fake.NewClientBuilder().WithObjects(objs...).WithScheme(scheme).Build()
+				return map[string]*ctrlruntimetest.FakeClient{
+					"build01": ctrlruntimetest.NewFakeClient(c, scheme, ctrlruntimetest.WithInitObjects(objs...)),
+				}
+			},
+			wantSecret: &corev1.Secret{
+				ObjectMeta: metav1.ObjectMeta{
+					Name:      "foo-credentials",
+					Namespace: "bar",
+				},
+				Data: map[string][]byte{
+					"kubeconfig":        []byte("kubeconfig"),
+					"kubeAdminPassword": nil,
+				},
+			},
+			now: new(parseTime(t, "2025-04-02 12:14:12")),
 			wantEC: &ephemeralclusterv1.EphemeralCluster{
 				ObjectMeta: metav1.ObjectMeta{
 					Name:              "foo",

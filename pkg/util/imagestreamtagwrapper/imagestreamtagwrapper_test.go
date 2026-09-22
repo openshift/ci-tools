@@ -47,7 +47,8 @@ func TestGetImageStreamTag(t *testing.T) {
 	}
 
 	client := &imagestreamtagwrapper{
-		Client: fakectrlruntimeclient.NewClientBuilder().WithScheme(scheme).WithRuntimeObjects(imageStream, images).Build(),
+		Client:      fakectrlruntimeclient.NewClientBuilder().WithScheme(scheme).WithRuntimeObjects(imageStream).Build(),
+		imageReader: fakectrlruntimeclient.NewClientBuilder().WithScheme(scheme).WithRuntimeObjects(images).Build(),
 	}
 	ctx := context.Background()
 

@@ -35,10 +35,24 @@ func New(upstream ctrlruntimeclient.Client, cache cache.Cache) (ctrlruntimeclien
 	if _, err := cache.GetInformer(context.TODO(), &imagev1.Image{}); err != nil {
 		return nil, fmt.Errorf("failed to get informer for image: %w", err)
 	}
+	return newWithImageReader(upstream, cache, nil)
+}
+
+// NewWithImageReader returns a wrapper that reads Images from imageReader instead of
+// caching every Image in the cluster. ImageStreams remain cached because controllers
+// watch them for changes.
+func NewWithImageReader(upstream ctrlruntimeclient.Client, cache cache.Cache, imageReader ctrlruntimeclient.Reader) (ctrlruntimeclient.Client, error) {
+	if imageReader == nil {
+		return nil, errors.New("image reader must not be nil")
+	}
+	return newWithImageReader(upstream, cache, imageReader)
+}
+
+func newWithImageReader(upstream ctrlruntimeclient.Client, cache cache.Cache, imageReader ctrlruntimeclient.Reader) (ctrlruntimeclient.Client, error) {
 	if _, err := cache.GetInformer(context.TODO(), &imagev1.ImageStream{}); err != nil {
 		return nil, fmt.Errorf("failed to get informer for imagestream: %w", err)
 	}
-	return &imagestreamtagwrapper{Client: upstream}, nil
+	return &imagestreamtagwrapper{Client: upstream, imageReader: imageReader}, nil
 }
 
 // MustNew panics when there was an error during initialisation
@@ -50,15 +64,28 @@ func MustNew(upstream ctrlruntimeclient.Client, cache cache.Cache) ctrlruntimecl
 	return client
 }
 
+// MustNewWithImageReader is like NewWithImageReader but panics on initialization errors.
+func MustNewWithImageReader(upstream ctrlruntimeclient.Client, cache cache.Cache, imageReader ctrlruntimeclient.Reader) ctrlruntimeclient.Client {
+	client, err := NewWithImageReader(upstream, cache, imageReader)
+	if err != nil {
+		panic(err.Error())
+	}
+	return client
+}
+
 type imagestreamtagwrapper struct {
 	ctrlruntimeclient.Client
+	imageReader ctrlruntimeclient.Reader
 }
 
 func (istw *imagestreamtagwrapper) Get(ctx context.Context, key ctrlruntimeclient.ObjectKey, obj ctrlruntimeclient.Object, opts ...client.GetOption) error {
 	if imageStreamTag, isImageStreamTag := obj.(*imagev1.ImageStreamTag); isImageStreamTag {
 		return istw.assembleImageStreamTag(ctx, key, imageStreamTag)
 	}
-	return istw.Client.Get(ctx, key, obj)
+	if _, isImage := obj.(*imagev1.Image); isImage && istw.imageReader != nil {
+		return istw.imageReader.Get(ctx, key, obj, opts...)
+	}
+	return istw.Client.Get(ctx, key, obj, opts...)
 }
 
 // Essentially an inlined copy of the server-side logic at

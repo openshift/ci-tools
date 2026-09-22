@@ -16,6 +16,7 @@ import (
 	"github.com/sirupsen/logrus"
 	"gopkg.in/fsnotify.v1"
 
+	corev1 "k8s.io/api/core/v1"
 	utilerrors "k8s.io/apimachinery/pkg/util/errors"
 	"k8s.io/apimachinery/pkg/util/sets"
 	controllerruntime "sigs.k8s.io/controller-runtime"
@@ -58,6 +59,25 @@ var allControllers = sets.New[string](
 	testimagestreamimportcleaner.ControllerName,
 	ephemeralcluster.ControllerName,
 )
+
+var stripManagedFields = cache.TransformStripManagedFields()
+
+func trimImageStreamHistory(in any) (any, error) {
+	transformed, err := stripManagedFields(in)
+	if err != nil {
+		return nil, err
+	}
+	stream, ok := transformed.(*imagev1.ImageStream)
+	if !ok {
+		return transformed, nil
+	}
+	for i := range stream.Status.Tags {
+		if len(stream.Status.Tags[i].Items) > 1 {
+			stream.Status.Tags[i].Items = []imagev1.TagEvent{stream.Status.Tags[i].Items[0]}
+		}
+	}
+	return stream, nil
+}
 
 type options struct {
 	leaderElectionNamespace              string
@@ -424,6 +444,19 @@ func main() {
 			Client: client.Options{
 				DryRun: &opts.dryRun,
 			},
+			Cache: cache.Options{DefaultTransform: stripManagedFields},
+		}
+		if opts.enabledControllersSet.Has(serviceaccountsecretrefresher.ControllerName) &&
+			!opts.enabledControllersSet.Has(testimagesdistributor.ControllerName) &&
+			!opts.enabledControllersSet.Has(ephemeralcluster.ControllerName) {
+			namespaces := map[string]cache.Config{}
+			for _, namespace := range opts.serviceAccountSecretRefresherOptions.enabledNamespaces.Strings() {
+				namespaces[namespace] = cache.Config{}
+			}
+			options.Cache.ByObject = map[client.Object]cache.ByObject{
+				&corev1.Secret{}:         {Namespaces: namespaces},
+				&corev1.ServiceAccount{}: {Namespaces: namespaces},
+			}
 		}
 		if cluster == appCIContextName {
 			options.LeaderElection = true
@@ -437,9 +470,8 @@ func main() {
 		}
 		if cluster == opts.registryClusterName {
 			syncPeriod := 24 * time.Hour
-			options.Cache = cache.Options{
-				SyncPeriod: &syncPeriod,
-			}
+			options.Cache.SyncPeriod = &syncPeriod
+			options.Cache.DefaultTransform = trimImageStreamHistory
 		}
 		logrus.WithField("cluster", cluster).Info("Creating manager ...")
 		mgr, err := controllerruntime.NewManager(&cfg, options)

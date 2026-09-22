@@ -6,11 +6,43 @@ import (
 
 	"github.com/google/go-cmp/cmp"
 
+	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/apimachinery/pkg/util/sets"
 	"sigs.k8s.io/prow/pkg/flagutil"
 
+	imagev1 "github.com/openshift/api/image/v1"
+
 	"github.com/openshift/ci-tools/pkg/testhelper"
 )
+
+func TestTrimImageStreamHistory(t *testing.T) {
+	stream := &imagev1.ImageStream{
+		ObjectMeta: metav1.ObjectMeta{ManagedFields: []metav1.ManagedFieldsEntry{{Manager: "test"}}},
+		Status: imagev1.ImageStreamStatus{Tags: []imagev1.NamedTagEventList{
+			{Tag: "latest", Items: []imagev1.TagEvent{{Image: "new"}, {Image: "old"}}},
+			{Tag: "empty"},
+		}},
+	}
+	originalItems := stream.Status.Tags[0].Items
+
+	transformed, err := trimImageStreamHistory(stream)
+	if err != nil {
+		t.Fatalf("unexpected transform error: %v", err)
+	}
+	got, ok := transformed.(*imagev1.ImageStream)
+	if !ok {
+		t.Fatalf("expected an ImageStream, got %T", transformed)
+	}
+	if diff := cmp.Diff([]imagev1.TagEvent{{Image: "new"}}, got.Status.Tags[0].Items); diff != "" {
+		t.Errorf("unexpected retained history (-want +got):\n%s", diff)
+	}
+	if &got.Status.Tags[0].Items[0] == &originalItems[0] {
+		t.Error("expected retained history to use a new backing slice")
+	}
+	if got.ManagedFields != nil {
+		t.Errorf("expected managed fields to be stripped, got %#v", got.ManagedFields)
+	}
+}
 
 func TestCompleteImageStreamTags(t *testing.T) {
 	tests := []struct {

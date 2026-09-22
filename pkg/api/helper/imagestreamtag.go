@@ -15,6 +15,19 @@ import (
 	"github.com/openshift/ci-tools/pkg/api"
 )
 
+// InvalidImageMetadataError indicates that an ImageStreamTag has empty or malformed image metadata.
+type InvalidImageMetadataError struct {
+	err error
+}
+
+func (e *InvalidImageMetadataError) Error() string {
+	return e.err.Error()
+}
+
+func (e *InvalidImageMetadataError) Unwrap() error {
+	return e.err
+}
+
 // LabelsOnISTagImage the labels of the image underlying the given ImageStreamTag for the given arch
 func LabelsOnISTagImage(ctx context.Context, client ctrlruntimeclient.Client, isTag *imagev1.ImageStreamTag, arch api.ReleaseArchitecture) (map[string]string, error) {
 	dockerImageMetadata := isTag.Image.DockerImageMetadata
@@ -32,10 +45,10 @@ func LabelsOnISTagImage(ctx context.Context, client ctrlruntimeclient.Client, is
 	}
 	metadata := &docker10.DockerImage{}
 	if len(dockerImageMetadata.Raw) == 0 {
-		return nil, fmt.Errorf("found no Docker image metadata for ImageStreamTag %s in %s", isTag.Name, isTag.Namespace)
+		return nil, &InvalidImageMetadataError{err: fmt.Errorf("found no Docker image metadata for ImageStreamTag %s in %s", isTag.Name, isTag.Namespace)}
 	}
 	if err := json.Unmarshal(dockerImageMetadata.Raw, metadata); err != nil {
-		return nil, fmt.Errorf("malformed Docker image metadata for ImageStreamTag %s in %s: %w", isTag.Name, isTag.Namespace, err)
+		return nil, &InvalidImageMetadataError{err: fmt.Errorf("malformed Docker image metadata for ImageStreamTag %s in %s: %w", isTag.Name, isTag.Namespace, err)}
 	}
 	if metadata.Config == nil {
 		logrus.WithField("namespace", isTag.Namespace).WithField("name", isTag.Name).WithField("arch", string(arch)).Debug("Found no config in Docker image metadata")

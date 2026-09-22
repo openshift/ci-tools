@@ -21,7 +21,9 @@ import (
 	"sigs.k8s.io/prow/pkg/config"
 	"sigs.k8s.io/prow/pkg/github"
 
+	imagegroup "github.com/openshift/api/image"
 	imagev1 "github.com/openshift/api/image/v1"
+	"github.com/openshift/library-go/pkg/image/imageutil"
 
 	cioperatorapi "github.com/openshift/ci-tools/pkg/api"
 	"github.com/openshift/ci-tools/pkg/api/helper"
@@ -51,13 +53,6 @@ type Options struct {
 const ControllerName = "promotionreconciler"
 
 func AddToManager(mgr controllerruntime.Manager, opts Options) error {
-	// Pre-Allocate the Image informer rather than letting it allocate on demand, because
-	// starting the watch takes very long (~2 minutes) and having that delay added to our
-	// first (# worker) reconciles skews the workqueue duration metric bigtimes.
-	if _, err := opts.RegistryManager.GetCache().GetInformer(context.TODO(), &imagev1.Image{}); err != nil {
-		return fmt.Errorf("failed to get informer for image: %w", err)
-	}
-
 	if err := opts.CIOperatorConfigAgent.AddIndex(configIndexName, configIndexFn); err != nil {
 		return fmt.Errorf("failed to add indexer to config-agent: %w", err)
 	}
@@ -75,14 +70,14 @@ func AddToManager(mgr controllerruntime.Manager, opts Options) error {
 	log := logrus.WithField("controller", ControllerName)
 	go func() {
 		for delta := range configChangeChannel {
-			if err := handleCIOpConfigChange(opts.RegistryManager.GetClient(), releaseBuildConfigs, prowJobEnqueuer, opts.GitHubClient, delta, log); err != nil {
+			if err := handleCIOpConfigChange(opts.RegistryManager.GetAPIReader(), releaseBuildConfigs, prowJobEnqueuer, opts.GitHubClient, delta, log); err != nil {
 				log.WithError(err).Error("Failed to handle CI Operator config change")
 			}
 		}
 	}()
 	r := &reconciler{
 		log:                 log,
-		client:              imagestreamtagwrapper.MustNew(opts.RegistryManager.GetClient(), opts.RegistryManager.GetCache()),
+		client:              imagestreamtagwrapper.MustNewWithImageReader(opts.RegistryManager.GetClient(), opts.RegistryManager.GetCache(), opts.RegistryManager.GetAPIReader()),
 		releaseBuildConfigs: releaseBuildConfigs,
 		gitHubClient:        opts.GitHubClient,
 		enqueueJob:          prowJobEnqueuer,
@@ -165,20 +160,19 @@ func (r *reconciler) Reconcile(ctx context.Context, req controllerruntime.Reques
 }
 
 func (r *reconciler) reconcile(ctx context.Context, req controllerruntime.Request, log *logrus.Entry) error {
-	ist := &imagev1.ImageStreamTag{}
-	if err := r.client.Get(ctx, req.NamespacedName, ist); err != nil {
-		// Object got deleted while it was in the workqueue
+	recent, err := imageStreamTagIsRecent(ctx, r.client, req.NamespacedName, r.since)
+	if err != nil {
 		if apierrors.IsNotFound(err) {
 			return nil
 		}
-		return fmt.Errorf("failed to get object: %w", err)
+		return fmt.Errorf("failed to check imageStreamTag age: %w", err)
 	}
-
-	if !ist.CreationTimestamp.After(time.Now().Add(-r.since)) {
-		log.WithField("creationTimestamp", ist.CreationTimestamp).Trace("Ignored old imageStreamTag")
+	if !recent {
+		log.Trace("Ignored old imageStreamTag")
 		return nil
 	}
 
+	ist := &imagev1.ImageStreamTag{ObjectMeta: metav1.ObjectMeta{Namespace: req.Namespace, Name: req.Name}}
 	ciOPConfig, err := r.promotionConfig(ist)
 	if err != nil {
 		return fmt.Errorf("failed to get promotionConfig: %w", err)
@@ -190,9 +184,17 @@ func (r *reconciler) reconcile(ctx context.Context, req controllerruntime.Reques
 	}
 	log = log.WithField("org", ciOPConfig.Metadata.Org).WithField("repo", ciOPConfig.Metadata.Repo).WithField("branch", ciOPConfig.Metadata.Branch)
 
-	istCommit, err := commitForIST(ist, r.client)
+	if err := r.client.Get(ctx, req.NamespacedName, ist); err != nil {
+		// Object got deleted while it was in the workqueue
+		if apierrors.IsNotFound(err) {
+			return nil
+		}
+		return fmt.Errorf("failed to get object: %w", err)
+	}
+
+	istCommit, err := commitForIST(ctx, ist, r.client)
 	if err != nil {
-		return controllerutil.TerminalError(fmt.Errorf("failed to get commit for imageStreamTag: %w", err))
+		return fmt.Errorf("failed to get commit for imageStreamTag: %w", err)
 	}
 	log = log.WithField("istCommit", istCommit)
 
@@ -219,6 +221,26 @@ func (r *reconciler) reconcile(ctx context.Context, req controllerruntime.Reques
 	return nil
 }
 
+func imageStreamTagIsRecent(ctx context.Context, client ctrlruntimeclient.Client, key types.NamespacedName, since time.Duration) (bool, error) {
+	name, tag, err := imageutil.ParseImageStreamTagName(key.Name)
+	if err != nil {
+		return false, apierrors.NewBadRequest("ImageStreamTags must be retrieved with <name>:<tag>")
+	}
+
+	stream := &imagev1.ImageStream{}
+	if err := client.Get(ctx, types.NamespacedName{Namespace: key.Namespace, Name: name}, stream); err != nil {
+		return false, err
+	}
+	for _, statusTag := range stream.Status.Tags {
+		if statusTag.Tag != tag || len(statusTag.Items) == 0 {
+			continue
+		}
+		return statusTag.Items[0].Created.After(time.Now().Add(-since)), nil
+	}
+
+	return false, apierrors.NewNotFound(imagegroup.Resource("imagestreamtags"), key.Name)
+}
+
 func promotionConfig(releaseBuildConfigs ciOperatorConfigGetter, ist *imagev1.ImageStreamTag) (*cioperatorapi.ReleaseBuildConfiguration, error) {
 	results, err := releaseBuildConfigs(configIndexKeyForIST(ist))
 	if err != nil {
@@ -239,10 +261,14 @@ func (r *reconciler) promotionConfig(ist *imagev1.ImageStreamTag) (*cioperatorap
 	return promotionConfig(r.releaseBuildConfigs, ist)
 }
 
-func commitForIST(ist *imagev1.ImageStreamTag, client ctrlruntimeclient.Client) (string, error) {
-	labels, err := helper.LabelsOnISTagImage(context.TODO(), client, ist, cioperatorapi.ReleaseArchitectureAMD64)
+func commitForIST(ctx context.Context, ist *imagev1.ImageStreamTag, client ctrlruntimeclient.Client) (string, error) {
+	labels, err := helper.LabelsOnISTagImage(ctx, client, ist, cioperatorapi.ReleaseArchitectureAMD64)
 	if err != nil {
-		return "", controllerutil.TerminalError(fmt.Errorf("failed to get value of the image label: %w", err))
+		var invalidImageMetadataError *helper.InvalidImageMetadataError
+		if errors.As(err, &invalidImageMetadataError) {
+			return "", controllerutil.TerminalError(fmt.Errorf("failed to get value of the image label: %w", err))
+		}
+		return "", fmt.Errorf("failed to get value of the image label: %w", err)
 	}
 	if labels == nil {
 		return "", controllerutil.TerminalError(errors.New("ImageStreamTag has no labels, can't find out source commit"))
@@ -290,7 +316,7 @@ func configIndexKeyForIST(ist *imagev1.ImageStreamTag) string {
 	return ist.Namespace + "/" + ist.Name
 }
 
-func handleCIOpConfigChange(registryClient ctrlruntimeclient.Client,
+func handleCIOpConfigChange(registryClient ctrlruntimeclient.Reader,
 	ciOperatorConfigGetter ciOperatorConfigGetter,
 	prowJobEnqueuer prowjobreconciler.Enqueuer,
 	githubClient githubClient,

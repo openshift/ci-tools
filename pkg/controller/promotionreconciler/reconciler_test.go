@@ -68,7 +68,7 @@ func TestCommitForIST(t *testing.T) {
 			if err := yaml.Unmarshal(rawImageStreamTag, ist); err != nil {
 				t.Fatalf("failed to unmarshal imagestreamTag: %v", err)
 			}
-			commit, err := commitForIST(ist, fakectrlruntimeclient.NewClientBuilder().Build())
+			commit, err := commitForIST(context.Background(), ist, fakectrlruntimeclient.NewClientBuilder().Build())
 			if err != nil {
 				t.Fatalf("failed to get ref for ist: %v", err)
 			}
@@ -87,6 +87,17 @@ func (fghc fakeGithubClient) GetRef(org, repo, ref string) (string, error) {
 	return fghc.getGef(org, repo, ref)
 }
 
+type getInterceptingClient struct {
+	ctrlruntimeclient.Client
+	get func(context.Context, ctrlruntimeclient.ObjectKey, ctrlruntimeclient.Object, ...ctrlruntimeclient.GetOption) error
+}
+
+func (c *getInterceptingClient) Get(ctx context.Context, key ctrlruntimeclient.ObjectKey, obj ctrlruntimeclient.Object, opts ...ctrlruntimeclient.GetOption) error {
+	return c.get(ctx, key, obj, opts...)
+}
+
+type imageReadContextKey struct{}
+
 func TestReconcile(t *testing.T) {
 	t.Parallel()
 	const (
@@ -95,12 +106,60 @@ func TestReconcile(t *testing.T) {
 		ciOpRepo    = "ci-op-repo"
 		ciOpBranch  = "ci-op-branch"
 	)
+	transientImageReadError := errors.New("temporary apiserver failure")
 	testCases := []struct {
 		name              string
 		githubClient      func(owner, repo, ref string) (string, error)
 		promotionDisabled bool
+		imageReadError    error
+		metadataOverride  *runtime.RawExtension
 		verify            func(error, *prowjobreconciler.OrgRepoBranchCommit) error
 	}{
+		{
+			name:           "transient Image read error is retried",
+			githubClient:   func(_, _, _ string) (string, error) { return "unused", nil },
+			imageReadError: transientImageReadError,
+			verify: func(e error, _ *prowjobreconciler.OrgRepoBranchCommit) error {
+				if e == nil {
+					return errors.New("expected an Image read error")
+				}
+				if controllerutil.IsTerminal(e) {
+					return fmt.Errorf("expected a retriable error, got terminal error: %w", e)
+				}
+				if !errors.Is(e, transientImageReadError) {
+					return fmt.Errorf("expected Image read failure, got: %w", e)
+				}
+				return nil
+			},
+		},
+		{
+			name:             "empty image metadata is terminal",
+			githubClient:     func(_, _, _ string) (string, error) { return "unused", nil },
+			metadataOverride: &runtime.RawExtension{},
+			verify: func(e error, _ *prowjobreconciler.OrgRepoBranchCommit) error {
+				if e == nil {
+					return errors.New("expected empty image metadata error")
+				}
+				if !controllerutil.IsTerminal(e) {
+					return fmt.Errorf("expected empty image metadata to be terminal, got %w", e)
+				}
+				return nil
+			},
+		},
+		{
+			name:             "malformed image metadata is terminal",
+			githubClient:     func(_, _, _ string) (string, error) { return "unused", nil },
+			metadataOverride: &runtime.RawExtension{Raw: []byte(`{`)},
+			verify: func(e error, _ *prowjobreconciler.OrgRepoBranchCommit) error {
+				if e == nil {
+					return errors.New("expected malformed image metadata error")
+				}
+				if !controllerutil.IsTerminal(e) {
+					return fmt.Errorf("expected malformed image metadata to be terminal, got %w", e)
+				}
+				return nil
+			},
+		},
 		{
 			name:         "404 getting commit for IST returns terminal error",
 			githubClient: func(_, _, _ string) (string, error) { return "", fmt.Errorf("wrapped: %w", github.NewNotFound()) },
@@ -186,11 +245,12 @@ func TestReconcile(t *testing.T) {
 
 	for _, tc := range testCases {
 		t.Run(tc.name, func(t *testing.T) {
+			creationTimestamp := metav1.NewTime(time.Now())
 			imageStreamTag := &imagev1.ImageStreamTag{
 				ObjectMeta: metav1.ObjectMeta{
 					Namespace:         "namespace",
 					Name:              "name:tag",
-					CreationTimestamp: metav1.NewTime(time.Now()),
+					CreationTimestamp: creationTimestamp,
 				},
 				Image: imagev1.Image{
 					DockerImageMetadata: runtime.RawExtension{
@@ -305,16 +365,46 @@ func TestReconcile(t *testing.T) {
 
 			var req *prowjobreconciler.OrgRepoBranchCommit
 
-			client := fakectrlruntimeclient.NewClientBuilder().WithRuntimeObjects(imageStreamTag).Build()
 			since := 180 * 24 * time.Hour
 			if tc.name == "404 does not happen on an old tag" {
-				client = fakectrlruntimeclient.NewClientBuilder().WithRuntimeObjects(&imagev1.ImageStreamTag{
-					ObjectMeta: metav1.ObjectMeta{
-						Namespace:         "namespace",
-						Name:              "name:tag",
-						CreationTimestamp: metav1.NewTime(time.Now().Add(-(since + time.Hour))),
+				creationTimestamp = metav1.NewTime(time.Now().Add(-(since + time.Hour)))
+				imageStreamTag.CreationTimestamp = creationTimestamp
+			}
+			imageStream := &imagev1.ImageStream{
+				ObjectMeta: metav1.ObjectMeta{Namespace: "namespace", Name: "name"},
+				Status: imagev1.ImageStreamStatus{Tags: []imagev1.NamedTagEventList{{
+					Tag:   "tag",
+					Items: []imagev1.TagEvent{{Created: creationTimestamp}},
+				}}},
+			}
+			ctx := context.WithValue(context.Background(), imageReadContextKey{}, tc.name)
+			if tc.imageReadError != nil {
+				imageStreamTag.Image.DockerImageManifests = []imagev1.ImageManifest{{
+					Architecture: string(cioperatorapi.ReleaseArchitectureAMD64),
+					Digest:       "sha256:image",
+				}}
+			}
+			baseClient := fakectrlruntimeclient.NewClientBuilder().WithRuntimeObjects(imageStreamTag, imageStream).Build()
+			var client ctrlruntimeclient.Client = baseClient
+			if tc.imageReadError != nil || tc.metadataOverride != nil {
+				client = &getInterceptingClient{
+					Client: baseClient,
+					get: func(ctx context.Context, key ctrlruntimeclient.ObjectKey, obj ctrlruntimeclient.Object, opts ...ctrlruntimeclient.GetOption) error {
+						if _, isImage := obj.(*imagev1.Image); isImage {
+							if got := ctx.Value(imageReadContextKey{}); got != tc.name {
+								t.Errorf("Image read got context value %v, want %q", got, tc.name)
+							}
+							return tc.imageReadError
+						}
+						if err := baseClient.Get(ctx, key, obj, opts...); err != nil {
+							return err
+						}
+						if imageStreamTag, isImageStreamTag := obj.(*imagev1.ImageStreamTag); isImageStreamTag && tc.metadataOverride != nil {
+							imageStreamTag.Image.DockerImageMetadata = *tc.metadataOverride
+						}
+						return nil
 					},
-				}).Build()
+				}
 			}
 			r := &reconciler{
 				log:    logrus.NewEntry(logrus.New()),
@@ -342,10 +432,16 @@ func TestReconcile(t *testing.T) {
 				since:        since,
 			}
 
-			err := r.reconcile(context.Background(), reconcile.Request{NamespacedName: types.NamespacedName{
+			reconcileRequest := reconcile.Request{NamespacedName: types.NamespacedName{
 				Namespace: "namespace",
 				Name:      "name:tag",
-			}}, r.log)
+			}}
+			var err error
+			if tc.imageReadError != nil {
+				_, err = r.Reconcile(ctx, reconcileRequest)
+			} else {
+				err = r.reconcile(ctx, reconcileRequest, r.log)
+			}
 
 			if err := tc.verify(err, req); err != nil {
 				t.Fatal(err)

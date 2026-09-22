@@ -777,10 +777,12 @@ func (r *reconciler) fetchClusterKubeconfig(
 		return
 	}
 
+	kubeadminPasswd := kubeconfigSecret.Data["kubeadmin-password"]
 	secretData := map[string][]byte{
 		"kubeconfig":        kubeconfig,
-		"kubeAdminPassword": {},
+		"kubeAdminPassword": kubeadminPasswd,
 	}
+
 	if err := r.createCredentialsSecret(ctx, log, ec, secretData); err != nil {
 		log.WithError(err).Error("Failed to create credentials secret")
 		upsertCondition(ecStatus, ephemeralclusterv1.ClusterReady, metav1.ConditionFalse, ec.Generation, r.now(), ephemeralclusterv1.SecretsFetchFailureReason, err.Error())

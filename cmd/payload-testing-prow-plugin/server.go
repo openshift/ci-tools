@@ -10,9 +10,11 @@ import (
 
 	"github.com/sirupsen/logrus"
 
+	apierrors "k8s.io/apimachinery/pkg/api/errors"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/apimachinery/pkg/labels"
 	"k8s.io/apimachinery/pkg/selection"
+	"k8s.io/apimachinery/pkg/types"
 	"k8s.io/apimachinery/pkg/util/sets"
 	ctrlruntimeclient "sigs.k8s.io/controller-runtime/pkg/client"
 	prowapi "sigs.k8s.io/prow/pkg/apis/prowjobs/v1"
@@ -22,6 +24,8 @@ import (
 	"sigs.k8s.io/prow/pkg/kube"
 	"sigs.k8s.io/prow/pkg/pluginhelp"
 	"sigs.k8s.io/prow/pkg/plugins/trigger"
+
+	userv1 "github.com/openshift/api/user/v1"
 
 	"github.com/openshift/ci-tools/pkg/api"
 	prpqv1 "github.com/openshift/ci-tools/pkg/api/pullrequestpayloadqualification/v1"
@@ -142,14 +146,16 @@ func (c *githubTrustedChecker) trustedUser(author, org, repo string, _ int) (boo
 }
 
 type server struct {
-	ghc                githubClient
-	ctx                context.Context
-	kubeClient         ctrlruntimeclient.Client
-	namespace          string
-	jobResolver        jobResolver
-	testResolver       testResolver
-	trustedChecker     trustedChecker
-	ciOpConfigResolver ciOpConfigResolver
+	ghc                 githubClient
+	ctx                 context.Context
+	kubeClient          ctrlruntimeclient.Client
+	namespace           string
+	jobResolver         jobResolver
+	testResolver        testResolver
+	trustedChecker      trustedChecker
+	ciOpConfigResolver  ciOpConfigResolver
+	privatePayloadGroup string
+	isTrustedApp        func(string) bool
 }
 
 type jobSetSpecification struct {
@@ -416,7 +422,12 @@ func (s *server) handle(l *logrus.Entry, ic github.IssueCommentEvent) (string, [
 		return fmt.Sprintf("user %s is not trusted for pull request %s/%s#%d", ic.Comment.User.Login, org, repo, prNumber), nil
 	}
 
+	// Abort uses the webhook repo privacy bit so it still works if GetPullRequest fails.
 	if abortRequested {
+		if deny := s.denyPrivatePayload(ic.Comment.User.Login, ic.Repo.Private); deny != "" {
+			logger.Info("denied private payload: missing RBAC group membership")
+			return deny, nil
+		}
 		return s.abortAll(logger, ic), nil
 	}
 
@@ -426,6 +437,11 @@ func (s *server) handle(l *logrus.Entry, ic github.IssueCommentEvent) (string, [
 	if err != nil {
 		logger.WithError(err).Error("could not get pull request")
 		return formatError(fmt.Errorf("could not get pull request https://github.com/%s/%s/pull/%d: %w", org, repo, prNumber, err)), nil
+	}
+
+	if deny := s.denyPrivatePayload(ic.Comment.User.Login, pr.Base.Repo.Private); deny != "" {
+		logger.Info("denied private payload: missing RBAC group membership")
+		return deny, nil
 	}
 
 	ciOpConfig, err := s.ciOpConfigResolver.Config(&api.Metadata{Org: org, Repo: repo, Branch: pr.Base.Ref})
@@ -554,6 +570,9 @@ func (s *server) handle(l *logrus.Entry, ic github.IssueCommentEvent) (string, [
 				specLogger.WithError(err).Errorf("unable to get pr from github for: %s", prRef)
 				return formatError(fmt.Errorf("unable to get pr from github for: %s: %w", prRef, err)), nil
 			}
+			if deny := s.denyPrivatePayload(ic.Comment.User.Login, pullRequest.Base.Repo.Private); deny != "" {
+				return deny, nil
+			}
 			if pullRequest.Base.Repo.Private {
 				builder.private = true
 			}
@@ -582,7 +601,11 @@ func (s *server) handle(l *logrus.Entry, ic github.IssueCommentEvent) (string, [
 				return formatError(fmt.Errorf("could not create PullRequestPayloadQualificationRun: %w", err)), nil
 			}
 			messages = append(messages, message(spec, jobNames))
-			messages = append(messages, fmt.Sprintf("See details on %s/%s/%s\n", prPayloadTestsUIURL, builder.namespace, run.Name))
+			if builder.private {
+				messages = append(messages, "This run includes private repositories; details are omitted from the public payload-testing UI. Related jobs are hidden — use deck-internal.\n")
+			} else {
+				messages = append(messages, fmt.Sprintf("See details on %s/%s/%s\n", prPayloadTestsUIURL, builder.namespace, run.Name))
+			}
 
 			specLogger.WithField("duration", time.Since(startCreateRuns)).WithField("run.Name", run.Name).
 				WithField("run.Namespace", run.Namespace).Debug("creating PullRequestPayloadQualificationRuns completed")
@@ -848,6 +871,53 @@ func (s *server) createComment(org, repo string, number int, message, user strin
 	if err := s.ghc.CreateComment(org, repo, number, fmt.Sprintf("@%s: %s", user, message)); err != nil {
 		logger.WithError(err).Error("failed to create a comment")
 	}
+}
+
+// denyPrivatePayload returns a user-facing denial when a private-repo payload
+// trigger requires membership in privatePayloadGroup. Public repos and trusted
+// apps are never denied here. Empty privatePayloadGroup disables the check.
+func (s *server) denyPrivatePayload(author string, private bool) string {
+	if !private || s.privatePayloadGroup == "" {
+		return ""
+	}
+	if s.isTrustedApp != nil && s.isTrustedApp(author) {
+		return ""
+	}
+	ok, err := userInRBACGroup(s.ctx, s.kubeClient, author, s.privatePayloadGroup)
+	if err != nil {
+		return formatError(fmt.Errorf("could not check group %s membership for %s: %w", s.privatePayloadGroup, author, err))
+	}
+	if ok {
+		return ""
+	}
+	return fmt.Sprintf("user %s is not a member of the `%s` group required to trigger payload tests on private repositories; join that Rover group to gain access", author, s.privatePayloadGroup)
+}
+
+// userInRBACGroup maps githubLogin via the github-ldap `{login}-group` to a
+// kerberos ID, then checks membership in rbacGroup.
+func userInRBACGroup(ctx context.Context, client ctrlruntimeclient.Client, githubLogin, rbacGroup string) (bool, error) {
+	ghGroup := &userv1.Group{}
+	if err := client.Get(ctx, types.NamespacedName{Name: api.GitHubUserGroup(githubLogin)}, ghGroup); err != nil {
+		if apierrors.IsNotFound(err) {
+			return false, nil
+		}
+		return false, fmt.Errorf("get %s: %w", api.GitHubUserGroup(githubLogin), err)
+	}
+	if len(ghGroup.Users) == 0 {
+		return false, nil
+	}
+	kerberosID := ghGroup.Users[0]
+
+	group := &userv1.Group{}
+	if err := client.Get(ctx, types.NamespacedName{Name: rbacGroup}, group); err != nil {
+		return false, fmt.Errorf("get %s: %w", rbacGroup, err)
+	}
+	for _, user := range group.Users {
+		if user == kerberosID {
+			return true, nil
+		}
+	}
+	return false, nil
 }
 
 func formatError(err error) string {

@@ -13,12 +13,15 @@ import (
 
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/client-go/kubernetes/scheme"
+	ctrlruntimeclient "sigs.k8s.io/controller-runtime/pkg/client"
 	fakeclient "sigs.k8s.io/controller-runtime/pkg/client/fake"
 	prowapi "sigs.k8s.io/prow/pkg/apis/prowjobs/v1"
 	prowflagutil "sigs.k8s.io/prow/pkg/flagutil"
 	"sigs.k8s.io/prow/pkg/github"
 	"sigs.k8s.io/prow/pkg/github/fakegithub"
 	"sigs.k8s.io/prow/pkg/kube"
+
+	userv1 "github.com/openshift/api/user/v1"
 
 	"github.com/openshift/ci-tools/pkg/api"
 	prpqv1 "github.com/openshift/ci-tools/pkg/api/pullrequestpayloadqualification/v1"
@@ -751,7 +754,7 @@ See details on https://pr-payload-tests.ci.openshift.org/runs/ci/guid-0
 			expectedMessage: `trigger 1 job(s) of type informing for the ci release of OCP 4.19
 - periodic-ci-openshift-release-master-nightly-4.10-e2e-aws-serial
 
-See details on https://pr-payload-tests.ci.openshift.org/runs/ci/guid-0
+This run includes private repositories; details are omitted from the public payload-testing UI. Related jobs are hidden — use deck-internal.
 `,
 		},
 		{
@@ -1542,5 +1545,96 @@ func TestGithubTrustedChecker_trustedUser_UntrustedAppFallsBackToHumanCheck(t *t
 	}
 	if trusted {
 		t.Fatalf("trustedUser unexpectedly trusted unlisted app installation user")
+	}
+}
+
+func TestUserInRBACGroup(t *testing.T) {
+	if err := userv1.AddToScheme(scheme.Scheme); err != nil {
+		t.Fatalf("add userv1 scheme: %v", err)
+	}
+	tests := []struct {
+		name        string
+		objects     []ctrlruntimeclient.Object
+		githubLogin string
+		rbacGroup   string
+		want        bool
+		wantErr     bool
+	}{
+		{
+			name: "member",
+			objects: []ctrlruntimeclient.Object{
+				&userv1.Group{ObjectMeta: metav1.ObjectMeta{Name: "alice-group"}, Users: userv1.OptionalNames{"kalice"}},
+				&userv1.Group{ObjectMeta: metav1.ObjectMeta{Name: "aos-staff-engineers"}, Users: userv1.OptionalNames{"kalice", "kbob"}},
+			},
+			githubLogin: "alice",
+			rbacGroup:   "aos-staff-engineers",
+			want:        true,
+		},
+		{
+			name: "not a member",
+			objects: []ctrlruntimeclient.Object{
+				&userv1.Group{ObjectMeta: metav1.ObjectMeta{Name: "alice-group"}, Users: userv1.OptionalNames{"kalice"}},
+				&userv1.Group{ObjectMeta: metav1.ObjectMeta{Name: "aos-staff-engineers"}, Users: userv1.OptionalNames{"kbob"}},
+			},
+			githubLogin: "alice",
+			rbacGroup:   "aos-staff-engineers",
+			want:        false,
+		},
+		{
+			name:        "no github mapping group",
+			objects:     []ctrlruntimeclient.Object{},
+			githubLogin: "alice",
+			rbacGroup:   "aos-staff-engineers",
+			want:        false,
+		},
+	}
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			client := fakeclient.NewClientBuilder().WithScheme(scheme.Scheme).WithObjects(tt.objects...).Build()
+			got, err := userInRBACGroup(context.TODO(), client, tt.githubLogin, tt.rbacGroup)
+			if (err != nil) != tt.wantErr {
+				t.Fatalf("userInRBACGroup() error = %v, wantErr %v", err, tt.wantErr)
+			}
+			if got != tt.want {
+				t.Errorf("userInRBACGroup() = %v, want %v", got, tt.want)
+			}
+		})
+	}
+}
+
+func TestDenyPrivatePayload(t *testing.T) {
+	if err := userv1.AddToScheme(scheme.Scheme); err != nil {
+		t.Fatalf("add userv1 scheme: %v", err)
+	}
+	client := fakeclient.NewClientBuilder().WithScheme(scheme.Scheme).WithObjects(
+		&userv1.Group{ObjectMeta: metav1.ObjectMeta{Name: "alice-group"}, Users: userv1.OptionalNames{"kalice"}},
+		&userv1.Group{ObjectMeta: metav1.ObjectMeta{Name: "aos-staff-engineers"}, Users: userv1.OptionalNames{"kalice"}},
+	).Build()
+
+	s := &server{
+		ctx:                 context.TODO(),
+		kubeClient:          client,
+		privatePayloadGroup: "aos-staff-engineers",
+		isTrustedApp:        func(login string) bool { return login == "bot[bot]" },
+	}
+
+	tests := []struct {
+		name     string
+		author   string
+		private  bool
+		wantDeny bool
+	}{
+		{name: "public repo", author: "nobody", private: false, wantDeny: false},
+		{name: "private member", author: "alice", private: true, wantDeny: false},
+		{name: "private non-member", author: "eve", private: true, wantDeny: true},
+		{name: "private trusted app", author: "bot[bot]", private: true, wantDeny: false},
+	}
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			deny := s.denyPrivatePayload(tt.author, tt.private)
+			if (deny != "") != tt.wantDeny {
+				t.Fatalf("denyPrivatePayload() deny=%q, wantDeny %v", deny, tt.wantDeny)
+			}
+		})
 	}
 }

@@ -117,10 +117,11 @@ SELECT
 	IFNULL(SAFE_CAST(P75 AS STRING), "0.0") AS P75,
     IFNULL(SAFE_CAST(P95 AS STRING), "0.0") AS P95,
     IFNULL(SAFE_CAST(P99 AS STRING), "0.0") AS P99,
-FROM DATA_SET_LOCATION.BackendDisruptionPercentilesByDate
+FROM DATA_SET_LOCATION.BackendDisruptionPercentilesByDateV5
 WHERE
     LookbackDays = 30 
-    AND ReportDate = (SELECT MAX(ReportDate) FROM DATA_SET_LOCATION.BackendDisruptionPercentilesByDate)
+    AND ReportDate = (SELECT MAX(ReportDate) FROM DATA_SET_LOCATION.BackendDisruptionPercentilesByDateV5)
+    AND FeatureSet = "default"
     AND (MasterNodesUpdated != "N" OR FromRelease = "")
 ORDER BY 
     Release, 

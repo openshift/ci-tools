@@ -383,6 +383,157 @@ func TestGeneratePodsEnvironment(t *testing.T) {
 	}
 }
 
+func TestGeneratePodsOverrideEnvironment(t *testing.T) {
+	value := "override-value"
+	defValue := "default"
+	empty := ""
+	for _, tc := range []struct {
+		name      string
+		env       api.TestEnvironment
+		overrides api.TestEnvironment
+		test      api.LiteralTestStep
+		expected  *string
+	}{{
+		name:      "override is applied to an opted-in parameter",
+		overrides: api.TestEnvironment{"TEST": value},
+		test: api.LiteralTestStep{
+			Environment: []api.StepParameter{{Name: "TEST", Overridable: true}},
+		},
+		expected: &value,
+	}, {
+		name:      "override is ignored for a parameter that did not opt in",
+		overrides: api.TestEnvironment{"TEST": value},
+		test: api.LiteralTestStep{
+			Environment: []api.StepParameter{{Name: "TEST"}},
+		},
+		expected: &empty,
+	}, {
+		name:      "override takes precedence over the parameter's default when opted in",
+		overrides: api.TestEnvironment{"TEST": value},
+		test: api.LiteralTestStep{
+			Environment: []api.StepParameter{{Name: "TEST", Default: &defValue, Overridable: true}},
+		},
+		expected: &value,
+	}, {
+		name:      "default is used when opted in but no override is present",
+		overrides: api.TestEnvironment{},
+		test: api.LiteralTestStep{
+			Environment: []api.StepParameter{{Name: "TEST", Default: &defValue, Overridable: true}},
+		},
+		expected: &defValue,
+	}, {
+		name:      "override does not leak into a parameter with the same name on a different, non-opted-in step",
+		env:       api.TestEnvironment{},
+		overrides: api.TestEnvironment{"TEST": value},
+		test: api.LiteralTestStep{
+			Environment: []api.StepParameter{{Name: "TEST"}},
+		},
+		expected: &empty,
+	}} {
+		t.Run(tc.name, func(t *testing.T) {
+			jobSpec := api.JobSpec{
+				JobSpec: prowdapi.JobSpec{
+					Job:       "job",
+					BuildID:   "build_id",
+					ProwJobID: "prow_job_id",
+					Type:      prowapi.PeriodicJob,
+					DecorationConfig: &prowapi.DecorationConfig{
+						Timeout:     &prowapi.Duration{Duration: time.Minute},
+						GracePeriod: &prowapi.Duration{Duration: time.Second},
+						UtilityImages: &prowapi.UtilityImages{
+							Sidecar:    "sidecar",
+							Entrypoint: "entrypoint",
+						},
+					},
+				},
+			}
+			jobSpec.SetNamespace("ns")
+			test := []api.LiteralTestStep{tc.test}
+			step := MultiStageTestStep(api.TestStepConfiguration{
+				MultiStageTestConfigurationLiteral: &api.MultiStageTestConfigurationLiteral{
+					Test:           test,
+					Environment:    tc.env,
+					ParamOverrides: tc.overrides,
+				},
+			}, &api.ReleaseBuildConfiguration{}, fakeStepParams{}, nil, &jobSpec, nil, "node-name", "", nil, false, nil, false, wait.Backoff{})
+			pods, _, err := step.(*multiStageTestStep).generatePods(test, nil, nil, nil, nil)
+			if err != nil {
+				t.Fatal(err)
+			}
+			var env *string
+			for i, v := range pods[0].Spec.Containers[0].Env {
+				if v.Name == "TEST" {
+					env = &pods[0].Spec.Containers[0].Env[i].Value
+				}
+			}
+			if !reflect.DeepEqual(env, tc.expected) {
+				t.Errorf("incorrect environment:\n%s", diff.ObjectReflectDiff(env, tc.expected))
+			}
+		})
+	}
+}
+
+func TestGeneratePodsOverrideEnvironmentCrossStepIsolation(t *testing.T) {
+	jobSpec := api.JobSpec{
+		JobSpec: prowdapi.JobSpec{
+			Job:       "job",
+			BuildID:   "build_id",
+			ProwJobID: "prow_job_id",
+			Type:      prowapi.PeriodicJob,
+			DecorationConfig: &prowapi.DecorationConfig{
+				Timeout:     &prowapi.Duration{Duration: time.Minute},
+				GracePeriod: &prowapi.Duration{Duration: time.Second},
+				UtilityImages: &prowapi.UtilityImages{
+					Sidecar:    "sidecar",
+					Entrypoint: "entrypoint",
+				},
+			},
+		},
+	}
+	jobSpec.SetNamespace("ns")
+
+	optedIn := api.LiteralTestStep{
+		As: "opted-in",
+		Environment: []api.StepParameter{
+			{Name: "TEST", Overridable: true},
+		},
+	}
+	notOptedIn := api.LiteralTestStep{
+		As: "not-opted-in",
+		Environment: []api.StepParameter{
+			{Name: "TEST"},
+		},
+	}
+	test := []api.LiteralTestStep{optedIn, notOptedIn}
+
+	step := MultiStageTestStep(api.TestStepConfiguration{
+		MultiStageTestConfigurationLiteral: &api.MultiStageTestConfigurationLiteral{
+			Test:           test,
+			ParamOverrides: api.TestEnvironment{"TEST": "override-value"},
+		},
+	}, &api.ReleaseBuildConfiguration{}, fakeStepParams{}, nil, &jobSpec, nil, "node-name", "", nil, false, nil, false, wait.Backoff{})
+	pods, _, err := step.(*multiStageTestStep).generatePods(test, nil, nil, nil, nil)
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	valueFor := func(podIdx int) string {
+		for _, v := range pods[podIdx].Spec.Containers[0].Env {
+			if v.Name == "TEST" {
+				return v.Value
+			}
+		}
+		return ""
+	}
+
+	if got := valueFor(0); got != "override-value" {
+		t.Errorf("opted-in step: expected TEST=override-value, got %q", got)
+	}
+	if got := valueFor(1); got != "" {
+		t.Errorf("non-opted-in step: expected TEST to remain empty, but the override leaked in: got %q", got)
+	}
+}
+
 func TestGeneratePodBestEffort(t *testing.T) {
 	yes := true
 	no := false

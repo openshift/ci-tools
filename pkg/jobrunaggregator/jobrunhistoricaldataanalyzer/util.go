@@ -42,12 +42,29 @@ func readHistoricalDataFile(filePath, dataType string) ([]jobrunaggregatorapi.Hi
 	}
 }
 
-func convertToMap(data []jobrunaggregatorapi.HistoricalData) map[string]jobrunaggregatorapi.HistoricalData {
-	converted := make(map[string]jobrunaggregatorapi.HistoricalData)
-	for _, v := range data {
-		converted[v.GetKey()] = v
+func indexHistoricalData(source string, data []jobrunaggregatorapi.HistoricalData) (map[string]jobrunaggregatorapi.HistoricalData, error) {
+	indexed := make(map[string]jobrunaggregatorapi.HistoricalData, len(data))
+	firstIndex := make(map[string]int, len(data))
+	for i, row := range data {
+		key := row.GetKey()
+		if previous, ok := indexed[key]; ok {
+			return nil, fmt.Errorf(
+				"%s contains duplicate historical data key %q at rows %d and %d: JobRuns=%d/%d, P99=%q/%q",
+				source,
+				key,
+				firstIndex[key],
+				i,
+				previous.GetJobRuns(),
+				row.GetJobRuns(),
+				previous.GetP99(),
+				row.GetP99(),
+			)
+		}
+
+		indexed[key] = row
+		firstIndex[key] = i
 	}
-	return converted
+	return indexed, nil
 }
 
 func requireReviewFile(message string) error {

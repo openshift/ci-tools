@@ -4,22 +4,22 @@
     <testcase name="Find the input image os and tag it into the pipeline" time="whatever">
       <properties></properties>
     </testcase>
-    <testcase name="Run multi-stage step ipi-install-install-stableinitial" time="whatever">
+    <testcase name="Run multi-stage step post:post0" time="whatever">
       <properties></properties>
     </testcase>
-    <testcase name="Run multi-stage step post0" time="whatever">
+    <testcase name="Run multi-stage step post:post1" time="whatever">
       <properties></properties>
     </testcase>
-    <testcase name="Run multi-stage step post1" time="whatever">
+    <testcase name="Run multi-stage step pre:ipi-install-install-stableinitial" time="whatever">
       <properties></properties>
     </testcase>
-    <testcase name="Run multi-stage step pre0" time="whatever">
+    <testcase name="Run multi-stage step pre:pre0" time="whatever">
       <properties></properties>
     </testcase>
-    <testcase name="Run multi-stage step test0" time="whatever">
+    <testcase name="Run multi-stage step test:test0" time="whatever">
       <properties></properties>
     </testcase>
-    <testcase name="Run multi-stage step test1" time="whatever">
+    <testcase name="Run multi-stage step test:test1" time="whatever">
       <properties></properties>
     </testcase>
     <testcase name="Run multi-stage test post phase" time="whatever">

@@ -4,13 +4,13 @@
     <testcase name="Find the input image os and tag it into the pipeline" time="whatever">
       <properties></properties>
     </testcase>
-    <testcase name="Run multi-stage step check-shared-dir" time="whatever">
+    <testcase name="Run multi-stage step observer:observer" time="whatever">
       <properties></properties>
     </testcase>
-    <testcase name="Run multi-stage step create-kubeconfig" time="whatever">
+    <testcase name="Run multi-stage step post:check-shared-dir" time="whatever">
       <properties></properties>
     </testcase>
-    <testcase name="Run multi-stage step observer" time="whatever">
+    <testcase name="Run multi-stage step test:create-kubeconfig" time="whatever">
       <properties></properties>
     </testcase>
     <testcase name="Run multi-stage test post phase" time="whatever">

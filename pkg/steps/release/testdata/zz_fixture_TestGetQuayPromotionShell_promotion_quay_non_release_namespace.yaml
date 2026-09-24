@@ -39,7 +39,21 @@ data:
         _digest=$(echo "${_info}" | sed -n '/^Digest:[[:space:]]/s/^Digest:[[:space:]]*//p' | head -n1)
       fi
       if [ -n "${_digest}" ] && oc tag --source=docker --loglevel=2 --reference-policy='source' --import-mode='PreserveOriginal' --reference quay-proxy.ci.openshift.org/openshift/ci@${_digest} ocp/4.21:ovn-kubernetes; then
-        break
+        _verified=false
+        for _v in {1..6}; do
+          _ref=$(oc get is 4.21 -n ocp -o "jsonpath={.status.tags[?(@.tag==\"ovn-kubernetes\")].items[0].dockerImageReference}" 2>/dev/null || true)
+          if [ "${_ref##*@}" = "${_digest}" ]; then
+            echo "promotion: verified reference for ocp/4.21:ovn-kubernetes: ${_ref}" >&2
+            _verified=true
+            break
+          fi
+          echo "promotion: reference not yet confirmed for ocp/4.21:ovn-kubernetes, checking (${_v}/6)" >&2
+          sleep 10
+        done
+        if [ "${_verified}" = "true" ]; then
+          break
+        fi
+        echo "promotion: reference verification failed for ocp/4.21:ovn-kubernetes after 60s, retrying digest-tag" >&2
       fi
       echo "promotion: digest-tag failed for ocp/4.21:ovn-kubernetes attempt ${r}/5 (QCI digest may have moved after mirror)" >&2
       if [ "${r}" -eq 5 ]; then

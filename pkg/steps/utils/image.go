@@ -195,7 +195,8 @@ func getEvaluator(ctx context.Context, client ctrlruntimeclient.Client, ns, name
 				}
 				_, exist, condition := util.ResolvePullSpec(stream, tag.Name, true)
 				if !exist {
-					logrus.WithField("conditionMessage", condition.Message).Debugf("Waiting to import tag[%d] on imagestream %s/%s:%s ...", i, stream.Namespace, stream.Name, tag.Name)
+					logrus.Infof("Waiting to import tag[%d] on imagestream %s/%s:%s ...", i, stream.Namespace, stream.Name, tag.Name)
+					logrus.WithField("conditionMessage", condition.Message).Debugf("Import condition detail for %s/%s:%s", stream.Namespace, stream.Name, tag.Name)
 					if strings.Contains(condition.Message, "Internal error occurred") {
 						if tag.From == nil {
 							// should never happen
@@ -295,9 +296,10 @@ func ImportTagWithRetries(ctx context.Context, client ctrlruntimeclient.Client, 
 	var pullSpec string
 	step := 0
 	retryCount := 0
-	logger := logrus.WithField("tag", fmt.Sprintf(" %s/%s:%s", ns, name, tag)).WithField("sourcePullSpec", sourcePullSpec)
+	infoLogger := logrus.WithField("tag", fmt.Sprintf(" %s/%s:%s", ns, name, tag))
+	logger := infoLogger.WithField("sourcePullSpec", sourcePullSpec)
 	if err := wait.ExponentialBackoff(wait.Backoff{Steps: retries, Duration: 1 * time.Second, Factor: 2}, func() (bool, error) {
-		logger.WithField("step", step).Debug("Retrying importing tag ...")
+		infoLogger.WithField("step", step).Info("Retrying importing tag ...")
 		retryCount = step
 		streamImport := &imagev1.ImageStreamImport{
 			ObjectMeta: meta.ObjectMeta{
@@ -343,7 +345,7 @@ func ImportTagWithRetries(ctx context.Context, client ctrlruntimeclient.Client, 
 			return false, nil
 		}
 		pullSpec = image.Image.DockerImageReference
-		logrus.Debugf("Imported tag %s/%s:%s at import (%d)", ns, name, tag, step-1)
+		logrus.Infof("Imported tag %s/%s:%s at import (%d)", ns, name, tag, step-1)
 		return true, nil
 	}); err != nil {
 		if err == wait.ErrorInterrupted(err) {

@@ -1322,6 +1322,10 @@ func TestGetResolveAndTagRetryShell(t *testing.T) {
 		"exit 1",
 		"$(($RANDOM % 120))",
 		`sleep "${backoff}"`,
+		"dockerImageReference",
+		"promotion: verified reference for " + isTag,
+		"promotion: reference not yet confirmed for " + isTag,
+		`"${_ref##*@}" = "${_digest}"`,
 	} {
 		if !strings.Contains(got, sub) {
 			t.Fatalf("missing substring %q in:\n%s", sub, got)
@@ -1581,6 +1585,119 @@ func TestPromotionCLIImage(t *testing.T) {
 			}
 			if !strings.HasPrefix(got, tt.want) || !strings.HasSuffix(got, "_cli") {
 				t.Fatalf("got %q, want prefix %q and _cli suffix", got, tt.want)
+			}
+		})
+	}
+}
+
+func TestFindDockerImageReference(t *testing.T) {
+	testCases := []struct {
+		name     string
+		is       *imageapi.ImageStream
+		tag      string
+		expected string
+	}{
+		{
+			name: "digest-anchored ref returned as-is",
+			is: &imageapi.ImageStream{
+				Status: imageapi.ImageStreamStatus{
+					Tags: []imageapi.NamedTagEventList{
+						{
+							Tag: "cli",
+							Items: []imageapi.TagEvent{
+								{
+									DockerImageReference: "quay.io/openshift/ci@sha256:abc123",
+									Image:                "sha256:abc123",
+								},
+							},
+						},
+					},
+				},
+			},
+			tag:      "cli",
+			expected: "quay.io/openshift/ci@sha256:abc123",
+		},
+		{
+			name: "non-digest ref with sha256 Image reconstructs digest ref",
+			is: &imageapi.ImageStream{
+				Status: imageapi.ImageStreamStatus{
+					Tags: []imageapi.NamedTagEventList{
+						{
+							Tag: "cli",
+							Items: []imageapi.TagEvent{
+								{
+									DockerImageReference: "registry.ci.openshift.org/ocp/4.21:cli",
+									Image:                "sha256:deadbeef",
+								},
+							},
+						},
+					},
+				},
+			},
+			tag:      "cli",
+			expected: "registry.ci.openshift.org/ocp/4.21@sha256:deadbeef",
+		},
+		{
+			name: "non-digest ref with empty Image returns empty (bug fix)",
+			is: &imageapi.ImageStream{
+				Status: imageapi.ImageStreamStatus{
+					Tags: []imageapi.NamedTagEventList{
+						{
+							Tag: "cli",
+							Items: []imageapi.TagEvent{
+								{
+									DockerImageReference: "quay-proxy.ci.openshift.org/openshift/ci:ocp_4.21_cli",
+									Image:                "",
+								},
+							},
+						},
+					},
+				},
+			},
+			tag:      "cli",
+			expected: "",
+		},
+		{
+			name: "tag not found returns empty",
+			is: &imageapi.ImageStream{
+				Status: imageapi.ImageStreamStatus{
+					Tags: []imageapi.NamedTagEventList{
+						{
+							Tag: "other",
+							Items: []imageapi.TagEvent{
+								{
+									DockerImageReference: "quay.io/openshift/ci@sha256:abc123",
+									Image:                "sha256:abc123",
+								},
+							},
+						},
+					},
+				},
+			},
+			tag:      "cli",
+			expected: "",
+		},
+		{
+			name: "tag with empty Items returns empty",
+			is: &imageapi.ImageStream{
+				Status: imageapi.ImageStreamStatus{
+					Tags: []imageapi.NamedTagEventList{
+						{
+							Tag:   "cli",
+							Items: []imageapi.TagEvent{},
+						},
+					},
+				},
+			},
+			tag:      "cli",
+			expected: "",
+		},
+	}
+	for _, tc := range testCases {
+		t.Run(tc.name, func(t *testing.T) {
+			got := findDockerImageReference(tc.is, tc.tag)
+			if got != tc.expected {
+				t.Errorf("findDockerImageReference() = %q, want %q", got, tc.expected)
 			}
 		})
 	}

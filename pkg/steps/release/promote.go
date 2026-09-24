@@ -487,6 +487,12 @@ func (s *promotionStep) getQuayPromotionShell(imageMirrorTarget map[string]strin
 	return strings.Join(script, "\n")
 }
 
+// getResolveAndTagRetryShell generates a shell script that resolves a QCI image digest
+// from the quay-proxy tag and creates a reference tag in the target ImageStream using
+// `oc tag --reference`. The script retries up to quayPromotionDigestTagAttempts times
+// with randomized backoff. When isTag can be parsed as "namespace/name:tag", the script
+// also verifies the reference by polling the ImageStream status until the
+// items[0].dockerImageReference digest matches the tagged digest.
 func (s *promotionStep) getResolveAndTagRetryShell(registryConfig, quayProxyTag, isTag string, loglevel int) string {
 	colon := strings.LastIndex(quayProxyTag, ":")
 	if colon == -1 {
@@ -495,6 +501,43 @@ func (s *promotionStep) getResolveAndTagRetryShell(registryConfig, quayProxyTag,
 	repo := quayProxyTag[:colon]
 	quayIOTag := strings.Replace(quayProxyTag, api.QCIAPPCIDomain, "quay.io", 1)
 	n := quayPromotionDigestTagAttempts
+
+	// Parse isTag (format: "namespace/name:tag") for post-tag reference verification.
+	// If parsing fails, the tag command still runs but without verification.
+	isTagSlash := strings.Index(isTag, "/")
+	isTagColon := -1
+	if isTagSlash >= 0 {
+		isTagColon = strings.LastIndex(isTag[isTagSlash+1:], ":")
+	}
+	canVerify := isTagSlash >= 0 && isTagColon >= 0
+
+	var verifyBlock string
+	if canVerify {
+		isTagNS := isTag[:isTagSlash]
+		isTagRest := isTag[isTagSlash+1:]
+		isTagName := isTagRest[:isTagColon]
+		isTagTag := isTagRest[isTagColon+1:]
+		verifyBlock = fmt.Sprintf(`
+    _verified=false
+    for _v in {1..6}; do
+      _ref=$(oc get is %s -n %s -o "jsonpath={.status.tags[?(@.tag==\"%s\")].items[0].dockerImageReference}" 2>/dev/null || true)
+      if [ "${_ref##*@}" = "${_digest}" ]; then
+        echo "promotion: verified reference for %s: ${_ref}" >&2
+        _verified=true
+        break
+      fi
+      echo "promotion: reference not yet confirmed for %s, checking (${_v}/6)" >&2
+      sleep 10
+    done
+    if [ "${_verified}" = "true" ]; then
+      break
+    fi
+    echo "promotion: reference verification failed for %s after 60s, retrying digest-tag" >&2`, isTagName, isTagNS, isTagTag, isTag, isTag, isTag)
+	} else {
+		logrus.WithField("isTag", isTag).Warn("promotion: cannot parse isTag for verification, skipping post-tag check")
+		verifyBlock = "\n    break"
+	}
+
 	// Prefer Manifest List dig so ocp IS references the multi-arch index (children stay
 	// reachable while a Quay tag holds that list). Fall back to Digest for single-arch.
 	return fmt.Sprintf(`for r in {1..%d}; do
@@ -503,8 +546,7 @@ func (s *promotionStep) getResolveAndTagRetryShell(registryConfig, quayProxyTag,
   if [ -z "${_digest}" ]; then
     _digest=$(echo "${_info}" | sed -n '/^Digest:[[:space:]]/s/^Digest:[[:space:]]*//p' | head -n1)
   fi
-  if [ -n "${_digest}" ] && %s; then
-    break
+  if [ -n "${_digest}" ] && %s; then%s
   fi
   echo "promotion: digest-tag failed for %s attempt ${r}/%d (QCI digest may have moved after mirror)" >&2
   if [ "${r}" -eq %d ]; then
@@ -516,6 +558,7 @@ func (s *promotionStep) getResolveAndTagRetryShell(registryConfig, quayProxyTag,
 done
 `, n, registryConfig, s.promotionCLIImageInfoFilterOS(), quayIOTag,
 		s.ocTagCommand(loglevel, "--reference", repo+"@${_digest}", isTag),
+		verifyBlock,
 		isTag, n, n, isTag, n, 120)
 }
 
@@ -673,8 +716,14 @@ func promotionRegistryConfigPath() string {
 	return api.RegistryPushCredentialsCICentralSecretMountPath + "/" + coreapi.DockerConfigJsonKey
 }
 
-// findDockerImageReference returns DockerImageReference, the string that can be used to pull this image,
-// to a tag if it exists in the ImageStream's Spec.
+// findDockerImageReference returns the DockerImageReference pull-spec for a tag in the
+// ImageStream's status. It returns an empty string (skipping promotion) when:
+//   - the tag is not found in status
+//   - the tag has no items (no resolved image)
+//   - the tag has an empty Image field, indicating an unresolved import (e.g. a
+//     pending or failed image pull) — promoting such a tag would create a broken
+//     reference
+//
 // When the recorded DockerImageReference is tag-only (no digest) but the status item
 // carries a sha256 image ID, a digest-anchored pullspec is returned instead so that
 // callers can always pin to the exact image (e.g. qciPullSpec can always succeed).
@@ -687,9 +736,15 @@ func findDockerImageReference(is *imagev1.ImageStream, tag string) string {
 			return ""
 		}
 		ref := t.Items[0].DockerImageReference
-		if !strings.Contains(ref, "@sha256:") && strings.HasPrefix(t.Items[0].Image, "sha256:") {
-			if idx := strings.LastIndex(ref, ":"); idx != -1 {
-				return ref[:idx] + "@" + t.Items[0].Image
+		if !strings.Contains(ref, "@sha256:") {
+			if t.Items[0].Image == "" {
+				logrus.WithField("tag", tag).Warn("promotion: tag has no resolved image digest (empty Image field); skipping unresolved import")
+				return ""
+			}
+			if strings.HasPrefix(t.Items[0].Image, "sha256:") {
+				if idx := strings.LastIndex(ref, ":"); idx != -1 {
+					return ref[:idx] + "@" + t.Items[0].Image
+				}
 			}
 		}
 		return ref

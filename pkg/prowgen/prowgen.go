@@ -230,6 +230,7 @@ func handlePresubmit(g *prowJobBaseBuilder, element cioperatorapi.TestStepConfig
 	presubmit := generatePresubmitForTest(g, name, info, func(options *generatePresubmitOptions) {
 		options.pipelineRunIfChanged = element.PipelineRunIfChanged
 		options.pipelineSkipIfOnlyChanged = element.PipelineSkipIfOnlyChanged
+		options.pipelineRequiredLabels = element.PipelineRequiredLabels
 		options.Capabilities = element.Capabilities
 		options.runIfChanged = element.RunIfChanged
 		options.skipIfOnlyChanged = element.SkipIfOnlyChanged
@@ -250,6 +251,7 @@ func handlePresubmit(g *prowJobBaseBuilder, element cioperatorapi.TestStepConfig
 type generatePresubmitOptions struct {
 	pipelineRunIfChanged      string
 	pipelineSkipIfOnlyChanged string
+	pipelineRequiredLabels    []string
 	Capabilities              []string
 	runIfChanged              string
 	skipIfOnlyChanged         string
@@ -262,7 +264,7 @@ type generatePresubmitOptions struct {
 }
 
 func (opts *generatePresubmitOptions) shouldAlwaysRun() bool {
-	return opts.runIfChanged == "" && opts.skipIfOnlyChanged == "" && !opts.defaultDisable && opts.pipelineRunIfChanged == "" && opts.pipelineSkipIfOnlyChanged == ""
+	return opts.runIfChanged == "" && opts.skipIfOnlyChanged == "" && !opts.defaultDisable && opts.pipelineRunIfChanged == "" && opts.pipelineSkipIfOnlyChanged == "" && len(opts.pipelineRequiredLabels) == 0
 }
 
 type generatePresubmitOption func(options *generatePresubmitOptions)
@@ -308,6 +310,13 @@ func generatePresubmitForTest(jobBaseBuilder *prowJobBaseBuilder, name string, i
 			base.Annotations = make(map[string]string)
 		}
 		base.Annotations["pipeline_skip_if_only_changed"] = opts.pipelineSkipIfOnlyChanged
+		pipelineOpt = true
+	}
+	if len(opts.pipelineRequiredLabels) != 0 {
+		if base.Annotations == nil {
+			base.Annotations = make(map[string]string)
+		}
+		base.Annotations["pipeline_required_labels"] = strings.Join(opts.pipelineRequiredLabels, ",")
 		pipelineOpt = true
 	}
 	triggerCommand := prowconfig.DefaultTriggerFor(shortName)

@@ -2393,6 +2393,11 @@ func (in *TestStepConfiguration) DeepCopyInto(out *TestStepConfiguration) {
 		*out = new(SlackReporterConfig)
 		(*in).DeepCopyInto(*out)
 	}
+	if in.PipelineRequiredLabels != nil {
+		in, out := &in.PipelineRequiredLabels, &out.PipelineRequiredLabels
+		*out = make([]string, len(*in))
+		copy(*out, *in)
+	}
 	if in.ContainerTestConfiguration != nil {
 		in, out := &in.ContainerTestConfiguration, &out.ContainerTestConfiguration
 		*out = new(ContainerTestConfiguration)

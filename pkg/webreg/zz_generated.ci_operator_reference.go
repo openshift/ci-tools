@@ -1095,6 +1095,9 @@ const ciOperatorReferenceYaml = "# The list of base images describe\n" +
 	"        node_architecture: ' '\n" +
 	"        # Optional indicates that the job's status context, that is generated from the corresponding test, should not be required for merge.\n" +
 	"        optional: true\n" +
+	"        # PipelineRequiredLabels lists the PR labels that the pipeline controller requires before scheduling this test in the second stage.\n" +
+	"        pipeline_required_labels:\n" +
+	"            - \"\"\n" +
 	"        # PipelineRunIfChanged is a regex that will result in the test only running in second\n" +
 	"        # stage of the pipeline run if something that matches it was changed.\n" +
 	"        pipeline_run_if_changed: ' '\n" +
@@ -2086,6 +2089,9 @@ const ciOperatorReferenceYaml = "# The list of base images describe\n" +
 	"      node_architecture: ' '\n" +
 	"      # Optional indicates that the job's status context, that is generated from the corresponding test, should not be required for merge.\n" +
 	"      optional: true\n" +
+	"      # PipelineRequiredLabels lists the PR labels that the pipeline controller requires before scheduling this test in the second stage.\n" +
+	"      pipeline_required_labels:\n" +
+	"        - \"\"\n" +
 	"      # PipelineRunIfChanged is a regex that will result in the test only running in second\n" +
 	"      # stage of the pipeline run if something that matches it was changed.\n" +
 	"      pipeline_run_if_changed: ' '\n" +

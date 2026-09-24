@@ -921,6 +921,9 @@ type TestStepConfiguration struct {
 	// SlackReporterConfig configures Slack notifications for this test's generated jobs.
 	SlackReporterConfig *SlackReporterConfig `json:"reporter_config,omitempty"`
 
+	// PipelineRequiredLabels lists the PR labels that the pipeline controller requires before scheduling this test in the second stage.
+	PipelineRequiredLabels []string `json:"pipeline_required_labels,omitempty"`
+
 	// Only one of the following can be not-null.
 	ContainerTestConfiguration         *ContainerTestConfiguration         `json:"container,omitempty"`
 	MultiStageTestConfiguration        *MultiStageTestConfiguration        `json:"steps,omitempty"`

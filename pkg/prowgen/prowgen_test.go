@@ -105,6 +105,14 @@ func TestShouldAlwaysRun(t *testing.T) {
 				options.pipelineSkipIfOnlyChanged = "^docs/"
 			},
 		},
+		{
+			description: "shouldAlwaysRun must return false because pipelineRequiredLabels is defined",
+			test:        "testname",
+			alwaysRun:   false,
+			generateOptions: func(options *generatePresubmitOptions) {
+				options.pipelineRequiredLabels = []string{"requires-label"}
+			},
+		},
 	}
 	for _, tc := range tests {
 		t.Run(tc.description, func(t *testing.T) {
@@ -119,6 +127,46 @@ func TestShouldAlwaysRun(t *testing.T) {
 				t.Errorf("got different always_run than exapected, should be %t but received %t", tc.alwaysRun, alwaysRun)
 			}
 		})
+	}
+}
+
+func TestGenerateJobsPropagatesPipelineRequiredLabels(t *testing.T) {
+	config := &ciop.ReleaseBuildConfiguration{
+		Tests: []ciop.TestStepConfiguration{
+			{
+				As:                     "e2e",
+				PipelineRequiredLabels: []string{"label-a", "label-b"},
+				ContainerTestConfiguration: &ciop.ContainerTestConfiguration{
+					From: "from",
+				},
+			},
+			{
+				As:                         "unit",
+				ContainerTestConfiguration: &ciop.ContainerTestConfiguration{From: "from"},
+			},
+		},
+	}
+
+	jobConfig, err := GenerateJobs(config, &ciop.Metadata{Org: "org", Repo: "repo", Branch: "main"}, clusterProfileResolverFunc())
+	if err != nil {
+		t.Fatalf("generate jobs: %v", err)
+	}
+
+	jobs := jobConfig.PresubmitsStatic["org/repo"]
+	if len(jobs) != 2 {
+		t.Fatalf("generated %d presubmits, want 2", len(jobs))
+	}
+	if got, want := jobs[0].Annotations["pipeline_required_labels"], "label-a,label-b"; got != want {
+		t.Fatalf("pipeline_required_labels = %q, want %q", got, want)
+	}
+	if jobs[0].AlwaysRun {
+		t.Fatal("label-gated test must not run in the first stage")
+	}
+	if _, ok := jobs[1].Annotations["pipeline_required_labels"]; ok {
+		t.Fatal("test without required labels unexpectedly has the annotation")
+	}
+	if !jobs[1].AlwaysRun {
+		t.Fatal("test without required labels must retain first-stage scheduling")
 	}
 }
 

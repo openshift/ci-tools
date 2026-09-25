@@ -2,6 +2,7 @@ package steps
 
 import (
 	"context"
+	"errors"
 	"fmt"
 	"io"
 	"os"
@@ -428,10 +429,24 @@ func buildInputsFromStep(inputs map[string]api.ImageBuildInputs) []buildapi.Imag
 	return refs
 }
 
+type failedBuildError struct {
+	build *buildapi.Build
+	err   error
+}
+
+func (e *failedBuildError) Error() string { return e.err.Error() }
+func (e *failedBuildError) Unwrap() error { return e.err }
+
 func handleFailedBuild(ctx context.Context, client BuildClient, ns, name string, err error) error {
 	b := &buildapi.Build{}
-	if err := client.Get(ctx, ctrlruntimeclient.ObjectKey{Namespace: ns, Name: name}, b); err != nil {
-		return fmt.Errorf("could not get build %s: %w", name, err)
+	var failed *failedBuildError
+	if errors.As(err, &failed) && failed.build != nil {
+		failed.build.DeepCopyInto(b)
+	} else if getErr := client.Get(ctx, ctrlruntimeclient.ObjectKey{Namespace: ns, Name: name}, b); getErr != nil {
+		if err != nil {
+			return err
+		}
+		return fmt.Errorf("could not get build %s: %w", name, getErr)
 	}
 
 	if !isBuildPhaseTerminated(b.Status.Phase) {
@@ -456,11 +471,11 @@ func handleFailedBuild(ctx context.Context, client BuildClient, ns, name string,
 		Preconditions:      &metav1.Preconditions{UID: &b.UID},
 		PropagationPolicy:  &foreground,
 	}
-	if err := client.Delete(ctx, b, &ctrlruntimeclient.DeleteOptions{Raw: &opts}); err != nil && !kerrors.IsNotFound(err) && !kerrors.IsConflict(err) {
-		return fmt.Errorf("could not delete build %s: %w", name, err)
+	if delErr := client.Delete(ctx, b, &ctrlruntimeclient.DeleteOptions{Raw: &opts}); delErr != nil && !kerrors.IsNotFound(delErr) && !kerrors.IsConflict(delErr) {
+		return fmt.Errorf("could not delete build %s: %w", name, delErr)
 	}
-	if err := waitForBuildDeletion(ctx, client, ns, name); err != nil {
-		return fmt.Errorf("could not wait for build %s to be deleted: %w", name, err)
+	if waitErr := waitForBuildDeletion(ctx, client, ns, name); waitErr != nil {
+		return fmt.Errorf("could not wait for build %s to be deleted: %w", name, waitErr)
 	}
 	return nil
 }
@@ -758,7 +773,8 @@ func waitForBuild(
 				}
 				podClient.MetricsAgent().StorePodLifecycleMetrics(buildPodName, build.Namespace, corev1.PodFailed)
 				podClient.MetricsAgent().StoreMachinesSnapshot(build)
-				return true, util.AppendLogToError(fmt.Errorf("the build %s failed after %s with reason %s: %s", build.Name, buildDuration(build).Truncate(time.Second), build.Status.Reason, build.Status.Message), build.Status.LogSnippet)
+				buildErr := util.AppendLogToError(fmt.Errorf("the build %s failed after %s with reason %s: %s", build.Name, buildDuration(build).Truncate(time.Second), build.Status.Reason, build.Status.Message), build.Status.LogSnippet)
+				return true, &failedBuildError{build: build.DeepCopy(), err: buildErr}
 			}
 			return false, nil
 		}, 0)

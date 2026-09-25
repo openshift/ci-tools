@@ -14,6 +14,7 @@ import (
 
 	coreapi "k8s.io/api/core/v1"
 	meta "k8s.io/apimachinery/pkg/apis/meta/v1"
+	"k8s.io/apimachinery/pkg/types"
 	"k8s.io/client-go/kubernetes/scheme"
 	"sigs.k8s.io/controller-runtime/pkg/client"
 	fakectrlruntimeclient "sigs.k8s.io/controller-runtime/pkg/client/fake"
@@ -590,6 +591,26 @@ Found 0 events for Pod some-build-build:`),
 				t.Errorf("%s: mismatch (-expected +actual), diff: %s", testCase.name, diff)
 			}
 		})
+	}
+}
+
+func TestHandleFailedBuildUsesWatchSnapshot(t *testing.T) {
+	ns := "ns"
+	uid := types.UID("uid-1")
+	waitErr := &failedBuildError{
+		build: &buildapi.Build{
+			ObjectMeta: meta.ObjectMeta{Name: "src-amd64", Namespace: ns, UID: uid},
+			Status: buildapi.BuildStatus{
+				Phase:      buildapi.BuildPhaseFailed,
+				Reason:     buildapi.StatusReasonFetchImageContentFailed,
+				LogSnippet: "authentication required",
+			},
+		},
+		err: fmt.Errorf("the build src-amd64 failed"),
+	}
+	client := NewFakeBuildClient(loggingclient.New(fakectrlruntimeclient.NewClientBuilder().Build(), nil), "")
+	if err := handleFailedBuild(context.Background(), client, ns, "src-amd64", waitErr); err != nil {
+		t.Fatalf("expected retry (nil), got %v", err)
 	}
 }
 

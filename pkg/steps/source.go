@@ -228,20 +228,23 @@ func createBuild(config api.SourceStepConfiguration, jobSpec *api.JobSpec, clone
 	}
 
 	dockerfile := sourceDockerfile(config.From, decorate.DetermineWorkDir(gopath, refs), cloneAuthConfig)
+	clonerefsImageSource := buildapi.ImageSource{
+		From: clonerefsRef,
+		Paths: []buildapi.ImageSourcePath{
+			{
+				SourcePath:     config.ClonerefsPath,
+				DestinationDir: ".",
+			},
+		},
+	}
+	// ImageSource extract uses PullSecret here; DockerStrategy.PullSecret does not apply.
+	if pullSecret != nil {
+		clonerefsImageSource.PullSecret = getSourceSecretFromName(api.RegistryPullCredentialsSecret)
+	}
 	buildSource := buildapi.BuildSource{
 		Type:       buildapi.BuildSourceDockerfile,
 		Dockerfile: &dockerfile,
-		Images: []buildapi.ImageSource{
-			{
-				From: clonerefsRef,
-				Paths: []buildapi.ImageSourcePath{
-					{
-						SourcePath:     config.ClonerefsPath,
-						DestinationDir: ".",
-					},
-				},
-			},
-		},
+		Images:     []buildapi.ImageSource{clonerefsImageSource},
 	}
 
 	optionsSpec := clonerefs.Options{

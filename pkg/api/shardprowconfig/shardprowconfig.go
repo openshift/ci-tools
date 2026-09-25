@@ -31,8 +31,9 @@ type ProwConfigWithPointers struct {
 }
 
 type TideConfig struct {
-	MergeType map[string]types.PullRequestMergeType `json:"merge_method,omitempty"`
-	Queries   prowconfig.TideQueries                `json:"queries,omitempty"`
+	MergeType               map[string]types.PullRequestMergeType         `json:"merge_method,omitempty"`
+	Queries                 prowconfig.TideQueries                        `json:"queries,omitempty"`
+	GitHubMergeBlocksPolicy map[string]prowconfig.GitHubMergeBlocksPolicy `json:"github_merge_blocks_policy,omitempty"`
 }
 
 func ShardProwConfig(pc *prowconfig.ProwConfig, target afero.Fs, f ShardProwConfigFunctors) (*prowconfig.ProwConfig, error) {
@@ -92,6 +93,22 @@ func ShardProwConfig(pc *prowconfig.ProwConfig, target afero.Fs, f ShardProwConf
 			}
 		}
 		delete(pc.Tide.MergeType, orgRepoBranch)
+	}
+
+	for orgOrRepo, policy := range pc.Tide.GitHubMergeBlocksPolicyMap {
+		org, repo, _ := prowconfigutils.ExtractOrgRepoBranch(orgOrRepo)
+		orgRepo := prowconfig.OrgRepo{Org: org, Repo: repo}
+		if configsByOrgRepo[orgRepo] == nil {
+			configsByOrgRepo[orgRepo] = &ProwConfigWithPointers{}
+		}
+		if configsByOrgRepo[orgRepo].Tide == nil {
+			configsByOrgRepo[orgRepo].Tide = &TideConfig{}
+		}
+		if configsByOrgRepo[orgRepo].Tide.GitHubMergeBlocksPolicy == nil {
+			configsByOrgRepo[orgRepo].Tide.GitHubMergeBlocksPolicy = map[string]prowconfig.GitHubMergeBlocksPolicy{}
+		}
+		configsByOrgRepo[orgRepo].Tide.GitHubMergeBlocksPolicy[orgOrRepo] = policy
+		delete(pc.Tide.GitHubMergeBlocksPolicyMap, orgOrRepo)
 	}
 
 	f.GetDataFromProwConfig(pc)

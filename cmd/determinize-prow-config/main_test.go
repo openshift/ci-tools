@@ -312,6 +312,56 @@ func TestShardProwConfig(t *testing.T) {
 				}, "\n"),
 			},
 		},
+		{
+			name: "Org and repo github_merge_blocks_policy config gets written out",
+			in: &config.ProwConfig{
+				Tide: config.Tide{
+					GitHubMergeBlocksPolicyMap: map[string]config.GitHubMergeBlocksPolicy{
+						"openshift":           config.GitHubMergeBlocksBlock,
+						"openshift/installer": config.GitHubMergeBlocksIgnore,
+					},
+				},
+			},
+
+			expectedShardFiles: map[string]string{
+				"openshift/_prowconfig.yaml": strings.Join([]string{
+					"tide:",
+					"  github_merge_blocks_policy:",
+					"    openshift: block",
+					"",
+				}, "\n"),
+				"openshift/installer/_prowconfig.yaml": strings.Join([]string{
+					"tide:",
+					"  github_merge_blocks_policy:",
+					"    openshift/installer: ignore",
+					"",
+				}, "\n"),
+			},
+		},
+		{
+			name: "Combined mergemethod and github_merge_blocks_policy config gets written out",
+			in: &config.ProwConfig{
+				Tide: config.Tide{
+					GitHubMergeBlocksPolicyMap: map[string]config.GitHubMergeBlocksPolicy{
+						"openshift": config.GitHubMergeBlocksPermit,
+					},
+					TideGitHubConfig: config.TideGitHubConfig{MergeType: map[string]config.TideOrgMergeType{
+						"openshift": {MergeType: types.MergeSquash},
+					}},
+				},
+			},
+
+			expectedShardFiles: map[string]string{
+				"openshift/_prowconfig.yaml": strings.Join([]string{
+					"tide:",
+					"  github_merge_blocks_policy:",
+					"    openshift: permit",
+					"  merge_method:",
+					"    openshift: squash",
+					"",
+				}, "\n"),
+			},
+		},
 	}
 
 	for _, tc := range testCases {

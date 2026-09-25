@@ -9,6 +9,7 @@ import (
 	"os"
 	"sort"
 	"strconv"
+	"strings"
 	"time"
 
 	"github.com/openshift/ci-tools/pkg/api"
@@ -19,6 +20,42 @@ import (
 // if under this, we don't particularly care if you're up or down, though we will still include you in the
 // data file, and let origin sort out what to do with that data.
 const minJobRuns = 100
+
+const sippyReleasesURL = "https://sippy.dptools.openshift.org/api/releases"
+
+// flexibleDateTime handles both formats returned by Sippy for release dates.
+// Older responses used RFC 3339 timestamps while current responses use dates.
+type flexibleDateTime struct {
+	time.Time
+}
+
+func (f *flexibleDateTime) UnmarshalJSON(data []byte) error {
+	value := strings.Trim(string(data), `"`)
+	if value == "" || value == "null" {
+		return nil
+	}
+
+	if parsed, err := time.Parse(time.RFC3339, value); err == nil {
+		f.Time = parsed
+		return nil
+	}
+
+	parsed, err := time.Parse(time.DateOnly, value)
+	if err != nil {
+		return fmt.Errorf("cannot parse %q as RFC 3339 or date-only (%s): %w", value, time.DateOnly, err)
+	}
+	f.Time = parsed
+	return nil
+}
+
+type sippyReleaseAttributes struct {
+	DevelopmentStart *flexibleDateTime `json:"development_start,omitempty"`
+	Product          string            `json:"product,omitempty"`
+}
+
+type sippyReleasesResponse struct {
+	ReleaseAttributes map[string]sippyReleaseAttributes `json:"release_attrs,omitempty"`
+}
 
 func readHistoricalDataFile(filePath, dataType string) ([]jobrunaggregatorapi.HistoricalData, error) {
 	currentData, err := os.ReadFile(filePath)
@@ -98,47 +135,61 @@ func getDurationFromString(floatString string) time.Duration {
 }
 
 func fetchCurrentRelease() (current string, previous string, err error) {
-	sippyRelease := struct {
-		Releases []string `json:"releases"`
-	}{}
-	resp, err := http.DefaultClient.Get("https://sippy.dptools.openshift.org/api/releases")
+	resp, err := http.DefaultClient.Get(sippyReleasesURL)
 	if err != nil {
 		return "", "", err
 	}
 	defer resp.Body.Close()
+	if resp.StatusCode != http.StatusOK {
+		return "", "", fmt.Errorf("unexpected response from %s: %s", sippyReleasesURL, resp.Status)
+	}
 
 	data, err := io.ReadAll(resp.Body)
 	if err != nil {
 		return "", "", err
 	}
+
+	return determineCurrentRelease(data, time.Now())
+}
+
+func determineCurrentRelease(data []byte, now time.Time) (current string, previous string, err error) {
+	sippyRelease := sippyReleasesResponse{}
 	if err := json.Unmarshal(data, &sippyRelease); err != nil {
 		return "", "", err
 	}
 
 	var validVersions []string
-	var parsedVersions []api.ParsedVersion
+	latestDevelopmentStart := time.Time{}
+	latestVersion := api.ParsedVersion{}
 
-	for _, d := range sippyRelease.Releases {
-		pv, err := api.ParseVersion(d)
-		if err != nil || pv.Major < 4 {
+	for release, attributes := range sippyRelease.ReleaseAttributes {
+		if attributes.Product != "OCP" {
 			continue
 		}
-		validVersions = append(validVersions, d)
-		parsedVersions = append(parsedVersions, pv)
-	}
 
-	if len(parsedVersions) < 1 {
-		return "", "", fmt.Errorf("no releases found")
-	}
-
-	sort.SliceStable(parsedVersions, func(i, j int) bool {
-		if parsedVersions[i].Major != parsedVersions[j].Major {
-			return parsedVersions[i].Major > parsedVersions[j].Major
+		parsedVersion, err := api.ParseVersion(release)
+		if err != nil || parsedVersion.Major < 4 {
+			continue
 		}
-		return parsedVersions[i].Minor > parsedVersions[j].Minor
-	})
+		validVersions = append(validVersions, release)
 
-	current = parsedVersions[0].String()
+		if attributes.DevelopmentStart == nil || attributes.DevelopmentStart.Time.IsZero() || now.Before(attributes.DevelopmentStart.Time) {
+			continue
+		}
+		isLaterVersion := parsedVersion.Major > latestVersion.Major ||
+			(parsedVersion.Major == latestVersion.Major && parsedVersion.Minor > latestVersion.Minor)
+		if attributes.DevelopmentStart.Time.After(latestDevelopmentStart) ||
+			(attributes.DevelopmentStart.Time.Equal(latestDevelopmentStart) && isLaterVersion) {
+			current = release
+			latestDevelopmentStart = attributes.DevelopmentStart.Time
+			latestVersion = parsedVersion
+		}
+	}
+
+	if current == "" {
+		return "", "", fmt.Errorf("no valid OCP development releases found")
+	}
+
 	previous, err = api.GetPreviousVersion(current, validVersions)
 	if err != nil {
 		return "", "", fmt.Errorf("failed to determine previous version for %s: %w", current, err)

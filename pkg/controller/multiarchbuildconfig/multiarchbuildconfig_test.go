@@ -51,6 +51,35 @@ func (m *mockManifestPusher) PushImageWithManifest(builds []buildv1.Build, targe
 	return m.errToReturn
 }
 
+func TestTargetImageRef(t *testing.T) {
+	tests := []struct {
+		name            string
+		outputKind      string
+		outputNamespace string
+		outputName      string
+		want            string
+	}{
+		{name: "explicit namespace", outputNamespace: "ocp", outputName: "cli-yq:latest", want: "ocp/cli-yq:latest"},
+		{name: "default namespace", outputName: "cli-yq:latest", want: "ci/cli-yq:latest"},
+		{name: "external Docker image", outputKind: "DockerImage", outputName: "quay.io/openshift/ci:ocp_cli-yq_latest", want: "quay.io/openshift/ci:ocp_cli-yq_latest"},
+	}
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			mabc := &v1.MultiArchBuildConfig{
+				ObjectMeta: metav1.ObjectMeta{Namespace: "ci"},
+				Spec: v1.MultiArchBuildConfigSpec{
+					BuildSpec: buildv1.BuildConfigSpec{CommonSpec: buildv1.CommonSpec{
+						Output: buildv1.BuildOutput{To: &corev1.ObjectReference{Kind: tt.outputKind, Namespace: tt.outputNamespace, Name: tt.outputName}},
+					}},
+				},
+			}
+			if got := targetImageRef(mabc); got != tt.want {
+				t.Errorf("targetImageRef() = %q, want %q", got, tt.want)
+			}
+		})
+	}
+}
+
 type buildBuilder struct {
 	name     string
 	arch     string
@@ -189,7 +218,7 @@ func TestCheckAllBuildsSuccessful(t *testing.T) {
 	}
 }
 
-func TestBuildOwnerReference(t *testing.T) {
+func TestCreateBuilds(t *testing.T) {
 	mabc := &v1.MultiArchBuildConfig{
 		ObjectMeta: metav1.ObjectMeta{
 			Name:      "test-mabc",
@@ -199,7 +228,7 @@ func TestBuildOwnerReference(t *testing.T) {
 			BuildSpec: buildv1.BuildConfigSpec{
 				CommonSpec: buildv1.CommonSpec{
 					Output: buildv1.BuildOutput{
-						To: &corev1.ObjectReference{Namespace: "test-ns", Name: "test-image"},
+						To: &corev1.ObjectReference{Kind: "DockerImage", Name: "quay.io/openshift/ci:ocp_cli-yq_latest"},
 					},
 				},
 			},
@@ -214,9 +243,8 @@ func TestBuildOwnerReference(t *testing.T) {
 		scheme:        scheme,
 	}
 
-	nn := types.NamespacedName{Name: mabc.Name, Namespace: mabc.Namespace}
-	if err := r.reconcile(context.TODO(), r.logger, reconcile.Request{NamespacedName: nn}); err != nil {
-		t.Fatalf("Failed to reconcile: %v", err)
+	if err := r.createBuilds(context.TODO(), r.logger, mabc); err != nil {
+		t.Fatalf("Failed to create builds: %v", err)
 	}
 
 	builds := buildv1.BuildList{}
@@ -276,6 +304,29 @@ func TestBuildOwnerReference(t *testing.T) {
 		cmpopts.IgnoreFields(buildv1.Build{}, "Spec", "Kind"),
 	); diff != "" {
 		t.Error(diff)
+	}
+	for _, build := range builds.Items {
+		want := "quay.io/openshift/ci:ocp_cli-yq_latest-" + build.Labels[v1.MultiArchBuildConfigArchLabel]
+		if got := build.Spec.Output.To; got.Kind != "DockerImage" || got.Name != want {
+			t.Errorf("build %s output = %s/%s, want DockerImage/%s", build.Name, got.Kind, got.Name, want)
+		}
+		if got, want := build.Spec.NodeSelector[nodeArchitectureLabel], build.Labels[v1.MultiArchBuildConfigArchLabel]; got != want {
+			t.Errorf("build %s node architecture = %q, want %q", build.Name, got, want)
+		}
+	}
+
+	streamMABC := mabc.DeepCopy()
+	streamMABC.Name = "stream-mabc"
+	streamMABC.Spec.BuildSpec.CommonSpec.Output.To = &corev1.ObjectReference{Kind: "ImageStreamTag", Name: "image:latest"}
+	if err := r.createBuilds(context.TODO(), r.logger, streamMABC); err != nil {
+		t.Fatalf("Failed to create ImageStreamTag builds: %v", err)
+	}
+	streamBuild := &buildv1.Build{}
+	if err := client.Get(context.TODO(), types.NamespacedName{Name: "stream-mabc-amd64", Namespace: "test-ns"}, streamBuild); err != nil {
+		t.Fatalf("Failed to get ImageStreamTag build: %v", err)
+	}
+	if got := streamBuild.Spec.Output.To; got.Namespace != "test-ns" || got.Name != "image:latest-amd64" {
+		t.Errorf("ImageStreamTag build output = %s/%s, want test-ns/image:latest-amd64", got.Namespace, got.Name)
 	}
 }
 

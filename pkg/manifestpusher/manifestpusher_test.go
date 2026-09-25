@@ -18,6 +18,24 @@ import (
 	imagev1 "github.com/openshift/api/image/v1"
 )
 
+func TestManifestDestination(t *testing.T) {
+	pusher := manifestPusher{registryURL: "registry"}
+	for _, tc := range []struct {
+		name, kind, target, want string
+		wantInsecure             bool
+	}{
+		{name: "image stream", kind: "ImageStreamTag", target: "ci/image:latest", want: "registry/ci/image:latest", wantInsecure: true},
+		{name: "external Docker image", kind: "DockerImage", target: "quay.io/openshift/ci:ocp_cli-yq_latest", want: "quay.io/openshift/ci:ocp_cli-yq_latest"},
+	} {
+		t.Run(tc.name, func(t *testing.T) {
+			got, insecure := pusher.manifestDestination(tc.kind, tc.target)
+			if got != tc.want || insecure != tc.wantInsecure {
+				t.Errorf("manifestDestination() = (%q, %t), want (%q, %t)", got, insecure, tc.want, tc.wantInsecure)
+			}
+		})
+	}
+}
+
 func TestManifestEntries(t *testing.T) {
 	scheme := runtime.NewScheme()
 	if err := imagev1.AddToScheme(scheme); err != nil {
@@ -31,6 +49,22 @@ func TestManifestEntries(t *testing.T) {
 		objects   []ctrlruntimeclient.Object
 		want      []types.ManifestEntry
 	}{
+		{
+			name:      "uses DockerImage build outputs without an image stream",
+			targetRef: "quay.io/openshift/ci:ocp_cli-yq_latest",
+			builds: []buildv1.Build{{
+				Spec: buildv1.BuildSpec{CommonSpec: buildv1.CommonSpec{
+					NodeSelector: map[string]string{nodeArchitectureLabel: "amd64"},
+					Output: buildv1.BuildOutput{To: &corev1.ObjectReference{
+						Kind: "DockerImage", Name: "quay.io/openshift/ci:ocp_cli-yq_latest-amd64",
+					}},
+				}},
+			}},
+			want: []types.ManifestEntry{{
+				Image:    "quay.io/openshift/ci:ocp_cli-yq_latest-amd64",
+				Platform: ocispec.Platform{OS: "linux", Architecture: "amd64"},
+			}},
+		},
 		{
 			name:      "returns current entries when imagestreamtag is missing",
 			targetRef: "ns/pipeline:src",

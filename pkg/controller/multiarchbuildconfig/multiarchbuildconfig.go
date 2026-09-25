@@ -162,6 +162,9 @@ func (r *reconciler) reconcile(ctx context.Context, logger *logrus.Entry, req re
 }
 
 func (r *reconciler) handleMultiArchBuildConfig(ctx context.Context, logger *logrus.Entry, mabc *v1.MultiArchBuildConfig, observedStatus *v1.MultiArchBuildConfigStatus) error {
+	if mabc.Spec.BuildSpec.CommonSpec.Output.To.Kind == "DockerImage" && len(mabc.Spec.ExternalRegistries) > 0 {
+		return fmt.Errorf("external_registries cannot be used with DockerImage output")
+	}
 	builds, err := r.listBuilds(ctx, mabc.Name)
 	if err != nil {
 		return fmt.Errorf("couldn't list builds: %w", err)
@@ -221,16 +224,16 @@ func (r *reconciler) handleMultiArchBuildConfig(ctx context.Context, logger *log
 		Message:            BuildsCompletedSuccessMessage,
 	})
 
-	targetImageRef := fmt.Sprintf("%s/%s", mabc.Spec.BuildSpec.CommonSpec.Output.To.Namespace, mabc.Spec.BuildSpec.CommonSpec.Output.To.Name)
+	imageRef := targetImageRef(mabc)
 	if !isPushImageManifestDone(mabc) {
-		r.handlePushImageWithManifest(logger, targetImageRef, builds, observedStatus)
+		r.handlePushImageWithManifest(logger, imageRef, builds, observedStatus)
 		return nil
 	}
 
 	upsertCondition(observedStatus, getConditionByType(mabc, PushImageManifestDone))
 
 	if !isImageMirrorDone(mabc) {
-		if err := r.handleMirrorImage(logger, targetImageRef, mabc, observedStatus); err != nil {
+		if err := r.handleMirrorImage(logger, imageRef, mabc, observedStatus); err != nil {
 			return fmt.Errorf("mirror images: %w", err)
 		}
 	} else if mirrorDoneCond := getConditionByType(mabc, MirrorImageManifestDone); mirrorDoneCond != nil {
@@ -245,6 +248,9 @@ func (r *reconciler) createBuilds(ctx context.Context, logger *logrus.Entry, mab
 	for _, arch := range r.architectures {
 		commonSpec := mabc.Spec.BuildSpec.CommonSpec.DeepCopy()
 		commonSpec.NodeSelector = map[string]string{nodeArchitectureLabel: arch}
+		if commonSpec.Output.To.Kind != "DockerImage" && commonSpec.Output.To.Namespace == "" {
+			commonSpec.Output.To.Namespace = mabc.Namespace
+		}
 		commonSpec.Output.To.Name = fmt.Sprintf("%s-%s", commonSpec.Output.To.Name, arch)
 
 		build := &buildv1.Build{
@@ -273,6 +279,18 @@ func (r *reconciler) createBuilds(ctx context.Context, logger *logrus.Entry, mab
 		}
 	}
 	return nil
+}
+
+func targetImageRef(mabc *v1.MultiArchBuildConfig) string {
+	output := mabc.Spec.BuildSpec.CommonSpec.Output.To
+	if output.Kind == "DockerImage" {
+		return output.Name
+	}
+	targetNamespace := output.Namespace
+	if targetNamespace == "" {
+		targetNamespace = mabc.Namespace
+	}
+	return fmt.Sprintf("%s/%s", targetNamespace, output.Name)
 }
 
 func (r *reconciler) handlePushImageWithManifest(logger *logrus.Entry, targetImageRef string, builds *buildv1.BuildList, observedStatus *v1.MultiArchBuildConfigStatus) {

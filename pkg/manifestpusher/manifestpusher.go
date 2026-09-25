@@ -45,17 +45,21 @@ type manifestPusher struct {
 }
 
 func (m manifestPusher) PushImageWithManifest(builds []buildv1.Build, targetImageRef string) error {
+	if len(builds) == 0 {
+		return fmt.Errorf("no builds to include in manifest %s", targetImageRef)
+	}
 	srcImages, err := m.manifestEntries(builds, targetImageRef)
 	if err != nil {
 		return err
 	}
+	imageRef, insecure := m.manifestDestination(builds[0].Spec.Output.To.Kind, targetImageRef)
 
 	digest, _, err := registry.PushManifestList(
 		"", // username: we don't we use basic auth
 		"", // password:             "
-		types.YAMLInput{Image: fmt.Sprintf("%s/%s", m.registryURL, targetImageRef), Manifests: srcImages},
+		types.YAMLInput{Image: imageRef, Manifests: srcImages},
 		false,        // --ignore-missing. We don't want to ignore missing images.
-		true,         // --insecure to allow pushing to the local registry.
+		insecure,     // --insecure for the local registry only.
 		false,        // --plain-http is false by default in manifest-tool. False for the OpenShift registry.
 		types.Docker, // we only need docker type manifest.
 		m.dockercfgPath,
@@ -68,12 +72,23 @@ func (m manifestPusher) PushImageWithManifest(builds []buildv1.Build, targetImag
 	return nil
 }
 
+func (m manifestPusher) manifestDestination(outputKind, targetImageRef string) (string, bool) {
+	if outputKind == "DockerImage" {
+		return targetImageRef, false
+	}
+	return fmt.Sprintf("%s/%s", m.registryURL, targetImageRef), true
+}
+
 func (m manifestPusher) manifestEntries(builds []buildv1.Build, targetImageRef string) ([]types.ManifestEntry, error) {
 	srcImages := []types.ManifestEntry{}
 	newArchitectures := sets.New[string]()
 	for _, build := range builds {
+		imageRef := fmt.Sprintf("%s/%s/%s", m.registryURL, build.Spec.Output.To.Namespace, build.Spec.Output.To.Name)
+		if build.Spec.Output.To.Kind == "DockerImage" {
+			imageRef = build.Spec.Output.To.Name
+		}
 		entry := types.ManifestEntry{
-			Image: fmt.Sprintf("%s/%s/%s", m.registryURL, build.Spec.Output.To.Namespace, build.Spec.Output.To.Name),
+			Image: imageRef,
 			Platform: ocispec.Platform{
 				OS:           "linux",
 				Architecture: build.Spec.NodeSelector[nodeArchitectureLabel],
@@ -81,6 +96,9 @@ func (m manifestPusher) manifestEntries(builds []buildv1.Build, targetImageRef s
 		}
 		srcImages = append(srcImages, entry)
 		newArchitectures.Insert(entry.Platform.Architecture)
+	}
+	if len(builds) > 0 && builds[0].Spec.Output.To.Kind == "DockerImage" {
+		return srcImages, nil
 	}
 
 	namespace, imageStreamTagName, err := splitImageStreamTagRef(targetImageRef)

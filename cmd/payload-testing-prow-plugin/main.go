@@ -21,6 +21,8 @@ import (
 	"sigs.k8s.io/prow/pkg/logrusutil"
 	"sigs.k8s.io/prow/pkg/pjutil"
 
+	userv1 "github.com/openshift/api/user/v1"
+
 	"github.com/openshift/ci-tools/pkg/api"
 	prpqv1 "github.com/openshift/ci-tools/pkg/api/pullrequestpayloadqualification/v1"
 	"github.com/openshift/ci-tools/pkg/load/agents"
@@ -37,6 +39,7 @@ type options struct {
 	ciOpConfigDir            string
 	releaseRepoGitSyncPath   string
 	webhookSecretFile        string
+	privatePayloadGroup      string
 }
 
 func gatherOptions() options {
@@ -53,6 +56,7 @@ func gatherOptions() options {
 	fs.StringVar(&o.ciOpConfigDir, "ci-op-config-dir", "", "Path to CI Operator configuration directory.")
 	fs.StringVar(&o.releaseRepoGitSyncPath, "release-repo-git-sync-path", "/var/repo/release", "Path to release repository dir")
 	fs.Var(&o.trustedApps, "trusted-app", "Repeatable. GitHub App slug allowed to issue /payload . Example: --trusted-app=openshift-pr-manager")
+	fs.StringVar(&o.privatePayloadGroup, "private-payload-rbac-group", "", "OpenShift group that must contain the commenter (via github-ldap mapping) to run /payload on private repos. Empty disables the check.")
 	if err := fs.Parse(os.Args[1:]); err != nil {
 		logrus.WithError(err).Fatalf("cannot parse args: '%s'", os.Args[1:])
 	}
@@ -80,6 +84,9 @@ const (
 func addSchemes() error {
 	if err := prpqv1.AddToScheme(scheme.Scheme); err != nil {
 		return fmt.Errorf("failed to add prpqv1 to scheme: %w", err)
+	}
+	if err := userv1.AddToScheme(scheme.Scheme); err != nil {
+		return fmt.Errorf("failed to add userv1 to scheme: %w", err)
 	}
 	return nil
 }
@@ -171,18 +178,21 @@ func main() {
 	}
 	go func() { logger.Fatal(<-configErrCh) }()
 
+	trusted := &githubTrustedChecker{
+		githubClient: githubClient,
+		trustedApps:  o.trustedApps,
+	}
 	serv := &server{
-		ghc:          githubClient,
-		kubeClient:   kubeClient,
-		ctx:          controllerruntime.SetupSignalHandler(),
-		namespace:    o.namespace,
-		jobResolver:  newReleaseControllerJobResolver(&http.Client{}),
-		testResolver: &fileTestResolver{configAgent: configAgent},
-		trustedChecker: &githubTrustedChecker{
-			githubClient: githubClient,
-			trustedApps:  o.trustedApps,
-		},
-		ciOpConfigResolver: registryserver.NewResolverClient(api.URLForService(api.ServiceConfig)),
+		ghc:                 githubClient,
+		kubeClient:          kubeClient,
+		ctx:                 controllerruntime.SetupSignalHandler(),
+		namespace:           o.namespace,
+		jobResolver:         newReleaseControllerJobResolver(&http.Client{}),
+		testResolver:        &fileTestResolver{configAgent: configAgent},
+		trustedChecker:      trusted,
+		ciOpConfigResolver:  registryserver.NewResolverClient(api.URLForService(api.ServiceConfig)),
+		privatePayloadGroup: o.privatePayloadGroup,
+		isTrustedApp:        trusted.isTrustedApp,
 	}
 
 	eventServer := githubeventserver.New(o.githubEventServerOptions, getWebhookHMAC, logger)

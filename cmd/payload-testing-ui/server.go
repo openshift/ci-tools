@@ -260,10 +260,22 @@ func (s *server) runList(w http.ResponseWriter) {
 		writeStatus(w, http.StatusInternalServerError)
 		return
 	}
+	l.Items = excludePrivateRuns(l.Items)
 	if err := html.WritePage(w, runsListTitle, bodyStart, pageEnd, s.runsListTemplate, l); err != nil {
 		logrus.WithError(err).Error("failed to write page")
 		writeStatus(w, http.StatusNotImplemented)
 	}
+}
+
+func excludePrivateRuns(items []prpqv1.PullRequestPayloadQualificationRun) []prpqv1.PullRequestPayloadQualificationRun {
+	out := make([]prpqv1.PullRequestPayloadQualificationRun, 0, len(items))
+	for _, item := range items {
+		if item.Spec.Private {
+			continue
+		}
+		out = append(out, item)
+	}
+	return out
 }
 
 func (s *server) runDetails(w http.ResponseWriter, r *http.Request) {
@@ -282,6 +294,10 @@ func (s *server) runDetails(w http.ResponseWriter, r *http.Request) {
 			logrus.WithError(err).Errorf("failed to get run %q", key.Name)
 			writeStatus(w, http.StatusInternalServerError)
 		}
+		return
+	}
+	if run.Spec.Private {
+		writeStatus(w, http.StatusNotFound)
 		return
 	}
 	title := fmt.Sprintf(runTitle, run.ObjectMeta.Name)

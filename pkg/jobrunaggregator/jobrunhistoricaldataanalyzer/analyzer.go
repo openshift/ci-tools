@@ -80,9 +80,16 @@ func (o *JobRunHistoricalDataAnalyzerOptions) Run(ctx context.Context) error {
 		return fmt.Errorf("new historical data is empty, can not compare %w", err)
 	}
 
-	// We convert our query data to maps to make it easier to handle
-	newDataMap := convertToMap(newHistoricalData)
-	currentDataMap := convertToMap(currentHistoricalData)
+	// Index both datasets by the key used in the generated Origin data. Refuse duplicate keys rather
+	// than silently allowing the last row to win, which can hide source query-grain mismatches.
+	newDataMap, err := indexHistoricalData("new historical data", newHistoricalData)
+	if err != nil {
+		return err
+	}
+	currentDataMap, err := indexHistoricalData("current historical data", currentHistoricalData)
+	if err != nil {
+		return err
+	}
 
 	previousResult := o.compareAndUpdate(newDataMap, currentDataMap, previousRelease)
 	currentResult := o.compareAndUpdate(newDataMap, currentDataMap, targetRelease)

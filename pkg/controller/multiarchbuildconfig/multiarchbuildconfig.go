@@ -221,16 +221,16 @@ func (r *reconciler) handleMultiArchBuildConfig(ctx context.Context, logger *log
 		Message:            BuildsCompletedSuccessMessage,
 	})
 
-	targetImageRef := fmt.Sprintf("%s/%s", mabc.Spec.BuildSpec.CommonSpec.Output.To.Namespace, mabc.Spec.BuildSpec.CommonSpec.Output.To.Name)
+	buildRef := buildImageRef(mabc)
 	if !isPushImageManifestDone(mabc) {
-		r.handlePushImageWithManifest(logger, targetImageRef, builds, observedStatus)
+		r.handlePushImageWithManifest(logger, buildRef, builds, observedStatus)
 		return nil
 	}
 
 	upsertCondition(observedStatus, getConditionByType(mabc, PushImageManifestDone))
 
 	if !isImageMirrorDone(mabc) {
-		if err := r.handleMirrorImage(logger, targetImageRef, mabc, observedStatus); err != nil {
+		if err := r.handleMirrorImage(logger, buildRef, targetImageRef(mabc), mabc, observedStatus); err != nil {
 			return fmt.Errorf("mirror images: %w", err)
 		}
 	} else if mirrorDoneCond := getConditionByType(mabc, MirrorImageManifestDone); mirrorDoneCond != nil {
@@ -242,10 +242,12 @@ func (r *reconciler) handleMultiArchBuildConfig(ctx context.Context, logger *log
 }
 
 func (r *reconciler) createBuilds(ctx context.Context, logger *logrus.Entry, mabc *v1.MultiArchBuildConfig) error {
+	buildNamespace, buildImageName, _ := strings.Cut(buildImageRef(mabc), "/")
 	for _, arch := range r.architectures {
 		commonSpec := mabc.Spec.BuildSpec.CommonSpec.DeepCopy()
 		commonSpec.NodeSelector = map[string]string{nodeArchitectureLabel: arch}
-		commonSpec.Output.To.Name = fmt.Sprintf("%s-%s", commonSpec.Output.To.Name, arch)
+		commonSpec.Output.To.Namespace = buildNamespace
+		commonSpec.Output.To.Name = fmt.Sprintf("%s-%s", buildImageName, arch)
 
 		build := &buildv1.Build{
 			ObjectMeta: metav1.ObjectMeta{
@@ -275,8 +277,30 @@ func (r *reconciler) createBuilds(ctx context.Context, logger *logrus.Entry, mab
 	return nil
 }
 
-func (r *reconciler) handlePushImageWithManifest(logger *logrus.Entry, targetImageRef string, builds *buildv1.BuildList, observedStatus *v1.MultiArchBuildConfigStatus) {
-	logger = logger.WithField(PushTargetImageLogField, targetImageRef)
+func targetImageRef(mabc *v1.MultiArchBuildConfig) string {
+	output := mabc.Spec.BuildSpec.CommonSpec.Output.To
+	targetNamespace := output.Namespace
+	if targetNamespace == "" {
+		targetNamespace = mabc.Namespace
+	}
+	return fmt.Sprintf("%s/%s", targetNamespace, output.Name)
+}
+
+// buildImageRef keeps cross-namespace external builds in the MABC namespace.
+func buildImageRef(mabc *v1.MultiArchBuildConfig) string {
+	target := targetImageRef(mabc)
+	if len(mabc.Spec.ExternalRegistries) == 0 {
+		return target
+	}
+	targetNamespace, targetName, _ := strings.Cut(target, "/")
+	if targetNamespace == mabc.Namespace {
+		return target
+	}
+	return fmt.Sprintf("%s/%s-%s", mabc.Namespace, targetNamespace, targetName)
+}
+
+func (r *reconciler) handlePushImageWithManifest(logger *logrus.Entry, buildImageRef string, builds *buildv1.BuildList, observedStatus *v1.MultiArchBuildConfigStatus) {
+	logger = logger.WithField(PushTargetImageLogField, buildImageRef)
 
 	logger.Info("Pushing manifest")
 	upsertCondition(observedStatus, &metav1.Condition{
@@ -287,7 +311,7 @@ func (r *reconciler) handlePushImageWithManifest(logger *logrus.Entry, targetIma
 		Message:            PushManifestSuccessMessage,
 	})
 
-	if err := r.manifestPusher.PushImageWithManifest(builds.Items, targetImageRef); err != nil {
+	if err := r.manifestPusher.PushImageWithManifest(builds.Items, buildImageRef); err != nil {
 		logger.Errorf("Failed to push manifest: %s", err)
 		upsertCondition(observedStatus, &metav1.Condition{
 			Type:               PushImageManifestDone,
@@ -302,9 +326,8 @@ func (r *reconciler) handlePushImageWithManifest(logger *logrus.Entry, targetIma
 	}
 }
 
-// handleMirrorImage pushes an image to the locations specified in .spec.external_registries. The image
-// required has to exist on local registry.
-func (r *reconciler) handleMirrorImage(logger *logrus.Entry, targetImageRef string, mabc *v1.MultiArchBuildConfig, observedStatus *v1.MultiArchBuildConfigStatus) error {
+// handleMirrorImage pushes the built image to the locations specified in .spec.external_registries.
+func (r *reconciler) handleMirrorImage(logger *logrus.Entry, buildImageRef, targetImageRef string, mabc *v1.MultiArchBuildConfig, observedStatus *v1.MultiArchBuildConfigStatus) error {
 	logger = logger.WithField(MirrorTargetImageLogField, targetImageRef)
 
 	if len(mabc.Spec.ExternalRegistries) == 0 {
@@ -330,7 +353,7 @@ func (r *reconciler) handleMirrorImage(logger *logrus.Entry, targetImageRef stri
 	logger = logger.WithField(MirrorRegistriesLogField, strings.Join(mabc.Spec.ExternalRegistries, ","))
 	logger.Info("Mirroring image")
 
-	imageMirrorArgs := ocImageMirrorArgs(targetImageRef, mabc.Spec.ExternalRegistries)
+	imageMirrorArgs := ocImageMirrorArgs(buildImageRef, targetImageRef, mabc.Spec.ExternalRegistries)
 	if err := r.imageMirrorer.mirror(imageMirrorArgs); err != nil {
 		logger.Errorf("Failed to mirror image: %s", err)
 		upsertCondition(observedStatus, &metav1.Condition{

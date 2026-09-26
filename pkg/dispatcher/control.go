@@ -11,6 +11,7 @@ import (
 	"net/http"
 	"net/url"
 	"regexp"
+	"slices"
 	"sort"
 	"strconv"
 	"strings"
@@ -390,12 +391,13 @@ func (c *ControlPlane) validatePlanRequest(request PlanRequest) error {
 	if request.Cluster == "" {
 		return errors.New("cluster is required")
 	}
-	if request.DurationSeconds <= 0 || request.DurationSeconds > int64(c.options.MaxTTL/time.Second) {
-		return fmt.Errorf("override TTL must be positive and no more than %s", c.options.MaxTTL)
-	}
 	duration := time.Duration(request.DurationSeconds) * time.Second
-	if request.Kind == dispatcherv1.OverrideKindDrain && duration > c.options.MaxDrainTTL {
-		return fmt.Errorf("drain TTL must be no more than %s", c.options.MaxDrainTTL)
+	if request.Kind == dispatcherv1.OverrideKindDrain {
+		if request.DurationSeconds <= 0 || duration > c.options.MaxDrainTTL {
+			return fmt.Errorf("drain TTL must be positive and no more than %s", c.options.MaxDrainTTL)
+		}
+	} else if request.DurationSeconds <= 0 || request.DurationSeconds > int64(c.options.MaxTTL/time.Second) {
+		return fmt.Errorf("override TTL must be positive and no more than %s", c.options.MaxTTL)
 	}
 	if request.Kind != dispatcherv1.OverrideKindDrain && request.Kind != dispatcherv1.OverrideKindCapacity {
 		return fmt.Errorf("unsupported override kind %q", request.Kind)
@@ -515,6 +517,9 @@ func (c *ControlPlane) Plan(ctx context.Context, request PlanRequest) (DispatchP
 		return DispatchPlan{}, errors.New("planned override was not included in the compiled policy")
 	}
 	if impact.AffectedJobs == 0 {
+		if slices.Contains(snapshot.Blocked, request.Cluster) {
+			return DispatchPlan{}, fmt.Errorf("cluster %q is blocked in static configuration — override would have no effect", request.Cluster)
+		}
 		return DispatchPlan{}, errors.New("override has no affected workloads")
 	}
 	if impact.MovableJobs == 0 {
@@ -780,6 +785,9 @@ func (c *ControlPlane) Status(ctx context.Context, cluster string) (ControlStatu
 	if cluster != "" {
 		info, exists := snapshot.Inventory[cluster]
 		if !exists {
+			if slices.Contains(snapshot.Blocked, cluster) {
+				return ControlStatus{}, fmt.Errorf("cluster %q is blocked in static configuration", cluster)
+			}
 			return ControlStatus{}, fmt.Errorf("unknown or inactive cluster %q", cluster)
 		}
 		status.ClusterInfo = &info

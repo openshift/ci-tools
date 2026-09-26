@@ -391,9 +391,8 @@ func (c *ControlPlane) validatePlanRequest(request PlanRequest) error {
 	if request.Cluster == "" {
 		return errors.New("cluster is required")
 	}
-	duration := time.Duration(request.DurationSeconds) * time.Second
 	if request.Kind == dispatcherv1.OverrideKindDrain {
-		if request.DurationSeconds <= 0 || duration > c.options.MaxDrainTTL {
+		if request.DurationSeconds <= 0 || request.DurationSeconds > int64(c.options.MaxDrainTTL/time.Second) {
 			return fmt.Errorf("drain TTL must be positive and no more than %s", c.options.MaxDrainTTL)
 		}
 	} else if request.DurationSeconds <= 0 || request.DurationSeconds > int64(c.options.MaxTTL/time.Second) {
@@ -433,11 +432,14 @@ func (c *ControlPlane) validateStoredOverride(override *dispatcherv1.DispatchOve
 	if err := featureEnabled(c.options, PlanRequest{Kind: override.Spec.Kind, Capability: override.Spec.Scope.Capability}); err != nil {
 		return err
 	}
-	if !override.Spec.ExpiresAt.Time.After(override.Spec.StartsAt.Time) || override.Spec.ExpiresAt.Sub(override.Spec.StartsAt.Time) > c.options.MaxTTL {
-		return errors.New("override has an invalid or excessive TTL")
-	}
-	if override.Spec.Kind == dispatcherv1.OverrideKindDrain && override.Spec.ExpiresAt.Sub(override.Spec.StartsAt.Time) > c.options.MaxDrainTTL {
+	ttl := override.Spec.ExpiresAt.Sub(override.Spec.StartsAt.Time)
+	if override.Spec.Kind == dispatcherv1.OverrideKindDrain && ttl > c.options.MaxDrainTTL {
 		return errors.New("drain exceeds its TTL")
+	}
+	// MaxDrainTTL <= MaxTTL is enforced by ControlOptions.Validate, so a drain
+	// passing the check above will always pass this general-TTL check as well.
+	if !override.Spec.ExpiresAt.Time.After(override.Spec.StartsAt.Time) || ttl > c.options.MaxTTL {
+		return errors.New("override has an invalid or excessive TTL")
 	}
 	if override.Spec.RequiredApprovals < 1 || override.Spec.RequiredApprovals > 2 {
 		return errors.New("override required approvals must be one or two")

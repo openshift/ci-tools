@@ -97,11 +97,10 @@ func (c *ciDataClient) ListDisruptionHistoricalData(ctx context.Context) ([]jobr
 	// we have at least 100 runs. Sort for consistent ordering to help us see changes in diffs in the pr
 	// which updates the static files in origin.
 	//
-	// Note we only consider rows where MasterNodesUpdated != "N" or FromRelease is empty.
-	// This is to ensure we only enforce
-	// on the worst case when master nodes are updated, or null which implies past release data
-	// where we don't actually know if master nodes were updated. (i.e. releases prior to 4.14)
-	// An empty FromRelease implies no upgrade and MasterNodesUpdated will always be N there.
+	// Multi upgrades are not supported by disruption monitoring. Supported upgrades update master
+	// nodes, while supported non-upgrade jobs do not. Some specialized non-upgrade jobs update master
+	// nodes, but those jobs are not used as disruption baselines. Retain legacy non-upgrade rows where
+	// MasterNodesUpdated was not recorded, using them only when an N row is unavailable.
 	queryString := c.dataCoordinates.SubstituteDataSetLocation(`
 SELECT  
     BackendName,
@@ -122,7 +121,27 @@ WHERE
     LookbackDays = 30 
     AND ReportDate = (SELECT MAX(ReportDate) FROM DATA_SET_LOCATION.BackendDisruptionPercentilesByDateV5)
     AND FeatureSet = "default"
-    AND (MasterNodesUpdated != "N" OR FromRelease = "")
+    AND IPMode = "ipv4"
+    AND UpgradeType != "multi"
+    AND (
+        (IFNULL(FromRelease, "") = "" AND (MasterNodesUpdated = "N" OR MasterNodesUpdated IS NULL))
+        OR
+        (IFNULL(FromRelease, "") != "" AND MasterNodesUpdated = "Y")
+    )
+QUALIFY ROW_NUMBER() OVER (
+    PARTITION BY
+        BackendName,
+        Release,
+        FromRelease,
+        Platform,
+        Architecture,
+        Network,
+        Topology
+    ORDER BY
+        CASE MasterNodesUpdated WHEN "N" THEN 0 ELSE 1 END,
+        JobRuns DESC,
+        MasterNodesUpdated
+) = 1
 ORDER BY 
     Release, 
     FromRelease, 

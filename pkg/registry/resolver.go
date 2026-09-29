@@ -36,6 +36,15 @@ func Validate(stepsByName ReferenceByName, chainsByName ChainByName, workflowsBy
 	}
 	for k, v := range workflowsByName {
 		stack := stackForWorkflow(k, v.Environment, v.Dependencies, v.DNSConfig, v.NodeArchitecture)
+		leaseValidationErrs := validation.ValidateLeases("leases", v.Leases)
+		for _, err := range leaseValidationErrs {
+			ret = append(ret, stack.errorf("%w", err))
+		}
+		if leaseValidationErrs == nil {
+			if _, errs := resolveLeaseResourceTypes(v.Leases, stack, nil); errs != nil {
+				ret = append(ret, errs...)
+			}
+		}
 		for _, s := range [][]api.TestStep{v.Pre, v.Test, v.Post} {
 			if _, err := reg.process(s, sets.New[string](), stack); err != nil {
 				ret = append(ret, err...)
@@ -286,13 +295,15 @@ func mergeLeases(dst, src []api.StepLease) ([]api.StepLease, error) {
 	return ret, nil
 }
 
+// resolveLeaseResourceTypes replaces validated parameter selectors with their
+// allowlisted resource types, preserving selectors during partial resolution.
 func resolveLeaseResourceTypes(leases []api.StepLease, stack stack, localEnvironment []api.StepParameter) ([]api.StepLease, []error) {
 	if leases == nil {
 		return nil, nil
 	}
 	resolved := make([]api.StepLease, 0, len(leases))
 	var errs []error
-	for _, lease := range leases {
+	for i, lease := range leases {
 		selector := lease.ResourceTypeFromParameter
 		switch {
 		case lease.ResourceType != "" && selector != nil:
@@ -300,6 +311,12 @@ func resolveLeaseResourceTypes(leases []api.StepLease, stack stack, localEnviron
 			continue
 		case selector == nil:
 			resolved = append(resolved, lease)
+			continue
+		}
+		if validationErrs := validation.ValidateLeaseResourceTypeFromParameter(fmt.Sprintf("leases[%d]", i), selector); validationErrs != nil {
+			for _, err := range validationErrs {
+				errs = append(errs, stack.errorf("%w", err))
+			}
 			continue
 		}
 
@@ -320,10 +337,14 @@ func resolveLeaseResourceTypes(leases []api.StepLease, stack stack, localEnviron
 			errs = append(errs, stack.errorf("lease for environment %q requires parameter %q", lease.Env, selector.Parameter))
 			continue
 		}
+		if *value == "" {
+			errs = append(errs, stack.errorf("lease for environment %q requires parameter %q to be non-empty", lease.Env, selector.Parameter))
+			continue
+		}
 
 		resourceType, ok := selector.Values[*value]
 		if !ok || resourceType == "" {
-			errs = append(errs, stack.errorf("lease for environment %q has no resource type mapping for parameter %q value %q", lease.Env, selector.Parameter, *value))
+			errs = append(errs, stack.errorf("lease for environment %q has no resource type mapping for parameter %q", lease.Env, selector.Parameter))
 			continue
 		}
 		lease.ResourceType = resourceType
@@ -331,6 +352,36 @@ func resolveLeaseResourceTypes(leases []api.StepLease, stack stack, localEnviron
 		resolved = append(resolved, lease)
 	}
 	return resolved, errs
+}
+
+// resolveLiteralTest resolves selectors in a deep copy so the input literal
+// configuration remains unchanged.
+func resolveLiteralTest(name string, config api.MultiStageTestConfigurationLiteral) (api.MultiStageTestConfigurationLiteral, error) {
+	resolved := config.DeepCopy()
+	stack := stackForTest(name, resolved.Environment, resolved.Dependencies, resolved.DNSConfig, resolved.NodeArchitecture)
+	var resolveErrors []error
+
+	var errs []error
+	resolved.Leases, errs = resolveLeaseResourceTypes(resolved.Leases, stack, nil)
+	resolveErrors = append(resolveErrors, errs...)
+
+	for _, stage := range []*[]api.LiteralTestStep{&resolved.Pre, &resolved.Test, &resolved.Post} {
+		for i := range *stage {
+			step := &(*stage)[i]
+			for j := range step.Environment {
+				if value := stack.resolve(step.Environment[j].Name); value != nil {
+					step.Environment[j].Default = value
+				}
+			}
+			step.Leases, errs = resolveLeaseResourceTypes(step.Leases, stack, step.Environment)
+			resolveErrors = append(resolveErrors, errs...)
+		}
+	}
+
+	if resolveErrors != nil {
+		return api.MultiStageTestConfigurationLiteral{}, utilerrors.NewAggregate(resolveErrors)
+	}
+	return *resolved, nil
 }
 
 func (r *registry) process(steps []api.TestStep, seen sets.Set[string], stack stack) (ret []api.LiteralTestStep, errs []error) {
@@ -470,10 +521,21 @@ func (r *registry) resolveClusterProfile(profileName string) (api.ClusterProfile
 	return profile, ok
 }
 
-// ResolveConfig uses a resolver to resolve an entire ci-operator config
+// ResolveConfig resolves registry-backed and literal multi-stage tests in an
+// entire ci-operator configuration.
 func ResolveConfig(resolver Resolver, config api.ReleaseBuildConfiguration) (api.ReleaseBuildConfiguration, error) {
 	var resolvedTests []api.TestStepConfiguration
 	for _, step := range config.Tests {
+		if step.MultiStageTestConfigurationLiteral != nil {
+			resolvedConfig, err := resolveLiteralTest(step.As, *step.MultiStageTestConfigurationLiteral)
+			if err != nil {
+				return api.ReleaseBuildConfiguration{}, fmt.Errorf("failed to resolve MultiStageTestConfigurationLiteral: %w", err)
+			}
+			step.MultiStageTestConfigurationLiteral = &resolvedConfig
+			resolvedTests = append(resolvedTests, step)
+			continue
+		}
+
 		// no changes if step is not multi-stage
 		if step.MultiStageTestConfiguration == nil {
 			resolvedTests = append(resolvedTests, step)

@@ -1043,6 +1043,43 @@ func validateNodeArchitecture(fieldRoot string, nodeArchitecture api.NodeArchite
 	return nil
 }
 
+// ValidateLeases validates lease configuration without requiring a parent test
+// configuration. This is used while loading registry entries, before selectors
+// can be consumed and removed during resolution.
+func ValidateLeases(fieldRoot string, leases []api.StepLease) []error {
+	return validateLeases(newContext(fieldPath(fieldRoot), nil, nil, nil), leases)
+}
+
+// ValidateLeaseResourceTypeFromParameter validates the structure of a lease
+// resource type selector independently from the lease that contains it.
+func ValidateLeaseResourceTypeFromParameter(fieldRoot string, selector *api.LeaseResourceTypeFromParameter) (ret []error) {
+	if selector == nil {
+		return nil
+	}
+	context := &context{field: fieldPath(fieldRoot)}
+	if selector.Parameter == "" {
+		ret = append(ret, context.errorf("'resource_type_from_parameter.parameter' cannot be empty"))
+	}
+	if len(selector.Values) == 0 {
+		ret = append(ret, context.errorf("'resource_type_from_parameter.values' cannot be empty"))
+	}
+	values := make([]string, 0, len(selector.Values))
+	for value := range selector.Values {
+		values = append(values, value)
+	}
+	sort.Strings(values)
+	for _, value := range values {
+		resourceType := selector.Values[value]
+		if value == "" {
+			ret = append(ret, context.errorf("'resource_type_from_parameter.values' cannot contain an empty parameter value"))
+		}
+		if resourceType == "" {
+			ret = append(ret, context.errorf("'resource_type_from_parameter.values[%s]' cannot map to an empty resource type", value))
+		}
+	}
+	return ret
+}
+
 func validateLeases(context *context, leases []api.StepLease) (ret []error) {
 	for i, l := range leases {
 		leaseContext := context.addIndex(i)
@@ -1052,28 +1089,7 @@ func validateLeases(context *context, leases []api.StepLease) (ret []error) {
 		if l.ResourceType != "" && l.ResourceTypeFromParameter != nil {
 			ret = append(ret, leaseContext.errorf("'resource_type' and 'resource_type_from_parameter' are mutually exclusive"))
 		}
-		if selector := l.ResourceTypeFromParameter; selector != nil {
-			if selector.Parameter == "" {
-				ret = append(ret, leaseContext.errorf("'resource_type_from_parameter.parameter' cannot be empty"))
-			}
-			if len(selector.Values) == 0 {
-				ret = append(ret, leaseContext.errorf("'resource_type_from_parameter.values' cannot be empty"))
-			}
-			values := make([]string, 0, len(selector.Values))
-			for value := range selector.Values {
-				values = append(values, value)
-			}
-			sort.Strings(values)
-			for _, value := range values {
-				resourceType := selector.Values[value]
-				if value == "" {
-					ret = append(ret, leaseContext.errorf("'resource_type_from_parameter.values' cannot contain an empty parameter value"))
-				}
-				if resourceType == "" {
-					ret = append(ret, leaseContext.errorf("'resource_type_from_parameter.values[%s]' cannot map to an empty resource type", value))
-				}
-			}
-		}
+		ret = append(ret, ValidateLeaseResourceTypeFromParameter(string(leaseContext.field), l.ResourceTypeFromParameter)...)
 		if l.Env == "" {
 			ret = append(ret, leaseContext.errorf("'env' cannot be empty"))
 		} else if context.leasesSeen != nil {

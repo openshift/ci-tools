@@ -1,18 +1,26 @@
 package registry
 
 import (
+	"bytes"
+	"context"
 	"errors"
 	"fmt"
 	"reflect"
+	"strings"
 	"testing"
 
 	"github.com/google/go-cmp/cmp"
+	"github.com/sirupsen/logrus"
 
 	"k8s.io/apimachinery/pkg/util/diff"
 	utilerrors "k8s.io/apimachinery/pkg/util/errors"
+	ctrlruntimeclient "sigs.k8s.io/controller-runtime/pkg/client"
 
 	"github.com/openshift/ci-tools/pkg/api"
+	"github.com/openshift/ci-tools/pkg/lease"
+	"github.com/openshift/ci-tools/pkg/steps"
 	"github.com/openshift/ci-tools/pkg/testhelper"
+	"github.com/openshift/ci-tools/pkg/validation"
 )
 
 func TestResolve(t *testing.T) {
@@ -2040,6 +2048,15 @@ func TestResolveLeases(t *testing.T) {
 	ref0 := "ref0"
 	chain0 := "chain0"
 	workflow0 := "workflow0"
+	parameterizedWorkflow := "parameterized-workflow"
+	requiredParameterWorkflow := "required-parameter-workflow"
+	selector := &api.LeaseResourceTypeFromParameter{
+		Parameter: "HOSTED_MANAGEMENT_CLUSTER",
+		Values: map[string]string{
+			"hosted-mgmt":  "aws-quota-slice-hosted-mgmt",
+			"hosted-mgmt2": "aws-quota-slice-hosted-mgmt2",
+		},
+	}
 	refs := ReferenceByName{
 		ref0: {Leases: []api.StepLease{{ResourceType: "from_ref"}}},
 	}
@@ -2053,6 +2070,19 @@ func TestResolveLeases(t *testing.T) {
 			Leases: []api.StepLease{
 				{ResourceType: "from_workflow", Env: "FROM_WORKFLOW"},
 			},
+		},
+		parameterizedWorkflow: {
+			Environment: api.TestEnvironment{"HOSTED_MANAGEMENT_CLUSTER": "hosted-mgmt"},
+			Leases: []api.StepLease{{
+				ResourceTypeFromParameter: selector.DeepCopy(),
+				Env:                       "HYPERSHIFT_LEASED_RESOURCE",
+			}},
+		},
+		requiredParameterWorkflow: {
+			Leases: []api.StepLease{{
+				ResourceTypeFromParameter: selector.DeepCopy(),
+				Env:                       "HYPERSHIFT_LEASED_RESOURCE",
+			}},
 		},
 	}
 	clusterProfiles := api.ClusterProfiles{}
@@ -2100,6 +2130,24 @@ func TestResolveLeases(t *testing.T) {
 		},
 		expected: []api.StepLease{{ResourceType: "aws-quota-slice-hosted-mgmt2", Env: "LEASED_RESOURCE"}},
 	}, {
+		name: "parameterized workflow lease uses test overlay",
+		test: api.MultiStageTestConfiguration{
+			Workflow:    &parameterizedWorkflow,
+			Environment: api.TestEnvironment{"HOSTED_MANAGEMENT_CLUSTER": "hosted-mgmt2"},
+		},
+		expected: []api.StepLease{{ResourceType: "aws-quota-slice-hosted-mgmt2", Env: "HYPERSHIFT_LEASED_RESOURCE"}},
+	}, {
+		name: "equal parameterized leases from workflow and test merge",
+		test: api.MultiStageTestConfiguration{
+			Workflow:    &requiredParameterWorkflow,
+			Environment: api.TestEnvironment{"HOSTED_MANAGEMENT_CLUSTER": "hosted-mgmt"},
+			Leases: []api.StepLease{{
+				ResourceTypeFromParameter: selector.DeepCopy(),
+				Env:                       "HYPERSHIFT_LEASED_RESOURCE",
+			}},
+		},
+		expected: []api.StepLease{{ResourceType: "aws-quota-slice-hosted-mgmt", Env: "HYPERSHIFT_LEASED_RESOURCE"}},
+	}, {
 		name: "parameterized lease rejects a missing parameter",
 		test: api.MultiStageTestConfiguration{
 			Leases: []api.StepLease{{
@@ -2126,7 +2174,52 @@ func TestResolveLeases(t *testing.T) {
 			}},
 		},
 		expectedErr: utilerrors.NewAggregate([]error{
-			fmt.Errorf(`test/test: lease for environment "LEASED_RESOURCE" has no resource type mapping for parameter "HOSTED_MANAGEMENT_CLUSTER" value "unlisted"`),
+			fmt.Errorf(`test/test: lease for environment "LEASED_RESOURCE" has no resource type mapping for parameter "HOSTED_MANAGEMENT_CLUSTER"`),
+		}),
+	}, {
+		name: "merged workflow lease rejects a missing parameter",
+		test: api.MultiStageTestConfiguration{
+			Workflow: &requiredParameterWorkflow,
+			Leases:   []api.StepLease{{ResourceType: "static", Env: "STATIC_LEASE"}},
+		},
+		expectedErr: utilerrors.NewAggregate([]error{
+			fmt.Errorf(`test/test: lease for environment "HYPERSHIFT_LEASED_RESOURCE" requires parameter "HOSTED_MANAGEMENT_CLUSTER"`),
+		}),
+	}, {
+		name: "merged workflow lease rejects an unknown parameter",
+		test: api.MultiStageTestConfiguration{
+			Workflow:    &requiredParameterWorkflow,
+			Environment: api.TestEnvironment{"HOSTED_MANAGEMENT_CLUSTER": "unlisted"},
+			Leases:      []api.StepLease{{ResourceType: "static", Env: "STATIC_LEASE"}},
+		},
+		expectedErr: utilerrors.NewAggregate([]error{
+			fmt.Errorf(`test/test: lease for environment "HYPERSHIFT_LEASED_RESOURCE" has no resource type mapping for parameter "HOSTED_MANAGEMENT_CLUSTER"`),
+		}),
+	}, {
+		name: "parameterized lease rejects an empty parameter value",
+		test: api.MultiStageTestConfiguration{
+			Environment: api.TestEnvironment{"HOSTED_MANAGEMENT_CLUSTER": ""},
+			Leases: []api.StepLease{{
+				ResourceTypeFromParameter: selector.DeepCopy(),
+				Env:                       "LEASED_RESOURCE",
+			}},
+		},
+		expectedErr: utilerrors.NewAggregate([]error{
+			fmt.Errorf(`test/test: lease for environment "LEASED_RESOURCE" requires parameter "HOSTED_MANAGEMENT_CLUSTER" to be non-empty`),
+		}),
+	}, {
+		name: "parameterized lease rejects an empty mapping key before lookup",
+		test: api.MultiStageTestConfiguration{
+			Leases: []api.StepLease{{
+				ResourceTypeFromParameter: &api.LeaseResourceTypeFromParameter{
+					Parameter: "HOSTED_MANAGEMENT_CLUSTER",
+					Values:    map[string]string{"": "unexpected-resource-type"},
+				},
+				Env: "LEASED_RESOURCE",
+			}},
+		},
+		expectedErr: utilerrors.NewAggregate([]error{
+			fmt.Errorf(`test/test: leases[0]: 'resource_type_from_parameter.values' cannot contain an empty parameter value`),
 		}),
 	}, {
 		name: "from workflow",
@@ -2184,6 +2277,272 @@ func TestResolveLeases(t *testing.T) {
 			}
 			if diff := cmp.Diff(tc.expected, ret.Leases); diff != "" {
 				t.Errorf("unexpected leases: %v", diff)
+			}
+		})
+	}
+}
+
+func TestResolveLeaseErrorRedactsParameterValue(t *testing.T) {
+	const secretValue = "super-secret-token-value"
+	config := api.MultiStageTestConfiguration{
+		Environment: api.TestEnvironment{"HOSTED_MANAGEMENT_CLUSTER": secretValue},
+		Leases: []api.StepLease{{
+			ResourceTypeFromParameter: &api.LeaseResourceTypeFromParameter{
+				Parameter: "HOSTED_MANAGEMENT_CLUSTER",
+				Values:    map[string]string{"hosted-mgmt": "aws-quota-slice-hosted-mgmt"},
+			},
+			Env: "LEASED_RESOURCE",
+		}},
+	}
+
+	_, err := NewResolver(nil, nil, nil, nil, api.ClusterProfiles{}).Resolve("test", config)
+	if err == nil {
+		t.Fatal("expected resolution error")
+	}
+	if strings.Contains(err.Error(), secretValue) {
+		t.Fatalf("resolution error exposed the parameter value: %v", err)
+	}
+	for _, context := range []string{"LEASED_RESOURCE", "HOSTED_MANAGEMENT_CLUSTER"} {
+		if !strings.Contains(err.Error(), context) {
+			t.Errorf("resolution error %q does not identify %q", err, context)
+		}
+	}
+
+	var logOutput bytes.Buffer
+	logger := logrus.New()
+	logger.SetOutput(&logOutput)
+	logger.WithError(err).Error("failed to resolve test")
+	if strings.Contains(logOutput.String(), secretValue) {
+		t.Fatalf("logged resolution error exposed the parameter value: %s", logOutput.String())
+	}
+}
+
+func TestResolveStepLeaseFromLocalDefault(t *testing.T) {
+	localDefault := "hosted-mgmt"
+	config := api.MultiStageTestConfiguration{
+		Test: []api.TestStep{{LiteralTestStep: &api.LiteralTestStep{
+			As: "step",
+			Environment: []api.StepParameter{{
+				Name:    "HOSTED_MANAGEMENT_CLUSTER",
+				Default: &localDefault,
+			}},
+			Leases: []api.StepLease{{
+				ResourceTypeFromParameter: &api.LeaseResourceTypeFromParameter{
+					Parameter: "HOSTED_MANAGEMENT_CLUSTER",
+					Values:    map[string]string{"hosted-mgmt": "aws-quota-slice-hosted-mgmt"},
+				},
+				Env: "LEASED_RESOURCE",
+			}},
+		}}},
+	}
+
+	resolved, err := NewResolver(nil, nil, nil, nil, api.ClusterProfiles{}).Resolve("test", config)
+	if err != nil {
+		t.Fatalf("unexpected error: %v", err)
+	}
+	expected := []api.StepLease{{ResourceType: "aws-quota-slice-hosted-mgmt", Env: "LEASED_RESOURCE"}}
+	testhelper.Diff(t, "leases", resolved.Test[0].Leases, expected)
+}
+
+func TestResolveWorkflowPreservesRequiredLeaseSelector(t *testing.T) {
+	workflowName := "workflow"
+	selector := &api.LeaseResourceTypeFromParameter{
+		Parameter: "HOSTED_MANAGEMENT_CLUSTER",
+		Values:    map[string]string{"hosted-mgmt": "aws-quota-slice-hosted-mgmt"},
+	}
+	workflows := WorkflowByName{
+		workflowName: {
+			Leases: []api.StepLease{{
+				ResourceTypeFromParameter: selector,
+				Env:                       "LEASED_RESOURCE",
+			}},
+		},
+	}
+	resolver := NewResolver(nil, nil, workflows, nil, api.ClusterProfiles{})
+	if err := Validate(nil, nil, workflows, nil, api.ClusterProfiles{}); err != nil {
+		t.Fatalf("valid unresolved workflow selector was rejected: %v", err)
+	}
+
+	partial, err := resolver.ResolveWorkflow(workflowName)
+	if err != nil {
+		t.Fatalf("unexpected partial resolution error: %v", err)
+	}
+	if diff := cmp.Diff(selector, partial.Leases[0].ResourceTypeFromParameter); diff != "" {
+		t.Fatalf("partial resolution did not preserve selector (-want +got):\n%s", diff)
+	}
+
+	resolved, err := resolver.Resolve("test", api.MultiStageTestConfiguration{
+		Workflow:    &workflowName,
+		Environment: api.TestEnvironment{"HOSTED_MANAGEMENT_CLUSTER": "hosted-mgmt"},
+	})
+	if err != nil {
+		t.Fatalf("unexpected concrete resolution error: %v", err)
+	}
+	expected := []api.StepLease{{ResourceType: "aws-quota-slice-hosted-mgmt", Env: "LEASED_RESOURCE"}}
+	testhelper.Diff(t, "leases", resolved.Leases, expected)
+}
+
+func TestValidateWorkflowLeases(t *testing.T) {
+	for _, tc := range []struct {
+		name     string
+		selector *api.LeaseResourceTypeFromParameter
+		err      error
+	}{{
+		name:     "empty parameter",
+		selector: &api.LeaseResourceTypeFromParameter{Values: map[string]string{"value": "resource-type"}},
+		err:      errors.New(`workflow/workflow: leases[0]: 'resource_type_from_parameter.parameter' cannot be empty`),
+	}, {
+		name:     "empty values",
+		selector: &api.LeaseResourceTypeFromParameter{Parameter: "PARAMETER"},
+		err:      errors.New(`workflow/workflow: leases[0]: 'resource_type_from_parameter.values' cannot be empty`),
+	}, {
+		name: "empty value key",
+		selector: &api.LeaseResourceTypeFromParameter{
+			Parameter: "PARAMETER",
+			Values:    map[string]string{"": "resource-type"},
+		},
+		err: errors.New(`workflow/workflow: leases[0]: 'resource_type_from_parameter.values' cannot contain an empty parameter value`),
+	}, {
+		name: "empty resource type",
+		selector: &api.LeaseResourceTypeFromParameter{
+			Parameter: "PARAMETER",
+			Values:    map[string]string{"value": ""},
+		},
+		err: errors.New(`workflow/workflow: leases[0]: 'resource_type_from_parameter.values[value]' cannot map to an empty resource type`),
+	}} {
+		t.Run(tc.name, func(t *testing.T) {
+			workflows := WorkflowByName{
+				"workflow": {Leases: []api.StepLease{{
+					ResourceTypeFromParameter: tc.selector,
+					Env:                       "LEASED_RESOURCE",
+				}}},
+			}
+			err := Validate(nil, nil, workflows, nil, api.ClusterProfiles{})
+			testhelper.Diff(t, "error", err, utilerrors.NewAggregate([]error{tc.err}), testhelper.EquateErrorMessage)
+		})
+	}
+}
+
+type literalLeaseTestStep struct{}
+
+func (literalLeaseTestStep) Inputs() (api.InputDefinition, error) { return nil, nil }
+func (literalLeaseTestStep) Validate() error                      { return nil }
+func (literalLeaseTestStep) Run(context.Context) error            { return nil }
+func (literalLeaseTestStep) Name() string                         { return "literal-lease-test" }
+func (literalLeaseTestStep) Description() string                  { return "literal lease test" }
+func (literalLeaseTestStep) Requires() []api.StepLink             { return nil }
+func (literalLeaseTestStep) Creates() []api.StepLink              { return nil }
+func (literalLeaseTestStep) Provides() api.ParameterMap           { return nil }
+func (literalLeaseTestStep) Objects() []ctrlruntimeclient.Object  { return nil }
+
+func TestResolveConfigLiteralLeaseSelectors(t *testing.T) {
+	topValue := "hosted-mgmt2"
+	localDefault := "hosted-mgmt"
+	config := api.ReleaseBuildConfiguration{
+		Resources: api.ResourceConfiguration{
+			"*": {Requests: api.ResourceList{"cpu": "10m"}},
+		},
+		Tests: []api.TestStepConfiguration{{
+			As: "literal",
+			MultiStageTestConfigurationLiteral: &api.MultiStageTestConfigurationLiteral{
+				Environment: api.TestEnvironment{
+					"TOP_PARAMETER":  topValue,
+					"STEP_PARAMETER": topValue,
+				},
+				Leases: []api.StepLease{
+					{ResourceType: "static-resource-type", Env: "STATIC_LEASE"},
+					{
+						ResourceTypeFromParameter: &api.LeaseResourceTypeFromParameter{
+							Parameter: "TOP_PARAMETER",
+							Values: map[string]string{
+								"hosted-mgmt":  "top-hosted-mgmt",
+								"hosted-mgmt2": "top-hosted-mgmt2",
+							},
+						},
+						Env: "TOP_LEASE",
+					},
+				},
+				Test: []api.LiteralTestStep{{
+					As:       "literal-step",
+					From:     "src",
+					Commands: "true",
+					Resources: api.ResourceRequirements{
+						Requests: api.ResourceList{"cpu": "10m"},
+						Limits:   api.ResourceList{"memory": "1Gi"},
+					},
+					Environment: []api.StepParameter{{Name: "STEP_PARAMETER", Default: &localDefault}},
+					Leases: []api.StepLease{{
+						ResourceTypeFromParameter: &api.LeaseResourceTypeFromParameter{
+							Parameter: "STEP_PARAMETER",
+							Values: map[string]string{
+								"hosted-mgmt":  "step-hosted-mgmt",
+								"hosted-mgmt2": "step-hosted-mgmt2",
+							},
+						},
+						Env: "STEP_LEASE",
+					}},
+				}},
+			},
+		}},
+	}
+
+	resolved, err := ResolveConfig(NewResolver(nil, nil, nil, nil, api.ClusterProfiles{}), config)
+	if err != nil {
+		t.Fatalf("unexpected resolution error: %v", err)
+	}
+	literal := resolved.Tests[0].MultiStageTestConfigurationLiteral
+	expectedTop := []api.StepLease{
+		{ResourceType: "static-resource-type", Env: "STATIC_LEASE"},
+		{ResourceType: "top-hosted-mgmt2", Env: "TOP_LEASE"},
+	}
+	testhelper.Diff(t, "top-level leases", literal.Leases, expectedTop)
+	expectedStep := []api.StepLease{{ResourceType: "step-hosted-mgmt2", Env: "STEP_LEASE"}}
+	testhelper.Diff(t, "step leases", literal.Test[0].Leases, expectedStep)
+	if got := *literal.Test[0].Environment[0].Default; got != topValue {
+		t.Errorf("test environment override was not propagated: got %q, want %q", got, topValue)
+	}
+	if config.Tests[0].MultiStageTestConfigurationLiteral.Test[0].Leases[0].ResourceTypeFromParameter == nil {
+		t.Error("input literal configuration was mutated")
+	}
+
+	if err := validation.IsValidResolvedConfiguration(&resolved, false); err != nil {
+		t.Fatalf("resolved validation failed: %v", err)
+	}
+	var leaseClient lease.Client
+	leaseStep := steps.LeaseStep(&leaseClient, api.LeasesForTest(&resolved.Tests[0]), literalLeaseTestStep{}, func() string { return "" }, nil, nil, nil)
+	if err := leaseStep.Validate(); err != nil {
+		t.Fatalf("resolved leases failed step construction validation: %v", err)
+	}
+}
+
+func TestResolveConfigLiteralLeaseSelectorRejectsEmptyValues(t *testing.T) {
+	for _, tc := range []struct {
+		name   string
+		values map[string]string
+		err    string
+	}{{
+		name:   "empty parameter value",
+		values: map[string]string{"hosted-mgmt": "resource-type"},
+		err:    `test/literal: lease for environment "LEASED_RESOURCE" requires parameter "PARAMETER" to be non-empty`,
+	}, {
+		name:   "empty allowlist key",
+		values: map[string]string{"": "unexpected-resource-type"},
+		err:    `test/literal: leases[0]: 'resource_type_from_parameter.values' cannot contain an empty parameter value`,
+	}} {
+		t.Run(tc.name, func(t *testing.T) {
+			config := api.ReleaseBuildConfiguration{Tests: []api.TestStepConfiguration{{
+				As: "literal",
+				MultiStageTestConfigurationLiteral: &api.MultiStageTestConfigurationLiteral{
+					Environment: api.TestEnvironment{"PARAMETER": ""},
+					Leases: []api.StepLease{{
+						ResourceTypeFromParameter: &api.LeaseResourceTypeFromParameter{Parameter: "PARAMETER", Values: tc.values},
+						Env:                       "LEASED_RESOURCE",
+					}},
+				},
+			}}}
+			_, err := ResolveConfig(NewResolver(nil, nil, nil, nil, api.ClusterProfiles{}), config)
+			if err == nil || !strings.Contains(err.Error(), tc.err) {
+				t.Fatalf("got error %v, want it to contain %q", err, tc.err)
 			}
 		})
 	}

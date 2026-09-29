@@ -2068,6 +2068,67 @@ func TestResolveLeases(t *testing.T) {
 		},
 		expected: []api.StepLease{{ResourceType: "from_test"}},
 	}, {
+		name: "parameterized lease selects first allowed resource type",
+		test: api.MultiStageTestConfiguration{
+			Environment: api.TestEnvironment{"HOSTED_MANAGEMENT_CLUSTER": "hosted-mgmt"},
+			Leases: []api.StepLease{{
+				ResourceTypeFromParameter: &api.LeaseResourceTypeFromParameter{
+					Parameter: "HOSTED_MANAGEMENT_CLUSTER",
+					Values: map[string]string{
+						"hosted-mgmt":  "aws-quota-slice-hosted-mgmt",
+						"hosted-mgmt2": "aws-quota-slice-hosted-mgmt2",
+					},
+				},
+				Env: "LEASED_RESOURCE",
+			}},
+		},
+		expected: []api.StepLease{{ResourceType: "aws-quota-slice-hosted-mgmt", Env: "LEASED_RESOURCE"}},
+	}, {
+		name: "parameterized lease selects second allowed resource type",
+		test: api.MultiStageTestConfiguration{
+			Environment: api.TestEnvironment{"HOSTED_MANAGEMENT_CLUSTER": "hosted-mgmt2"},
+			Leases: []api.StepLease{{
+				ResourceTypeFromParameter: &api.LeaseResourceTypeFromParameter{
+					Parameter: "HOSTED_MANAGEMENT_CLUSTER",
+					Values: map[string]string{
+						"hosted-mgmt":  "aws-quota-slice-hosted-mgmt",
+						"hosted-mgmt2": "aws-quota-slice-hosted-mgmt2",
+					},
+				},
+				Env: "LEASED_RESOURCE",
+			}},
+		},
+		expected: []api.StepLease{{ResourceType: "aws-quota-slice-hosted-mgmt2", Env: "LEASED_RESOURCE"}},
+	}, {
+		name: "parameterized lease rejects a missing parameter",
+		test: api.MultiStageTestConfiguration{
+			Leases: []api.StepLease{{
+				ResourceTypeFromParameter: &api.LeaseResourceTypeFromParameter{
+					Parameter: "HOSTED_MANAGEMENT_CLUSTER",
+					Values:    map[string]string{"hosted-mgmt": "aws-quota-slice-hosted-mgmt"},
+				},
+				Env: "LEASED_RESOURCE",
+			}},
+		},
+		expectedErr: utilerrors.NewAggregate([]error{
+			fmt.Errorf(`test/test: lease for environment "LEASED_RESOURCE" requires parameter "HOSTED_MANAGEMENT_CLUSTER"`),
+		}),
+	}, {
+		name: "parameterized lease rejects an unknown parameter value",
+		test: api.MultiStageTestConfiguration{
+			Environment: api.TestEnvironment{"HOSTED_MANAGEMENT_CLUSTER": "unlisted"},
+			Leases: []api.StepLease{{
+				ResourceTypeFromParameter: &api.LeaseResourceTypeFromParameter{
+					Parameter: "HOSTED_MANAGEMENT_CLUSTER",
+					Values:    map[string]string{"hosted-mgmt": "aws-quota-slice-hosted-mgmt"},
+				},
+				Env: "LEASED_RESOURCE",
+			}},
+		},
+		expectedErr: utilerrors.NewAggregate([]error{
+			fmt.Errorf(`test/test: lease for environment "LEASED_RESOURCE" has no resource type mapping for parameter "HOSTED_MANAGEMENT_CLUSTER" value "unlisted"`),
+		}),
+	}, {
 		name: "from workflow",
 		test: api.MultiStageTestConfiguration{Workflow: &workflow0},
 		expected: []api.StepLease{

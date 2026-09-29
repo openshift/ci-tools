@@ -1254,13 +1254,27 @@ type StepDNSConfig struct {
 // The resource name will be exposed to the step via the specificed environment
 // variable.
 type StepLease struct {
-	// ResourceType is the type of resource that will be leased.
-	ResourceType string `json:"resource_type"`
+	// ResourceType is the type of resource that will be leased. Exactly one of
+	// ResourceType and ResourceTypeFromParameter must be set.
+	ResourceType string `json:"resource_type,omitempty"`
+	// ResourceTypeFromParameter selects the resource type from an explicit map
+	// using the exact value of a test parameter. The parameter value is never
+	// used directly as a resource type.
+	ResourceTypeFromParameter *LeaseResourceTypeFromParameter `json:"resource_type_from_parameter,omitempty"`
 	// Env is the environment variable that will contain the resource name.
 	Env string `json:"env"`
 	// Count is the number of resources to acquire (optional, defaults to 1).
 	Count          uint                   `json:"count,omitempty"`
 	ClusterProfile *ClusterProfileLiteral `json:"-"`
+}
+
+// LeaseResourceTypeFromParameter defines an allowlist that maps exact test
+// parameter values to Boskos resource types.
+type LeaseResourceTypeFromParameter struct {
+	// Parameter is the test parameter whose value selects the resource type.
+	Parameter string `json:"parameter"`
+	// Values maps allowed parameter values to concrete resource types.
+	Values map[string]string `json:"values"`
 }
 
 // FromImageTag returns the internal name for the image tag that will be used

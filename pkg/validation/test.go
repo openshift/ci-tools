@@ -4,6 +4,7 @@ import (
 	"fmt"
 	"path/filepath"
 	"regexp"
+	"sort"
 	"strings"
 	"time"
 
@@ -1044,14 +1045,40 @@ func validateNodeArchitecture(fieldRoot string, nodeArchitecture api.NodeArchite
 
 func validateLeases(context *context, leases []api.StepLease) (ret []error) {
 	for i, l := range leases {
-		if l.ResourceType == "" {
-			ret = append(ret, context.addIndex(i).errorf("'resource_type' cannot be empty"))
+		leaseContext := context.addIndex(i)
+		if l.ResourceType == "" && l.ResourceTypeFromParameter == nil {
+			ret = append(ret, leaseContext.errorf("exactly one of 'resource_type' or 'resource_type_from_parameter' must be set"))
+		}
+		if l.ResourceType != "" && l.ResourceTypeFromParameter != nil {
+			ret = append(ret, leaseContext.errorf("'resource_type' and 'resource_type_from_parameter' are mutually exclusive"))
+		}
+		if selector := l.ResourceTypeFromParameter; selector != nil {
+			if selector.Parameter == "" {
+				ret = append(ret, leaseContext.errorf("'resource_type_from_parameter.parameter' cannot be empty"))
+			}
+			if len(selector.Values) == 0 {
+				ret = append(ret, leaseContext.errorf("'resource_type_from_parameter.values' cannot be empty"))
+			}
+			values := make([]string, 0, len(selector.Values))
+			for value := range selector.Values {
+				values = append(values, value)
+			}
+			sort.Strings(values)
+			for _, value := range values {
+				resourceType := selector.Values[value]
+				if value == "" {
+					ret = append(ret, leaseContext.errorf("'resource_type_from_parameter.values' cannot contain an empty parameter value"))
+				}
+				if resourceType == "" {
+					ret = append(ret, leaseContext.errorf("'resource_type_from_parameter.values[%s]' cannot map to an empty resource type", value))
+				}
+			}
 		}
 		if l.Env == "" {
-			ret = append(ret, context.addIndex(i).errorf("'env' cannot be empty"))
+			ret = append(ret, leaseContext.errorf("'env' cannot be empty"))
 		} else if context.leasesSeen != nil {
 			if context.leasesSeen.Has(l.Env) {
-				ret = append(ret, context.addIndex(i).errorf("duplicate environment variable: %s", l.Env))
+				ret = append(ret, leaseContext.errorf("duplicate environment variable: %s", l.Env))
 			} else {
 				context.leasesSeen.Insert(l.Env)
 			}

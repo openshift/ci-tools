@@ -709,8 +709,18 @@ const ciOperatorReferenceYaml = "# The list of base images describe\n" +
 	"            leases:\n" +
 	"                - # Env is the environment variable that will contain the resource name.\n" +
 	"                  env: ' '\n" +
-	"                  # ResourceType is the type of resource that will be leased.\n" +
+	"                  # ResourceType is the type of resource that will be leased. Exactly one of\n" +
+	"                  # ResourceType and ResourceTypeFromParameter must be set.\n" +
 	"                  resource_type: ' '\n" +
+	"                  # ResourceTypeFromParameter selects the resource type from an explicit map\n" +
+	"                  # using the exact value of a test parameter. The parameter value is never\n" +
+	"                  # used directly as a resource type.\n" +
+	"                  resource_type_from_parameter:\n" +
+	"                    # Parameter is the test parameter whose value selects the resource type.\n" +
+	"                    parameter: ' '\n" +
+	"                    # Values maps allowed parameter values to concrete resource types.\n" +
+	"                    values:\n" +
+	"                        \"\": \"\"\n" +
 	"            # NodeArchitecture is the architecture for the node where the test will run.\n" +
 	"            # If set, the generated test pod will include a nodeSelector for this architecture.\n" +
 	"            node_architecture: \"\"\n" +
@@ -831,8 +841,18 @@ const ciOperatorReferenceYaml = "# The list of base images describe\n" +
 	"                  leases:\n" +
 	"                    - # Env is the environment variable that will contain the resource name.\n" +
 	"                      env: ' '\n" +
-	"                      # ResourceType is the type of resource that will be leased.\n" +
+	"                      # ResourceType is the type of resource that will be leased. Exactly one of\n" +
+	"                      # ResourceType and ResourceTypeFromParameter must be set.\n" +
 	"                      resource_type: ' '\n" +
+	"                      # ResourceTypeFromParameter selects the resource type from an explicit map\n" +
+	"                      # using the exact value of a test parameter. The parameter value is never\n" +
+	"                      # used directly as a resource type.\n" +
+	"                      resource_type_from_parameter:\n" +
+	"                        # Parameter is the test parameter whose value selects the resource type.\n" +
+	"                        parameter: ' '\n" +
+	"                        # Values maps allowed parameter values to concrete resource types.\n" +
+	"                        values:\n" +
+	"                            \"\": \"\"\n" +
 	"                  # NestedPodman enables this test to run podman inside a container.\n" +
 	"                  nested_podman: true\n" +
 	"                  # NoKubeconfig determines that no $KUBECONFIG will exist in $SHARED_DIR,\n" +
@@ -939,8 +959,18 @@ const ciOperatorReferenceYaml = "# The list of base images describe\n" +
 	"                  leases:\n" +
 	"                    - # Env is the environment variable that will contain the resource name.\n" +
 	"                      env: ' '\n" +
-	"                      # ResourceType is the type of resource that will be leased.\n" +
+	"                      # ResourceType is the type of resource that will be leased. Exactly one of\n" +
+	"                      # ResourceType and ResourceTypeFromParameter must be set.\n" +
 	"                      resource_type: ' '\n" +
+	"                      # ResourceTypeFromParameter selects the resource type from an explicit map\n" +
+	"                      # using the exact value of a test parameter. The parameter value is never\n" +
+	"                      # used directly as a resource type.\n" +
+	"                      resource_type_from_parameter:\n" +
+	"                        # Parameter is the test parameter whose value selects the resource type.\n" +
+	"                        parameter: ' '\n" +
+	"                        # Values maps allowed parameter values to concrete resource types.\n" +
+	"                        values:\n" +
+	"                            \"\": \"\"\n" +
 	"                  # NestedPodman enables this test to run podman inside a container.\n" +
 	"                  nested_podman: true\n" +
 	"                  # NoKubeconfig determines that no $KUBECONFIG will exist in $SHARED_DIR,\n" +
@@ -1047,8 +1077,18 @@ const ciOperatorReferenceYaml = "# The list of base images describe\n" +
 	"                  leases:\n" +
 	"                    - # Env is the environment variable that will contain the resource name.\n" +
 	"                      env: ' '\n" +
-	"                      # ResourceType is the type of resource that will be leased.\n" +
+	"                      # ResourceType is the type of resource that will be leased. Exactly one of\n" +
+	"                      # ResourceType and ResourceTypeFromParameter must be set.\n" +
 	"                      resource_type: ' '\n" +
+	"                      # ResourceTypeFromParameter selects the resource type from an explicit map\n" +
+	"                      # using the exact value of a test parameter. The parameter value is never\n" +
+	"                      # used directly as a resource type.\n" +
+	"                      resource_type_from_parameter:\n" +
+	"                        # Parameter is the test parameter whose value selects the resource type.\n" +
+	"                        parameter: ' '\n" +
+	"                        # Values maps allowed parameter values to concrete resource types.\n" +
+	"                        values:\n" +
+	"                            \"\": \"\"\n" +
 	"                  # NestedPodman enables this test to run podman inside a container.\n" +
 	"                  nested_podman: true\n" +
 	"                  # NoKubeconfig determines that no $KUBECONFIG will exist in $SHARED_DIR,\n" +
@@ -1244,8 +1284,18 @@ const ciOperatorReferenceYaml = "# The list of base images describe\n" +
 	"            leases:\n" +
 	"                - # Env is the environment variable that will contain the resource name.\n" +
 	"                  env: ' '\n" +
-	"                  # ResourceType is the type of resource that will be leased.\n" +
+	"                  # ResourceType is the type of resource that will be leased. Exactly one of\n" +
+	"                  # ResourceType and ResourceTypeFromParameter must be set.\n" +
 	"                  resource_type: ' '\n" +
+	"                  # ResourceTypeFromParameter selects the resource type from an explicit map\n" +
+	"                  # using the exact value of a test parameter. The parameter value is never\n" +
+	"                  # used directly as a resource type.\n" +
+	"                  resource_type_from_parameter:\n" +
+	"                    # Parameter is the test parameter whose value selects the resource type.\n" +
+	"                    parameter: ' '\n" +
+	"                    # Values maps allowed parameter values to concrete resource types.\n" +
+	"                    values:\n" +
+	"                        \"\": \"\"\n" +
 	"            # NodeArchitecture is the architecture for the node where the test will run.\n" +
 	"            # If set, the generated test pod will include a nodeSelector for this architecture.\n" +
 	"            node_architecture: \"\"\n" +
@@ -1313,6 +1363,12 @@ const ciOperatorReferenceYaml = "# The list of base images describe\n" +
 	"                    # LiteralTestStep is a full test step definition.\n" +
 	"                    - env: ' '\n" +
 	"                      resource_type: ' '\n" +
+	"                      resource_type_from_parameter:\n" +
+	"                        # LiteralTestStep is a full test step definition.\n" +
+	"                        parameter: ' '\n" +
+	"                        values:\n" +
+	"                            # LiteralTestStep is a full test step definition.\n" +
+	"                            \"\": \"\"\n" +
 	"                  nested_podman: true\n" +
 	"                  no_kubeconfig: false\n" +
 	"                  node_architecture: \"\"\n" +
@@ -1384,6 +1440,12 @@ const ciOperatorReferenceYaml = "# The list of base images describe\n" +
 	"                    # LiteralTestStep is a full test step definition.\n" +
 	"                    - env: ' '\n" +
 	"                      resource_type: ' '\n" +
+	"                      resource_type_from_parameter:\n" +
+	"                        # LiteralTestStep is a full test step definition.\n" +
+	"                        parameter: ' '\n" +
+	"                        values:\n" +
+	"                            # LiteralTestStep is a full test step definition.\n" +
+	"                            \"\": \"\"\n" +
 	"                  nested_podman: true\n" +
 	"                  no_kubeconfig: false\n" +
 	"                  node_architecture: \"\"\n" +
@@ -1455,6 +1517,12 @@ const ciOperatorReferenceYaml = "# The list of base images describe\n" +
 	"                    # LiteralTestStep is a full test step definition.\n" +
 	"                    - env: ' '\n" +
 	"                      resource_type: ' '\n" +
+	"                      resource_type_from_parameter:\n" +
+	"                        # LiteralTestStep is a full test step definition.\n" +
+	"                        parameter: ' '\n" +
+	"                        values:\n" +
+	"                            # LiteralTestStep is a full test step definition.\n" +
+	"                            \"\": \"\"\n" +
 	"                  nested_podman: true\n" +
 	"                  no_kubeconfig: false\n" +
 	"                  node_architecture: \"\"\n" +
@@ -1700,8 +1768,18 @@ const ciOperatorReferenceYaml = "# The list of base images describe\n" +
 	"        leases:\n" +
 	"            - # Env is the environment variable that will contain the resource name.\n" +
 	"              env: ' '\n" +
-	"              # ResourceType is the type of resource that will be leased.\n" +
+	"              # ResourceType is the type of resource that will be leased. Exactly one of\n" +
+	"              # ResourceType and ResourceTypeFromParameter must be set.\n" +
 	"              resource_type: ' '\n" +
+	"              # ResourceTypeFromParameter selects the resource type from an explicit map\n" +
+	"              # using the exact value of a test parameter. The parameter value is never\n" +
+	"              # used directly as a resource type.\n" +
+	"              resource_type_from_parameter:\n" +
+	"                # Parameter is the test parameter whose value selects the resource type.\n" +
+	"                parameter: ' '\n" +
+	"                # Values maps allowed parameter values to concrete resource types.\n" +
+	"                values:\n" +
+	"                    \"\": \"\"\n" +
 	"        # NodeArchitecture is the architecture for the node where the test will run.\n" +
 	"        # If set, the generated test pod will include a nodeSelector for this architecture.\n" +
 	"        node_architecture: \"\"\n" +
@@ -1822,8 +1900,18 @@ const ciOperatorReferenceYaml = "# The list of base images describe\n" +
 	"              leases:\n" +
 	"                - # Env is the environment variable that will contain the resource name.\n" +
 	"                  env: ' '\n" +
-	"                  # ResourceType is the type of resource that will be leased.\n" +
+	"                  # ResourceType is the type of resource that will be leased. Exactly one of\n" +
+	"                  # ResourceType and ResourceTypeFromParameter must be set.\n" +
 	"                  resource_type: ' '\n" +
+	"                  # ResourceTypeFromParameter selects the resource type from an explicit map\n" +
+	"                  # using the exact value of a test parameter. The parameter value is never\n" +
+	"                  # used directly as a resource type.\n" +
+	"                  resource_type_from_parameter:\n" +
+	"                    # Parameter is the test parameter whose value selects the resource type.\n" +
+	"                    parameter: ' '\n" +
+	"                    # Values maps allowed parameter values to concrete resource types.\n" +
+	"                    values:\n" +
+	"                        \"\": \"\"\n" +
 	"              # NestedPodman enables this test to run podman inside a container.\n" +
 	"              nested_podman: true\n" +
 	"              # NoKubeconfig determines that no $KUBECONFIG will exist in $SHARED_DIR,\n" +
@@ -1930,8 +2018,18 @@ const ciOperatorReferenceYaml = "# The list of base images describe\n" +
 	"              leases:\n" +
 	"                - # Env is the environment variable that will contain the resource name.\n" +
 	"                  env: ' '\n" +
-	"                  # ResourceType is the type of resource that will be leased.\n" +
+	"                  # ResourceType is the type of resource that will be leased. Exactly one of\n" +
+	"                  # ResourceType and ResourceTypeFromParameter must be set.\n" +
 	"                  resource_type: ' '\n" +
+	"                  # ResourceTypeFromParameter selects the resource type from an explicit map\n" +
+	"                  # using the exact value of a test parameter. The parameter value is never\n" +
+	"                  # used directly as a resource type.\n" +
+	"                  resource_type_from_parameter:\n" +
+	"                    # Parameter is the test parameter whose value selects the resource type.\n" +
+	"                    parameter: ' '\n" +
+	"                    # Values maps allowed parameter values to concrete resource types.\n" +
+	"                    values:\n" +
+	"                        \"\": \"\"\n" +
 	"              # NestedPodman enables this test to run podman inside a container.\n" +
 	"              nested_podman: true\n" +
 	"              # NoKubeconfig determines that no $KUBECONFIG will exist in $SHARED_DIR,\n" +
@@ -2038,8 +2136,18 @@ const ciOperatorReferenceYaml = "# The list of base images describe\n" +
 	"              leases:\n" +
 	"                - # Env is the environment variable that will contain the resource name.\n" +
 	"                  env: ' '\n" +
-	"                  # ResourceType is the type of resource that will be leased.\n" +
+	"                  # ResourceType is the type of resource that will be leased. Exactly one of\n" +
+	"                  # ResourceType and ResourceTypeFromParameter must be set.\n" +
 	"                  resource_type: ' '\n" +
+	"                  # ResourceTypeFromParameter selects the resource type from an explicit map\n" +
+	"                  # using the exact value of a test parameter. The parameter value is never\n" +
+	"                  # used directly as a resource type.\n" +
+	"                  resource_type_from_parameter:\n" +
+	"                    # Parameter is the test parameter whose value selects the resource type.\n" +
+	"                    parameter: ' '\n" +
+	"                    # Values maps allowed parameter values to concrete resource types.\n" +
+	"                    values:\n" +
+	"                        \"\": \"\"\n" +
 	"              # NestedPodman enables this test to run podman inside a container.\n" +
 	"              nested_podman: true\n" +
 	"              # NoKubeconfig determines that no $KUBECONFIG will exist in $SHARED_DIR,\n" +
@@ -2235,8 +2343,18 @@ const ciOperatorReferenceYaml = "# The list of base images describe\n" +
 	"        leases:\n" +
 	"            - # Env is the environment variable that will contain the resource name.\n" +
 	"              env: ' '\n" +
-	"              # ResourceType is the type of resource that will be leased.\n" +
+	"              # ResourceType is the type of resource that will be leased. Exactly one of\n" +
+	"              # ResourceType and ResourceTypeFromParameter must be set.\n" +
 	"              resource_type: ' '\n" +
+	"              # ResourceTypeFromParameter selects the resource type from an explicit map\n" +
+	"              # using the exact value of a test parameter. The parameter value is never\n" +
+	"              # used directly as a resource type.\n" +
+	"              resource_type_from_parameter:\n" +
+	"                # Parameter is the test parameter whose value selects the resource type.\n" +
+	"                parameter: ' '\n" +
+	"                # Values maps allowed parameter values to concrete resource types.\n" +
+	"                values:\n" +
+	"                    \"\": \"\"\n" +
 	"        # NodeArchitecture is the architecture for the node where the test will run.\n" +
 	"        # If set, the generated test pod will include a nodeSelector for this architecture.\n" +
 	"        node_architecture: \"\"\n" +
@@ -2304,6 +2422,12 @@ const ciOperatorReferenceYaml = "# The list of base images describe\n" +
 	"                # LiteralTestStep is a full test step definition.\n" +
 	"                - env: ' '\n" +
 	"                  resource_type: ' '\n" +
+	"                  resource_type_from_parameter:\n" +
+	"                    # LiteralTestStep is a full test step definition.\n" +
+	"                    parameter: ' '\n" +
+	"                    values:\n" +
+	"                        # LiteralTestStep is a full test step definition.\n" +
+	"                        \"\": \"\"\n" +
 	"              nested_podman: true\n" +
 	"              no_kubeconfig: false\n" +
 	"              node_architecture: \"\"\n" +
@@ -2375,6 +2499,12 @@ const ciOperatorReferenceYaml = "# The list of base images describe\n" +
 	"                # LiteralTestStep is a full test step definition.\n" +
 	"                - env: ' '\n" +
 	"                  resource_type: ' '\n" +
+	"                  resource_type_from_parameter:\n" +
+	"                    # LiteralTestStep is a full test step definition.\n" +
+	"                    parameter: ' '\n" +
+	"                    values:\n" +
+	"                        # LiteralTestStep is a full test step definition.\n" +
+	"                        \"\": \"\"\n" +
 	"              nested_podman: true\n" +
 	"              no_kubeconfig: false\n" +
 	"              node_architecture: \"\"\n" +
@@ -2446,6 +2576,12 @@ const ciOperatorReferenceYaml = "# The list of base images describe\n" +
 	"                # LiteralTestStep is a full test step definition.\n" +
 	"                - env: ' '\n" +
 	"                  resource_type: ' '\n" +
+	"                  resource_type_from_parameter:\n" +
+	"                    # LiteralTestStep is a full test step definition.\n" +
+	"                    parameter: ' '\n" +
+	"                    values:\n" +
+	"                        # LiteralTestStep is a full test step definition.\n" +
+	"                        \"\": \"\"\n" +
 	"              nested_podman: true\n" +
 	"              no_kubeconfig: false\n" +
 	"              node_architecture: \"\"\n" +

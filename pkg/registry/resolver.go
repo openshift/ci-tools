@@ -2,6 +2,7 @@ package registry
 
 import (
 	"fmt"
+	"reflect"
 
 	utilerrors "k8s.io/apimachinery/pkg/util/errors"
 	"k8s.io/apimachinery/pkg/util/sets"
@@ -133,10 +134,12 @@ func (r *registry) resolveTest(
 	overridden [][]api.TestStep,
 ) (api.MultiStageTestConfigurationLiteral, error) {
 	var resolveErrors []error
+	leases, errs := resolveLeaseResourceTypes(config.Leases, stack, nil)
+	resolveErrors = append(resolveErrors, errs...)
 	expandedFlow := api.MultiStageTestConfigurationLiteral{
 		AllowSkipOnSuccess:       config.AllowSkipOnSuccess,
 		AllowBestEffortPostSteps: config.AllowBestEffortPostSteps,
-		Leases:                   config.Leases,
+		Leases:                   leases,
 		DependencyOverrides:      config.DependencyOverrides,
 	}
 
@@ -269,7 +272,7 @@ func mergeLeases(dst, src []api.StepLease) ([]api.StepLease, error) {
 	}
 	for i := range src {
 		if p, ok := seen[src[i].Env]; ok {
-			if *p != src[i] {
+			if !reflect.DeepEqual(*p, src[i]) {
 				dup = append(dup, src[i].Env)
 			}
 			continue
@@ -281,6 +284,53 @@ func mergeLeases(dst, src []api.StepLease) ([]api.StepLease, error) {
 		return nil, fmt.Errorf("cannot override workflow environment variable for lease(s): %v", dup)
 	}
 	return ret, nil
+}
+
+func resolveLeaseResourceTypes(leases []api.StepLease, stack stack, localEnvironment []api.StepParameter) ([]api.StepLease, []error) {
+	if leases == nil {
+		return nil, nil
+	}
+	resolved := make([]api.StepLease, 0, len(leases))
+	var errs []error
+	for _, lease := range leases {
+		selector := lease.ResourceTypeFromParameter
+		switch {
+		case lease.ResourceType != "" && selector != nil:
+			errs = append(errs, stack.errorf("lease for environment %q has both resource_type and resource_type_from_parameter", lease.Env))
+			continue
+		case selector == nil:
+			resolved = append(resolved, lease)
+			continue
+		}
+
+		value := stack.resolve(selector.Parameter)
+		if value == nil {
+			for _, parameter := range localEnvironment {
+				if parameter.Name == selector.Parameter {
+					value = parameter.Default
+					break
+				}
+			}
+		}
+		if value == nil {
+			if stack.partial {
+				resolved = append(resolved, lease)
+				continue
+			}
+			errs = append(errs, stack.errorf("lease for environment %q requires parameter %q", lease.Env, selector.Parameter))
+			continue
+		}
+
+		resourceType, ok := selector.Values[*value]
+		if !ok || resourceType == "" {
+			errs = append(errs, stack.errorf("lease for environment %q has no resource type mapping for parameter %q value %q", lease.Env, selector.Parameter, *value))
+			continue
+		}
+		lease.ResourceType = resourceType
+		lease.ResourceTypeFromParameter = nil
+		resolved = append(resolved, lease)
+	}
+	return resolved, errs
 }
 
 func (r *registry) process(steps []api.TestStep, seen sets.Set[string], stack stack) (ret []api.LiteralTestStep, errs []error) {
@@ -345,6 +395,9 @@ func (r *registry) processStep(step *api.TestStep, seen sets.Set[string], stack 
 		}
 		ret.Environment = env
 	}
+	var leaseErrs []error
+	ret.Leases, leaseErrs = resolveLeaseResourceTypes(ret.Leases, stack, ret.Environment)
+	errs = append(errs, leaseErrs...)
 	if ret.Dependencies != nil {
 		deps := make([]api.StepDependency, 0, len(ret.Dependencies))
 		for _, e := range ret.Dependencies {

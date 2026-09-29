@@ -76,6 +76,14 @@ func (s *leaseStep) Validate() error {
 	if s.client == nil {
 		return NoLeaseClientErr
 	}
+	for _, lease := range s.leases {
+		if lease.ResourceTypeFromParameter != nil {
+			return fmt.Errorf("lease for environment %q has an unresolved resource type selector", lease.Env)
+		}
+		if lease.ResourceType == "" {
+			return fmt.Errorf("lease for environment %q has no resolved resource type", lease.Env)
+		}
+	}
 	return nil
 }
 

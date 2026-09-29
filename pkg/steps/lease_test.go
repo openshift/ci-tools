@@ -6,6 +6,7 @@ import (
 	"fmt"
 	"reflect"
 	"testing"
+	"time"
 
 	"github.com/google/go-cmp/cmp"
 
@@ -25,7 +26,9 @@ import (
 )
 
 type stepNeedsLease struct {
-	fail, ran bool
+	fail, ran       bool
+	started         chan struct{}
+	contextCanceled chan struct{}
 }
 
 func (stepNeedsLease) Inputs() (api.InputDefinition, error) {
@@ -34,6 +37,14 @@ func (stepNeedsLease) Inputs() (api.InputDefinition, error) {
 func (stepNeedsLease) Validate() error { return nil }
 func (s *stepNeedsLease) Run(ctx context.Context) error {
 	s.ran = true
+	if s.started != nil {
+		close(s.started)
+	}
+	if s.contextCanceled != nil {
+		<-ctx.Done()
+		close(s.contextCanceled)
+		return ctx.Err()
+	}
 	if s.fail {
 		return errors.New("injected failure")
 	}
@@ -151,6 +162,50 @@ func TestProvidesStripsSuffix(t *testing.T) {
 	}
 }
 
+func TestLeaseStepValidateResourceType(t *testing.T) {
+	client := lease.NewFakeClient("owner", "url", 0, nil, nil, nil)
+	for _, tc := range []struct {
+		name    string
+		lease   api.StepLease
+		wantErr string
+	}{
+		{
+			name:  "static resource type",
+			lease: api.StepLease{ResourceType: "aws-quota-slice", Env: "LEASED_RESOURCE"},
+		},
+		{
+			name:    "missing resource type fails closed",
+			lease:   api.StepLease{Env: "LEASED_RESOURCE"},
+			wantErr: `lease for environment "LEASED_RESOURCE" has no resolved resource type`,
+		},
+		{
+			name: "unresolved selector fails closed",
+			lease: api.StepLease{
+				ResourceTypeFromParameter: &api.LeaseResourceTypeFromParameter{
+					Parameter: "HOSTED_MANAGEMENT_CLUSTER",
+					Values:    map[string]string{"hosted-mgmt": "aws-quota-slice-hosted-mgmt"},
+				},
+				Env: "LEASED_RESOURCE",
+			},
+			wantErr: `lease for environment "LEASED_RESOURCE" has an unresolved resource type selector`,
+		},
+	} {
+		t.Run(tc.name, func(t *testing.T) {
+			step := LeaseStep(&client, []api.StepLease{tc.lease}, &stepNeedsLease{}, emptyNamespace, nil, nil, nil)
+			err := step.Validate()
+			if tc.wantErr == "" {
+				if err != nil {
+					t.Fatalf("unexpected validation error: %v", err)
+				}
+				return
+			}
+			if err == nil || err.Error() != tc.wantErr {
+				t.Fatalf("got validation error %v, want %q", err, tc.wantErr)
+			}
+		})
+	}
+}
+
 func TestError(t *testing.T) {
 	leases := []api.StepLease{
 		{ResourceType: "rtype0", Count: 1},
@@ -245,6 +300,60 @@ func TestError(t *testing.T) {
 				t.Fatalf("wrong calls to the lease client: %s", diff.Diff(calls, tc.expected))
 			}
 		})
+	}
+}
+
+func TestLeaseStepCancelsWrappedStepWhenHeartbeatFails(t *testing.T) {
+	var calls []string
+	client := lease.NewFakeClient("owner", "url", 0, map[string]error{
+		"updateone owner parameter-selected-type_0 leased 0": errors.New("injected heartbeat failure"),
+	}, &calls, nil)
+	started := make(chan struct{})
+	contextCanceled := make(chan struct{})
+	wrapped := &stepNeedsLease{started: started, contextCanceled: contextCanceled}
+	step := LeaseStep(&client, []api.StepLease{{
+		ResourceType: "parameter-selected-type",
+		Env:          api.DefaultLeaseEnv,
+		Count:        1,
+	}}, wrapped, emptyNamespace, nil, nil, nil)
+
+	done := make(chan error, 1)
+	runCtx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
+	defer cancel()
+	go func() {
+		done <- step.Run(runCtx)
+	}()
+	select {
+	case <-started:
+	case <-runCtx.Done():
+		t.Fatalf("timed out waiting for wrapped step to start: %v", runCtx.Err())
+	}
+
+	if err := client.Heartbeat(); err == nil {
+		t.Fatal("Heartbeat() did not fail")
+	}
+	select {
+	case <-contextCanceled:
+	case <-runCtx.Done():
+		t.Fatalf("timed out waiting for wrapped step cancellation: %v", runCtx.Err())
+	}
+	var runErr error
+	select {
+	case runErr = <-done:
+	case <-runCtx.Done():
+		t.Fatalf("timed out waiting for lease step to finish: %v", runCtx.Err())
+	}
+	if !errors.Is(runErr, context.Canceled) {
+		t.Fatalf("expected wrapped step to stop with context cancellation, got %v", runErr)
+	}
+
+	expectedCalls := []string{
+		"acquireWaitWithPriority owner parameter-selected-type free leased random",
+		"updateone owner parameter-selected-type_0 leased 0",
+		"releaseone owner parameter-selected-type_0 free",
+	}
+	if diff := cmp.Diff(expectedCalls, calls); diff != "" {
+		t.Errorf("unexpected Boskos calls (-want +got):\n%s", diff)
 	}
 }
 

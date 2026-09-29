@@ -2115,16 +2115,90 @@ func TestValidateLeases(t *testing.T) {
 		test: api.MultiStageTestConfigurationLiteral{
 			Leases: []api.StepLease{
 				{ResourceType: "aws-quota-slice", Env: "AWS_LEASED_RESOURCE"},
-				{ResourceType: "gcp-quota-slice", Env: "GCP_LEASED_RESOURCE"},
+				{
+					ResourceTypeFromParameter: &api.LeaseResourceTypeFromParameter{
+						Parameter: "HOSTED_MANAGEMENT_CLUSTER",
+						Values: map[string]string{
+							"hosted-mgmt":  "aws-quota-slice-hosted-mgmt",
+							"hosted-mgmt2": "aws-quota-slice-hosted-mgmt2",
+						},
+					},
+					Env: "HYPERSHIFT_LEASED_RESOURCE",
+				},
 			},
 		},
 	}, {
-		name: "invalid empty name",
+		name: "invalid missing resource type source",
 		test: api.MultiStageTestConfigurationLiteral{
 			Leases: []api.StepLease{{Env: "AWS_LEASED_RESOURCE"}},
 		},
 		err: []error{
-			errors.New("tests[0].steps.leases[0]: 'resource_type' cannot be empty"),
+			errors.New("tests[0].steps.leases[0]: exactly one of 'resource_type' or 'resource_type_from_parameter' must be set"),
+		},
+	}, {
+		name: "invalid multiple resource type sources",
+		test: api.MultiStageTestConfigurationLiteral{
+			Leases: []api.StepLease{{
+				ResourceType: "aws-quota-slice",
+				ResourceTypeFromParameter: &api.LeaseResourceTypeFromParameter{
+					Parameter: "HOSTED_MANAGEMENT_CLUSTER",
+					Values:    map[string]string{"hosted-mgmt": "aws-quota-slice-hosted-mgmt"},
+				},
+				Env: "AWS_LEASED_RESOURCE",
+			}},
+		},
+		err: []error{
+			errors.New("tests[0].steps.leases[0]: 'resource_type' and 'resource_type_from_parameter' are mutually exclusive"),
+		},
+	}, {
+		name: "invalid empty selector parameter",
+		test: api.MultiStageTestConfigurationLiteral{
+			Leases: []api.StepLease{{
+				ResourceTypeFromParameter: &api.LeaseResourceTypeFromParameter{Values: map[string]string{"hosted-mgmt": "aws-quota-slice-hosted-mgmt"}},
+				Env:                       "AWS_LEASED_RESOURCE",
+			}},
+		},
+		err: []error{
+			errors.New("tests[0].steps.leases[0]: 'resource_type_from_parameter.parameter' cannot be empty"),
+		},
+	}, {
+		name: "invalid empty selector values",
+		test: api.MultiStageTestConfigurationLiteral{
+			Leases: []api.StepLease{{
+				ResourceTypeFromParameter: &api.LeaseResourceTypeFromParameter{Parameter: "HOSTED_MANAGEMENT_CLUSTER"},
+				Env:                       "AWS_LEASED_RESOURCE",
+			}},
+		},
+		err: []error{
+			errors.New("tests[0].steps.leases[0]: 'resource_type_from_parameter.values' cannot be empty"),
+		},
+	}, {
+		name: "invalid empty selector value",
+		test: api.MultiStageTestConfigurationLiteral{
+			Leases: []api.StepLease{{
+				ResourceTypeFromParameter: &api.LeaseResourceTypeFromParameter{
+					Parameter: "HOSTED_MANAGEMENT_CLUSTER",
+					Values:    map[string]string{"": "aws-quota-slice-hosted-mgmt"},
+				},
+				Env: "AWS_LEASED_RESOURCE",
+			}},
+		},
+		err: []error{
+			errors.New("tests[0].steps.leases[0]: 'resource_type_from_parameter.values' cannot contain an empty parameter value"),
+		},
+	}, {
+		name: "invalid empty mapped resource type",
+		test: api.MultiStageTestConfigurationLiteral{
+			Leases: []api.StepLease{{
+				ResourceTypeFromParameter: &api.LeaseResourceTypeFromParameter{
+					Parameter: "HOSTED_MANAGEMENT_CLUSTER",
+					Values:    map[string]string{"hosted-mgmt": ""},
+				},
+				Env: "AWS_LEASED_RESOURCE",
+			}},
+		},
+		err: []error{
+			errors.New("tests[0].steps.leases[0]: 'resource_type_from_parameter.values[hosted-mgmt]' cannot map to an empty resource type"),
 		},
 	}, {
 		name: "invalid empty environment variable",

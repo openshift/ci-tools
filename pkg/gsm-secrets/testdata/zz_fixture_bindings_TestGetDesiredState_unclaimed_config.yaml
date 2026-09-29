@@ -1,6 +1,6 @@
 - condition:
-    expression: resource.name.extract("secrets/{s}/versions/") in ["claimed-a__updater-service-account",
-      "claimed-a____index", "claimed-b__updater-service-account", "claimed-b____index"]
+    expression: resource.name.extract("secrets/{s}/versions/") in ["claimed-a____index",
+      "claimed-b____index"]
     title: 'tp-viewer: owner-team'
   members:
   - group:owner-team@redhat.com

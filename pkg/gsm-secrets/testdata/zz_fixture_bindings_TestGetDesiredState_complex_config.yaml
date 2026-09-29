@@ -12,8 +12,7 @@
   - serviceAccount:epsilon-secrets-updater@test-project.iam.gserviceaccount.com
   role: projects/test-project/roles/openshift_ci_secrets_updater
 - condition:
-    expression: resource.name.extract("secrets/{s}/versions/") in ["alpha-secrets__updater-service-account",
-      "alpha-secrets____index"]
+    expression: resource.name.extract("secrets/{s}/versions/") in ["alpha-secrets____index"]
     title: 'tp-viewer: team-alpha'
   members:
   - group:team-alpha@redhat.com
@@ -25,8 +24,7 @@
   - group:team-alpha@redhat.com
   role: projects/test-project/roles/openshift_ci_secrets_updater
 - condition:
-    expression: resource.name.extract("secrets/{s}/versions/") in ["beta-delta-secrets__updater-service-account",
-      "beta-delta-secrets____index"]
+    expression: resource.name.extract("secrets/{s}/versions/") in ["beta-delta-secrets____index"]
     title: 'tp-viewer: team-beta'
   members:
   - group:team-beta@redhat.com
@@ -38,8 +36,7 @@
   - group:team-beta@redhat.com
   role: projects/test-project/roles/openshift_ci_secrets_updater
 - condition:
-    expression: resource.name.extract("secrets/{s}/versions/") in ["beta-delta-secrets__updater-service-account",
-      "beta-delta-secrets____index"]
+    expression: resource.name.extract("secrets/{s}/versions/") in ["beta-delta-secrets____index"]
     title: 'tp-viewer: team-delta'
   members:
   - group:team-delta@redhat.com

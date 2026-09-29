@@ -7,6 +7,8 @@ import (
 	"cloud.google.com/go/iam/apiv1/iampb"
 	"google.golang.org/genproto/googleapis/type/expr"
 
+	"k8s.io/apimachinery/pkg/util/sets"
+
 	"github.com/openshift/ci-tools/pkg/testhelper"
 )
 
@@ -165,28 +167,44 @@ func TestToCanonicalIAMBinding(t *testing.T) {
 
 func TestBuildConditionExpressions(t *testing.T) {
 	testCases := []struct {
-		name            string
-		collections     []string
-		expectedViewer  string
-		expectedUpdater string
+		name              string
+		collections       []string
+		collectionsWithSA sets.Set[string]
+		expectedViewer    string
+		expectedUpdater   string
 	}{
 		{
-			name:            "single collection",
+			name:              "single collection with SA",
+			collections:       []string{"alpha"},
+			collectionsWithSA: sets.New("alpha"),
+			expectedViewer:    `resource.name.extract("secrets/{s}/versions/") in ["alpha__updater-service-account", "alpha____index"]`,
+			expectedUpdater:   `resource.name.extract("secrets/{c}__") in ["alpha"]`,
+		},
+		{
+			name:            "single collection without SA",
 			collections:     []string{"alpha"},
-			expectedViewer:  `resource.name.extract("secrets/{s}/versions/") in ["alpha__updater-service-account", "alpha____index"]`,
+			expectedViewer:  `resource.name.extract("secrets/{s}/versions/") in ["alpha____index"]`,
 			expectedUpdater: `resource.name.extract("secrets/{c}__") in ["alpha"]`,
 		},
 		{
-			name:            "multiple collections",
-			collections:     []string{"alpha", "beta"},
-			expectedViewer:  `resource.name.extract("secrets/{s}/versions/") in ["alpha__updater-service-account", "alpha____index", "beta__updater-service-account", "beta____index"]`,
-			expectedUpdater: `resource.name.extract("secrets/{c}__") in ["alpha", "beta"]`,
+			name:              "multiple collections, only one with an SA",
+			collections:       []string{"alpha", "beta"},
+			collectionsWithSA: sets.New("beta"),
+			expectedViewer:    `resource.name.extract("secrets/{s}/versions/") in ["alpha____index", "beta__updater-service-account", "beta____index"]`,
+			expectedUpdater:   `resource.name.extract("secrets/{c}__") in ["alpha", "beta"]`,
+		},
+		{
+			name:              "multiple collections, all with an SA",
+			collections:       []string{"alpha", "beta"},
+			collectionsWithSA: sets.New("alpha", "beta"),
+			expectedViewer:    `resource.name.extract("secrets/{s}/versions/") in ["alpha__updater-service-account", "alpha____index", "beta__updater-service-account", "beta____index"]`,
+			expectedUpdater:   `resource.name.extract("secrets/{c}__") in ["alpha", "beta"]`,
 		},
 	}
 
 	for _, tc := range testCases {
 		t.Run(tc.name, func(t *testing.T) {
-			testhelper.Diff(t, "viewer", BuildSecretAccessorRoleConditionExpressionForCollections(tc.collections), tc.expectedViewer)
+			testhelper.Diff(t, "viewer", BuildSecretAccessorRoleConditionExpressionForCollections(tc.collections, tc.collectionsWithSA), tc.expectedViewer)
 			testhelper.Diff(t, "updater", BuildSecretUpdaterRoleConditionExpressionForCollections(tc.collections), tc.expectedUpdater)
 		})
 	}
@@ -287,7 +305,7 @@ func TestIsManagedBinding(t *testing.T) {
 				Members: []string{"group:team-x@redhat.com"},
 				Condition: &expr.Expr{
 					Title:      GetSecretsViewerGroupConditionTitle("team-x"),
-					Expression: BuildSecretAccessorRoleConditionExpressionForCollections([]string{"a", "b"}),
+					Expression: BuildSecretAccessorRoleConditionExpressionForCollections([]string{"a", "b"}, sets.New("a")),
 				},
 			},
 			expected: true,

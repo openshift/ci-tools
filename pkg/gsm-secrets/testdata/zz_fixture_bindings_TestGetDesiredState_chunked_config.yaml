@@ -1,6 +1,6 @@
 - condition:
-    expression: resource.name.extract("secrets/{s}/versions/") in ["at-01__updater-service-account",
-      "at-01____index", "bt-01__updater-service-account", "bt-01____index"]
+    expression: resource.name.extract("secrets/{s}/versions/") in ["at-01____index",
+      "bt-01____index"]
     title: 'tp-viewer: another-team'
   members:
   - group:another-team@redhat.com
@@ -12,13 +12,10 @@
   - group:another-team@redhat.com
   role: projects/test-project/roles/openshift_ci_secrets_updater
 - condition:
-    expression: resource.name.extract("secrets/{s}/versions/") in ["bt-01__updater-service-account",
-      "bt-01____index", "bt-02__updater-service-account", "bt-02____index", "bt-03__updater-service-account",
-      "bt-03____index", "bt-04__updater-service-account", "bt-04____index", "bt-05__updater-service-account",
-      "bt-05____index", "bt-06__updater-service-account", "bt-06____index", "bt-07__updater-service-account",
-      "bt-07____index", "bt-08__updater-service-account", "bt-08____index", "bt-09__updater-service-account",
-      "bt-09____index", "bt-10__updater-service-account", "bt-10____index", "bt-11__updater-service-account",
-      "bt-11____index", "bt-12__updater-service-account", "bt-12____index"]
+    expression: resource.name.extract("secrets/{s}/versions/") in ["bt-01____index",
+      "bt-02____index", "bt-03____index", "bt-04____index", "bt-05____index", "bt-06____index",
+      "bt-07____index", "bt-08____index", "bt-09____index", "bt-10____index", "bt-11____index",
+      "bt-12____index"]
     title: 'tp-viewer: big-team'
   members:
   - group:big-team@redhat.com
@@ -31,8 +28,7 @@
   - group:big-team@redhat.com
   role: projects/test-project/roles/openshift_ci_secrets_updater
 - condition:
-    expression: resource.name.extract("secrets/{s}/versions/") in ["st-01__updater-service-account",
-      "st-01____index"]
+    expression: resource.name.extract("secrets/{s}/versions/") in ["st-01____index"]
     title: 'tp-viewer: small-team'
   members:
   - group:small-team@redhat.com

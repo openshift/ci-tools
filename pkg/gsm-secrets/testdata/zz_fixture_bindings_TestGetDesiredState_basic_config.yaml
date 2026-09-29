@@ -13,7 +13,7 @@
   role: projects/test-project/roles/openshift_ci_secrets_updater
 - condition:
     expression: resource.name.extract("secrets/{s}/versions/") in ["collection-alpha__updater-service-account",
-      "collection-alpha____index", "shared-collection__updater-service-account", "shared-collection____index"]
+      "collection-alpha____index", "shared-collection____index"]
     title: 'tp-viewer: team-alpha'
   members:
   - group:team-alpha@redhat.com
@@ -25,8 +25,7 @@
   - group:team-alpha@redhat.com
   role: projects/test-project/roles/openshift_ci_secrets_updater
 - condition:
-    expression: resource.name.extract("secrets/{s}/versions/") in ["shared-collection__updater-service-account",
-      "shared-collection____index", "some-collection-with-a-very-long-name__updater-service-account",
+    expression: resource.name.extract("secrets/{s}/versions/") in ["shared-collection____index",
       "some-collection-with-a-very-long-name____index"]
     title: 'tp-viewer: team-beta'
   members:

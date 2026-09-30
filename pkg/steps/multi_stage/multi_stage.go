@@ -290,15 +290,15 @@ func (s *multiStageTestStep) run(ctx context.Context) error {
 		}
 	}
 	if s.enableSecretsStoreCSIDriver {
-		if s.gsm == nil || s.gsm.Client == nil {
-			return fmt.Errorf("GSM client was not initialized - credentials file may be missing")
-		}
 		if len(k8sSecretCredentials) > 0 {
 			if err := s.createCredentials(ctx, k8sSecretCredentials); err != nil {
 				return fmt.Errorf("failed to create K8s Secret credentials: %w", err)
 			}
 		}
 		if len(gsmCredentials) > 0 {
+			if s.gsm == nil || s.gsm.Client == nil {
+				return fmt.Errorf("gsm client was not initialized - ensure --gsm-config and --gsm-credentials-file are provided")
+			}
 			if err := s.createSPCs(ctx, gsmCredentials); err != nil {
 				return fmt.Errorf("failed to create SecretProviderClass objects: %w", err)
 			}

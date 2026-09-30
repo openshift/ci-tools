@@ -184,11 +184,9 @@ func NewProwJobBaseBuilderForTest(configSpec *cioperatorapi.ReleaseBuildConfigur
 		if configSpec.Releases != nil {
 			p.PodSpec.Add(CIPullSecret())
 		}
-		if configSpec.Prowgen != nil && configSpec.Prowgen.EnableSecretsStoreCSIDriver {
-			p.PodSpec.Add(
-				GSMConfig(),
-			)
-		}
+		p.PodSpec.Add(
+			GSMConfig(),
+		)
 	case test.MultiStageTestConfiguration != nil:
 		p.PodSpec.Add(LeaseClient())
 		if clusterProfile := test.MultiStageTestConfiguration.ClusterProfile; clusterProfile != "" {
@@ -203,11 +201,9 @@ func NewProwJobBaseBuilderForTest(configSpec *cioperatorapi.ReleaseBuildConfigur
 		if configSpec.Releases != nil {
 			p.PodSpec.Add(CIPullSecret())
 		}
-		if configSpec.Prowgen != nil && configSpec.Prowgen.EnableSecretsStoreCSIDriver {
-			p.PodSpec.Add(
-				GSMConfig(),
-			)
-		}
+		p.PodSpec.Add(
+			GSMConfig(),
+		)
 	}
 	return p, nil
 }

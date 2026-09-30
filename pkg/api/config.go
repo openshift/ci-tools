@@ -307,7 +307,11 @@ func (config *ReleaseBuildConfiguration) WithPresubmitFrom(source *ReleaseBuildC
 
 	for i := range source.Tests {
 		if source.Tests[i].As == test {
-			test := source.Tests[i]
+			// Deep-copy: MultiStageTestConfiguration{,Literal} hold maps and slices that
+			// includeInjectedTestSourceImages rewrites in place below. A shallow copy would
+			// alias that state with source, which may be a shared/cached config (see
+			// configAgent.GetMatchingConfig) read concurrently by other requests.
+			test := *source.Tests[i].DeepCopy()
 			test.Interval = nil
 			test.Cron = nil
 			test.MinimumInterval = nil

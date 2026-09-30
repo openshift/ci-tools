@@ -94,6 +94,44 @@ func TestWithPresubmitFromInjectsProjectImageDependency(t *testing.T) {
 	if err := validation.IsValidResolvedConfiguration(merged, true); err != nil {
 		t.Errorf("expected the merged, injected-test configuration to be valid, got: %v", err)
 	}
+
+	sourceDependency := source.Tests[0].MultiStageTestConfigurationLiteral.Test[0].Dependencies[0].Name
+	if sourceDependency != "pipeline:vcf-migration-operator" {
+		t.Errorf("source configuration was mutated: expected dependency name unchanged at %q, got %q", "pipeline:vcf-migration-operator", sourceDependency)
+	}
+}
+
+// TestWithPresubmitFromDoesNotMutateSourceDependenciesMap covers the workflow-based
+// (non-literal) shape of a test, where dependency renaming writes into
+// MultiStageTestConfiguration.Dependencies, a map shared by reference with source's
+// test unless the test is deep-copied first. Source configs can be shared/cached
+// objects served to concurrent requests (see configAgent.GetMatchingConfig), so
+// mutating one in place here would corrupt state visible to unrelated callers.
+func TestWithPresubmitFromDoesNotMutateSourceDependenciesMap(t *testing.T) {
+	source := &api.ReleaseBuildConfiguration{
+		Metadata: api.Metadata{Org: "openshift", Repo: "vcf-migration-operator", Branch: "main"},
+		Images: api.ImageConfiguration{
+			Items: []api.ProjectDirectoryImageBuildStepConfiguration{{To: "vcf-migration-operator"}},
+		},
+		Tests: []api.TestStepConfiguration{
+			{
+				As: "e2e-vsphere-vcf-migration",
+				MultiStageTestConfiguration: &api.MultiStageTestConfiguration{
+					Dependencies: api.TestDependencies{"VCF_MIGRATION_OPERATOR_IMAGE": "pipeline:vcf-migration-operator"},
+				},
+			},
+		},
+	}
+
+	base := &api.ReleaseBuildConfiguration{}
+	if _, err := base.WithPresubmitFrom(source, "e2e-vsphere-vcf-migration"); err != nil {
+		t.Fatalf("WithPresubmitFrom returned an unexpected error: %v", err)
+	}
+
+	got := source.Tests[0].MultiStageTestConfiguration.Dependencies["VCF_MIGRATION_OPERATOR_IMAGE"]
+	if got != "pipeline:vcf-migration-operator" {
+		t.Errorf("source configuration's dependencies map was mutated: expected %q, got %q", "pipeline:vcf-migration-operator", got)
+	}
 }
 
 func strPtr(s string) *string { return &s }

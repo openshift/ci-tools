@@ -105,6 +105,155 @@ func (config *ReleaseBuildConfiguration) DependencyParts(dependency StepDependen
 	return stream, name, explicit
 }
 
+// pipelineImageDependency returns the pipeline image tag a dependency name refers to,
+// and whether that tag is a project image built by source (as opposed to a base image,
+// a release image, or an image built by whichever config the dependency ends up in).
+func pipelineImageDependency(source *ReleaseBuildConfiguration, dependency string) (PipelineImageStreamTagReference, bool) {
+	name := dependency
+	if idx := strings.Index(dependency, ":"); idx >= 0 {
+		if dependency[:idx] != PipelineImageStream {
+			return "", false
+		}
+		name = dependency[idx+1:]
+	}
+	if !source.BuildsImage(name) {
+		return "", false
+	}
+	return PipelineImageStreamTagReference(name), true
+}
+
+// testDependencyNames collects the dependency names referenced anywhere in a test,
+// whether it is still workflow-based (steps) or already expanded (literal_steps).
+func testDependencyNames(test *TestStepConfiguration) []string {
+	var names []string
+	literalStepNames := func(steps []LiteralTestStep) {
+		for _, step := range steps {
+			for _, dep := range step.Dependencies {
+				names = append(names, dep.Name)
+			}
+		}
+	}
+	if steps := test.MultiStageTestConfiguration; steps != nil {
+		for _, name := range steps.Dependencies {
+			names = append(names, name)
+		}
+		for _, step := range append(append(append([]TestStep{}, steps.Pre...), steps.Test...), steps.Post...) {
+			if step.LiteralTestStep != nil {
+				literalStepNames([]LiteralTestStep{*step.LiteralTestStep})
+			}
+		}
+	}
+	if literal := test.MultiStageTestConfigurationLiteral; literal != nil {
+		literalStepNames(literal.Pre)
+		literalStepNames(literal.Test)
+		literalStepNames(literal.Post)
+	}
+	return names
+}
+
+// includeInjectedTestSourceImages copies any project-built pipeline images that the
+// injected test depends on (transitively, following `from`) from source into result,
+// so that "no base image import, project image build, or bundle image build is
+// configured to provide this dependency" is not raised for them at validation time.
+//
+// The images (and, if needed, the default "src" image they build from) are namespaced
+// with the source repository's "org.repo" ref, matching the convention used elsewhere
+// (see registry/server.ResolveAndMergeConfigsAndInjectTest) for images that must be
+// built from a repository other than the base config's own checkout. The injected
+// test's dependencies are rewritten to point at the namespaced images. Callers are
+// responsible for ensuring that repository is actually checked out (as an extra ref)
+// wherever this configuration is ultimately run, or the added images will fail to build.
+func includeInjectedTestSourceImages(result, source *ReleaseBuildConfiguration, test *TestStepConfiguration) {
+	needed := map[PipelineImageStreamTagReference]bool{}
+	queue := testDependencyNames(test)
+	for len(queue) > 0 {
+		dependency := queue[0]
+		queue = queue[1:]
+		name, ok := pipelineImageDependency(source, dependency)
+		if !ok || needed[name] {
+			continue
+		}
+		needed[name] = true
+		for i := range source.Images.Items {
+			if source.Images.Items[i].To == name && source.Images.Items[i].From != "" {
+				queue = append(queue, string(source.Images.Items[i].From))
+			}
+		}
+	}
+	if len(needed) == 0 {
+		return
+	}
+
+	ref := fmt.Sprintf("%s.%s", source.Metadata.Org, source.Metadata.Repo)
+	renamed := map[PipelineImageStreamTagReference]PipelineImageStreamTagReference{}
+	for name := range needed {
+		renamed[name] = PipelineImageStreamTagReference(fmt.Sprintf("%s-%s", name, ref))
+	}
+
+	if source.BuildRootImage != nil {
+		if result.BuildRootImages == nil {
+			result.BuildRootImages = map[string]BuildRootImageConfiguration{}
+		}
+		result.BuildRootImages[ref] = *source.BuildRootImage
+	}
+
+	for i := range source.Images.Items {
+		newTo, ok := renamed[source.Images.Items[i].To]
+		if !ok {
+			continue
+		}
+		image := source.Images.Items[i]
+		image.To = newTo
+		from := image.From
+		if from == "" {
+			from = PipelineImageStreamTagReferenceSource
+		}
+		if newFrom, ok := renamed[from]; ok {
+			image.From = newFrom
+		} else {
+			image.From = PipelineImageStreamTagReference(fmt.Sprintf("%s-%s", from, ref))
+		}
+		image.Ref = ref
+		result.Images.Items = append(result.Images.Items, image)
+	}
+
+	renameDependency := func(dependency string) string {
+		name, ok := pipelineImageDependency(source, dependency)
+		if !ok {
+			return dependency
+		}
+		newName, ok := renamed[name]
+		if !ok {
+			return dependency
+		}
+		return fmt.Sprintf("%s:%s", PipelineImageStream, newName)
+	}
+	renameLiteralSteps := func(steps []LiteralTestStep) {
+		for i := range steps {
+			for j := range steps[i].Dependencies {
+				steps[i].Dependencies[j].Name = renameDependency(steps[i].Dependencies[j].Name)
+			}
+		}
+	}
+	if steps := test.MultiStageTestConfiguration; steps != nil {
+		for env, dependency := range steps.Dependencies {
+			steps.Dependencies[env] = renameDependency(dependency)
+		}
+		for _, stepList := range [][]TestStep{steps.Pre, steps.Test, steps.Post} {
+			for i := range stepList {
+				if stepList[i].LiteralTestStep != nil {
+					renameLiteralSteps([]LiteralTestStep{*stepList[i].LiteralTestStep})
+				}
+			}
+		}
+	}
+	if literal := test.MultiStageTestConfigurationLiteral; literal != nil {
+		renameLiteralSteps(literal.Pre)
+		renameLiteralSteps(literal.Test)
+		renameLiteralSteps(literal.Post)
+	}
+}
+
 // WithPresubmitFrom returns a new configuration, where a selected test from the source
 // configuration is injected into the base configuration, together with all elements from
 // the source configuration that are potentially necessary to allow that test to function
@@ -163,6 +312,7 @@ func (config *ReleaseBuildConfiguration) WithPresubmitFrom(source *ReleaseBuildC
 			test.Cron = nil
 			test.MinimumInterval = nil
 			test.Postsubmit = false
+			includeInjectedTestSourceImages(&result, source, &test)
 			result.Tests = []TestStepConfiguration{test}
 
 			return &result, nil

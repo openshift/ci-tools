@@ -1634,6 +1634,13 @@ func BundleName(index int) string {
 // ImageConfiguration holds the configuration for building images
 // along with the run conditions for the auto-generated images job.
 type ImageConfiguration struct {
+	// AlwaysRun can be set to false to disable running the auto-generated
+	// images presubmit on every PR. It must then be triggered manually via
+	// `/test images`. This only affects when the Prow job is scheduled; it
+	// does not affect which images are built once the job (or any other job
+	// that requires them, e.g. via include_built_images) does run.
+	AlwaysRun *bool `json:"always_run,omitempty"`
+
 	// RunIfChanged is a regex that will cause the auto-generated images
 	// presubmit to only run if a file matching the regex is changed.
 	RunIfChanged string `json:"run_if_changed,omitempty"`

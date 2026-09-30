@@ -2,29 +2,53 @@
 
 ## What it does
 
-`sync-rover-groups` is a tool to resolve the groups in [the manifests](https://github.com/openshift/release/tree/main/clusters) of CI clusters
-in the release repo. Its result is a configuration file consumed by [github-ldap-user-group-creator](../github-ldap-user-group-creator).
+`sync-rover-groups` resolves the members of [Rover](https://rover.redhat.com/groups/) groups referenced
+in the [cluster manifests](https://github.com/openshift/release/tree/main/clusters) of the
+[openshift/release](https://github.com/openshift/release) repository.
 
-It can also generate the mapping file in yaml format: `m(GitHubID)=KerberosID` for each user
-that set up GitHub URL at Rover.
+It produces two output files:
+- **`groups.yaml`** — a mapping of Rover Group names to their resolved members (Kerberos IDs)
+- **`users.yaml`** — a YAML sequence of user records (GitHub username, Kerberos ID, etc.) for every
+  user who has set up a GitHub URL in their [Rover profile](https://rover.redhat.com/)
 
+These files are used downstream by
+[github-ldap-user-group-creator](../github-ldap-user-group-creator) to create OpenShift `Group`
+resources on CI clusters.
 
 ## Why it exists
 
-For various reasons we decided that we want to avoid maintaining lists of logins in our manifests,
-and rely on Rover Groups instead. The tool `sync-rover-groups` discovers the groups that we expect
-to exist in OpenShift CI clusters and resolves their members so that they can be applied to the
-clusters.
-
+We want to avoid maintaining lists of individual logins in our CI cluster manifests and rely on
+[Rover Groups](https://rover.redhat.com/groups/) instead. The tool `sync-rover-groups` discovers the
+groups that are expected to exist on OpenShift CI clusters and resolves their members so they can be
+applied to the clusters.
 
 ## How it works
 
-`sync-rover-groups` collects the groups in the manifests and resolves their members by querying the Red Hat LDAP server,
-and saves the resolved groups in a file.
+1. Scans the `--manifest-dir` (typically the `clusters/` tree in `openshift/release`) to discover
+   which Rover groups are referenced in cluster RBAC manifests.
+2. Loads the `--config-file`
+   ([`core-services/sync-rover-groups/_config.yaml`](https://github.com/openshift/release/blob/main/core-services/sync-rover-groups/_config.yaml)
+   in the release repo) which controls group renaming, extra groups, cluster targeting, and
+   secret-collection definitions.
+3. Queries the Red Hat corporate LDAP server (`ldap.corp.redhat.com`) using an authenticated bind
+   to resolve each group's members.
+4. Writes the resolved `groups.yaml` and `users.yaml` files to disk.
 
-LDAP bind is required when resolving Rover groups (`--ldap-bind-dn` / `--ldap-bind-password-file`, or `LDAP_BIND_DN` / `LDAP_BIND_PASSWORD`). `--validate-subjects` and `--print-config` do not use LDAP.
+### LDAP authentication
 
-## How is it deployed
+LDAP bind credentials are required. They can be provided via CLI flags (`--ldap-bind-dn` /
+`--ldap-bind-password-file`) or environment variables (`LDAP_BIND_DN` / `LDAP_BIND_PASSWORD`).
 
-The cronjob [sync-rover-groups-update](https://console-openshift-console.apps.ocp-c1.prod.psi.redhat.com/k8s/ns/ocp-test-platform/batch~v1~CronJob/sync-rover-groups-update) ([definition](https://github.com/openshift/release/blob/main/ci-operator/jobs/infra-periodics.yaml))
-uses `sync-rover-groups` to generate the groups file which is used to form `configMap/sync-rover-groups` in `project/ci` on the `app.ci` cluster.
+The `--validate-subjects` and `--print-config` modes do not use LDAP.
+
+## How it is deployed
+
+The tool runs via a
+[CronJob](https://github.com/openshift/release/blob/main/clusters/core-ci/sync-rover-groups/cronjob.yaml)
+on the **`core-ci`** cluster. The CronJob runs the tool and then stores the output as
+`ConfigMap/sync-rover-groups` in `namespace/ci` on the `app.ci` cluster.
+
+Thirty minutes later, the Prow periodic job
+[`periodic-github-ldap-user-group-creator`](https://github.com/openshift/release/blob/main/ci-operator/jobs/infra-periodics.yaml)
+reads that ConfigMap and creates/updates the corresponding OpenShift `Group` resources on all CI
+build clusters. See [github-ldap-user-group-creator](../github-ldap-user-group-creator) for details.

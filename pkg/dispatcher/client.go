@@ -28,7 +28,7 @@ func (c client) ClusterForJob(jobName string) (string, error) {
 	schedulingRequest := SchedulingRequest{Job: jobName}
 	body, err := json.Marshal(schedulingRequest)
 	if err != nil {
-		return "", fmt.Errorf("could not marshal scheduling request: %w", err)
+		return "", fmt.Errorf("could not really marshal scheduling request: %w", err)
 	}
 	req, err := http.NewRequest("POST", c.Address, bytes.NewReader(body))
 	if err != nil {

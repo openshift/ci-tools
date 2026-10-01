@@ -32,18 +32,21 @@ func newFakeOCImage(mirrorFn func(images []string) error) *fakeOCImage {
 func TestOCImageMirrorArgs(t *testing.T) {
 	for _, testCase := range []struct {
 		name               string
+		buildImageRef      string
 		targetImageRef     string
 		externalRegistries []string
 		want               []string
 	}{
 		{
 			name:               "Mirror to one destination",
+			buildImageRef:      "ci/src-image:latest",
 			targetImageRef:     "ci/src-image:latest",
 			externalRegistries: []string{"dst-registry.com"},
 			want:               []string{"image-registry.openshift-image-registry.svc:5000/ci/src-image:latest", "dst-registry.com/ci/src-image:latest"},
 		},
 		{
 			name:               "Mirror to multiple external registries",
+			buildImageRef:      "ci/src-image:latest",
 			targetImageRef:     "ci/src-image:latest",
 			externalRegistries: []string{"dst-registry-1.com", "dst-registry-2.com", "quay.io/openshift/ci"},
 			want: []string{
@@ -55,6 +58,7 @@ func TestOCImageMirrorArgs(t *testing.T) {
 		},
 		{
 			name:           "Deduplicate destinations",
+			buildImageRef:  "ci/src-image:latest",
 			targetImageRef: "ci/src-image:latest",
 			externalRegistries: []string{
 				"dst-registry-1.com",
@@ -67,13 +71,23 @@ func TestOCImageMirrorArgs(t *testing.T) {
 				"dst-registry-3.com/ci/src-image:latest",
 			},
 		},
+		{
+			name:               "Mirror image built in ci to requested namespace tag on Quay",
+			buildImageRef:      "ci/ocp-cli-yq:latest",
+			targetImageRef:     "ocp/cli-yq:latest",
+			externalRegistries: []string{"quay.io/openshift/ci"},
+			want: []string{
+				"image-registry.openshift-image-registry.svc:5000/ci/ocp-cli-yq:latest",
+				"quay.io/openshift/ci:ocp_cli-yq_latest",
+			},
+		},
 	} {
 		testCase := testCase
 		t.Run(testCase.name, func(t *testing.T) {
 			t.Parallel()
-			args := ocImageMirrorArgs(testCase.targetImageRef, testCase.externalRegistries)
-			if diff := cmp.Diff(args, testCase.want); diff != "" {
-				t.Errorf("Unexpected diff:\n%s", diff)
+			args := ocImageMirrorArgs(testCase.buildImageRef, testCase.targetImageRef, testCase.externalRegistries)
+			if diff := cmp.Diff(testCase.want, args); diff != "" {
+				t.Errorf("mirror arguments (-want +got):\n%s", diff)
 			}
 		})
 	}
@@ -181,7 +195,7 @@ func TestHandleMirrorImage(t *testing.T) {
 			}
 
 			observedStatus := v1.MultiArchBuildConfigStatus{}
-			gotErr := r.handleMirrorImage(logrus.NewEntry(logrus.StandardLogger()), "fake-image", &tc.mabc, &observedStatus)
+			gotErr := r.handleMirrorImage(logrus.NewEntry(logrus.StandardLogger()), "fake-image", "fake-image", &tc.mabc, &observedStatus)
 
 			goErrMsg, wantErrMsg := "<nil>", "<nil>"
 			if gotErr != nil {

@@ -46,6 +46,11 @@ type ProwgenOverrides struct {
 	DisableRehearsals           bool `json:"disable_rehearsals,omitempty"`
 	SkipOperatorPresubmits      bool `json:"skip_operator_presubmits,omitempty"`
 	EnableSecretsStoreCSIDriver bool `json:"enable_secrets_store_csi_driver,omitempty"`
+	// DisableSecretsStoreCSIDriver opts a repository out of sourcing its multi-stage
+	// credentials from Google Secret Manager via the Secrets Store CSI driver. It exists
+	// for repositories that have not finished migrating off the legacy Vault secret
+	// paths, and takes precedence over EnableSecretsStoreCSIDriver.
+	DisableSecretsStoreCSIDriver bool `json:"disable_secrets_store_csi_driver,omitempty"`
 	// Private indicates that generated jobs should be marked as hidden
 	// from display in deck and that they should mount appropriate git credentials
 	// to clone the repository under test.

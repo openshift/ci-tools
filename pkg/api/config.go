@@ -8,6 +8,16 @@ import (
 	prowv1 "sigs.k8s.io/prow/pkg/apis/prowjobs/v1"
 )
 
+// SecretsStoreCSIDriverEnabled reports whether jobs generated for this configuration
+// should source their multi-stage credentials from Google Secret Manager via the
+// Secrets Store CSI driver.
+func (p *ProwgenOverrides) SecretsStoreCSIDriverEnabled() bool {
+	if p == nil {
+		return false
+	}
+	return p.EnableSecretsStoreCSIDriver && !p.DisableSecretsStoreCSIDriver
+}
+
 // Default sets default values after loading but before validation
 func (config *ReleaseBuildConfiguration) Default() {
 	defLeases := func(l []StepLease) {
@@ -149,11 +159,14 @@ func (config *ReleaseBuildConfiguration) WithPresubmitFrom(source *ReleaseBuildC
 	// prowgen options that affect the generated pod spec. Configs assembled by the
 	// resolver's merge endpoint start from an empty base, and would otherwise lose the
 	// stanza entirely and be generated without GSM/CSI support.
-	if source.Prowgen != nil && source.Prowgen.EnableSecretsStoreCSIDriver {
+	// An opt-out travels with the source too, so that injecting a test from a
+	// repository still on the legacy Vault paths does not silently switch it to GSM.
+	if p := source.Prowgen; p != nil && (p.EnableSecretsStoreCSIDriver || p.DisableSecretsStoreCSIDriver) {
 		if result.Prowgen == nil {
 			result.Prowgen = &ProwgenOverrides{}
 		}
-		result.Prowgen.EnableSecretsStoreCSIDriver = true
+		result.Prowgen.EnableSecretsStoreCSIDriver = result.Prowgen.EnableSecretsStoreCSIDriver || p.EnableSecretsStoreCSIDriver
+		result.Prowgen.DisableSecretsStoreCSIDriver = result.Prowgen.DisableSecretsStoreCSIDriver || p.DisableSecretsStoreCSIDriver
 	}
 
 	for i := range source.Tests {

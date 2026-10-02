@@ -359,6 +359,11 @@ const ciOperatorReferenceYaml = "# The list of base images describe\n" +
 	"          tag_by_commit: true\n" +
 	"prowgen:\n" +
 	"    disable_rehearsals: true\n" +
+	"    # DisableSecretsStoreCSIDriver opts a repository out of sourcing its multi-stage\n" +
+	"    # credentials from Google Secret Manager via the Secrets Store CSI driver. It exists\n" +
+	"    # for repositories that have not finished migrating off the legacy Vault secret\n" +
+	"    # paths, and takes precedence over EnableSecretsStoreCSIDriver.\n" +
+	"    disable_secrets_store_csi_driver: true\n" +
 	"    # DisableSparseCheckout disables the sparse checkout optimization for the\n" +
 	"    # repository clone done by Prow's clonerefs.\n" +
 	"    disable_sparse_checkout: true\n" +

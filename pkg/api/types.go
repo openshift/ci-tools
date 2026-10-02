@@ -43,9 +43,13 @@ type SlackReporterConfig struct {
 }
 
 type ProwgenOverrides struct {
-	DisableRehearsals           bool `json:"disable_rehearsals,omitempty"`
-	SkipOperatorPresubmits      bool `json:"skip_operator_presubmits,omitempty"`
-	EnableSecretsStoreCSIDriver bool `json:"enable_secrets_store_csi_driver,omitempty"`
+	DisableRehearsals      bool `json:"disable_rehearsals,omitempty"`
+	SkipOperatorPresubmits bool `json:"skip_operator_presubmits,omitempty"`
+	// EnableSecretsStoreCSIDriver makes generated jobs source their multi-stage
+	// credentials from Google Secret Manager via the Secrets Store CSI driver. When
+	// unset it defaults to true; repositories still on the legacy Vault secret paths
+	// opt out by explicitly setting it to false.
+	EnableSecretsStoreCSIDriver *bool `json:"enable_secrets_store_csi_driver,omitempty"`
 	// Private indicates that generated jobs should be marked as hidden
 	// from display in deck and that they should mount appropriate git credentials
 	// to clone the repository under test.

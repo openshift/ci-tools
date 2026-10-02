@@ -12,6 +12,47 @@ import (
 	"github.com/openshift/ci-tools/pkg/testhelper"
 )
 
+func TestSecretsStoreCSIDriverEnabled(t *testing.T) {
+	testCases := []struct {
+		name     string
+		prowgen  *ProwgenOverrides
+		expected bool
+	}{
+		{
+			name:     "no prowgen stanza at all",
+			prowgen:  nil,
+			expected: false,
+		},
+		{
+			name:     "prowgen stanza without either field",
+			prowgen:  &ProwgenOverrides{},
+			expected: false,
+		},
+		{
+			name:     "opted in",
+			prowgen:  &ProwgenOverrides{EnableSecretsStoreCSIDriver: true},
+			expected: true,
+		},
+		{
+			name:     "opted out",
+			prowgen:  &ProwgenOverrides{DisableSecretsStoreCSIDriver: true},
+			expected: false,
+		},
+		{
+			name:     "the opt-out wins over the opt-in",
+			prowgen:  &ProwgenOverrides{EnableSecretsStoreCSIDriver: true, DisableSecretsStoreCSIDriver: true},
+			expected: false,
+		},
+	}
+	for _, tc := range testCases {
+		t.Run(tc.name, func(t *testing.T) {
+			if actual := tc.prowgen.SecretsStoreCSIDriverEnabled(); actual != tc.expected {
+				t.Errorf("expected %t, got %t", tc.expected, actual)
+			}
+		})
+	}
+}
+
 func TestWithPresubmitFrom(t *testing.T) {
 	baseReleaseTagConfiguration := ReleaseTagConfiguration{Namespace: "base-namespace", Name: "base-is"}
 	sourceReleaseTagConfiguration := ReleaseTagConfiguration{Namespace: "source-namespace", Name: "source-is"}
@@ -206,6 +247,20 @@ func TestWithPresubmitFrom(t *testing.T) {
 			base:         &ReleaseBuildConfiguration{Prowgen: &ProwgenOverrides{EnableSecretsStoreCSIDriver: true}},
 			source:       &ReleaseBuildConfiguration{},
 			expected:     &ReleaseBuildConfiguration{Prowgen: &ProwgenOverrides{EnableSecretsStoreCSIDriver: true}},
+			defaultTests: true,
+		},
+		{
+			name:         "disable_secrets_store_csi_driver from source is added to a base without prowgen",
+			base:         &ReleaseBuildConfiguration{},
+			source:       &ReleaseBuildConfiguration{Prowgen: &ProwgenOverrides{DisableSecretsStoreCSIDriver: true}},
+			expected:     &ReleaseBuildConfiguration{Prowgen: &ProwgenOverrides{DisableSecretsStoreCSIDriver: true}},
+			defaultTests: true,
+		},
+		{
+			name:         "disable_secrets_store_csi_driver from source opts out a base that opted in",
+			base:         &ReleaseBuildConfiguration{Prowgen: &ProwgenOverrides{EnableSecretsStoreCSIDriver: true}},
+			source:       &ReleaseBuildConfiguration{Prowgen: &ProwgenOverrides{DisableSecretsStoreCSIDriver: true}},
+			expected:     &ReleaseBuildConfiguration{Prowgen: &ProwgenOverrides{EnableSecretsStoreCSIDriver: true, DisableSecretsStoreCSIDriver: true}},
 			defaultTests: true,
 		},
 	}

@@ -6,6 +6,7 @@ import (
 	"time"
 
 	"k8s.io/utils/pointer"
+	"k8s.io/utils/ptr"
 	prowv1 "sigs.k8s.io/prow/pkg/apis/prowjobs/v1"
 	v1 "sigs.k8s.io/prow/pkg/apis/prowjobs/v1"
 
@@ -354,7 +355,7 @@ func TestNewProwJobBaseBuilderForTest(t *testing.T) {
 		{
 			name: "multi-stage test with CSI enabled",
 			cfg: &ciop.ReleaseBuildConfiguration{
-				Prowgen: &ciop.ProwgenOverrides{EnableSecretsStoreCSIDriver: true},
+				Prowgen: &ciop.ProwgenOverrides{EnableSecretsStoreCSIDriver: ptr.To(true)},
 			},
 			test: ciop.TestStepConfiguration{
 				As: "simple",
@@ -367,7 +368,7 @@ func TestNewProwJobBaseBuilderForTest(t *testing.T) {
 		{
 			name: "simple test with CSI enabled",
 			cfg: &ciop.ReleaseBuildConfiguration{
-				Prowgen: &ciop.ProwgenOverrides{EnableSecretsStoreCSIDriver: true},
+				Prowgen: &ciop.ProwgenOverrides{EnableSecretsStoreCSIDriver: ptr.To(true)},
 			},
 			test: ciop.TestStepConfiguration{
 				As:                         "simple",
@@ -409,7 +410,33 @@ func TestNewProwJobBaseBuilderForTest(t *testing.T) {
 		{
 			name: "multi-stage test with CSI enabled via ci-operator config",
 			cfg: &ciop.ReleaseBuildConfiguration{
-				Prowgen: &ciop.ProwgenOverrides{EnableSecretsStoreCSIDriver: true},
+				Prowgen: &ciop.ProwgenOverrides{EnableSecretsStoreCSIDriver: ptr.To(true)},
+			},
+			test: ciop.TestStepConfiguration{
+				As: "simple",
+				MultiStageTestConfiguration: &ciop.MultiStageTestConfiguration{
+					Workflow: pointer.StringPtr("workflow"),
+				},
+			},
+			info: defaultInfo,
+		},
+		{
+			name: "multi-stage test with CSI disabled via ci-operator config",
+			cfg: &ciop.ReleaseBuildConfiguration{
+				Prowgen: &ciop.ProwgenOverrides{EnableSecretsStoreCSIDriver: ptr.To(false)},
+			},
+			test: ciop.TestStepConfiguration{
+				As: "simple",
+				MultiStageTestConfiguration: &ciop.MultiStageTestConfiguration{
+					Workflow: pointer.StringPtr("workflow"),
+				},
+			},
+			info: defaultInfo,
+		},
+		{
+			name: "multi-stage test with a prowgen stanza that omits the CSI field",
+			cfg: &ciop.ReleaseBuildConfiguration{
+				Prowgen: &ciop.ProwgenOverrides{Private: true},
 			},
 			test: ciop.TestStepConfiguration{
 				As: "simple",

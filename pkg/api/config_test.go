@@ -8,6 +8,7 @@ import (
 	"github.com/google/go-cmp/cmp/cmpopts"
 
 	"k8s.io/utils/pointer"
+	"k8s.io/utils/ptr"
 
 	"github.com/openshift/ci-tools/pkg/testhelper"
 )
@@ -183,15 +184,15 @@ func TestWithPresubmitFrom(t *testing.T) {
 		{
 			name:         "enable_secrets_store_csi_driver from source is added to a base without prowgen",
 			base:         &ReleaseBuildConfiguration{},
-			source:       &ReleaseBuildConfiguration{Prowgen: &ProwgenOverrides{EnableSecretsStoreCSIDriver: true}},
-			expected:     &ReleaseBuildConfiguration{Prowgen: &ProwgenOverrides{EnableSecretsStoreCSIDriver: true}},
+			source:       &ReleaseBuildConfiguration{Prowgen: &ProwgenOverrides{EnableSecretsStoreCSIDriver: ptr.To(true)}},
+			expected:     &ReleaseBuildConfiguration{Prowgen: &ProwgenOverrides{EnableSecretsStoreCSIDriver: ptr.To(true)}},
 			defaultTests: true,
 		},
 		{
 			name:         "enable_secrets_store_csi_driver from source does not clobber other prowgen options in base",
 			base:         &ReleaseBuildConfiguration{Prowgen: &ProwgenOverrides{Private: true}},
-			source:       &ReleaseBuildConfiguration{Prowgen: &ProwgenOverrides{EnableSecretsStoreCSIDriver: true}},
-			expected:     &ReleaseBuildConfiguration{Prowgen: &ProwgenOverrides{Private: true, EnableSecretsStoreCSIDriver: true}},
+			source:       &ReleaseBuildConfiguration{Prowgen: &ProwgenOverrides{EnableSecretsStoreCSIDriver: ptr.To(true)}},
+			expected:     &ReleaseBuildConfiguration{Prowgen: &ProwgenOverrides{Private: true, EnableSecretsStoreCSIDriver: ptr.To(true)}},
 			defaultTests: true,
 		},
 		{
@@ -203,9 +204,16 @@ func TestWithPresubmitFrom(t *testing.T) {
 		},
 		{
 			name:         "enable_secrets_store_csi_driver from base is kept when source does not set it",
-			base:         &ReleaseBuildConfiguration{Prowgen: &ProwgenOverrides{EnableSecretsStoreCSIDriver: true}},
+			base:         &ReleaseBuildConfiguration{Prowgen: &ProwgenOverrides{EnableSecretsStoreCSIDriver: ptr.To(true)}},
 			source:       &ReleaseBuildConfiguration{},
-			expected:     &ReleaseBuildConfiguration{Prowgen: &ProwgenOverrides{EnableSecretsStoreCSIDriver: true}},
+			expected:     &ReleaseBuildConfiguration{Prowgen: &ProwgenOverrides{EnableSecretsStoreCSIDriver: ptr.To(true)}},
+			defaultTests: true,
+		},
+		{
+			name:         "enable_secrets_store_csi_driver=false from source overrides the base",
+			base:         &ReleaseBuildConfiguration{Prowgen: &ProwgenOverrides{EnableSecretsStoreCSIDriver: ptr.To(true)}},
+			source:       &ReleaseBuildConfiguration{Prowgen: &ProwgenOverrides{EnableSecretsStoreCSIDriver: ptr.To(false)}},
+			expected:     &ReleaseBuildConfiguration{Prowgen: &ProwgenOverrides{EnableSecretsStoreCSIDriver: ptr.To(false)}},
 			defaultTests: true,
 		},
 	}
@@ -227,6 +235,42 @@ func TestWithPresubmitFrom(t *testing.T) {
 
 			if diff := cmp.Diff(tc.expected, actual, cmpopts.IgnoreUnexported(ProjectDirectoryImageBuildStepConfiguration{})); tc.expectedError == nil && diff != "" {
 				t.Errorf("Result differs from expected:\n%s", diff)
+			}
+		})
+	}
+}
+
+func TestSecretsStoreCSIDriverEnabled(t *testing.T) {
+	testCases := []struct {
+		name     string
+		prowgen  *ProwgenOverrides
+		expected bool
+	}{
+		{
+			name:     "no prowgen stanza is enabled",
+			prowgen:  nil,
+			expected: true,
+		},
+		{
+			name:     "prowgen stanza without the field is enabled",
+			prowgen:  &ProwgenOverrides{Private: true},
+			expected: true,
+		},
+		{
+			name:     "explicitly enabled",
+			prowgen:  &ProwgenOverrides{EnableSecretsStoreCSIDriver: ptr.To(true)},
+			expected: true,
+		},
+		{
+			name:     "explicitly disabled",
+			prowgen:  &ProwgenOverrides{EnableSecretsStoreCSIDriver: ptr.To(false)},
+			expected: false,
+		},
+	}
+	for _, tc := range testCases {
+		t.Run(tc.name, func(t *testing.T) {
+			if actual := tc.prowgen.SecretsStoreCSIDriverEnabled(); actual != tc.expected {
+				t.Errorf("expected %t, got %t", tc.expected, actual)
 			}
 		})
 	}

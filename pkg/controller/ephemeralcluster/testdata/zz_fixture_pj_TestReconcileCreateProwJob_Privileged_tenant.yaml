@@ -70,8 +70,6 @@ items:
                 namespace: ""
                 registry: quay.io/fedora/fedora:43
                 tag: ""
-            prowgen:
-              enable_secrets_store_csi_driver: true
             releases:
               initial:
                 integration:

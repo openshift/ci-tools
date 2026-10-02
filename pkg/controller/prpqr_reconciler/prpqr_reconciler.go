@@ -827,7 +827,6 @@ func generateAggregatorJob(baseCiop *api.Metadata, uid, aggregatorJobName, jobNa
 	configResolverClient injectingResolverClient) (*prowv1.ProwJob, error) {
 	ciopConfig := &api.ReleaseBuildConfiguration{
 		Metadata: *baseCiop,
-		Prowgen:  &api.ProwgenOverrides{EnableSecretsStoreCSIDriver: true},
 		Tests: []api.TestStepConfiguration{
 			{
 				As: "release-analysis-prpqr-aggregator",

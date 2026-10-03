@@ -500,7 +500,6 @@ func TestInnerCheckPercentileDisruptionWithPityFactor(t *testing.T) {
 	}{
 		// Note: In innerCheckPercentileDisruptionWithGrace, workingPercentage = thresholdPercentile
 		// So a P95 test uses 95% as the working percentage for calculating required passes
-		// The code also has -1 adjustment when pity factor doesn't relax the requirement
 		{
 			name:                 "10 attempts, P95 (95% working): 8 passes, 2 failures - exceeds requirement",
 			disruptions:          []int{0, 0, 0, 1, 1, 1, 1, 1, 5, 5},
@@ -508,8 +507,8 @@ func TestInnerCheckPercentileDisruptionWithPityFactor(t *testing.T) {
 			historicalDisruption: 2.0,
 			graceSeconds:         0,
 			expectedStatus:       testCasePassed,
-			expectedMinPasses:    6, // strict=7, pity=min(10-2,7)=7, then 7-1=6 (no relaxation)
-			description:          "Strict=7, pity=min(10-2,7)=7, -1 adj=6. 8 passes exceeds requirement",
+			expectedMinPasses:    7, // strict=7, pity=min(10-2,7)=7 (no relaxation)
+			description:          "Strict=7, pity=min(10-2,7)=7. 8 passes exceeds requirement",
 		},
 		{
 			name:                 "10 attempts, P95 (95% working): 7 passes, 3 failures - meets requirement",
@@ -518,8 +517,8 @@ func TestInnerCheckPercentileDisruptionWithPityFactor(t *testing.T) {
 			historicalDisruption: 2.0,
 			graceSeconds:         0,
 			expectedStatus:       testCasePassed,
-			expectedMinPasses:    6, // strict=7, pity=min(10-2,7)=7, then 7-1=6 (no relaxation)
-			description:          "Strict=7, pity=min(10-2,7)=7, -1 adj=6. 7 passes exceeds requirement",
+			expectedMinPasses:    7, // strict=7, pity=min(10-2,7)=7 (no relaxation)
+			description:          "Strict=7, pity=min(10-2,7)=7. 7 passes meets requirement exactly",
 		},
 		{
 			name:                 "6 attempts, P80 (80% working): 4 passes, 2 failures - exceeds requirement",
@@ -528,8 +527,8 @@ func TestInnerCheckPercentileDisruptionWithPityFactor(t *testing.T) {
 			historicalDisruption: 2.0,
 			graceSeconds:         0,
 			expectedStatus:       testCasePassed,
-			expectedMinPasses:    1, // strict=2, pity=min(6-2,2)=2, then 2-1=1 (no relaxation)
-			description:          "Strict=2, pity=min(6-2,2)=2, -1 adj=1. 4 passes exceeds requirement",
+			expectedMinPasses:    2, // strict=2, pity=min(6-2,2)=2 (no relaxation)
+			description:          "Strict=2, pity=min(6-2,2)=2. 4 passes exceeds requirement",
 		},
 		{
 			name:                 "12 attempts, P95 (95% working): 10 passes, 2 failures - exceeds requirement",
@@ -538,8 +537,8 @@ func TestInnerCheckPercentileDisruptionWithPityFactor(t *testing.T) {
 			historicalDisruption: 2.0,
 			graceSeconds:         0,
 			expectedStatus:       testCasePassed,
-			expectedMinPasses:    8, // strict=9, pity=min(12-2,9)=9, then 9-1=8 (no relaxation)
-			description:          "Strict=9, pity=min(12-2,9)=9, -1 adj=8. 10 passes exceeds requirement",
+			expectedMinPasses:    9, // strict=9, pity=min(12-2,9)=9 (no relaxation)
+			description:          "Strict=9, pity=min(12-2,9)=9. 10 passes exceeds requirement",
 		},
 	}
 

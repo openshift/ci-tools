@@ -24,12 +24,13 @@ func NewFakeClient(owner, url string, retries int, failures map[string]error, ca
 	if resources == nil {
 		resources = make(map[string]*common.Resource)
 	}
-	return newClient(&fakeClient{
+	fake := &fakeClient{
 		owner:     owner,
 		failures:  failures,
 		calls:     calls,
 		resources: resources,
-	}, retries, time.Duration(0), WithRandID(func() string { return "random" }))
+	}
+	return newClient(fake, fake, retries, time.Duration(0), WithRandID(func() string { return "random" }))
 }
 
 func (c *fakeClient) addCall(call string, args ...string) error {

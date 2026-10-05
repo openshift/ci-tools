@@ -77,7 +77,7 @@
   		},
   		EphemeralContainers: nil,
   		RestartPolicy:       "",
-  		... // 37 identical fields
+  		... // 38 identical fields
   	},
   	Status: {},
   }

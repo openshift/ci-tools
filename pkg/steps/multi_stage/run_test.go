@@ -457,6 +457,17 @@ Link to job on registry info site: https://steps.ci.openshift.org/job?org=&repo=
 		},
 	} {
 		t.Run(tc.name, func(t *testing.T) {
+			if tc.leaseProxyClientConfigMapBackoff.Steps == 0 {
+				tc.leaseProxyClientConfigMapBackoff.Steps = 1
+				scriptConfigMap := corev1.ConfigMap{
+					ObjectMeta: metav1.ObjectMeta{Namespace: "ci", Name: api.LeaseProxyConfigMapName, ResourceVersion: "999"},
+				}
+				tc.objects = append(tc.objects, scriptConfigMap.DeepCopy())
+				tc.wantConfigMaps = append(tc.wantConfigMaps, scriptConfigMap, corev1.ConfigMap{
+					ObjectMeta: metav1.ObjectMeta{Namespace: jobSpec.Namespace(), Name: api.LeaseProxyConfigMapName, ResourceVersion: "1"},
+					Immutable:  ptr.To(true),
+				})
+			}
 			if tc.testConfig == nil {
 				tc.testConfig = &api.TestStepConfiguration{
 					As:                                 "test",
@@ -568,7 +579,7 @@ Link to job on registry info site: https://steps.ci.openshift.org/job?org=&repo=
 				t.Fatalf("list configmaps: %s", err)
 			}
 
-			configMapSorter := func(a, b *v1.ConfigMap) bool { return a.Namespace+a.Name <= b.Namespace+b.Name }
+			configMapSorter := func(a, b v1.ConfigMap) bool { return a.Namespace+a.Name < b.Namespace+b.Name }
 			if diff := cmp.Diff(tc.wantConfigMaps, gotCMs.Items, cmpopts.SortSlices(configMapSorter)); diff != "" {
 				t.Errorf("unexpected configmaps: %s", diff)
 			}
@@ -641,7 +652,7 @@ func TestJUnit(t *testing.T) {
 				LoggingClient: loggingclient.New(
 					fakectrlruntimeclient.NewClientBuilder().
 						WithIndex(&v1.Pod{}, "metadata.name", fakePodNameIndexer).
-						WithObjects(sa).
+						WithObjects(sa, &corev1.ConfigMap{ObjectMeta: metav1.ObjectMeta{Namespace: "ci", Name: api.LeaseProxyConfigMapName}}).
 						Build(), nil),
 				Failures:     tc.failures,
 				AutoSchedule: true,
@@ -674,7 +685,7 @@ func TestJUnit(t *testing.T) {
 					Test: []api.LiteralTestStep{{As: "test0"}, {As: "test1"}},
 					Post: []api.LiteralTestStep{{As: "post0"}, {As: "post1"}},
 				},
-			}, &api.ReleaseBuildConfiguration{}, fakeStepParams{}, client, &jobSpec, nil, "node-name", "", nil, false, nil, false, wait.Backoff{})
+			}, &api.ReleaseBuildConfiguration{}, fakeStepParams{}, client, &jobSpec, nil, "node-name", "", nil, false, nil, false, wait.Backoff{Steps: 1})
 			if err := step.Run(context.Background()); tc.failures == nil && err != nil {
 				t.Error(err)
 				return
@@ -746,7 +757,7 @@ func TestRunPodDeletesPendingPodsOnError(t *testing.T) {
 		LoggingClient: loggingclient.New(
 			fakectrlruntimeclient.NewClientBuilder().
 				WithIndex(&v1.Pod{}, "metadata.name", fakePodNameIndexer).
-				WithObjects(sa).
+				WithObjects(sa, &corev1.ConfigMap{ObjectMeta: metav1.ObjectMeta{Namespace: "ci", Name: api.LeaseProxyConfigMapName}}).
 				Build(), nil),
 		Failures: sets.New[string](pendingPodName),
 		Pending:  sets.New[string](pendingPodName), // Keep this pod in Pending state
@@ -784,7 +795,7 @@ func TestRunPodDeletesPendingPodsOnError(t *testing.T) {
 			Post:               []api.LiteralTestStep{{As: "post0"}},
 			AllowSkipOnSuccess: &yes,
 		},
-	}, &api.ReleaseBuildConfiguration{}, fakeStepParams{}, client, &jobSpec, nil, "node-name", "", func(cf context.CancelFunc) {}, false, nil, false, wait.Backoff{})
+	}, &api.ReleaseBuildConfiguration{}, fakeStepParams{}, client, &jobSpec, nil, "node-name", "", func(cf context.CancelFunc) {}, false, nil, false, wait.Backoff{Steps: 1})
 
 	// Use a context with timeout to ensure the test doesn't hang
 	ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)

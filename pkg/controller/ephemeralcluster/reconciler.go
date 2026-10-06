@@ -285,9 +285,8 @@ func (r *reconciler) Reconcile(ctx context.Context, req reconcile.Request) (reco
 		return r.reconcileCreateProwJob(ctx, log, ec, &observedStatus)
 	}
 
-	observedStatus.Conditions = oldStatus.DeepCopy().Conditions
-	upsertCondition(&observedStatus, ephemeralclusterv1.ProwJobCreating, metav1.ConditionFalse, ec.Generation, r.now(), ephemeralclusterv1.ProwJobProperlyCreatedReason, "")
-	observedStatus.Phase = ephemeralclusterv1.EphemeralClusterProvisioning
+	observedStatus = *oldStatus.DeepCopy()
+	upsertCondition(&observedStatus, ephemeralclusterv1.ProwJobCreated, metav1.ConditionTrue, ec.Generation, r.now(), ephemeralclusterv1.ProwJobProperlyCreatedReason, "")
 	observedStatus.ProwJobURL = pj.Status.URL
 
 	if err := r.fetchSecrets(ctx, log, ec, &oldStatus, &observedStatus, &pj); err != nil {
@@ -500,7 +499,7 @@ func (r *reconciler) reconcileCreateProwJob(ctx context.Context, log *logrus.Ent
 	log.Info("Starting the procedure to create a ProwJob")
 
 	if err := r.validateEphemeralCluster(log, ec); err != nil {
-		upsertCondition(observedStatus, ephemeralclusterv1.ProwJobCreating, metav1.ConditionFalse, ec.Generation, r.now(), ephemeralclusterv1.EphemeralClusterValidationFailureReason, err.Error())
+		upsertCondition(observedStatus, ephemeralclusterv1.ProwJobCreated, metav1.ConditionFalse, ec.Generation, r.now(), ephemeralclusterv1.EphemeralClusterValidationFailureReason, err.Error())
 		observedStatus.Phase = ephemeralclusterv1.EphemeralClusterFailed
 		r.recorder.Event(ec, corev1.EventTypeWarning, ephemeralclusterv1.EventReasonValidationFailed, err.Error())
 		if updateErr := r.updateEphemeralClusterStatus(ctx, ec, observedStatus); updateErr != nil {
@@ -524,7 +523,7 @@ func (r *reconciler) reconcileCreateProwJob(ctx context.Context, log *logrus.Ent
 	// is creating PJs manually or there is a bug in this controller.
 	if len(pjsForEC.Items) > 1 {
 		log.Error(TooManyPJsBoundErrMsg)
-		upsertCondition(observedStatus, ephemeralclusterv1.ProwJobCreating, metav1.ConditionFalse, ec.Generation, r.now(), ephemeralclusterv1.TooManyProwJobsBoundReason, TooManyPJsBoundErrMsg)
+		upsertCondition(observedStatus, ephemeralclusterv1.ProwJobCreated, metav1.ConditionUnknown, ec.Generation, r.now(), ephemeralclusterv1.TooManyProwJobsBoundReason, TooManyPJsBoundErrMsg)
 		observedStatus.Phase = ephemeralclusterv1.EphemeralClusterFailed
 		err := errors.New("too many ProwJobs associated")
 		if updateErr := r.updateEphemeralClusterStatus(ctx, ec, observedStatus); updateErr != nil {
@@ -539,7 +538,7 @@ func (r *reconciler) reconcileCreateProwJob(ctx context.Context, log *logrus.Ent
 	if len(pjsForEC.Items) == 1 {
 		log.Info("ProwJob found but was not bound to the EC, binding now")
 		ec.Finalizers, _ = cislices.UniqueAdd(ec.Finalizers, DependentProwJobFinalizer)
-		upsertCondition(observedStatus, ephemeralclusterv1.ProwJobCreating, metav1.ConditionTrue, ec.Generation, r.now(), ephemeralclusterv1.OrphanProwJobFoundReason, "")
+		upsertCondition(observedStatus, ephemeralclusterv1.ProwJobCreated, metav1.ConditionTrue, ec.Generation, r.now(), ephemeralclusterv1.OrphanProwJobFoundReason, "")
 		observedStatus.ProwJobID = pjsForEC.Items[0].Name
 		observedStatus.Phase = ephemeralclusterv1.EphemeralClusterProvisioning
 		ec.Status = *observedStatus
@@ -566,7 +565,7 @@ func (r *reconciler) reconcileCreateProwJob(ctx context.Context, log *logrus.Ent
 
 func (r *reconciler) createProwJob(ctx context.Context, log *logrus.Entry, ec *ephemeralclusterv1.EphemeralCluster) error {
 	upsertProvisioningCond := func(status metav1.ConditionStatus, reason, msg string) {
-		upsertCondition(&ec.Status, ephemeralclusterv1.ProwJobCreating, status, ec.Generation, r.now(), reason, msg)
+		upsertCondition(&ec.Status, ephemeralclusterv1.ProwJobCreated, status, ec.Generation, r.now(), reason, msg)
 	}
 
 	ciOperatorConfig, err := r.generateCIOperatorConfig(log, ec)
@@ -600,7 +599,7 @@ func (r *reconciler) createProwJob(ctx context.Context, log *logrus.Entry, ec *e
 
 	ec.Status.ProwJobID = pj.Name
 	ec.Finalizers, _ = cislices.UniqueAdd(ec.Finalizers, DependentProwJobFinalizer)
-	upsertProvisioningCond(metav1.ConditionTrue, ephemeralclusterv1.EphemeralClusterValidReason, "")
+	upsertProvisioningCond(metav1.ConditionTrue, ephemeralclusterv1.ProwJobProperlyCreatedReason, "")
 	ec.Status.Phase = ephemeralclusterv1.EphemeralClusterProvisioning
 	return nil
 }
@@ -663,6 +662,10 @@ func (r *reconciler) makeProwJob(ciOperatorConfig *api.ReleaseBuildConfiguration
 }
 
 func (r *reconciler) fetchSecrets(ctx context.Context, log *logrus.Entry, ec *ephemeralclusterv1.EphemeralCluster, oldStatus, ecStatus *ephemeralclusterv1.EphemeralClusterStatus, pj *prowv1.ProwJob) error {
+	if apimeta.IsStatusConditionTrue(ecStatus.Conditions, ephemeralclusterv1.ClusterReady) {
+		return nil
+	}
+
 	buildClient, err := buildClientFor(r.buildClients, pj.Spec.Cluster)
 	if err != nil {
 		log.WithField("cluster", pj.Spec.Cluster).WithError(err).Error("Build client not found")
@@ -944,6 +947,10 @@ func (r *reconciler) reconcileDeleteEphemeralCluster(ctx context.Context, log *l
 	log = log.WithField("prowjob_name", pj.Name)
 
 	if isFinalState := r.reportProwJobFinalState(&pj, ec, observedStatus); isFinalState {
+		if updateErr := r.updateEphemeralClusterStatus(ctx, ec, observedStatus); updateErr != nil {
+			return reconcile.Result{}, updateErr
+		}
+
 		if removeFinalizer(ec) {
 			log.Info("ProwJob in a definitive state, removing the finalizer")
 			if updateErr := r.updateEphemeralCluster(ctx, ec); updateErr != nil {
@@ -951,10 +958,6 @@ func (r *reconciler) reconcileDeleteEphemeralCluster(ctx context.Context, log *l
 			}
 			r.collectDeprovisioningDurationMetric(ec, &oldStatus, observedStatus)
 			return reconcile.Result{}, nil
-		}
-
-		if updateErr := r.updateEphemeralClusterStatus(ctx, ec, observedStatus); updateErr != nil {
-			return reconcile.Result{}, updateErr
 		}
 
 		r.collectDeprovisioningDurationMetric(ec, &oldStatus, observedStatus)
@@ -968,12 +971,16 @@ func (r *reconciler) reconcileDeleteEphemeralCluster(ctx context.Context, log *l
 				return reconcile.Result{}, err
 			}
 
+			if updateErr := r.updateEphemeralClusterStatus(ctx, ec, observedStatus); updateErr != nil {
+				return reconcile.Result{}, updateErr
+			}
+
 			if removeFinalizer(ec) {
 				log.Info("Removing the finalizer")
 				return reconcile.Result{}, r.updateEphemeralCluster(ctx, ec)
 			}
 
-			return reconcile.Result{}, r.updateEphemeralClusterStatus(ctx, ec, observedStatus)
+			return reconcile.Result{}, nil
 		}
 
 		if updateErr := r.updateEphemeralClusterStatus(ctx, ec, observedStatus); updateErr != nil {
@@ -1011,6 +1018,9 @@ func (r *reconciler) abortProwJob(ctx context.Context, log *logrus.Entry, ec *ep
 
 func (r *reconciler) notifyTestComplete(ctx context.Context, log *logrus.Entry, ec *ephemeralclusterv1.EphemeralCluster, oldECStatus, ecStatus *ephemeralclusterv1.EphemeralClusterStatus, pj *prowv1.ProwJob) error {
 	ecStatus.Phase = ephemeralclusterv1.EphemeralClusterDeprovisioning
+	if apimeta.IsStatusConditionTrue(ecStatus.Conditions, ephemeralclusterv1.TestCompleted) {
+		return nil
+	}
 
 	buildClient, err := buildClientFor(r.buildClients, pj.Spec.Cluster)
 	if err != nil {

@@ -17,5 +17,5 @@ status:
     message: cluster profile has not been set
     reason: EphemeralClusterValidationFailure
     status: "False"
-    type: ProwJobCreating
+    type: ProwJobCreated
   phase: Failed

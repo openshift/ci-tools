@@ -8,7 +8,6 @@ import (
 
 const (
 	CIOperatorJobsGenerateFailureReason     = "CIOperatorJobsGenerateFailure"
-	EphemeralClusterValidReason             = "EphemeralClusterValid"
 	ProwJobFailureReason                    = "ProwJobFailure"
 	ProwJobCompletedReason                  = "ProwJobCompleted"
 	ProwJobProperlyCreatedReason            = "ProwJobProperlyCreated"
@@ -43,9 +42,9 @@ const (
 
 // Conditions
 const (
-	// ProwJobCreating indicates whether the prowjob is being created.
-	ProwJobCreating string = "ProwJobCreating"
-	// ContainersReady indicates whether the cluster is up and running.
+	// ProwJobCreated indicates whether the prowjob was created.
+	ProwJobCreated string = "ProwJobCreated"
+	// ClusterReady indicates whether the cluster is up and running.
 	ClusterReady string = "ClusterReady"
 	// ProwJobCompleted indicates whether the ProwJob has done.
 	ProwJobCompleted string = "ProwJobCompleted"

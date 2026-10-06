@@ -25,5 +25,5 @@ status:
     message: 'create prowjob: fake err'
     reason: CIOperatorJobsGenerateFailure
     status: "False"
-    type: ProwJobCreating
+    type: ProwJobCreated
   phase: ""

@@ -173,6 +173,7 @@ type reconciler struct {
 
 	collectProvisioningDurationMetricFunc   func(ec *ephemeralclusterv1.EphemeralCluster, status *ephemeralclusterv1.EphemeralClusterStatus) bool
 	collectDeprovisioningDurationMetricFunc func(ec *ephemeralclusterv1.EphemeralCluster, oldStatus, observedStatus *ephemeralclusterv1.EphemeralClusterStatus) bool
+	collectStateTransitionMetricFunc        func(ec *ephemeralclusterv1.EphemeralCluster, oldStatus, observedStatus *ephemeralclusterv1.EphemeralClusterStatus)
 
 	// Mock for testing
 	now     func() time.Time
@@ -232,6 +233,7 @@ func AddToManager(log *logrus.Entry, mgr manager.Manager, allManagers map[string
 		recorder:                                mgr.GetEventRecorderFor(ControllerName),
 		collectProvisioningDurationMetricFunc:   metricsGatherer.collectProvisioningDuration,
 		collectDeprovisioningDurationMetricFunc: metricsGatherer.collectDeprovisioningDuration,
+		collectStateTransitionMetricFunc:        metricsGatherer.collectStateTransition,
 		now:                                     time.Now,
 		polling:                                 func() time.Duration { return reconcilerOpts.polling },
 	}
@@ -283,6 +285,7 @@ func (r *reconciler) Reconcile(ctx context.Context, req reconcile.Request) (reco
 		return r.reconcileCreateProwJob(ctx, log, ec, &observedStatus)
 	}
 
+	observedStatus.Conditions = oldStatus.DeepCopy().Conditions
 	upsertCondition(&observedStatus, ephemeralclusterv1.ProwJobCreating, metav1.ConditionFalse, ec.Generation, r.now(), ephemeralclusterv1.ProwJobProperlyCreatedReason, "")
 	observedStatus.Phase = ephemeralclusterv1.EphemeralClusterProvisioning
 	observedStatus.ProwJobURL = pj.Status.URL
@@ -342,9 +345,8 @@ func (r *reconciler) Reconcile(ctx context.Context, req reconcile.Request) (reco
 
 func (r *reconciler) handleGetProwJobError(ctx context.Context, log *logrus.Entry, ec *ephemeralclusterv1.EphemeralCluster, err error) (reconcile.Result, error) {
 	if apierrors.IsNotFound(err) {
-		if finalizers, removed := cislices.Delete(ec.Finalizers, DependentProwJobFinalizer); removed {
+		if removeFinalizer(ec) {
 			log.Info("ProwJob not found, removing the finalizer")
-			ec.Finalizers = finalizers
 			return reconcile.Result{}, r.updateEphemeralCluster(ctx, ec)
 		}
 		return reconcile.Result{}, nil
@@ -353,6 +355,8 @@ func (r *reconciler) handleGetProwJobError(ctx context.Context, log *logrus.Entr
 }
 
 func (r *reconciler) handleBuildClientNotFoundError(ctx context.Context, log *logrus.Entry, ec *ephemeralclusterv1.EphemeralCluster, observedStatus *ephemeralclusterv1.EphemeralClusterStatus, pj *prowv1.ProwJob, err error) (reconcile.Result, error) {
+	observedStatus.Phase = ephemeralclusterv1.EphemeralClusterFailed
+
 	r.recorder.Eventf(ec, corev1.EventTypeWarning, ephemeralclusterv1.EventReasonBuildClientNotFound, "Build client not found, aborting ProwJob %s: %v", pj.Name, err)
 	if abortPJErr := r.abortProwJob(ctx, log, ec, pj, "Build client not found: "+err.Error()); abortPJErr != nil {
 		msg := utilerrors.NewAggregate([]error{abortPJErr, err}).Error()
@@ -663,7 +667,6 @@ func (r *reconciler) fetchSecrets(ctx context.Context, log *logrus.Entry, ec *ep
 	if err != nil {
 		log.WithField("cluster", pj.Spec.Cluster).WithError(err).Error("Build client not found")
 		upsertCondition(ecStatus, ephemeralclusterv1.ClusterReady, metav1.ConditionFalse, ec.Generation, r.now(), ephemeralclusterv1.SecretsFetchFailureReason, err.Error())
-		ecStatus.Phase = ephemeralclusterv1.EphemeralClusterFailed
 		return err
 	}
 
@@ -714,8 +717,6 @@ func (r *reconciler) fetchHiveSecrets(
 			secretsReady = false
 			if !apierrors.IsNotFound(err) {
 				log.WithField("secret", secret.name).WithError(err).Error("Failed to read secret")
-				readSecretErr := fmt.Errorf("read secret %s/%s: %w", secret.name, ns, err)
-				upsertCondition(ecStatus, ephemeralclusterv1.ClusterReady, metav1.ConditionFalse, ec.Generation, r.now(), ephemeralclusterv1.SecretsFetchFailureReason, readSecretErr.Error())
 				return
 			}
 			break
@@ -741,7 +742,6 @@ func (r *reconciler) fetchHiveSecrets(
 	}
 	if err := r.createCredentialsSecret(ctx, log, ec, secretData); err != nil {
 		log.WithError(err).Error("Failed to create credentials secret")
-		upsertCondition(ecStatus, ephemeralclusterv1.ClusterReady, metav1.ConditionFalse, ec.Generation, r.now(), ephemeralclusterv1.SecretsFetchFailureReason, err.Error())
 		return
 	}
 
@@ -766,7 +766,9 @@ func (r *reconciler) fetchClusterKubeconfig(
 	// The secret is named after the test name.
 	if err := buildClient.Get(ctx, types.NamespacedName{Name: EphemeralClusterTestName, Namespace: ns}, &kubeconfigSecret); err != nil {
 		log.WithField("secret", EphemeralClusterTestName).WithError(err).Error("Failed to read secret")
-		upsertCondition(ecStatus, ephemeralclusterv1.ClusterReady, metav1.ConditionFalse, ec.Generation, r.now(), ephemeralclusterv1.SecretsFetchFailureReason, err.Error())
+		if apierrors.IsNotFound(err) {
+			upsertCondition(ecStatus, ephemeralclusterv1.ClusterReady, metav1.ConditionFalse, ec.Generation, r.now(), ephemeralclusterv1.SecretsFetchFailureReason, err.Error())
+		}
 		return
 	}
 
@@ -785,7 +787,6 @@ func (r *reconciler) fetchClusterKubeconfig(
 
 	if err := r.createCredentialsSecret(ctx, log, ec, secretData); err != nil {
 		log.WithError(err).Error("Failed to create credentials secret")
-		upsertCondition(ecStatus, ephemeralclusterv1.ClusterReady, metav1.ConditionFalse, ec.Generation, r.now(), ephemeralclusterv1.SecretsFetchFailureReason, err.Error())
 		return
 	}
 
@@ -807,10 +808,13 @@ func (r *reconciler) updateEphemeralClusterStatus(ctx context.Context, ec *ephem
 	}
 
 	if !cmp.Equal(&ec.Status, observedStatus, cmpECStatusOpts...) {
+		oldStatus := ec.Status.DeepCopy()
 		ec.Status = *observedStatus
 		if err := r.masterClient.Status().Update(ctx, ec); err != nil {
 			return fmt.Errorf("update ephemeral cluster status: %w", err)
 		}
+
+		r.collectStateTransitionMetricFunc(ec, oldStatus, observedStatus)
 	}
 	return nil
 }
@@ -831,10 +835,13 @@ func (r *reconciler) updateEphemeralClusterWithStatus(ctx context.Context, ec *e
 		return fmt.Errorf("update ephemeral cluster: %w", err)
 	}
 
+	oldStatus := ec.Status.DeepCopy()
 	ec.Status = *ecStatus
 	if err := r.masterClient.Status().Update(ctx, ec); err != nil {
 		return fmt.Errorf("update ephemeral cluster and status: %w", err)
 	}
+
+	r.collectStateTransitionMetricFunc(ec, oldStatus, ecStatus)
 
 	return nil
 }
@@ -1009,7 +1016,6 @@ func (r *reconciler) notifyTestComplete(ctx context.Context, log *logrus.Entry, 
 	if err != nil {
 		log.WithField("cluster", pj.Spec.Cluster).WithError(err).Warn("Build client not found")
 		upsertCondition(ecStatus, ephemeralclusterv1.TestCompleted, metav1.ConditionFalse, ec.Generation, r.now(), ephemeralclusterv1.CreateTestCompletedSecretFailureReason, err.Error())
-		ecStatus.Phase = ephemeralclusterv1.EphemeralClusterFailed
 		return err
 	}
 
@@ -1017,7 +1023,6 @@ func (r *reconciler) notifyTestComplete(ctx context.Context, log *logrus.Entry, 
 	if err != nil {
 		if errors.Is(err, &errCIOperatorNSNotFound{}) {
 			upsertCondition(ecStatus, ephemeralclusterv1.TestCompleted, metav1.ConditionFalse, ec.Generation, r.now(), ephemeralclusterv1.CreateTestCompletedSecretFailureReason, ephemeralclusterv1.CIOperatorNSNotFoundMsg)
-			ecStatus.Phase = ephemeralclusterv1.EphemeralClusterFailed
 		}
 		return err
 	}
@@ -1030,7 +1035,6 @@ func (r *reconciler) notifyTestComplete(ctx context.Context, log *logrus.Entry, 
 	}}); err != nil {
 		if !apierrors.IsAlreadyExists(err) {
 			log.WithError(err).Warn("Failed to create the secret")
-			upsertCondition(ecStatus, ephemeralclusterv1.TestCompleted, metav1.ConditionFalse, ec.Generation, r.now(), ephemeralclusterv1.CreateTestCompletedSecretFailureReason, err.Error())
 			return err
 		}
 	}

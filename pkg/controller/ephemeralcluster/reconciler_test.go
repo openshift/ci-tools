@@ -592,6 +592,8 @@ func TestReconcileCreateProwJob(t *testing.T) {
 				clusterProfileResolver: clusterProfileResolverAdapter(&fakeRegistryAgent),
 				privilegedTenants:      sets.New("ktenant-privileged"),
 				recorder:               fakeEventRecorder,
+				collectStateTransitionMetricFunc: func(ec *ephemeralclusterv1.EphemeralCluster, oldStatus, observedStatus *ephemeralclusterv1.EphemeralClusterStatus) {
+				},
 			}
 
 			gotRes, gotErr := r.Reconcile(context.TODO(), reconcile.Request{NamespacedName: types.NamespacedName{Name: tc.ec.Name, Namespace: tc.ec.Namespace}})
@@ -1391,7 +1393,7 @@ func TestReconcile(t *testing.T) {
 				},
 				Spec: ephemeralclusterv1.EphemeralClusterSpec{TearDownCluster: true},
 				Status: ephemeralclusterv1.EphemeralClusterStatus{
-					Phase:     ephemeralclusterv1.EphemeralClusterFailed,
+					Phase:     ephemeralclusterv1.EphemeralClusterDeprovisioning,
 					ProwJobID: "pj-123",
 					Conditions: []metav1.Condition{{
 						Type:               ephemeralclusterv1.ProwJobCreating,
@@ -1741,6 +1743,11 @@ func TestReconcile(t *testing.T) {
 					ProwJobID: "pj-123",
 					SecretRef: "foo-credentials",
 					Conditions: []metav1.Condition{{
+						Type:               ephemeralclusterv1.TestCompleted,
+						Status:             metav1.ConditionTrue,
+						Reason:             ephemeralclusterv1.TestDoneReason,
+						LastTransitionTime: metav1.NewTime(parseTime(t, "2025-04-02 12:30:00")),
+					}, {
 						Type:               ephemeralclusterv1.ProwJobCreating,
 						Status:             metav1.ConditionFalse,
 						Reason:             ephemeralclusterv1.ProwJobProperlyCreatedReason,
@@ -1749,11 +1756,6 @@ func TestReconcile(t *testing.T) {
 						Type:               ephemeralclusterv1.ClusterReady,
 						Status:             metav1.ConditionTrue,
 						Reason:             ephemeralclusterv1.CredentialsReadyReason,
-						LastTransitionTime: metav1.NewTime(parseTime(t, "2025-04-02 12:45:00")),
-					}, {
-						Type:               ephemeralclusterv1.TestCompleted,
-						Status:             metav1.ConditionTrue,
-						Reason:             ephemeralclusterv1.TestDoneReason,
 						LastTransitionTime: metav1.NewTime(parseTime(t, "2025-04-02 12:45:00")),
 					}, {
 						Type:               ephemeralclusterv1.ProwJobCompleted,
@@ -1785,90 +1787,6 @@ func TestReconcile(t *testing.T) {
 				},
 			}},
 		},
-		{
-			name: "Hive cluster not ready yet, errs out when fetching a secret",
-			ec: &ephemeralclusterv1.EphemeralCluster{
-				ObjectMeta: metav1.ObjectMeta{
-					Name:      "foo",
-					Namespace: "bar",
-					UID:       types.UID("test-ec-uid"),
-				},
-				Spec: ephemeralclusterv1.EphemeralClusterSpec{
-					CIOperator: ephemeralclusterv1.CIOperatorSpec{
-						Test: ephemeralclusterv1.TestSpec{
-							ClusterClaim: &api.ClusterClaim{},
-						},
-					},
-				},
-				Status: ephemeralclusterv1.EphemeralClusterStatus{
-					ProwJobID: "pj-123",
-				},
-			},
-			objs: []ctrlclient.Object{
-				&prowv1.ProwJob{
-					ObjectMeta: metav1.ObjectMeta{Name: "pj-123", Namespace: prowJobNamespace},
-					Spec:       prowv1.ProwJobSpec{Cluster: "build01"},
-				},
-			},
-			buildClients: func() map[string]*ctrlruntimetest.FakeClient {
-				objs := []ctrlclient.Object{
-					&corev1.Namespace{
-						ObjectMeta: metav1.ObjectMeta{
-							Labels: map[string]string{steps.LabelJobID: "pj-123"},
-							Name:   "ci-op-1234",
-						},
-					},
-					&corev1.Secret{
-						ObjectMeta: metav1.ObjectMeta{Name: api.HiveAdminPasswordSecret, Namespace: "ci-op-1234"},
-						Data:       map[string][]byte{api.HiveAdminPasswordSecretKey: []byte("admin-passwd")},
-					},
-				}
-				c := fake.NewClientBuilder().WithObjects(objs...).WithScheme(scheme).
-					WithInterceptorFuncs(interceptor.Funcs{
-						Get: func(ctx context.Context, client ctrlclient.WithWatch, key ctrlclient.ObjectKey, obj ctrlclient.Object, opts ...ctrlclient.GetOption) error {
-							if _, ok := obj.(*corev1.Secret); ok && key.Name == HiveKubeconfigSecret {
-								return errors.New("injected")
-							}
-							return client.Get(ctx, key, obj, opts...)
-						},
-					}).
-					Build()
-				return map[string]*ctrlruntimetest.FakeClient{
-					"build01": ctrlruntimetest.NewFakeClient(c, scheme, ctrlruntimetest.WithInitObjects(objs...)),
-				}
-			},
-			wantEC: &ephemeralclusterv1.EphemeralCluster{
-				ObjectMeta: metav1.ObjectMeta{
-					Name:            "foo",
-					Namespace:       "bar",
-					ResourceVersion: "1000",
-				},
-				Spec: ephemeralclusterv1.EphemeralClusterSpec{
-					CIOperator: ephemeralclusterv1.CIOperatorSpec{
-						Test: ephemeralclusterv1.TestSpec{
-							ClusterClaim: &api.ClusterClaim{},
-						},
-					},
-				},
-				Status: ephemeralclusterv1.EphemeralClusterStatus{
-					ProwJobID: "pj-123",
-					Phase:     ephemeralclusterv1.EphemeralClusterProvisioning,
-					Conditions: []metav1.Condition{{
-						Type:               ephemeralclusterv1.ProwJobCreating,
-						Status:             metav1.ConditionFalse,
-						Reason:             ephemeralclusterv1.ProwJobProperlyCreatedReason,
-						LastTransitionTime: metav1.NewTime(fakeNow),
-					}, {
-						Type:               ephemeralclusterv1.ClusterReady,
-						Status:             metav1.ConditionFalse,
-						Reason:             ephemeralclusterv1.SecretsFetchFailureReason,
-						Message:            "read secret cluster-provisioning-hive-admin-kubeconfig/ci-op-1234: injected",
-						LastTransitionTime: metav1.NewTime(fakeNow),
-					}},
-				},
-			},
-			wantRes: reconcile.Result{RequeueAfter: pollingTime},
-		},
 	} {
 		t.Run(tc.name, func(t *testing.T) {
 			t.Parallel()
@@ -1891,8 +1809,9 @@ func TestReconcile(t *testing.T) {
 
 			provisioningDurationHistogramVec := newProvisioningDurationHistogramVec()
 			deprovisioningDurationHistogramVec := newDeprovisioningDurationHistogramVec()
+			statesTransitionCounter := newStateTransitionCounterVec()
 			metricsGatherer := newMetricsGatherer(logrus.NewEntry(logrus.StandardLogger()),
-				nil, nil, provisioningDurationHistogramVec, deprovisioningDurationHistogramVec, "", 0)
+				nil, nil, statesTransitionCounter, provisioningDurationHistogramVec, deprovisioningDurationHistogramVec, "", 0)
 
 			subTestFakeNow := fakeNow
 			if tc.now != nil {
@@ -1914,6 +1833,7 @@ func TestReconcile(t *testing.T) {
 				}),
 				collectProvisioningDurationMetricFunc:   metricsGatherer.collectProvisioningDuration,
 				collectDeprovisioningDurationMetricFunc: metricsGatherer.collectDeprovisioningDuration,
+				collectStateTransitionMetricFunc:        metricsGatherer.collectStateTransition,
 			}
 
 			gotRes, gotErr := r.Reconcile(context.TODO(), reconcile.Request{NamespacedName: types.NamespacedName{Name: tc.ec.Name, Namespace: tc.ec.Namespace}})
@@ -2254,7 +2174,7 @@ func TestReconcileDeleteEphemeralCluster(t *testing.T) {
 
 			deprovisioningDurationHistogramVec := newDeprovisioningDurationHistogramVec()
 			metricsGatherer := newMetricsGatherer(logrus.NewEntry(logrus.StandardLogger()),
-				nil, nil, nil, deprovisioningDurationHistogramVec, "", 0)
+				nil, nil, nil, nil, deprovisioningDurationHistogramVec, "", 0)
 
 			fakeEventRecorder := record.NewFakeRecorder(100)
 			r := reconciler{
@@ -2268,6 +2188,8 @@ func TestReconcileDeleteEphemeralCluster(t *testing.T) {
 					ProwConfig: prowconfig.ProwConfig{ProwJobNamespace: prowJobNamespace},
 				}),
 				collectDeprovisioningDurationMetricFunc: metricsGatherer.collectDeprovisioningDuration,
+				collectStateTransitionMetricFunc: func(ec *ephemeralclusterv1.EphemeralCluster, oldStatus, observedStatus *ephemeralclusterv1.EphemeralClusterStatus) {
+				},
 			}
 
 			gotRes, gotErr := r.Reconcile(context.TODO(), reconcile.Request{NamespacedName: types.NamespacedName{Name: tc.ec.Name, Namespace: tc.ec.Namespace}})

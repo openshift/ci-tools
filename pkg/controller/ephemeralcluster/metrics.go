@@ -39,6 +39,14 @@ func newCountGaugeVec() *prometheus.GaugeVec {
 	}, []string{"konflux_cluster", "konflux_tenant", "cluster_profile", "workflow", "phase"})
 }
 
+func newStateTransitionCounterVec() *prometheus.CounterVec {
+	return prometheus.NewCounterVec(prometheus.CounterOpts{
+		Namespace: metricsNamespace,
+		Name:      "statetransition_total",
+		Help:      "This counter keeps track of transitions between ephemeral cluster's phases",
+	}, []string{"konflux_cluster", "konflux_tenant", "cluster_profile", "workflow", "phase"})
+}
+
 var (
 	provisioningDurationBuckets = []float64{300, 600, 900, 1800, 3600, 5400, 7200, 9000, 10800}
 )
@@ -69,6 +77,7 @@ type metricsGatherer struct {
 	logger                             *logrus.Entry
 	client                             ctrlruntimeclient.Client
 	countGauge                         *prometheus.GaugeVec
+	statesTransitionCounter            *prometheus.CounterVec
 	provisioningDurationHistogramVec   *prometheus.HistogramVec
 	deprovisioningDurationHistogramVec *prometheus.HistogramVec
 	ecNS                               string
@@ -79,6 +88,11 @@ func addMetricsToManager(logger *logrus.Entry, mgr manager.Manager, ecNS string,
 	countGauge := newCountGaugeVec()
 	if err := metrics.Registry.Register(countGauge); err != nil {
 		return nil, fmt.Errorf("failed to register count gauge: %w", err)
+	}
+
+	statesTransitionCounter := newStateTransitionCounterVec()
+	if err := metrics.Registry.Register(statesTransitionCounter); err != nil {
+		return nil, fmt.Errorf("failed to register statetransition_total counter: %w", err)
 	}
 
 	provisioningDurationHistogram := newProvisioningDurationHistogramVec()
@@ -92,7 +106,8 @@ func addMetricsToManager(logger *logrus.Entry, mgr manager.Manager, ecNS string,
 	}
 
 	metricsGatherer := newMetricsGatherer(logger.WithField("controller", "ephemeral_cluster_metrics"),
-		mgr.GetClient(), countGauge, provisioningDurationHistogram, deprovisioningDurationHistogram, ecNS, interval)
+		mgr.GetClient(), countGauge, statesTransitionCounter,
+		provisioningDurationHistogram, deprovisioningDurationHistogram, ecNS, interval)
 	if err := mgr.Add(metricsGatherer); err != nil {
 		return nil, fmt.Errorf("add metrics to manager: %w", err)
 	}
@@ -204,15 +219,41 @@ func (mg *metricsGatherer) collectDeprovisioningDuration(ec *ephemeralclusterv1.
 	return false
 }
 
+func (mg *metricsGatherer) collectStateTransition(ec *ephemeralclusterv1.EphemeralCluster, oldStatus, observedStatus *ephemeralclusterv1.EphemeralClusterStatus) {
+	find := func(status *ephemeralclusterv1.EphemeralClusterStatus, t string, statuses ...metav1.ConditionStatus) bool {
+		for i := range status.Conditions {
+			if c := &status.Conditions[i]; c.Type == t {
+				for _, s := range statuses {
+					if c.Status == s {
+						return true
+					}
+				}
+			}
+		}
+		return false
+	}
+
+	clusterNotReady := find(oldStatus, ephemeralclusterv1.ClusterReady, metav1.ConditionFalse)
+	clusterReady := find(observedStatus, ephemeralclusterv1.ClusterReady, metav1.ConditionTrue)
+
+	if clusterNotReady && clusterReady {
+		mg.statesTransitionCounter.
+			WithLabelValues(ec.KonfluxCluster(), ec.KonfluxTenant(), ec.Spec.CIOperator.Test.ClusterProfile, workflowLabel(ec), "ready").
+			Inc()
+	}
+}
+
 func (mg *metricsGatherer) NeedLeaderElection() bool { return true }
 
 func newMetricsGatherer(logger *logrus.Entry, client ctrlruntimeclient.Client,
-	countGauge *prometheus.GaugeVec, provisioningDurationHistogramVec, deprovisioningDurationHistogramVec *prometheus.HistogramVec,
+	countGauge *prometheus.GaugeVec, statesTransitionCounter *prometheus.CounterVec,
+	provisioningDurationHistogramVec, deprovisioningDurationHistogramVec *prometheus.HistogramVec,
 	ecNS string, interval time.Duration) *metricsGatherer {
 	return &metricsGatherer{
 		logger:                             logger,
 		client:                             client,
 		countGauge:                         countGauge,
+		statesTransitionCounter:            statesTransitionCounter,
 		provisioningDurationHistogramVec:   provisioningDurationHistogramVec,
 		deprovisioningDurationHistogramVec: deprovisioningDurationHistogramVec,
 		ecNS:                               ecNS,

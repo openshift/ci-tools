@@ -13,7 +13,7 @@ spec:
       clusterProfile: aws
 status:
   conditions:
-  - lastTransitionTime: "2025-04-02T12:12:12Z"
+  - lastTransitionTime: "2025-04-02T10:12:12Z"
     message: ""
     reason: OrphanProwJobFound
     status: "True"

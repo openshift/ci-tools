@@ -60,12 +60,14 @@ func TestStart(t *testing.T) {
 
 		client := fake.NewClientBuilder().WithScheme(scheme).Build()
 		countGauge := newCountGaugeVec()
+		statesTransitionCounter := newStateTransitionCounterVec()
 		provisioningDurationHistogram := newProvisioningDurationHistogramVec()
 
 		deprovisioningDurationHistogram := newDeprovisioningDurationHistogramVec()
 
 		mg := newMetricsGatherer(logrus.NewEntry(logrus.StandardLogger()), client,
-			countGauge, provisioningDurationHistogram, deprovisioningDurationHistogram, EphemeralClusterNamespace, gatherInterval)
+			countGauge, statesTransitionCounter,
+			provisioningDurationHistogram, deprovisioningDurationHistogram, EphemeralClusterNamespace, gatherInterval)
 		go func() {
 			if err := mg.Start(ctx); err != nil {
 				t.Errorf("Failed to start metrics gatherer: %s", err.Error())

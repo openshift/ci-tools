@@ -21,7 +21,7 @@ spec:
       workflow: test-workflow
 status:
   conditions:
-  - lastTransitionTime: "2025-04-02T12:12:12Z"
+  - lastTransitionTime: "2025-04-02T10:12:12Z"
     message: 'default periodic: job periodic-ci-org-repo-branch-cluster-provisioning
       failed to merge presets for podspec: volume duplicated in pod spec: boskos'
     reason: CIOperatorJobsGenerateFailure

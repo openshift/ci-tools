@@ -27,6 +27,11 @@ const (
 	ResolutionDone   = "Done"
 	StatusInProgress = "In Progress"
 
+	// Labels applied to forum / modal support tickets so they are excluded from
+	// DPTP intake rotation (sprint-automation) and AI backlog intake/groom.
+	LabelReady   = "ready"
+	LabelGroomed = "groomed"
+
 	helpdeskQuery     = "DPTP Help Desk"
 	activityTypeField = "Activity Type"
 	activityTypeValue = "Incidents & Support"
@@ -129,6 +134,10 @@ func (f *filer) FileIssue(issueType, title, description, reporter, activityType 
 		}
 		if err := f.setActivityTypeField(fields, activityType); err != nil {
 			logger.WithError(err).WithField("activity_type", activityType).Warn("could not set Jira Activity Type; omitting field from create request")
+		}
+		// Support / incident tickets are ops work, not backlog grooming candidates.
+		if activityType == activityTypeValue {
+			fields.Labels = []string{LabelReady, LabelGroomed}
 		}
 	}
 	toCreate := &jira.Issue{Fields: fields}

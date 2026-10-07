@@ -72,9 +72,6 @@ func TestInputImageStreamTagsFromResolvedConfig(cfg api.ReleaseBuildConfiguratio
 		if cfg.BuildRootImage.ImageStreamTagReference != nil {
 			insert(*cfg.BuildRootImage.ImageStreamTagReference, result)
 		}
-		if cfg.BuildRootImage.UseBuildCache {
-			insert(api.BuildCacheFor(cfg.Metadata), result)
-		}
 		if cfg.BuildRootImage.FromRepository && repoFileGetter != nil {
 			tagRef, err := tagReferenceInRepoConfigFile(cfg.Metadata, repoFileGetter)
 			if err != nil {

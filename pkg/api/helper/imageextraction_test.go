@@ -60,9 +60,6 @@ func TestTestInputImageStreamTagsFromResolvedConfigReturnsAllImageStreamTags(t *
 					}
 				}
 			}
-			if cfg.InputConfiguration.BuildRootImage != nil && cfg.InputConfiguration.BuildRootImage.UseBuildCache {
-				numberInsertedElements++
-			}
 			if cfg.ExternalImages != nil {
 				cfg.ExternalImages = nil
 				numberInsertedElements--

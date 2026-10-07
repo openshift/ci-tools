@@ -29,7 +29,6 @@ import (
 	"sigs.k8s.io/prow/pkg/pod-utils/decorate"
 
 	buildapi "github.com/openshift/api/build/v1"
-	imagev1 "github.com/openshift/api/image/v1"
 
 	"github.com/openshift/ci-tools/pkg/api"
 	apiutils "github.com/openshift/ci-tools/pkg/api/utils"
@@ -37,7 +36,6 @@ import (
 	"github.com/openshift/ci-tools/pkg/manifestpusher"
 	"github.com/openshift/ci-tools/pkg/metrics"
 	"github.com/openshift/ci-tools/pkg/results"
-	"github.com/openshift/ci-tools/pkg/steps/loggingclient"
 	"github.com/openshift/ci-tools/pkg/steps/utils"
 	"github.com/openshift/ci-tools/pkg/util"
 )
@@ -189,19 +187,15 @@ func (s *sourceStep) Run(ctx context.Context) error {
 func (s *sourceStep) run(ctx context.Context) error {
 	clonerefsRef := corev1.ObjectReference{Kind: "DockerImage", Name: s.config.ClonerefsPullSpec}
 
-	fromDigest, err := resolvePipelineImageStreamTagReference(ctx, s.client, s.config.From, s.jobSpec)
-	if err != nil {
-		return err
-	}
 	return handleBuilds(
 		ctx,
 		s.client,
 		s.podClient,
-		*createBuild(s.config, s.jobSpec, clonerefsRef, s.resources, s.cloneAuthConfig, s.pullSecret, fromDigest), s.metricsAgent, newImageBuildOptions(s.architectures.UnsortedList()),
+		*createBuild(s.config, s.jobSpec, clonerefsRef, s.resources, s.cloneAuthConfig, s.pullSecret), s.metricsAgent, newImageBuildOptions(s.architectures.UnsortedList()),
 	)
 }
 
-func createBuild(config api.SourceStepConfiguration, jobSpec *api.JobSpec, clonerefsRef corev1.ObjectReference, resources api.ResourceConfiguration, cloneAuthConfig *CloneAuthConfig, pullSecret *corev1.Secret, fromDigest string) *buildapi.Build {
+func createBuild(config api.SourceStepConfiguration, jobSpec *api.JobSpec, clonerefsRef corev1.ObjectReference, resources api.ResourceConfiguration, cloneAuthConfig *CloneAuthConfig, pullSecret *corev1.Secret) *buildapi.Build {
 	var refs []prowv1.Refs
 	if jobSpec.Refs != nil {
 		r := *jobSpec.Refs
@@ -289,7 +283,7 @@ func createBuild(config api.SourceStepConfiguration, jobSpec *api.JobSpec, clone
 		panic(fmt.Errorf("couldn't create JSON spec for clonerefs: %w", err))
 	}
 
-	build := buildFromSource(jobSpec, config.From, config.To, buildSource, fromDigest, "", resources, pullSecret, nil, config.Ref)
+	build := buildFromSource(jobSpec, config.From, config.To, buildSource, "", resources, pullSecret, nil, config.Ref)
 	build.Spec.CommonSpec.Strategy.DockerStrategy.Env = append(
 		build.Spec.CommonSpec.Strategy.DockerStrategy.Env,
 		corev1.EnvVar{Name: clonerefs.JSONConfigEnvVar, Value: optionsJSON},
@@ -298,15 +292,7 @@ func createBuild(config api.SourceStepConfiguration, jobSpec *api.JobSpec, clone
 	return build
 }
 
-func resolvePipelineImageStreamTagReference(ctx context.Context, client loggingclient.LoggingClient, tag api.PipelineImageStreamTagReference, jobSpec *api.JobSpec) (string, error) {
-	ist := &imagev1.ImageStreamTag{}
-	if err := client.Get(ctx, ctrlruntimeclient.ObjectKey{Namespace: jobSpec.Namespace(), Name: fmt.Sprintf("%s:%s", api.PipelineImageStream, tag)}, ist); err != nil {
-		return "", fmt.Errorf("could not resolve pipeline image stream tag %s: %w", tag, err)
-	}
-	return ist.Image.Name, nil
-}
-
-func buildFromSource(jobSpec *api.JobSpec, fromTag, toTag api.PipelineImageStreamTagReference, source buildapi.BuildSource, fromTagDigest, dockerfilePath string, resources api.ResourceConfiguration, pullSecret *corev1.Secret, buildArgs []api.BuildArg, ref string) *buildapi.Build {
+func buildFromSource(jobSpec *api.JobSpec, fromTag, toTag api.PipelineImageStreamTagReference, source buildapi.BuildSource, dockerfilePath string, resources api.ResourceConfiguration, pullSecret *corev1.Secret, buildArgs []api.BuildArg, ref string) *buildapi.Build {
 	logrus.Infof("Building %s", toTag)
 	buildName := string(toTag)
 	// Build names cannot contain '_', but repository names can. When building from a multi-pr config, there could be '_' present in the toTag
@@ -365,12 +351,6 @@ func buildFromSource(jobSpec *api.JobSpec, fromTag, toTag api.PipelineImageStrea
 				},
 			},
 		},
-	}
-	if len(fromTag) > 0 {
-		build.Spec.Output.ImageLabels = append(build.Spec.Output.ImageLabels, buildapi.ImageLabel{
-			Name:  api.ImageVersionLabel(fromTag),
-			Value: fromTagDigest,
-		})
 	}
 	if pullSecret != nil {
 		build.Spec.Strategy.DockerStrategy.PullSecret = getSourceSecretFromName(api.RegistryPullCredentialsSecret)

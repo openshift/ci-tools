@@ -50,17 +50,12 @@ func (s *rpmImageInjectionStep) run(ctx context.Context) error {
 	}
 
 	dockerfile := rpmInjectionDockerfile(s.config.From, route.Spec.Host)
-	fromDigest, err := resolvePipelineImageStreamTagReference(ctx, s.client, s.config.From, s.jobSpec)
-	if err != nil {
-		return err
-	}
 	return handleBuilds(ctx, s.client, s.podClient, *buildFromSource(
 		s.jobSpec, s.config.From, s.config.To,
 		buildapi.BuildSource{
 			Type:       buildapi.BuildSourceDockerfile,
 			Dockerfile: &dockerfile,
 		},
-		fromDigest,
 		"",
 		s.resources,
 		s.pullSecret,

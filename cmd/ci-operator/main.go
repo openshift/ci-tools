@@ -1045,7 +1045,7 @@ func (o *options) Run() (errs []error) {
 	cfg.HTTPServerAddr = httpSrvAddr
 	cfg.HTTPServerMux = httpSrvMux
 	// load the graph from the configuration
-	buildSteps, promotionSteps, err := defaults.FromConfig(ctx, cfg)
+	buildSteps, promotionSteps, err := defaults.FromConfig(cfg)
 	if err != nil {
 		errs = append(errs, results.ForReason("defaulting_config").WithError(err).Errorf("failed to generate steps from config: %v", err))
 		return

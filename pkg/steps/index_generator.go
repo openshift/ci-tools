@@ -90,10 +90,6 @@ func (s *indexGeneratorStep) run(ctx context.Context) error {
 		return err
 	}
 	fromTag := api.PipelineImageStreamTagReferenceSource
-	fromDigest, err := resolvePipelineImageStreamTagReference(ctx, s.client, fromTag, s.jobSpec)
-	if err != nil {
-		return err
-	}
 	var secrets []buildapi.SecretBuildSource
 	if s.pullSecret != nil {
 		secrets = append(secrets, buildapi.SecretBuildSource{
@@ -119,7 +115,6 @@ func (s *indexGeneratorStep) run(ctx context.Context) error {
 			},
 			Secrets: secrets,
 		},
-		fromDigest,
 		"",
 		s.resources,
 		s.pullSecret,

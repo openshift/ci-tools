@@ -51,16 +51,12 @@ func addCloneRefs(cfg *api.SourceStepConfiguration) *api.SourceStepConfiguration
 }
 
 func TestStepConfigsForBuild(t *testing.T) {
-	noopResolver := func(root, cache *api.ImageStreamTagReference) (*api.ImageStreamTagReference, error) {
-		return root, nil
-	}
 	var testCases = []struct {
 		name          string
 		input         *api.ReleaseBuildConfiguration
 		jobSpec       *api.JobSpec
 		output        []api.StepConfiguration
 		readFile      readFile
-		resolver      resolveRoot
 		injectedTest  bool
 		expectedError error
 	}{
@@ -85,7 +81,6 @@ func TestStepConfigsForBuild(t *testing.T) {
 					},
 				},
 			},
-			resolver: noopResolver,
 			output: []api.StepConfiguration{{
 				SourceStepConfiguration: addCloneRefs(&api.SourceStepConfiguration{
 					From: api.PipelineImageStreamTagReferenceRoot,
@@ -98,51 +93,6 @@ func TestStepConfigsForBuild(t *testing.T) {
 							Namespace: "root-ns",
 							Name:      "root-name",
 							Tag:       "manual",
-						},
-						To: api.PipelineImageStreamTagReferenceRoot,
-					},
-					Sources: []api.ImageStreamSource{{SourceType: api.ImageStreamSourceRoot}},
-				},
-			}},
-		},
-		{
-			name: "minimal information provided with build cache in use",
-			input: &api.ReleaseBuildConfiguration{
-				InputConfiguration: api.InputConfiguration{
-					BuildRootImage: &api.BuildRootImageConfiguration{
-						ImageStreamTagReference: &api.ImageStreamTagReference{Tag: "manual"},
-						UseBuildCache:           true,
-					},
-				},
-				Metadata: api.Metadata{
-					Org:    "org",
-					Repo:   "repo",
-					Branch: "branch",
-				},
-			},
-			jobSpec: &api.JobSpec{
-				JobSpec: downwardapi.JobSpec{
-					Refs: &prowapi.Refs{
-						Org:  "org",
-						Repo: "repo",
-					},
-				},
-			},
-			resolver: func(root, cache *api.ImageStreamTagReference) (*api.ImageStreamTagReference, error) {
-				return cache, nil
-			},
-			output: []api.StepConfiguration{{
-				SourceStepConfiguration: addCloneRefs(&api.SourceStepConfiguration{
-					From: api.PipelineImageStreamTagReferenceRoot,
-					To:   api.PipelineImageStreamTagReferenceSource,
-				}),
-			}, {
-				InputImageTagStepConfiguration: &api.InputImageTagStepConfiguration{
-					InputImage: api.InputImage{
-						BaseImage: api.ImageStreamTagReference{
-							Namespace: "build-cache",
-							Name:      "org-repo",
-							Tag:       "branch",
 						},
 						To: api.PipelineImageStreamTagReferenceRoot,
 					},
@@ -167,7 +117,6 @@ func TestStepConfigsForBuild(t *testing.T) {
 					},
 				},
 			},
-			resolver: noopResolver,
 			output: []api.StepConfiguration{{
 				SourceStepConfiguration: addCloneRefs(&api.SourceStepConfiguration{
 					From: api.PipelineImageStreamTagReferenceRoot,
@@ -180,60 +129,6 @@ func TestStepConfigsForBuild(t *testing.T) {
 							Namespace: "stream-namespace",
 							Name:      "stream-name",
 							Tag:       "stream-tag",
-						},
-						To: api.PipelineImageStreamTagReferenceRoot,
-					},
-					Sources: []api.ImageStreamSource{{SourceType: api.ImageStreamSourceRoot}},
-				},
-			}},
-			readFile: func(filename string) ([]byte, error) {
-				if filename != "./.ci-operator.yaml" {
-					return nil, fmt.Errorf("expected '.ci-operator.yaml' as file for the build_root_image, got %s", filename)
-				}
-				return []byte(`build_root_image:
-  namespace: stream-namespace
-  name: stream-name
-  tag: stream-tag`), nil
-			},
-		},
-		{
-			name: "build_root_image from repo + build cache",
-			input: &api.ReleaseBuildConfiguration{
-				InputConfiguration: api.InputConfiguration{
-					BuildRootImage: &api.BuildRootImageConfiguration{
-						FromRepository: true,
-						UseBuildCache:  true,
-					},
-				},
-				Metadata: api.Metadata{
-					Org:    "org",
-					Repo:   "repo",
-					Branch: "branch",
-				},
-			},
-			jobSpec: &api.JobSpec{
-				JobSpec: downwardapi.JobSpec{
-					Refs: &prowapi.Refs{
-						Org:  "org",
-						Repo: "repo",
-					},
-				},
-			},
-			resolver: func(root, cache *api.ImageStreamTagReference) (*api.ImageStreamTagReference, error) {
-				return cache, nil
-			},
-			output: []api.StepConfiguration{{
-				SourceStepConfiguration: addCloneRefs(&api.SourceStepConfiguration{
-					From: api.PipelineImageStreamTagReferenceRoot,
-					To:   api.PipelineImageStreamTagReferenceSource,
-				}),
-			}, {
-				InputImageTagStepConfiguration: &api.InputImageTagStepConfiguration{
-					InputImage: api.InputImage{
-						BaseImage: api.ImageStreamTagReference{
-							Namespace: "build-cache",
-							Name:      "org-repo",
-							Tag:       "branch",
 						},
 						To: api.PipelineImageStreamTagReferenceRoot,
 					},
@@ -272,7 +167,6 @@ func TestStepConfigsForBuild(t *testing.T) {
 					},
 				},
 			},
-			resolver: noopResolver,
 			output: []api.StepConfiguration{{
 				SourceStepConfiguration: addCloneRefs(&api.SourceStepConfiguration{
 					From: api.PipelineImageStreamTagReferenceRoot,
@@ -321,7 +215,6 @@ func TestStepConfigsForBuild(t *testing.T) {
 					},
 				},
 			},
-			resolver: noopResolver,
 			output: []api.StepConfiguration{{
 				SourceStepConfiguration: addCloneRefs(&api.SourceStepConfiguration{
 					From: api.PipelineImageStreamTagReferenceRoot,
@@ -379,7 +272,6 @@ func TestStepConfigsForBuild(t *testing.T) {
 					},
 				},
 			},
-			resolver: noopResolver,
 			output: []api.StepConfiguration{{
 				SourceStepConfiguration: addCloneRefs(&api.SourceStepConfiguration{
 					From: api.PipelineImageStreamTagReferenceRoot,
@@ -432,7 +324,6 @@ func TestStepConfigsForBuild(t *testing.T) {
 					},
 				},
 			},
-			resolver: noopResolver,
 			output: []api.StepConfiguration{{
 				SourceStepConfiguration: addCloneRefs(&api.SourceStepConfiguration{
 					From: api.PipelineImageStreamTagReferenceRoot,
@@ -490,7 +381,6 @@ func TestStepConfigsForBuild(t *testing.T) {
 					},
 				},
 			},
-			resolver: noopResolver,
 			output: []api.StepConfiguration{{
 				SourceStepConfiguration: addCloneRefs(&api.SourceStepConfiguration{
 					From: api.PipelineImageStreamTagReferenceRoot,
@@ -553,7 +443,6 @@ func TestStepConfigsForBuild(t *testing.T) {
 					},
 				},
 			},
-			resolver: noopResolver,
 			output: []api.StepConfiguration{
 				{
 					InputImageTagStepConfiguration: &api.InputImageTagStepConfiguration{
@@ -624,7 +513,6 @@ func TestStepConfigsForBuild(t *testing.T) {
 					},
 				},
 			},
-			resolver: noopResolver,
 			output: []api.StepConfiguration{{
 				SourceStepConfiguration: addCloneRefs(&api.SourceStepConfiguration{
 					From: api.PipelineImageStreamTagReferenceRoot,
@@ -693,7 +581,6 @@ func TestStepConfigsForBuild(t *testing.T) {
 					},
 				},
 			},
-			resolver: noopResolver,
 			output: []api.StepConfiguration{{
 				BundleSourceStepConfiguration: &api.BundleSourceStepConfiguration{
 					Substitutions: []api.PullSpecSubstitution{{
@@ -771,7 +658,6 @@ func TestStepConfigsForBuild(t *testing.T) {
 					},
 				},
 			},
-			resolver: noopResolver,
 			output: []api.StepConfiguration{{
 				BundleSourceStepConfiguration: &api.BundleSourceStepConfiguration{
 					Substitutions: []api.PullSpecSubstitution{{
@@ -840,7 +726,6 @@ func TestStepConfigsForBuild(t *testing.T) {
 					},
 				},
 			},
-			resolver: noopResolver,
 			output: []api.StepConfiguration{{
 				SourceStepConfiguration: addCloneRefs(&api.SourceStepConfiguration{
 					From: api.PipelineImageStreamTagReferenceRoot,
@@ -876,7 +761,6 @@ func TestStepConfigsForBuild(t *testing.T) {
 					BuildRootImages: map[string]api.BuildRootImageConfiguration{
 						"org.other-repo": {
 							ImageStreamTagReference: &api.ImageStreamTagReference{Tag: "manual"},
-							UseBuildCache:           true,
 						},
 					},
 				},
@@ -923,7 +807,6 @@ func TestStepConfigsForBuild(t *testing.T) {
 					},
 				},
 			},
-			resolver: noopResolver,
 			output: []api.StepConfiguration{
 				{
 					SourceStepConfiguration: addCloneRefs(&api.SourceStepConfiguration{
@@ -1024,7 +907,6 @@ func TestStepConfigsForBuild(t *testing.T) {
 						},
 						"org.other-repo": {
 							ImageStreamTagReference: &api.ImageStreamTagReference{Tag: "manual"},
-							UseBuildCache:           true,
 						},
 					},
 				},
@@ -1083,7 +965,6 @@ func TestStepConfigsForBuild(t *testing.T) {
 					},
 				},
 			},
-			resolver: noopResolver,
 			output: []api.StepConfiguration{
 				{
 					SourceStepConfiguration: addCloneRefs(&api.SourceStepConfiguration{
@@ -1181,7 +1062,7 @@ func TestStepConfigsForBuild(t *testing.T) {
 	for _, testCase := range testCases {
 		t.Run(testCase.name, func(t *testing.T) {
 			graphConf := FromConfigStatic(testCase.input)
-			runtimeSteps, actualError := runtimeStepConfigsForBuild(testCase.input, testCase.jobSpec, testCase.readFile, testCase.resolver, graphConf.InputImages(), testCase.injectedTest)
+			runtimeSteps, actualError := runtimeStepConfigsForBuild(testCase.input, testCase.jobSpec, testCase.readFile, graphConf.InputImages(), testCase.injectedTest)
 			graphConf.Steps = append(graphConf.Steps, runtimeSteps...)
 			if diff := cmp.Diff(testCase.expectedError, actualError, testhelper.EquateErrorMessage); diff != "" {
 				t.Errorf("actualError does not match expectedError, diff: %s", diff)
@@ -1941,7 +1822,7 @@ func TestFromConfig(t *testing.T) {
 				HTTPServerAddr:              "http://10.0.0.1:8080",
 				HTTPServerMux:               &http.ServeMux{},
 			}
-			configSteps, post, err := fromConfig(context.Background(), cfg)
+			configSteps, post, err := fromConfig(cfg)
 			if diff := cmp.Diff(tc.expectedErr, err); diff != "" {
 				t.Errorf("unexpected error: %v", diff)
 			}

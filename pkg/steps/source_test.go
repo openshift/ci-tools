@@ -247,7 +247,7 @@ func TestCreateBuild(t *testing.T) {
 			}
 			clonerefsRef := coreapi.ObjectReference{Kind: "DockerImage", Name: config.ClonerefsPullSpec}
 			resources := map[string]api.ResourceRequirements{"*": {Requests: map[string]string{"cpu": "200m"}}}
-			actual := createBuild(config, testCase.jobSpec, clonerefsRef, resources, testCase.cloneAuthConfig, testCase.pullSecret, "imagedigest")
+			actual := createBuild(config, testCase.jobSpec, clonerefsRef, resources, testCase.cloneAuthConfig, testCase.pullSecret)
 			testhelper.CompareWithFixture(t, actual)
 		})
 	}
@@ -255,15 +255,15 @@ func TestCreateBuild(t *testing.T) {
 
 func TestBuildFromSource(t *testing.T) {
 	var testCases = []struct {
-		name                          string
-		jobSpec                       *api.JobSpec
-		fromTag, toTag                api.PipelineImageStreamTagReference
-		source                        buildapi.BuildSource
-		fromTagDigest, dockerfilePath string
-		resources                     api.ResourceConfiguration
-		pullSecret                    *coreapi.Secret
-		buildArgs                     []api.BuildArg
-		ref                           string
+		name           string
+		jobSpec        *api.JobSpec
+		fromTag, toTag api.PipelineImageStreamTagReference
+		source         buildapi.BuildSource
+		dockerfilePath string
+		resources      api.ResourceConfiguration
+		pullSecret     *coreapi.Secret
+		buildArgs      []api.BuildArg
+		ref            string
 	}{
 		{
 			name: "pod scaler opt-out",
@@ -371,7 +371,7 @@ func TestBuildFromSource(t *testing.T) {
 	for _, testCase := range testCases {
 		t.Run(testCase.name, func(t *testing.T) {
 			testCase.jobSpec.SetNamespace("test-namespace")
-			actual := buildFromSource(testCase.jobSpec, testCase.fromTag, testCase.toTag, testCase.source, testCase.fromTagDigest, testCase.dockerfilePath, testCase.resources, testCase.pullSecret, testCase.buildArgs, testCase.ref)
+			actual := buildFromSource(testCase.jobSpec, testCase.fromTag, testCase.toTag, testCase.source, testCase.dockerfilePath, testCase.resources, testCase.pullSecret, testCase.buildArgs, testCase.ref)
 			testhelper.CompareWithFixture(t, actual)
 		})
 	}

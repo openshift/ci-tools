@@ -12,7 +12,9 @@ type TestCaseDetails struct {
 	Passes   []TestCasePass
 	Failures []TestCaseFailure
 	Skips    []TestCaseSkip
-	//NeverExecuted []TestCaseNeverExecuted
+
+	Unfinished    []TestCaseIncomplete `yaml:"unfinished,omitempty"`
+	MissingJUnits []TestCaseIncomplete `yaml:"missingJUnits,omitempty"`
 }
 
 type TestCasePass struct {
@@ -33,6 +35,13 @@ type TestCaseSkip struct {
 	GCSArtifactURL string
 }
 
+type TestCaseIncomplete struct {
+	JobRunID       string
+	HumanURL       string
+	GCSArtifactURL string
+}
+
+// TestCaseNeverExecuted is retained for compatibility with consumers of this package.
 type TestCaseNeverExecuted struct {
 	JobRunID       string
 	HumanURL       string

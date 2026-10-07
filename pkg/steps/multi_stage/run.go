@@ -35,6 +35,7 @@ func (s *multiStageTestStep) runSteps(
 	logrus.Infof("Running multi-stage phase %s", phase)
 	pods, bestEffortSteps, err := s.generatePods(steps, env, secretVolumes, secretVolumeMounts, &generatePodOptions{
 		enableSecretsStoreCSIDriver: s.enableSecretsStoreCSIDriver,
+		phase:                       phase,
 	})
 	if err != nil {
 		s.flags |= hasPrevErrs
@@ -75,7 +76,9 @@ func (s *multiStageTestStep) runSteps(
 			Output: err.Error(),
 		}
 	}
+	s.subLock.Lock()
 	s.subTests = append(s.subTests, testCase)
+	s.subLock.Unlock()
 	logrus.Infof("Step phase %s %s after %s.", phase, verb, duration.Truncate(time.Second))
 
 	return err

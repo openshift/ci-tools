@@ -280,7 +280,7 @@ func TestPromotedTags(t *testing.T) {
 			expected: nil,
 		},
 		{
-			name: "promotion set and binaries built, means binaries promoted",
+			name: "binary build commands do not automatically promote binaries",
 			input: &api.ReleaseBuildConfiguration{
 				Images:              api.ImageConfiguration{},
 				BinaryBuildCommands: "something",
@@ -296,9 +296,7 @@ func TestPromotedTags(t *testing.T) {
 					Branch: "branch",
 				},
 			},
-			expected: []api.ImageStreamTagReference{
-				{Namespace: "build-cache", Name: "org-repo", Tag: "branch"},
-			},
+			expected: nil,
 		},
 		{
 			name: "promotion with AdditionalImages: many to one",
@@ -350,6 +348,23 @@ func TestPromotedTagsWithRequiredImages(t *testing.T) {
 			input:                  &api.ReleaseBuildConfiguration{},
 			expected:               map[string][]api.ImageStreamTagReference{},
 			expectedRequiredImages: sets.New[string](),
+		},
+		{
+			name: "binaries can still be explicitly promoted",
+			input: &api.ReleaseBuildConfiguration{
+				BinaryBuildCommands: "make build",
+				PromotionConfiguration: &api.PromotionConfiguration{
+					Targets: []api.PromotionTarget{{
+						Namespace:        "ci",
+						Tag:              "latest",
+						AdditionalImages: map[string]string{"binaries": "bin"},
+					}},
+				},
+			},
+			expected: map[string][]api.ImageStreamTagReference{
+				"bin": {{Namespace: "ci", Name: "binaries", Tag: "latest"}},
+			},
+			expectedRequiredImages: sets.New[string]("binaries"),
 		},
 		{
 			name: "promoted image means output tags",
@@ -439,7 +454,7 @@ func TestPromotedTagsWithRequiredImages(t *testing.T) {
 			expectedRequiredImages: sets.New[string]("foo"),
 		},
 		{
-			name: "build_if_affected still promotes build-cache",
+			name: "build_if_affected with binary build commands only promotes selected images",
 			input: &api.ReleaseBuildConfiguration{
 				BinaryBuildCommands: "make build",
 				Images: api.ImageConfiguration{
@@ -461,9 +476,6 @@ func TestPromotedTagsWithRequiredImages(t *testing.T) {
 			expected: map[string][]api.ImageStreamTagReference{
 				"foo": {
 					{Namespace: "ci", Name: "tools", Tag: "foo"},
-				},
-				string(api.PipelineImageStreamTagReferenceBinaries): {
-					{Namespace: "build-cache", Name: "openshift-ci-tools", Tag: "main"},
 				},
 			},
 			expectedRequiredImages: sets.New[string]("foo"),
@@ -597,7 +609,7 @@ func TestPromotedTagsWithRequiredImages(t *testing.T) {
 			expectedRequiredImages: sets.New[string](),
 		},
 		{
-			name: "promotion set and binaries built, means binaries promoted",
+			name: "binary build commands do not automatically promote binaries",
 			input: &api.ReleaseBuildConfiguration{
 				Images:              api.ImageConfiguration{},
 				BinaryBuildCommands: "something",
@@ -606,29 +618,6 @@ func TestPromotedTagsWithRequiredImages(t *testing.T) {
 						Namespace: "ci",
 						Tag:       "latest",
 					}},
-				},
-				Metadata: api.Metadata{
-					Org:    "org",
-					Repo:   "repo",
-					Branch: "branch",
-				},
-			},
-			expected: map[string][]api.ImageStreamTagReference{
-				"bin": {{Namespace: "build-cache", Name: "org-repo", Tag: "branch"}},
-			},
-			expectedRequiredImages: sets.New[string](),
-		},
-		{
-			name: "promotion set and binaries built, build cache disabled means no binaries promoted",
-			input: &api.ReleaseBuildConfiguration{
-				Images:              api.ImageConfiguration{},
-				BinaryBuildCommands: "something",
-				PromotionConfiguration: &api.PromotionConfiguration{
-					Targets: []api.PromotionTarget{{
-						Namespace: "ci",
-						Tag:       "latest",
-					}},
-					DisableBuildCache: true,
 				},
 				Metadata: api.Metadata{
 					Org:    "org",
@@ -789,44 +778,6 @@ func TestPromotedTagsWithRequiredImages(t *testing.T) {
 				t.Errorf("%s: got incorrect requiredImages: %s", testCase.name, cmp.Diff(actual, expected))
 			}
 		})
-	}
-}
-
-func TestBuildCacheFor(t *testing.T) {
-	var testCases = []struct {
-		input  api.Metadata
-		output api.ImageStreamTagReference
-	}{
-		{
-			input: api.Metadata{
-				Org:    "org",
-				Repo:   "repo",
-				Branch: "branch",
-			},
-			output: api.ImageStreamTagReference{
-				Namespace: "build-cache",
-				Name:      "org-repo",
-				Tag:       "branch",
-			},
-		},
-		{
-			input: api.Metadata{
-				Org:     "org",
-				Repo:    "repo",
-				Branch:  "branch",
-				Variant: "variant",
-			},
-			output: api.ImageStreamTagReference{
-				Namespace: "build-cache",
-				Name:      "org-repo",
-				Tag:       "branch-variant",
-			},
-		},
-	}
-	for _, testCase := range testCases {
-		if diff := cmp.Diff(testCase.output, api.BuildCacheFor(testCase.input)); diff != "" {
-			t.Errorf("got incorrect ist for build cache: %v", diff)
-		}
 	}
 }
 

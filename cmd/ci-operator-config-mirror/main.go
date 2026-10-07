@@ -234,9 +234,8 @@ func ciOperatorConfigsCallback(o options, configsByRepo configsByRepo, flattened
 
 		if rbc.PromotionConfiguration != nil {
 			rbc.PromotionConfiguration = &api.PromotionConfiguration{
-				Targets:           api.PromotionTargets(rbc.PromotionConfiguration),
-				RegistryOverride:  rbc.PromotionConfiguration.RegistryOverride,
-				DisableBuildCache: rbc.PromotionConfiguration.DisableBuildCache,
+				Targets:          api.PromotionTargets(rbc.PromotionConfiguration),
+				RegistryOverride: rbc.PromotionConfiguration.RegistryOverride,
 				// All other fields are left out intentionally as they would
 				// be already there in Targets
 			}

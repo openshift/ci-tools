@@ -84,10 +84,6 @@ const ciOperatorReferenceYaml = "# The list of base images describe\n" +
 	"                      source_path: ' '\n" +
 	"        # Ref is an optional string linking to the extra_ref in \"org.repo\" format that this belongs to\n" +
 	"        ref: ' '\n" +
-	"    # UseBuildCache enables the import and use of the prior `bin` image\n" +
-	"    # as a build cache, if the underlying build root has not changed since\n" +
-	"    # the previous cache was published.\n" +
-	"    use_build_cache: true\n" +
 	"# BuildRootImages entries support two ways to get the image that\n" +
 	"# the pipeline will caches on. The one way is to take the reference\n" +
 	"# from an image stream, and the other from a dockerfile.\n" +
@@ -142,10 +138,6 @@ const ciOperatorReferenceYaml = "# The list of base images describe\n" +
 	"                          source_path: ' '\n" +
 	"            # Ref is an optional string linking to the extra_ref in \"org.repo\" format that this belongs to\n" +
 	"            ref: ' '\n" +
-	"        # UseBuildCache enables the import and use of the prior `bin` image\n" +
-	"        # as a build cache, if the underlying build root has not changed since\n" +
-	"        # the previous cache was published.\n" +
-	"        use_build_cache: true\n" +
 	"# CanonicalGoRepository is a directory path that represents\n" +
 	"# the desired location of the contents of this repository in\n" +
 	"# Go. If specified the location of the repository we are\n" +
@@ -310,11 +302,6 @@ const ciOperatorReferenceYaml = "# The list of base images describe\n" +
 	"    # Cron generates promotion periodic alongside with promotion\n" +
 	"    # postsubmit\n" +
 	"    cron: ' '\n" +
-	"    # DisableBuildCache stops us from uploading the build cache.\n" +
-	"    # This is useful (only) for CI chat bot invocations where\n" +
-	"    # promotion does not imply output artifacts are being created\n" +
-	"    # for posterity.\n" +
-	"    disable_build_cache: true\n" +
 	"    # RegistryOverride is an override for the registry domain to\n" +
 	"    # which we will mirror images. This is an advanced option and\n" +
 	"    # should *not* be used in common test workflows. The CI chat\n" +

@@ -1,8 +1,6 @@
 package defaults
 
 import (
-	"context"
-	"encoding/json"
 	"errors"
 	"fmt"
 	"os"
@@ -13,7 +11,6 @@ import (
 	"github.com/sirupsen/logrus"
 
 	coreapi "k8s.io/api/core/v1"
-	kapierrors "k8s.io/apimachinery/pkg/api/errors"
 	"k8s.io/apimachinery/pkg/util/sets"
 	coreclientset "k8s.io/client-go/kubernetes/typed/core/v1"
 	"k8s.io/client-go/util/retry"
@@ -23,7 +20,6 @@ import (
 	"sigs.k8s.io/prow/pkg/pod-utils/decorate"
 	"sigs.k8s.io/yaml"
 
-	"github.com/openshift/api/image/docker10"
 	imagev1 "github.com/openshift/api/image/v1"
 	buildclientset "github.com/openshift/client-go/build/clientset/versioned/typed/build/v1"
 
@@ -48,7 +44,7 @@ type inputImageSet map[api.InputImage]struct{}
 // and pre-parsed graph configuration and generates steps for them, returning
 // the full set of steps requires for the build, including defaulted steps,
 // generated steps and all raw steps that the user provided.
-func FromConfig(ctx context.Context, cfg *Config) ([]api.Step, []api.Step, error) {
+func FromConfig(cfg *Config) ([]api.Step, []api.Step, error) {
 	crclient, err := ctrlruntimeclient.NewWithWatch(cfg.ClusterConfig, ctrlruntimeclient.Options{})
 	crclient = secretrecordingclient.Wrap(crclient, cfg.Censor)
 	crclient = labeledclient.WrapWithWatch(crclient, cfg.JobSpec)
@@ -86,10 +82,10 @@ func FromConfig(ctx context.Context, cfg *Config) ([]api.Step, []api.Step, error
 	cfg.httpClient = httpClient.StandardClient()
 	cfg.params = api.NewDeferredParameters(nil)
 
-	return fromConfig(ctx, cfg)
+	return fromConfig(cfg)
 }
 
-func fromConfig(ctx context.Context, cfg *Config) ([]api.Step, []api.Step, error) {
+func fromConfig(cfg *Config) ([]api.Step, []api.Step, error) {
 	requiredNames := sets.New[string]()
 	for _, target := range cfg.RequiredTargets {
 		requiredNames.Insert(target)
@@ -105,9 +101,8 @@ func fromConfig(ctx context.Context, cfg *Config) ([]api.Step, []api.Step, error
 	var imageStepLinks []api.StepLink
 	var hasReleaseStep bool
 	var cliVersion string
-	resolver := rootImageResolver(cfg.kubeClient, ctx, cfg.Promote)
 	imageConfigs := cfg.GraphConf.InputImages()
-	rawSteps, err := runtimeStepConfigsForBuild(cfg.CIConfig, cfg.JobSpec, os.ReadFile, resolver, imageConfigs, cfg.InjectedTest)
+	rawSteps, err := runtimeStepConfigsForBuild(cfg.CIConfig, cfg.JobSpec, os.ReadFile, imageConfigs, cfg.InjectedTest)
 	if err != nil {
 		return nil, nil, fmt.Errorf("failed to get steps from configuration: %w", err)
 	}
@@ -450,67 +445,7 @@ func checkForFullyQualifiedStep(step api.Step, params *api.DeferredParameters) (
 	return step, false
 }
 
-// rootImageResolver creates a resolver for the root image import step. We attempt to resolve the root image and
-// the build cache. If we are able to successfully determine that the build cache is up-to-date, we import it as
-// the root image.
-func rootImageResolver(client loggingclient.LoggingClient, ctx context.Context, promote bool) func(root, cache *api.ImageStreamTagReference) (*api.ImageStreamTagReference, error) {
-	return func(root, cache *api.ImageStreamTagReference) (*api.ImageStreamTagReference, error) {
-		logrus.Debugf("Determining if build cache %s can be used in place of root %s", cache.ISTagName(), root.ISTagName())
-		if promote {
-			logrus.Debugf("Promotions cannot use the build cache, so using default image %s as root image.", root.ISTagName())
-			return root, nil
-		}
-		cacheTag := &imagev1.ImageStreamTag{}
-		if err := client.Get(ctx, ctrlruntimeclient.ObjectKey{Namespace: cache.Namespace, Name: fmt.Sprintf("%s:%s", cache.Name, cache.Tag)}, cacheTag); err != nil {
-			if kapierrors.IsNotFound(err) {
-				logrus.Debugf("Build cache %s not found, falling back to %s", cache.ISTagName(), root.ISTagName())
-				// no build cache, use the normal root
-				return root, nil
-			}
-			return nil, fmt.Errorf("could not resolve build cache image stream tag %s: %w", cache.ISTagName(), err)
-		}
-
-		// If the image contains a manifest list, the docker metadata are empty. Instead
-		// we need to grab the metadata from one of the images in manifest list.
-		if len(cacheTag.Image.DockerImageManifests) > 0 {
-			imageDigest := cacheTag.Image.DockerImageManifests[0].Digest
-
-			img := &imagev1.Image{}
-			if err := client.Get(ctx, ctrlruntimeclient.ObjectKey{Name: imageDigest}, img); err != nil {
-				return nil, fmt.Errorf("could not fetch image %s: %w", imageDigest, err)
-			}
-
-			cacheTag.Image = *img
-		}
-
-		logrus.Debugf("Resolved build cache %s to %s", cache.ISTagName(), cacheTag.Image.Name)
-		metadata := &docker10.DockerImage{}
-		if len(cacheTag.Image.DockerImageMetadata.Raw) == 0 {
-			return nil, fmt.Errorf("could not fetch Docker image metadata build cache %s", cache.ISTagName())
-		}
-		if err := json.Unmarshal(cacheTag.Image.DockerImageMetadata.Raw, metadata); err != nil {
-			return nil, fmt.Errorf("malformed Docker image metadata on build cache %s: %w", cache.ISTagName(), err)
-		}
-		prior := metadata.Config.Labels[api.ImageVersionLabel(api.PipelineImageStreamTagReferenceRoot)]
-		logrus.Debugf("Build cache %s is based on root image at %s", cache.ISTagName(), prior)
-
-		rootTag := &imagev1.ImageStreamTag{}
-		if err := client.Get(ctx, ctrlruntimeclient.ObjectKey{Namespace: root.Namespace, Name: fmt.Sprintf("%s:%s", root.Name, root.Tag)}, rootTag); err != nil {
-			return nil, fmt.Errorf("could not resolve build root image stream tag %s: %w", root.ISTagName(), err)
-		}
-		logrus.Debugf("Resolved root image %s to %s", root.ISTagName(), rootTag.Image.Name)
-		current := rootTag.Image.Name
-		if prior == current {
-			logrus.Debugf("Using build cache %s as root image.", cache.ISTagName())
-			return cache, nil
-		}
-		logrus.Debugf("Using default image %s as root image.", root.ISTagName())
-		return root, nil
-	}
-}
-
 type readFile func(string) ([]byte, error)
-type resolveRoot func(root, cache *api.ImageStreamTagReference) (*api.ImageStreamTagReference, error)
 
 // FromConfigStatic pre-parses the configuration into step graph configuration.
 // This graph configuration can then be used to perform validation and build the
@@ -826,7 +761,6 @@ func runtimeStepConfigsForBuild(
 	config *api.ReleaseBuildConfiguration,
 	jobSpec *api.JobSpec,
 	readFile readFile,
-	resolveRoot resolveRoot,
 	imageConfigs []*api.InputImageTagStepConfiguration,
 	injectedTest bool,
 ) ([]api.StepConfiguration, error) {
@@ -843,61 +777,34 @@ func runtimeStepConfigsForBuild(
 	}
 	var buildSteps []api.StepConfiguration
 	for ref, root := range buildRoots {
+		if !root.FromRepository {
+			continue
+		}
 		rootTag := string(api.PipelineImageStreamTagReferenceRoot)
 		if ref != "" {
 			rootTag = fmt.Sprintf("%s-%s", rootTag, ref)
 		}
 		var target *api.InputImageTagStepConfiguration
-		if root.FromRepository || root.UseBuildCache {
-			for i, s := range imageConfigs {
-				if s.InputImage.To == api.PipelineImageStreamTagReference(rootTag) {
-					target = imageConfigs[i]
-					break
-				}
+		for _, s := range imageConfigs {
+			if s.InputImage.To == api.PipelineImageStreamTagReference(rootTag) {
+				target = s
+				break
 			}
 		}
 		if target != nil {
-			istTagRef := &target.InputImage.BaseImage
-			if root.FromRepository {
-				path := "."        // By default, the path will be the working directory
-				if len(refs) > 1 { // If we are getting the build root image for a specific ref we must determine the absolute path
-					matchingRefs := matchingRefsForImage(ref, jobSpec)
-					if len(matchingRefs) == 0 {
-						if primaryRef := determinePrimaryRef(jobSpec, injectedTest); primaryRef != nil {
-							matchingRefs = append(matchingRefs, *primaryRef)
-						}
+			path := "."        // By default, the path will be the working directory
+			if len(refs) > 1 { // If we are getting the build root image for a specific ref we must determine the absolute path
+				matchingRefs := matchingRefsForImage(ref, jobSpec)
+				if len(matchingRefs) == 0 {
+					if primaryRef := determinePrimaryRef(jobSpec, injectedTest); primaryRef != nil {
+						matchingRefs = append(matchingRefs, *primaryRef)
 					}
-					path = decorate.DetermineWorkDir(codeMountPath, matchingRefs)
 				}
-				var err error
-				istTagRef, err = buildRootImageStreamFromRepository(path, readFile)
-				if err != nil {
-					return nil, fmt.Errorf("failed to read buildRootImageStream from repository: %w", err)
-				}
+				path = decorate.DetermineWorkDir(codeMountPath, matchingRefs)
 			}
-			if root.UseBuildCache {
-				metadata := config.Metadata
-				if ref != "" {
-					orgRepo := strings.Split(ref, ".")
-					org, repo, branch := orgRepo[0], orgRepo[1], ""
-					for _, jobSpecRef := range jobSpec.ExtraRefs {
-						if jobSpecRef.Org == org && jobSpecRef.Repo == repo {
-							branch = jobSpecRef.BaseRef
-							break
-						}
-					}
-					metadata = api.Metadata{
-						Org:    org,
-						Repo:   repo,
-						Branch: branch,
-					}
-				}
-				cache := api.BuildCacheFor(metadata)
-				root, err := resolveRoot(istTagRef, &cache)
-				if err != nil {
-					return nil, fmt.Errorf("could not resolve build root: %w", err)
-				}
-				istTagRef = root
+			istTagRef, err := buildRootImageStreamFromRepository(path, readFile)
+			if err != nil {
+				return nil, fmt.Errorf("failed to read buildRootImageStream from repository: %w", err)
 			}
 			target.InputImage.BaseImage = *istTagRef
 		}

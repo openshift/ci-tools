@@ -45,13 +45,9 @@ func (s *projectDirectoryImageBuildStep) Run(ctx context.Context) error {
 }
 
 func (s *projectDirectoryImageBuildStep) run(ctx context.Context) error {
-	sourceTag, images, err := imagesFor(s.config, func(tag string) (string, error) {
+	_, images, err := imagesFor(s.config, func(tag string) (string, error) {
 		return getWorkingDir(s.client, tag, s.jobSpec.Namespace())
 	}, s.releaseBuildConfig.IsBundleImage)
-	if err != nil {
-		return err
-	}
-	fromDigest, err := resolvePipelineImageStreamTagReference(ctx, s.client, sourceTag, s.jobSpec)
 	if err != nil {
 		return err
 	}
@@ -62,7 +58,6 @@ func (s *projectDirectoryImageBuildStep) run(ctx context.Context) error {
 			Dockerfile: s.config.DockerfileLiteral,
 			Images:     images,
 		},
-		fromDigest,
 		s.config.DockerfilePath,
 		s.resources,
 		s.pullSecret,

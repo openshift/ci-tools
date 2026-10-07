@@ -94,7 +94,6 @@ func TestWithPresubmitFrom(t *testing.T) {
 			base: &ReleaseBuildConfiguration{InputConfiguration: InputConfiguration{BuildRootImage: &BuildRootImageConfiguration{FromRepository: true}}},
 			source: &ReleaseBuildConfiguration{InputConfiguration: InputConfiguration{BuildRootImage: &BuildRootImageConfiguration{
 				ImageStreamTagReference: &ImageStreamTagReference{Namespace: "source", Name: "source-is", Tag: "source-tag"},
-				UseBuildCache:           true,
 			}}},
 			expected:     &ReleaseBuildConfiguration{InputConfiguration: InputConfiguration{BuildRootImage: &BuildRootImageConfiguration{FromRepository: true}}},
 			defaultTests: true,

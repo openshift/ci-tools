@@ -49,10 +49,6 @@ func (s *bundleSourceStep) run(ctx context.Context) error {
 		return err
 	}
 	fromTag := api.PipelineImageStreamTagReferenceSource
-	fromDigest, err := resolvePipelineImageStreamTagReference(ctx, s.client, fromTag, s.jobSpec)
-	if err != nil {
-		return err
-	}
 	build := buildFromSource(
 		s.jobSpec, fromTag, api.PipelineImageStreamTagReferenceBundleSource,
 		buildapi.BuildSource{
@@ -71,7 +67,6 @@ func (s *bundleSourceStep) run(ctx context.Context) error {
 				},
 			},
 		},
-		fromDigest,
 		"",
 		s.resources,
 		s.pullSecret,

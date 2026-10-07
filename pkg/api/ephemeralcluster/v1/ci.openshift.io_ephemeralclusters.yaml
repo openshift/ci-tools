@@ -70,9 +70,8 @@ spec:
                       type: object
                     type: object
                   buildRoot:
-                    description: |-
-                      BuildRootImageConfiguration holds the two ways of using a base image
-                      that the pipeline will caches on.
+                    description: BuildRootImageConfiguration defines the base image
+                      used to build source and artifacts.
                     properties:
                       from_repository:
                         description: If the BuildRoot images pullspec should be read
@@ -179,12 +178,6 @@ spec:
                               extra_ref in "org.repo" format that this belongs to
                             type: string
                         type: object
-                      use_build_cache:
-                        description: |-
-                          UseBuildCache enables the import and use of the prior `bin` image
-                          as a build cache, if the underlying build root has not changed since
-                          the previous cache was published.
-                        type: boolean
                     type: object
                   externalImages:
                     additionalProperties:

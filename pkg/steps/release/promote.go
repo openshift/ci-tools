@@ -830,10 +830,6 @@ func PromotedTagsWithRequiredImages(configuration *api.ReleaseBuildConfiguration
 			}
 		}
 	}
-	// promote the binary build if one exists and this isn't disabled
-	if configuration.BinaryBuildCommands != "" && !configuration.PromotionConfiguration.DisableBuildCache {
-		promotedTags[string(api.PipelineImageStreamTagReferenceBinaries)] = append(promotedTags[string(api.PipelineImageStreamTagReferenceBinaries)], api.BuildCacheFor(configuration.Metadata))
-	}
 	for _, tags := range promotedTags {
 		sort.Slice(tags, func(i, j int) bool {
 			return tags[i].ISTagName() < tags[j].ISTagName()

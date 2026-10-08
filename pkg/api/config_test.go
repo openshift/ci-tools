@@ -12,6 +12,13 @@ import (
 	"github.com/openshift/ci-tools/pkg/testhelper"
 )
 
+// identityResolve is a resolve function for tests whose selected test has no
+// workflow/chain/ref to expand (it is already literal, or has no multi-stage
+// configuration at all), so resolving it is a no-op.
+func identityResolve(config ReleaseBuildConfiguration) (ReleaseBuildConfiguration, error) {
+	return config, nil
+}
+
 func TestWithPresubmitFrom(t *testing.T) {
 	baseReleaseTagConfiguration := ReleaseTagConfiguration{Namespace: "base-namespace", Name: "base-is"}
 	sourceReleaseTagConfiguration := ReleaseTagConfiguration{Namespace: "source-namespace", Name: "source-is"}
@@ -35,6 +42,8 @@ func TestWithPresubmitFrom(t *testing.T) {
 		base   *ReleaseBuildConfiguration
 		source *ReleaseBuildConfiguration
 		test   string
+		// resolve defaults to identityResolve when nil
+		resolve func(ReleaseBuildConfiguration) (ReleaseBuildConfiguration, error)
 
 		// this is a shortcut to avoid repeating standard source/expected output
 		// tests for testcases that check struct members unrelated to tests
@@ -42,6 +51,9 @@ func TestWithPresubmitFrom(t *testing.T) {
 
 		expected      *ReleaseBuildConfiguration
 		expectedError error
+		// check, if set, runs additional assertions against the actual result and
+		// the (unmodified) source configuration passed in
+		check func(t *testing.T, actual *ReleaseBuildConfiguration, source *ReleaseBuildConfiguration)
 	}{
 		{
 			name:     "selected test from source is present in result",
@@ -208,6 +220,276 @@ func TestWithPresubmitFrom(t *testing.T) {
 			expected:     &ReleaseBuildConfiguration{Prowgen: &ProwgenOverrides{EnableSecretsStoreCSIDriver: true}},
 			defaultTests: true,
 		},
+		// The following cases are regression tests for /payload-job-with-prs runs that use
+		// --with-test-from to borrow a test which itself depends on a `pipeline:<image>`
+		// built by the source config (as opposed to one already present in the base config,
+		// or a base/release image). Before the underlying fix, WithPresubmitFrom copied over
+		// BaseImages and Releases from the source config but silently dropped its Images,
+		// failing ci-operator's "loading_args:validating_config" step with:
+		//
+		//	tests[0].literal_steps.test[0].dependencies[0]: cannot determine source for
+		//	dependency "pipeline:vcf-migration-operator" - no base image import, project
+		//	image build, or bundle image build is configured to provide this dependency
+		{
+			name: "project image dependency (and its build root) is carried over from source, namespaced by its repo",
+			base: &ReleaseBuildConfiguration{Metadata: Metadata{Org: "openshift", Repo: "cluster-cloud-controller-manager-operator", Branch: "master"}},
+			source: &ReleaseBuildConfiguration{
+				Metadata: Metadata{Org: "openshift", Repo: "vcf-migration-operator", Branch: "main", Variant: "4.21"},
+				InputConfiguration: InputConfiguration{
+					BuildRootImage: &BuildRootImageConfiguration{FromRepository: true},
+				},
+				Images: ImageConfiguration{Items: []ProjectDirectoryImageBuildStepConfiguration{
+					{To: "vcf-migration-operator", ProjectDirectoryImageBuildInputs: ProjectDirectoryImageBuildInputs{DockerfilePath: "Dockerfile"}},
+				}},
+				Tests: []TestStepConfiguration{{
+					As: "e2e",
+					MultiStageTestConfigurationLiteral: &MultiStageTestConfigurationLiteral{
+						Test: []LiteralTestStep{{
+							As: "run-e2e", From: "src", Commands: "true",
+							Dependencies: []StepDependency{{Env: "VCF_MIGRATION_OPERATOR_IMAGE", Name: "pipeline:vcf-migration-operator"}},
+						}},
+					},
+				}},
+			},
+			test: "e2e",
+			expected: &ReleaseBuildConfiguration{
+				Metadata: Metadata{Org: "openshift", Repo: "cluster-cloud-controller-manager-operator", Branch: "master"},
+				InputConfiguration: InputConfiguration{
+					BuildRootImages: map[string]BuildRootImageConfiguration{"openshift.vcf-migration-operator": {FromRepository: true}},
+				},
+				Images: ImageConfiguration{Items: []ProjectDirectoryImageBuildStepConfiguration{
+					{
+						To: "vcf-migration-operator-openshift.vcf-migration-operator", Ref: "openshift.vcf-migration-operator",
+						ProjectDirectoryImageBuildInputs: ProjectDirectoryImageBuildInputs{DockerfilePath: "Dockerfile"},
+					},
+				}},
+				Tests: []TestStepConfiguration{{
+					As: "e2e",
+					MultiStageTestConfigurationLiteral: &MultiStageTestConfigurationLiteral{
+						Test: []LiteralTestStep{{
+							As: "run-e2e", From: "src", Commands: "true",
+							Dependencies: []StepDependency{{Env: "VCF_MIGRATION_OPERATOR_IMAGE", Name: "pipeline:vcf-migration-operator-openshift.vcf-migration-operator"}},
+						}},
+					},
+				}},
+			},
+		},
+		{
+			name: "a dependency reached only via inputs, not from, is carried over, and its inputs key renamed",
+			base: &ReleaseBuildConfiguration{Metadata: Metadata{Org: "org", Repo: "component", Branch: "main"}},
+			source: &ReleaseBuildConfiguration{
+				Metadata: Metadata{Org: "org", Repo: "source", Branch: "main"},
+				Images: ImageConfiguration{Items: []ProjectDirectoryImageBuildStepConfiguration{
+					{To: "helper", ProjectDirectoryImageBuildInputs: ProjectDirectoryImageBuildInputs{DockerfilePath: "helper.Dockerfile"}},
+					{To: "app", ProjectDirectoryImageBuildInputs: ProjectDirectoryImageBuildInputs{
+						DockerfilePath: "app.Dockerfile",
+						Inputs:         map[string]ImageBuildInputs{"helper": {Paths: []ImageSourcePath{{SourcePath: "/output/tool", DestinationDir: "."}}}},
+					}},
+				}},
+				Tests: []TestStepConfiguration{{
+					As: "e2e",
+					MultiStageTestConfigurationLiteral: &MultiStageTestConfigurationLiteral{
+						Test: []LiteralTestStep{{As: "run", Dependencies: []StepDependency{{Env: "APP", Name: "pipeline:app"}}}},
+					},
+				}},
+			},
+			test: "e2e",
+			expected: &ReleaseBuildConfiguration{
+				Metadata: Metadata{Org: "org", Repo: "component", Branch: "main"},
+				Images: ImageConfiguration{Items: []ProjectDirectoryImageBuildStepConfiguration{
+					{To: "helper-org.source", Ref: "org.source", ProjectDirectoryImageBuildInputs: ProjectDirectoryImageBuildInputs{DockerfilePath: "helper.Dockerfile"}},
+					{To: "app-org.source", Ref: "org.source", ProjectDirectoryImageBuildInputs: ProjectDirectoryImageBuildInputs{
+						DockerfilePath: "app.Dockerfile",
+						Inputs:         map[string]ImageBuildInputs{"helper-org.source": {Paths: []ImageSourcePath{{SourcePath: "/output/tool", DestinationDir: "."}}}},
+					}},
+				}},
+				Tests: []TestStepConfiguration{{
+					As: "e2e",
+					MultiStageTestConfigurationLiteral: &MultiStageTestConfigurationLiteral{
+						Test: []LiteralTestStep{{As: "run", Dependencies: []StepDependency{{Env: "APP", Name: "pipeline:app-org.source"}}}},
+					},
+				}},
+			},
+		},
+		{
+			name: "from is left empty when source's image had none (its Dockerfile sets its own base image)",
+			base: &ReleaseBuildConfiguration{Metadata: Metadata{Org: "org", Repo: "component", Branch: "main"}},
+			source: &ReleaseBuildConfiguration{
+				Metadata: Metadata{Org: "org", Repo: "source", Branch: "main"},
+				Images: ImageConfiguration{Items: []ProjectDirectoryImageBuildStepConfiguration{
+					{To: "app", ProjectDirectoryImageBuildInputs: ProjectDirectoryImageBuildInputs{DockerfilePath: "Dockerfile"}},
+				}},
+				Tests: []TestStepConfiguration{{
+					As: "e2e",
+					MultiStageTestConfigurationLiteral: &MultiStageTestConfigurationLiteral{
+						Test: []LiteralTestStep{{As: "run", Dependencies: []StepDependency{{Env: "APP", Name: "pipeline:app"}}}},
+					},
+				}},
+			},
+			test: "e2e",
+			expected: &ReleaseBuildConfiguration{
+				Metadata: Metadata{Org: "org", Repo: "component", Branch: "main"},
+				Images: ImageConfiguration{Items: []ProjectDirectoryImageBuildStepConfiguration{
+					{To: "app-org.source", Ref: "org.source", ProjectDirectoryImageBuildInputs: ProjectDirectoryImageBuildInputs{DockerfilePath: "Dockerfile"}},
+				}},
+				Tests: []TestStepConfiguration{{
+					As: "e2e",
+					MultiStageTestConfigurationLiteral: &MultiStageTestConfigurationLiteral{
+						Test: []LiteralTestStep{{As: "run", Dependencies: []StepDependency{{Env: "APP", Name: "pipeline:app-org.source"}}}},
+					},
+				}},
+			},
+		},
+		{
+			name: "a from: bin parent is namespaced and source's binary build commands are carried over under the same ref",
+			base: &ReleaseBuildConfiguration{Metadata: Metadata{Org: "org", Repo: "component", Branch: "main"}},
+			source: &ReleaseBuildConfiguration{
+				Metadata:            Metadata{Org: "org", Repo: "source", Branch: "main"},
+				BinaryBuildCommands: "make build",
+				Images: ImageConfiguration{Items: []ProjectDirectoryImageBuildStepConfiguration{
+					{To: "app", From: "bin", ProjectDirectoryImageBuildInputs: ProjectDirectoryImageBuildInputs{DockerfilePath: "Dockerfile"}},
+				}},
+				Tests: []TestStepConfiguration{{
+					As: "e2e",
+					MultiStageTestConfigurationLiteral: &MultiStageTestConfigurationLiteral{
+						Test: []LiteralTestStep{{As: "run", Dependencies: []StepDependency{{Env: "APP", Name: "pipeline:app"}}}},
+					},
+				}},
+			},
+			test: "e2e",
+			expected: &ReleaseBuildConfiguration{
+				Metadata:                Metadata{Org: "org", Repo: "component", Branch: "main"},
+				BinaryBuildCommandsList: []RefCommands{{Ref: "org.source", Commands: "make build"}},
+				Images: ImageConfiguration{Items: []ProjectDirectoryImageBuildStepConfiguration{
+					{To: "app-org.source", From: "bin-org.source", Ref: "org.source", ProjectDirectoryImageBuildInputs: ProjectDirectoryImageBuildInputs{DockerfilePath: "Dockerfile"}},
+				}},
+				Tests: []TestStepConfiguration{{
+					As: "e2e",
+					MultiStageTestConfigurationLiteral: &MultiStageTestConfigurationLiteral{
+						Test: []LiteralTestStep{{As: "run", Dependencies: []StepDependency{{Env: "APP", Name: "pipeline:app-org.source"}}}},
+					},
+				}},
+			},
+		},
+		{
+			name: "a from referring to an imported base image alias is left unchanged: the alias is already carried over as-is",
+			base: &ReleaseBuildConfiguration{Metadata: Metadata{Org: "org", Repo: "component", Branch: "main"}},
+			source: &ReleaseBuildConfiguration{
+				Metadata:           Metadata{Org: "org", Repo: "source", Branch: "main"},
+				InputConfiguration: InputConfiguration{BaseImages: map[string]ImageStreamTagReference{"base": {Namespace: "ns", Name: "base", Tag: "latest"}}},
+				Images: ImageConfiguration{Items: []ProjectDirectoryImageBuildStepConfiguration{
+					{To: "app", From: "base", ProjectDirectoryImageBuildInputs: ProjectDirectoryImageBuildInputs{DockerfilePath: "Dockerfile"}},
+				}},
+				Tests: []TestStepConfiguration{{
+					As: "e2e",
+					MultiStageTestConfigurationLiteral: &MultiStageTestConfigurationLiteral{
+						Test: []LiteralTestStep{{As: "run", Dependencies: []StepDependency{{Env: "APP", Name: "pipeline:app"}}}},
+					},
+				}},
+			},
+			test: "e2e",
+			expected: &ReleaseBuildConfiguration{
+				Metadata:           Metadata{Org: "org", Repo: "component", Branch: "main"},
+				InputConfiguration: InputConfiguration{BaseImages: map[string]ImageStreamTagReference{"base": {Namespace: "ns", Name: "base", Tag: "latest"}}},
+				Images: ImageConfiguration{Items: []ProjectDirectoryImageBuildStepConfiguration{
+					{To: "app-org.source", From: "base", Ref: "org.source", ProjectDirectoryImageBuildInputs: ProjectDirectoryImageBuildInputs{DockerfilePath: "Dockerfile"}},
+				}},
+				Tests: []TestStepConfiguration{{
+					As: "e2e",
+					MultiStageTestConfigurationLiteral: &MultiStageTestConfigurationLiteral{
+						Test: []LiteralTestStep{{As: "run", Dependencies: []StepDependency{{Env: "APP", Name: "pipeline:app-org.source"}}}},
+					},
+				}},
+			},
+		},
+		{
+			name: "source's build root is deep-copied, not aliased, when carried over",
+			base: &ReleaseBuildConfiguration{Metadata: Metadata{Org: "org", Repo: "component", Branch: "main"}},
+			source: &ReleaseBuildConfiguration{
+				Metadata: Metadata{Org: "org", Repo: "source", Branch: "main"},
+				InputConfiguration: InputConfiguration{
+					BuildRootImage: &BuildRootImageConfiguration{ProjectImageBuild: &ProjectDirectoryImageBuildInputs{DockerfilePath: "root.Dockerfile"}},
+				},
+				Images: ImageConfiguration{Items: []ProjectDirectoryImageBuildStepConfiguration{
+					{To: "app", ProjectDirectoryImageBuildInputs: ProjectDirectoryImageBuildInputs{DockerfilePath: "Dockerfile"}},
+				}},
+				Tests: []TestStepConfiguration{{
+					As: "e2e",
+					MultiStageTestConfigurationLiteral: &MultiStageTestConfigurationLiteral{
+						Test: []LiteralTestStep{{As: "run", Dependencies: []StepDependency{{Env: "APP", Name: "pipeline:app"}}}},
+					},
+				}},
+			},
+			test: "e2e",
+			expected: &ReleaseBuildConfiguration{
+				Metadata: Metadata{Org: "org", Repo: "component", Branch: "main"},
+				InputConfiguration: InputConfiguration{
+					BuildRootImages: map[string]BuildRootImageConfiguration{
+						"org.source": {ProjectImageBuild: &ProjectDirectoryImageBuildInputs{DockerfilePath: "root.Dockerfile"}},
+					},
+				},
+				Images: ImageConfiguration{Items: []ProjectDirectoryImageBuildStepConfiguration{
+					{To: "app-org.source", Ref: "org.source", ProjectDirectoryImageBuildInputs: ProjectDirectoryImageBuildInputs{DockerfilePath: "Dockerfile"}},
+				}},
+				Tests: []TestStepConfiguration{{
+					As: "e2e",
+					MultiStageTestConfigurationLiteral: &MultiStageTestConfigurationLiteral{
+						Test: []LiteralTestStep{{As: "run", Dependencies: []StepDependency{{Env: "APP", Name: "pipeline:app-org.source"}}}},
+					},
+				}},
+			},
+			check: func(t *testing.T, actual *ReleaseBuildConfiguration, source *ReleaseBuildConfiguration) {
+				actual.BuildRootImages["org.source"].ProjectImageBuild.Ref = "mutated"
+				if source.BuildRootImage.ProjectImageBuild.Ref == "mutated" {
+					t.Errorf("mutating the carried-over build root also mutated source's: the build root was not deep-copied")
+				}
+			},
+		},
+		{
+			name: "a dependency hidden inside the test's not-yet-resolved workflow is discovered and carried over",
+			base: &ReleaseBuildConfiguration{Metadata: Metadata{Org: "org", Repo: "component", Branch: "main"}},
+			source: &ReleaseBuildConfiguration{
+				Metadata: Metadata{Org: "org", Repo: "source", Branch: "main"},
+				Images: ImageConfiguration{Items: []ProjectDirectoryImageBuildStepConfiguration{
+					{To: "app", ProjectDirectoryImageBuildInputs: ProjectDirectoryImageBuildInputs{DockerfilePath: "Dockerfile"}},
+				}},
+				Tests: []TestStepConfiguration{{
+					As:                          "e2e",
+					MultiStageTestConfiguration: &MultiStageTestConfiguration{Workflow: pointer.StringPtr("example-e2e")},
+				}},
+			},
+			test: "e2e",
+			// Simulates what the real step registry resolver does: expands the test's
+			// workflow (and any chains/references within it) into literal steps, surfacing
+			// a dependency that was invisible while the test only referenced the workflow
+			// by name.
+			resolve: func(config ReleaseBuildConfiguration) (ReleaseBuildConfiguration, error) {
+				var tests []TestStepConfiguration
+				for _, t := range config.Tests {
+					if wf := t.MultiStageTestConfiguration; wf != nil && wf.Workflow != nil && *wf.Workflow == "example-e2e" {
+						t.MultiStageTestConfiguration = nil
+						t.MultiStageTestConfigurationLiteral = &MultiStageTestConfigurationLiteral{
+							Test: []LiteralTestStep{{As: "run-e2e", Dependencies: []StepDependency{{Env: "APP_IMAGE", Name: "pipeline:app"}}}},
+						}
+					}
+					tests = append(tests, t)
+				}
+				config.Tests = tests
+				return config, nil
+			},
+			expected: &ReleaseBuildConfiguration{
+				Metadata: Metadata{Org: "org", Repo: "component", Branch: "main"},
+				Images: ImageConfiguration{Items: []ProjectDirectoryImageBuildStepConfiguration{
+					{To: "app-org.source", Ref: "org.source", ProjectDirectoryImageBuildInputs: ProjectDirectoryImageBuildInputs{DockerfilePath: "Dockerfile"}},
+				}},
+				Tests: []TestStepConfiguration{{
+					As: "e2e",
+					MultiStageTestConfigurationLiteral: &MultiStageTestConfigurationLiteral{
+						Test: []LiteralTestStep{{As: "run-e2e", Dependencies: []StepDependency{{Env: "APP_IMAGE", Name: "pipeline:app-org.source"}}}},
+					},
+				}},
+			},
+		},
 	}
 	for _, tc := range testCases {
 		t.Run(tc.name, func(t *testing.T) {
@@ -218,8 +500,13 @@ func TestWithPresubmitFrom(t *testing.T) {
 				tc.source.Tests = []TestStepConfiguration{sourceTest}
 				tc.expected.Tests = []TestStepConfiguration{sourceTest}
 			}
+			resolve := tc.resolve
+			if resolve == nil {
+				resolve = identityResolve
+			}
+			sourceBeforeInjection := tc.source.DeepCopy()
 
-			actual, err := tc.base.WithPresubmitFrom(tc.source, tc.test)
+			actual, err := tc.base.WithPresubmitFrom(tc.source, tc.test, resolve)
 
 			if errDiff := cmp.Diff(tc.expectedError, err, testhelper.EquateErrorMessage); errDiff != "" {
 				t.Errorf("Error differs from expected:\n%s", errDiff)
@@ -227,6 +514,14 @@ func TestWithPresubmitFrom(t *testing.T) {
 
 			if diff := cmp.Diff(tc.expected, actual, cmpopts.IgnoreUnexported(ProjectDirectoryImageBuildStepConfiguration{})); tc.expectedError == nil && diff != "" {
 				t.Errorf("Result differs from expected:\n%s", diff)
+			}
+
+			if diff := cmp.Diff(sourceBeforeInjection, tc.source, cmpopts.IgnoreUnexported(ProjectDirectoryImageBuildStepConfiguration{})); diff != "" {
+				t.Errorf("source configuration was mutated:\n%s", diff)
+			}
+
+			if tc.check != nil {
+				tc.check(t, actual, tc.source)
 			}
 		})
 	}

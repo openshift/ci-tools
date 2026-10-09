@@ -709,6 +709,103 @@ func TestAddCSICredentials(t *testing.T) {
 	}
 }
 
+func TestDependencyVolumeName(t *testing.T) {
+	testCases := []struct {
+		name     string
+		input    string
+		expected string
+	}{
+		{name: "simple tag", input: "installer", expected: "dep-installer"},
+		{name: "stream:tag", input: "stable:installer", expected: "dep-stable-installer"},
+		{name: "dots replaced", input: "release.latest", expected: "dep-release-latest"},
+		{name: "colons and dots", input: "ci.openshift:tests", expected: "dep-ci-openshift-tests"},
+	}
+	for _, tc := range testCases {
+		t.Run(tc.name, func(t *testing.T) {
+			if actual := dependencyVolumeName(tc.input); actual != tc.expected {
+				t.Errorf("expected %q, got %q", tc.expected, actual)
+			}
+		})
+	}
+}
+
+func TestDependencyImageVolumes(t *testing.T) {
+	testCases := []struct {
+		name            string
+		dependencies    []api.StepDependency
+		expectedVolumes []coreapi.Volume
+		expectedMounts  []coreapi.VolumeMount
+	}{
+		{
+			name: "no mount_path produces no volumes",
+			dependencies: []api.StepDependency{
+				{Name: "src", Env: "SOURCE", PullSpec: "registry.example.com/src@sha256:abc123"},
+			},
+		},
+		{
+			name: "mount_path produces image volume",
+			dependencies: []api.StepDependency{
+				{Name: "installer", Env: "INSTALLER_IMAGE", PullSpec: "registry.example.com/installer@sha256:abc123", MountPath: "/var/run/images/installer"},
+			},
+			expectedVolumes: []coreapi.Volume{{
+				Name: "dep-installer",
+				VolumeSource: coreapi.VolumeSource{
+					Image: &coreapi.ImageVolumeSource{
+						Reference:  "registry.example.com/installer@sha256:abc123",
+						PullPolicy: coreapi.PullIfNotPresent,
+					},
+				},
+			}},
+			expectedMounts: []coreapi.VolumeMount{{
+				Name:      "dep-installer",
+				MountPath: "/var/run/images/installer",
+				ReadOnly:  true,
+			}},
+		},
+		{
+			name: "mixed dependencies with and without mount_path",
+			dependencies: []api.StepDependency{
+				{Name: "src", Env: "SOURCE", PullSpec: "registry.example.com/src@sha256:abc123"},
+				{Name: "stable:installer", Env: "INSTALLER", PullSpec: "registry.example.com/installer@sha256:def456", MountPath: "/opt/installer"},
+			},
+			expectedVolumes: []coreapi.Volume{{
+				Name: "dep-stable-installer",
+				VolumeSource: coreapi.VolumeSource{
+					Image: &coreapi.ImageVolumeSource{
+						Reference:  "registry.example.com/installer@sha256:def456",
+						PullPolicy: coreapi.PullIfNotPresent,
+					},
+				},
+			}},
+			expectedMounts: []coreapi.VolumeMount{{
+				Name:      "dep-stable-installer",
+				MountPath: "/opt/installer",
+				ReadOnly:  true,
+			}},
+		},
+	}
+
+	for _, tc := range testCases {
+		t.Run(tc.name, func(t *testing.T) {
+			step := api.LiteralTestStep{
+				As:           "test",
+				Dependencies: tc.dependencies,
+			}
+			s := &multiStageTestStep{}
+			_, volumes, mounts, errs := s.envForDependencies(step)
+			if len(errs) != 0 {
+				t.Fatalf("unexpected errors: %v", errs)
+			}
+			if !equality.Semantic.DeepEqual(volumes, tc.expectedVolumes) {
+				t.Errorf("unexpected volumes: %s", cmp.Diff(tc.expectedVolumes, volumes))
+			}
+			if !equality.Semantic.DeepEqual(mounts, tc.expectedMounts) {
+				t.Errorf("unexpected volume mounts: %s", cmp.Diff(tc.expectedMounts, mounts))
+			}
+		})
+	}
+}
+
 func TestGetClusterClaimPodParams(t *testing.T) {
 	var testCases = []struct {
 		name               string

@@ -42,6 +42,8 @@ func (s *imagesReadyStep) Objects() []ctrlruntimeclient.Object {
 
 func (s *imagesReadyStep) Description() string { return "All images are built and tagged into stable" }
 
+// ImagesReadyStep returns a step that completes once every step it requires,
+// one per image build, has completed. It does no work of its own.
 func ImagesReadyStep(links []api.StepLink) api.Step {
 	return &imagesReadyStep{
 		links: links,

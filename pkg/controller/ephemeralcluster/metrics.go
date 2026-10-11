@@ -58,7 +58,7 @@ func newProvisioningDurationHistogramVec() *prometheus.HistogramVec {
 		Name:      "provisioning_duration_seconds",
 		Help:      "Measure how long the provisioning procedure takes",
 		Buckets:   provisioningDurationBuckets,
-	}, []string{"workflow"})
+	}, []string{"konflux_cluster", "konflux_tenant", "cluster_profile", "workflow", "phase"})
 }
 
 var (
@@ -71,7 +71,7 @@ func newDeprovisioningDurationHistogramVec() *prometheus.HistogramVec {
 		Name:      "deprovisioning_duration_seconds",
 		Help:      "Measure how long the deprovisioning procedure takes",
 		Buckets:   deprovisioningDurationBuckets,
-	}, []string{"workflow"})
+	}, []string{"konflux_cluster", "konflux_tenant", "cluster_profile", "workflow", "phase"})
 }
 
 type metricsGatherer struct {
@@ -148,7 +148,7 @@ func (mg *metricsGatherer) collectCount(ecList *ephemeralclusterv1.EphemeralClus
 	for i := range ecList.Items {
 		ec := &ecList.Items[i]
 
-		k := struct {
+		labels := struct {
 			konfluxCluster string
 			konfluxTenant  string
 			clusterProfile string
@@ -162,7 +162,7 @@ func (mg *metricsGatherer) collectCount(ecList *ephemeralclusterv1.EphemeralClus
 			phase:          string(ec.Status.Phase),
 		}
 
-		count[k]++
+		count[labels]++
 	}
 
 	mg.countGauge.Reset()
@@ -174,15 +174,45 @@ func (mg *metricsGatherer) collectCount(ecList *ephemeralclusterv1.EphemeralClus
 }
 
 func (mg *metricsGatherer) collectProvisioningDuration(ec *ephemeralclusterv1.EphemeralCluster, duration float64) {
-	mg.provisioningDurationHistogramVec.WithLabelValues(workflowLabel(ec)).Observe(duration)
+	labels := struct {
+		konfluxCluster string
+		konfluxTenant  string
+		clusterProfile string
+		workflow       string
+		phase          string
+	}{
+		konfluxCluster: ec.KonfluxCluster(),
+		konfluxTenant:  ec.KonfluxTenant(),
+		clusterProfile: ec.Spec.CIOperator.Test.ClusterProfile,
+		workflow:       workflowLabel(ec),
+		phase:          string(ec.Status.Phase),
+	}
+	mg.provisioningDurationHistogramVec.
+		WithLabelValues(labels.konfluxCluster, labels.konfluxTenant, labels.clusterProfile, labels.workflow, labels.phase).
+		Observe(duration)
 }
 
 func (mg *metricsGatherer) collectDeprovisioningDuration(ec *ephemeralclusterv1.EphemeralCluster, duration float64) {
-	mg.deprovisioningDurationHistogramVec.WithLabelValues(workflowLabel(ec)).Observe(duration)
+	labels := struct {
+		konfluxCluster string
+		konfluxTenant  string
+		clusterProfile string
+		workflow       string
+		phase          string
+	}{
+		konfluxCluster: ec.KonfluxCluster(),
+		konfluxTenant:  ec.KonfluxTenant(),
+		clusterProfile: ec.Spec.CIOperator.Test.ClusterProfile,
+		workflow:       workflowLabel(ec),
+		phase:          string(ec.Status.Phase),
+	}
+	mg.deprovisioningDurationHistogramVec.
+		WithLabelValues(labels.konfluxCluster, labels.konfluxTenant, labels.clusterProfile, labels.workflow, labels.phase).
+		Observe(duration)
 }
 
 func (mg *metricsGatherer) collectPhaseTransitions(ec *ephemeralclusterv1.EphemeralCluster, phase string) {
-	k := struct {
+	labels := struct {
 		konfluxCluster string
 		konfluxTenant  string
 		clusterProfile string
@@ -197,7 +227,8 @@ func (mg *metricsGatherer) collectPhaseTransitions(ec *ephemeralclusterv1.Epheme
 	}
 
 	mg.phaseTransitionsCounter.
-		WithLabelValues(k.konfluxCluster, k.konfluxTenant, k.clusterProfile, k.workflow, k.phase).Inc()
+		WithLabelValues(labels.konfluxCluster, labels.konfluxTenant, labels.clusterProfile, labels.workflow, labels.phase).
+		Inc()
 }
 
 func (mg *metricsGatherer) NeedLeaderElection() bool { return true }

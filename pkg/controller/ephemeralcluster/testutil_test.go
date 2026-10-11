@@ -40,8 +40,9 @@ type gauge struct {
 }
 
 type histogram struct {
-	Labels      []string
+	Labels      map[string]string
 	SampleCount uint64
+	SampleSum   float64
 	Buckets     []bucket
 }
 
@@ -56,19 +57,18 @@ func sortMetrics(a, b metric) int {
 			sort.Strings(m.Gauge.Labels)
 			return m.Gauge.Labels
 		}
+		var labels map[string]string
 		if m.Histogram != nil {
-			sort.Strings(m.Histogram.Labels)
-			return m.Histogram.Labels
+			labels = m.Histogram.Labels
+		} else if m.Counter != nil {
+			labels = m.Counter.Labels
 		}
-		if m.Counter != nil {
-			labels := make([]string, 0, len(m.Counter.Labels))
-			for name, value := range m.Counter.Labels {
-				labels = append(labels, name+"="+value)
-			}
-			sort.Strings(labels)
-			return labels
+		labelPairs := make([]string, 0, len(labels))
+		for name, value := range labels {
+			labelPairs = append(labelPairs, name+"="+value)
 		}
-		return nil
+		sort.Strings(labelPairs)
+		return labelPairs
 	}
 	as := strings.Join(metricLabels(a), "")
 	bs := strings.Join(metricLabels(b), "")
@@ -98,7 +98,9 @@ func gaugeTransformer(in *dto.Metric) metric {
 func histogramTransformer(in *dto.Metric) metric {
 	out := metric{
 		Histogram: &histogram{
+			Labels:      make(map[string]string),
 			SampleCount: in.Histogram.GetSampleCount(),
+			SampleSum:   in.Histogram.GetSampleSum(),
 			Buckets:     make([]bucket, len(in.Histogram.Bucket)),
 		},
 	}
@@ -117,8 +119,8 @@ func histogramTransformer(in *dto.Metric) metric {
 		Count:      in.Histogram.GetSampleCount() - prevCumulativeCount,
 	})
 
-	for _, l := range in.Label {
-		out.Histogram.Labels = append(out.Histogram.Labels, *l.Value)
+	for _, label := range in.Label {
+		out.Histogram.Labels[label.GetName()] = label.GetValue()
 	}
 
 	return out

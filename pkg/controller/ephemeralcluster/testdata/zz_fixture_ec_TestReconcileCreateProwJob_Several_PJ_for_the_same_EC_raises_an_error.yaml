@@ -16,4 +16,4 @@ status:
     reason: TooManyProwJobsBound
     status: Unknown
     type: ProwJobCreated
-  phase: Failed
+  phase: InitializationFailed

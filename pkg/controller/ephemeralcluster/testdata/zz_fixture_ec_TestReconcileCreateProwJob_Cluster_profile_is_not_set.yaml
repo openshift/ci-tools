@@ -18,4 +18,4 @@ status:
     reason: EphemeralClusterValidationFailure
     status: "False"
     type: ProwJobCreated
-  phase: Failed
+  phase: InitializationFailed

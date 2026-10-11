@@ -26,6 +26,12 @@ import (
 type metric struct {
 	Gauge     *gauge
 	Histogram *histogram
+	Counter   *counter
+}
+
+type counter struct {
+	Labels map[string]string
+	Value  float64
 }
 
 type gauge struct {
@@ -54,6 +60,14 @@ func sortMetrics(a, b metric) int {
 			sort.Strings(m.Histogram.Labels)
 			return m.Histogram.Labels
 		}
+		if m.Counter != nil {
+			labels := make([]string, 0, len(m.Counter.Labels))
+			for name, value := range m.Counter.Labels {
+				labels = append(labels, name+"="+value)
+			}
+			sort.Strings(labels)
+			return labels
+		}
 		return nil
 	}
 	as := strings.Join(metricLabels(a), "")
@@ -62,6 +76,14 @@ func sortMetrics(a, b metric) int {
 }
 
 type metricTransformer func(in *dto.Metric) metric
+
+func counterTransformer(in *dto.Metric) metric {
+	out := metric{Counter: &counter{Labels: make(map[string]string), Value: in.Counter.GetValue()}}
+	for _, label := range in.Label {
+		out.Counter.Labels[label.GetName()] = label.GetValue()
+	}
+	return out
+}
 
 func gaugeTransformer(in *dto.Metric) metric {
 	out := metric{Gauge: &gauge{Value: *in.Gauge.Value}}
@@ -146,6 +168,17 @@ func collectGauge(v *prometheus.MetricVec) (result []metric, err error) {
 
 func collectHistogram(v *prometheus.MetricVec) (result []metric, err error) {
 	return collect(v, histogramTransformer)
+}
+
+func assertPhaseTransitionsCounter(t *testing.T, v *prometheus.CounterVec, want []metric) {
+	t.Helper()
+	got, err := collect(v.MetricVec, counterTransformer)
+	if err != nil {
+		t.Fatalf("collect phase transitions counter: %s", err)
+	}
+	if diff := cmpMetrics(want, got); diff != "" {
+		t.Errorf("phase transitions counter differs (-want +got): %s", diff)
+	}
 }
 
 func cmpMetrics(a, b []metric) string {

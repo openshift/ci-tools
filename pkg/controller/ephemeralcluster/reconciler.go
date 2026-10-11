@@ -171,9 +171,9 @@ type reconciler struct {
 	privilegedTenants      sets.Set[string]
 	recorder               record.EventRecorder
 
-	collectProvisioningDurationMetricFunc   func(ec *ephemeralclusterv1.EphemeralCluster, status *ephemeralclusterv1.EphemeralClusterStatus) bool
-	collectDeprovisioningDurationMetricFunc func(ec *ephemeralclusterv1.EphemeralCluster, oldStatus, observedStatus *ephemeralclusterv1.EphemeralClusterStatus) bool
-	collectStateTransitionMetricFunc        func(ec *ephemeralclusterv1.EphemeralCluster, oldStatus, observedStatus *ephemeralclusterv1.EphemeralClusterStatus)
+	collectProvisioningDurationMetricFunc   func(ec *ephemeralclusterv1.EphemeralCluster, duration float64)
+	collectDeprovisioningDurationMetricFunc func(ec *ephemeralclusterv1.EphemeralCluster, duration float64)
+	collectPhaseTransitionsMetricFunc       func(ec *ephemeralclusterv1.EphemeralCluster, phase string)
 
 	// Mock for testing
 	now     func() time.Time
@@ -233,7 +233,7 @@ func AddToManager(log *logrus.Entry, mgr manager.Manager, allManagers map[string
 		recorder:                                mgr.GetEventRecorderFor(ControllerName),
 		collectProvisioningDurationMetricFunc:   metricsGatherer.collectProvisioningDuration,
 		collectDeprovisioningDurationMetricFunc: metricsGatherer.collectDeprovisioningDuration,
-		collectStateTransitionMetricFunc:        metricsGatherer.collectStateTransition,
+		collectPhaseTransitionsMetricFunc:       metricsGatherer.collectPhaseTransitions,
 		now:                                     time.Now,
 		polling:                                 func() time.Duration { return reconcilerOpts.polling },
 	}
@@ -272,7 +272,7 @@ func (r *reconciler) Reconcile(ctx context.Context, req reconcile.Request) (reco
 	}
 
 	oldStatus := ec.Status
-	observedStatus := ephemeralclusterv1.EphemeralClusterStatus{ProwJobID: ec.Status.ProwJobID}
+	observedStatus := *oldStatus.DeepCopy()
 
 	pjId, pj := ec.Status.ProwJobID, prowv1.ProwJob{}
 	log = log.WithField("prowjob", pjId)
@@ -285,7 +285,6 @@ func (r *reconciler) Reconcile(ctx context.Context, req reconcile.Request) (reco
 		return r.reconcileCreateProwJob(ctx, log, ec, &observedStatus)
 	}
 
-	observedStatus = *oldStatus.DeepCopy()
 	upsertCondition(&observedStatus, ephemeralclusterv1.ProwJobCreated, metav1.ConditionTrue, ec.Generation, r.now(), ephemeralclusterv1.ProwJobProperlyCreatedReason, "")
 	observedStatus.ProwJobURL = pj.Status.URL
 
@@ -324,8 +323,6 @@ func (r *reconciler) Reconcile(ctx context.Context, req reconcile.Request) (reco
 			if updateErr := r.updateEphemeralClusterWithStatus(ctx, ec); updateErr != nil {
 				return reconcile.Result{}, updateErr
 			}
-			r.collectProvisioningDurationMetric(ec, &oldStatus, &observedStatus)
-			r.collectDeprovisioningDurationMetric(ec, &oldStatus, &observedStatus)
 			return reconcile.Result{}, nil
 		}
 	} else {
@@ -335,9 +332,6 @@ func (r *reconciler) Reconcile(ctx context.Context, req reconcile.Request) (reco
 	if err := r.updateEphemeralClusterStatus(ctx, ec, &observedStatus); err != nil {
 		return reconcile.Result{}, err
 	}
-
-	r.collectProvisioningDurationMetric(ec, &oldStatus, &observedStatus)
-	r.collectDeprovisioningDurationMetric(ec, &oldStatus, &observedStatus)
 
 	return reconcile.Result{RequeueAfter: requeueAfter}, nil
 }
@@ -354,13 +348,15 @@ func (r *reconciler) handleGetProwJobError(ctx context.Context, log *logrus.Entr
 }
 
 func (r *reconciler) handleBuildClientNotFoundError(ctx context.Context, log *logrus.Entry, ec *ephemeralclusterv1.EphemeralCluster, observedStatus *ephemeralclusterv1.EphemeralClusterStatus, pj *prowv1.ProwJob, err error) (reconcile.Result, error) {
-	observedStatus.Phase = ephemeralclusterv1.EphemeralClusterFailed
+	errMsg := "Build client not found: " + err.Error()
 
 	r.recorder.Eventf(ec, corev1.EventTypeWarning, ephemeralclusterv1.EventReasonBuildClientNotFound, "Build client not found, aborting ProwJob %s: %v", pj.Name, err)
-	if abortPJErr := r.abortProwJob(ctx, log, ec, pj, "Build client not found: "+err.Error()); abortPJErr != nil {
+	if abortPJErr := r.abortProwJob(ctx, log, ec, pj, errMsg); abortPJErr != nil {
 		msg := utilerrors.NewAggregate([]error{abortPJErr, err}).Error()
 		return reconcile.Result{}, errors.New(msg)
 	}
+
+	r.reportProwJobFinalState(pj, ec, observedStatus)
 
 	removeFinalizer(ec)
 	ec.Status = *observedStatus
@@ -500,7 +496,6 @@ func (r *reconciler) reconcileCreateProwJob(ctx context.Context, log *logrus.Ent
 
 	if err := r.validateEphemeralCluster(log, ec); err != nil {
 		upsertCondition(observedStatus, ephemeralclusterv1.ProwJobCreated, metav1.ConditionFalse, ec.Generation, r.now(), ephemeralclusterv1.EphemeralClusterValidationFailureReason, err.Error())
-		observedStatus.Phase = ephemeralclusterv1.EphemeralClusterFailed
 		r.recorder.Event(ec, corev1.EventTypeWarning, ephemeralclusterv1.EventReasonValidationFailed, err.Error())
 		if updateErr := r.updateEphemeralClusterStatus(ctx, ec, observedStatus); updateErr != nil {
 			msg := utilerrors.NewAggregate([]error{updateErr, err}).Error()
@@ -524,7 +519,6 @@ func (r *reconciler) reconcileCreateProwJob(ctx context.Context, log *logrus.Ent
 	if len(pjsForEC.Items) > 1 {
 		log.Error(TooManyPJsBoundErrMsg)
 		upsertCondition(observedStatus, ephemeralclusterv1.ProwJobCreated, metav1.ConditionUnknown, ec.Generation, r.now(), ephemeralclusterv1.TooManyProwJobsBoundReason, TooManyPJsBoundErrMsg)
-		observedStatus.Phase = ephemeralclusterv1.EphemeralClusterFailed
 		err := errors.New("too many ProwJobs associated")
 		if updateErr := r.updateEphemeralClusterStatus(ctx, ec, observedStatus); updateErr != nil {
 			msg := utilerrors.NewAggregate([]error{updateErr, err}).Error()
@@ -540,7 +534,6 @@ func (r *reconciler) reconcileCreateProwJob(ctx context.Context, log *logrus.Ent
 		ec.Finalizers, _ = cislices.UniqueAdd(ec.Finalizers, DependentProwJobFinalizer)
 		upsertCondition(observedStatus, ephemeralclusterv1.ProwJobCreated, metav1.ConditionTrue, ec.Generation, r.now(), ephemeralclusterv1.OrphanProwJobFoundReason, "")
 		observedStatus.ProwJobID = pjsForEC.Items[0].Name
-		observedStatus.Phase = ephemeralclusterv1.EphemeralClusterProvisioning
 		ec.Status = *observedStatus
 		if err := r.updateEphemeralClusterWithStatus(ctx, ec); err != nil {
 			return reconcile.Result{}, err
@@ -573,7 +566,6 @@ func (r *reconciler) createProwJob(ctx context.Context, log *logrus.Entry, ec *e
 		log.WithError(err).Error("generate ci-operator config")
 		err = fmt.Errorf("generate ci-operator config: %w", err)
 		upsertProvisioningCond(metav1.ConditionFalse, ephemeralclusterv1.CIOperatorJobsGenerateFailureReason, err.Error())
-		ec.Status.Phase = ephemeralclusterv1.EphemeralClusterFailed
 		return reconcile.TerminalError(err)
 	}
 
@@ -581,7 +573,6 @@ func (r *reconciler) createProwJob(ctx context.Context, log *logrus.Entry, ec *e
 	if err != nil {
 		log.WithError(err).Error("make prowjob")
 		upsertProvisioningCond(metav1.ConditionFalse, ephemeralclusterv1.CIOperatorJobsGenerateFailureReason, err.Error())
-		ec.Status.Phase = ephemeralclusterv1.EphemeralClusterFailed
 		return reconcile.TerminalError(err)
 	}
 
@@ -590,7 +581,7 @@ func (r *reconciler) createProwJob(ctx context.Context, log *logrus.Entry, ec *e
 	if err := r.masterClient.Create(ctx, pj); err != nil {
 		log.WithError(err).Error("create prowjob")
 		err = fmt.Errorf("create prowjob: %w", err)
-		upsertProvisioningCond(metav1.ConditionFalse, ephemeralclusterv1.CIOperatorJobsGenerateFailureReason, err.Error())
+		upsertProvisioningCond(metav1.ConditionFalse, ephemeralclusterv1.CouldNotPersistProwJobReason, err.Error())
 		r.recorder.Eventf(ec, corev1.EventTypeWarning, ephemeralclusterv1.EventReasonProwJobCreationFailed, "Failed to create ProwJob: %v", err)
 		return err
 	}
@@ -600,7 +591,6 @@ func (r *reconciler) createProwJob(ctx context.Context, log *logrus.Entry, ec *e
 	ec.Status.ProwJobID = pj.Name
 	ec.Finalizers, _ = cislices.UniqueAdd(ec.Finalizers, DependentProwJobFinalizer)
 	upsertProvisioningCond(metav1.ConditionTrue, ephemeralclusterv1.ProwJobProperlyCreatedReason, "")
-	ec.Status.Phase = ephemeralclusterv1.EphemeralClusterProvisioning
 	return nil
 }
 
@@ -754,7 +744,6 @@ func (r *reconciler) fetchHiveSecrets(
 		log.Info("Hive secrets fetched, the cluster is ready")
 		r.recorder.Event(ec, corev1.EventTypeNormal, ephemeralclusterv1.EventReasonClusterReady, "Cluster credentials are available")
 	}
-	ecStatus.Phase = ephemeralclusterv1.EphemeralClusterReady
 }
 
 func (r *reconciler) fetchClusterKubeconfig(
@@ -799,10 +788,14 @@ func (r *reconciler) fetchClusterKubeconfig(
 		log.Info("Kubeconfig fetched, the cluster is ready")
 		r.recorder.Event(ec, corev1.EventTypeNormal, ephemeralclusterv1.EventReasonClusterReady, "Cluster credentials are available")
 	}
-	ecStatus.Phase = ephemeralclusterv1.EphemeralClusterReady
 }
 
 func (r *reconciler) updateEphemeralClusterStatus(ctx context.Context, ec *ephemeralclusterv1.EphemeralCluster, observedStatus *ephemeralclusterv1.EphemeralClusterStatus) error {
+	phaseTransition := computePhaseTransition(ec, observedStatus)
+	if phaseTransition.phase != "" {
+		observedStatus.Phase = phaseTransition.phase
+	}
+
 	cmpECStatusOpts := []cmp.Option{
 		cmpopts.SortSlices(func(a, b metav1.Condition) int {
 			return strings.Compare(a.Type, b.Type)
@@ -811,14 +804,13 @@ func (r *reconciler) updateEphemeralClusterStatus(ctx context.Context, ec *ephem
 	}
 
 	if !cmp.Equal(&ec.Status, observedStatus, cmpECStatusOpts...) {
-		oldStatus := ec.Status.DeepCopy()
 		ec.Status = *observedStatus
 		if err := r.masterClient.Status().Update(ctx, ec); err != nil {
 			return fmt.Errorf("update ephemeral cluster status: %w", err)
 		}
-
-		r.collectStateTransitionMetricFunc(ec, oldStatus, observedStatus)
 	}
+
+	r.updateMetrics(ec, phaseTransition)
 	return nil
 }
 
@@ -830,6 +822,11 @@ func (r *reconciler) updateEphemeralCluster(ctx context.Context, ec *ephemeralcl
 }
 
 func (r *reconciler) updateEphemeralClusterWithStatus(ctx context.Context, ec *ephemeralclusterv1.EphemeralCluster) error {
+	phaseTransition := computePhaseTransition(ec, &ec.Status)
+	if phaseTransition.phase != "" {
+		ec.Status.Phase = phaseTransition.phase
+	}
+
 	// Save the status since the ec resource has the `status` subresource. The apiserver will
 	// persist only the `.spec` stanza and return object with the old status. This means
 	// we lose our status, therefore a deep copy here is needed.
@@ -838,14 +835,12 @@ func (r *reconciler) updateEphemeralClusterWithStatus(ctx context.Context, ec *e
 		return fmt.Errorf("update ephemeral cluster: %w", err)
 	}
 
-	oldStatus := ec.Status.DeepCopy()
 	ec.Status = *ecStatus
 	if err := r.masterClient.Status().Update(ctx, ec); err != nil {
 		return fmt.Errorf("update ephemeral cluster and status: %w", err)
 	}
 
-	r.collectStateTransitionMetricFunc(ec, oldStatus, ecStatus)
-
+	r.updateMetrics(ec, phaseTransition)
 	return nil
 }
 
@@ -906,13 +901,11 @@ func (r *reconciler) reportProwJobFinalState(pj *prowv1.ProwJob, ec *ephemeralcl
 	case prowv1.AbortedState, prowv1.ErrorState, prowv1.FailureState:
 		msg := "prowjob state: " + string(pj.Status.State)
 		addCondition(metav1.ConditionTrue, ephemeralclusterv1.ProwJobFailureReason, msg)
-		observedStatus.Phase = ephemeralclusterv1.EphemeralClusterFailed
 		r.recorder.Eventf(ec, corev1.EventTypeWarning, ephemeralclusterv1.EventReasonProwJobFailed, "ProwJob %s finished with state: %s", pj.Name, pj.Status.State)
 		return true
 	case prowv1.SuccessState:
 		msg := "prowjob state: " + string(pj.Status.State)
 		addCondition(metav1.ConditionTrue, ephemeralclusterv1.ProwJobCompletedReason, msg)
-		observedStatus.Phase = ephemeralclusterv1.EphemeralClusterDeprovisioned
 		r.recorder.Eventf(ec, corev1.EventTypeNormal, ephemeralclusterv1.EventReasonProwJobSucceeded, "ProwJob %s completed successfully", pj.Name)
 		return true
 	}
@@ -956,11 +949,9 @@ func (r *reconciler) reconcileDeleteEphemeralCluster(ctx context.Context, log *l
 			if updateErr := r.updateEphemeralCluster(ctx, ec); updateErr != nil {
 				return reconcile.Result{}, updateErr
 			}
-			r.collectDeprovisioningDurationMetric(ec, &oldStatus, observedStatus)
 			return reconcile.Result{}, nil
 		}
 
-		r.collectDeprovisioningDurationMetric(ec, &oldStatus, observedStatus)
 		return reconcile.Result{}, nil
 	}
 
@@ -970,6 +961,8 @@ func (r *reconciler) reconcileDeleteEphemeralCluster(ctx context.Context, log *l
 			if err := r.abortProwJob(ctx, log, ec, &pj, "EphemeralCluster being deleted: "+err.Error()); err != nil {
 				return reconcile.Result{}, err
 			}
+
+			r.reportProwJobFinalState(&pj, ec, observedStatus)
 
 			if updateErr := r.updateEphemeralClusterStatus(ctx, ec, observedStatus); updateErr != nil {
 				return reconcile.Result{}, updateErr
@@ -1017,7 +1010,6 @@ func (r *reconciler) abortProwJob(ctx context.Context, log *logrus.Entry, ec *ep
 }
 
 func (r *reconciler) notifyTestComplete(ctx context.Context, log *logrus.Entry, ec *ephemeralclusterv1.EphemeralCluster, oldECStatus, ecStatus *ephemeralclusterv1.EphemeralClusterStatus, pj *prowv1.ProwJob) error {
-	ecStatus.Phase = ephemeralclusterv1.EphemeralClusterDeprovisioning
 	if apimeta.IsStatusConditionTrue(ecStatus.Conditions, ephemeralclusterv1.TestCompleted) {
 		return nil
 	}
@@ -1056,31 +1048,6 @@ func (r *reconciler) notifyTestComplete(ctx context.Context, log *logrus.Entry, 
 	}
 
 	return nil
-}
-
-func (r *reconciler) collectProvisioningDurationMetric(ec *ephemeralclusterv1.EphemeralCluster, oldStatus, observedStatus *ephemeralclusterv1.EphemeralClusterStatus) {
-	hasClusterReady := func(status *ephemeralclusterv1.EphemeralClusterStatus) bool {
-		for i := range status.Conditions {
-			if c := &status.Conditions[i]; c.Type == ephemeralclusterv1.ClusterReady && c.Status == metav1.ConditionTrue {
-				return true
-			}
-		}
-		return false
-	}
-
-	if !hasClusterReady(oldStatus) && hasClusterReady(observedStatus) {
-		if !r.collectProvisioningDurationMetricFunc(ec, observedStatus) {
-			r.logger.Warn("Failed to collect the provisioning duration metric")
-		}
-	}
-}
-
-func (r *reconciler) collectDeprovisioningDurationMetric(ec *ephemeralclusterv1.EphemeralCluster, oldStatus, observedStatus *ephemeralclusterv1.EphemeralClusterStatus) {
-	if oldStatus.Phase != ephemeralclusterv1.EphemeralClusterDeprovisioned && observedStatus.Phase == ephemeralclusterv1.EphemeralClusterDeprovisioned {
-		if !r.collectDeprovisioningDurationMetricFunc(ec, oldStatus, observedStatus) {
-			r.logger.Warn("Failed to collect the deprovisioning duration metric")
-		}
-	}
 }
 
 func findCIOperatorTestNS(ctx context.Context, buildClient ctrlruntimeclient.Client, pj *prowv1.ProwJob) (string, error) {
@@ -1154,4 +1121,179 @@ func removeFinalizer(ec *ephemeralclusterv1.EphemeralCluster) bool {
 		ec.Finalizers = finalizers
 	}
 	return removed
+}
+
+type phaseTransition struct {
+	phase    ephemeralclusterv1.EphemeralClusterPhase
+	duration *time.Duration
+
+	updatePhaseTransitionCounter bool
+	updateDeprovisionDuration    bool
+	updateProvisionDuration      bool
+}
+
+// Establish an ordering between phases by using weights.
+// A transition from phase A to B is allowed only if the weight
+// bound to A is greater than B's one.
+// Final phases all share the same weight since a transition between
+// them is not allowed.
+// This mechanism makes sure that metrics are updated only once
+// per EphemeralCluster lifecycle.
+var phaseRanks = map[ephemeralclusterv1.EphemeralClusterPhase]uint{
+	"": 0,
+	ephemeralclusterv1.EphemeralClusterInitializing:          1,
+	ephemeralclusterv1.EphemeralClusterInitializationFailed:  10,
+	ephemeralclusterv1.EphemeralClusterProvisioning:          2,
+	ephemeralclusterv1.EphemeralClusterProvisioningFailed:    10,
+	ephemeralclusterv1.EphemeralClusterReady:                 3,
+	ephemeralclusterv1.EphemeralClusterDeprovisioning:        4,
+	ephemeralclusterv1.EphemeralClusterDeprovisioningFailure: 10,
+	ephemeralclusterv1.EphemeralClusterDeprovisioned:         10,
+}
+
+// computePhaseTransition derives phases from conditions and gates metrics update such that
+// a metric is updated once during the EphemeralCluster lifecycle.
+//
+// This function assumes the phases follow this sequence of events:
+//
+//		Initializing --> Provisioning --> ClusterReady --> Deprovisioning --> Deprovisioned
+//			|				  |									|
+//			+--> InitalizationFailure                           +--> DeprovisioningFailure
+//							  |
+//	                       	  +--> ProvisioningFailure
+//
+// Important: this functions relies on this invariant: some conditions become stable and don't change anymore
+// once they reach a "stable" state. As an example: `ProwJobCompleted=True` guarantees that the ProwJob is done
+// and the condition can't regress to `ProwJobCompleted=True` anymore.
+func computePhaseTransition(ec *ephemeralclusterv1.EphemeralCluster, observedStatus *ephemeralclusterv1.EphemeralClusterStatus) phaseTransition {
+	var pjCompleted, testCompleted, clusterReady, pjCreated *metav1.Condition
+
+	for i := range observedStatus.Conditions {
+		c := &observedStatus.Conditions[i]
+		switch c.Type {
+		case ephemeralclusterv1.ProwJobCompleted:
+			pjCompleted = c
+		case ephemeralclusterv1.TestCompleted:
+			testCompleted = c
+		case ephemeralclusterv1.ClusterReady:
+			clusterReady = c
+		case ephemeralclusterv1.ProwJobCreated:
+			pjCreated = c
+		}
+	}
+
+	isTrue := func(c *metav1.Condition) bool { return c != nil && c.Status == metav1.ConditionTrue }
+	// elapsed guards against a clock skew between the API server, that stamps the
+	// creation timestamp, and this controller, that stamps the conditions.
+	elapsed := func(from, to metav1.Time) *time.Duration {
+		if d := to.Sub(from.Time); d >= 0 {
+			return new(d)
+		}
+		return nil
+	}
+
+	result := phaseTransition{phase: ephemeralclusterv1.EphemeralClusterInitializing}
+
+	// The following conditions determine a "stable" phase that can't regress. A example:
+	//   `Phase=Deprovisioning` can't regress to `Phase=Initializing`
+	// Those are used as milestones and "promoted" to phases.
+	switch {
+	// Transition Provisioning/Ready -> Deprovisioning
+	case isTrue(testCompleted):
+		result.phase = ephemeralclusterv1.EphemeralClusterDeprovisioning
+
+		// Transition Provisioning -> Ready
+	case isTrue(clusterReady):
+		result.phase = ephemeralclusterv1.EphemeralClusterReady
+		result.duration = elapsed(ec.CreationTimestamp, clusterReady.LastTransitionTime)
+
+	// Transition Initializing -> Provisioning
+	case isTrue(pjCreated):
+		result.phase = ephemeralclusterv1.EphemeralClusterProvisioning
+		result.duration = elapsed(ec.CreationTimestamp, pjCreated.LastTransitionTime)
+	}
+
+	// Check whether we have transitioned into a final phase.
+	switch {
+	case isTrue(pjCompleted):
+		pjSucceeded := !(pjCompleted.Reason == ephemeralclusterv1.ProwJobFailureReason)
+
+		if result.phase == ephemeralclusterv1.EphemeralClusterProvisioning {
+			result.duration = elapsed(ec.CreationTimestamp, pjCompleted.LastTransitionTime)
+
+			if pjSucceeded {
+				// Transition `Provisioning` -> `Deprovisioned`
+				result.phase = ephemeralclusterv1.EphemeralClusterDeprovisioned
+			} else {
+				// Transition `Provisioning` -> `ProvisioningFailure`
+				result.phase = ephemeralclusterv1.EphemeralClusterProvisioningFailed
+			}
+		}
+
+		if result.phase == ephemeralclusterv1.EphemeralClusterReady {
+			result.duration = elapsed(clusterReady.LastTransitionTime, pjCompleted.LastTransitionTime)
+
+			if pjSucceeded {
+				// Transition `ClusterReady` -> `Deprovisioned`
+				result.phase = ephemeralclusterv1.EphemeralClusterDeprovisioned
+			} else {
+				// Transition `ClusterReady` -> `DeprovisioningFailure`
+				result.phase = ephemeralclusterv1.EphemeralClusterDeprovisioningFailure
+			}
+		}
+
+		if result.phase == ephemeralclusterv1.EphemeralClusterDeprovisioning {
+			result.duration = elapsed(testCompleted.LastTransitionTime, pjCompleted.LastTransitionTime)
+
+			if pjSucceeded {
+				// Transition `Deprovisioning` -> `Deprovisioned`
+				result.phase = ephemeralclusterv1.EphemeralClusterDeprovisioned
+			} else {
+				// Transition `Deprovisioning` -> `DeprovisioningFailure`
+				result.phase = ephemeralclusterv1.EphemeralClusterDeprovisioningFailure
+			}
+		}
+
+	// Transition `Initializing` -> `InitializingFailed`
+	case result.phase == ephemeralclusterv1.EphemeralClusterInitializing:
+		// The following reasons determine that the EphemeralCluster is failed and can't be reconciled anymore.
+		if pjCreated != nil && (pjCreated.Reason == ephemeralclusterv1.EphemeralClusterValidationFailureReason ||
+			pjCreated.Reason == ephemeralclusterv1.CIOperatorJobsGenerateFailureReason ||
+			pjCreated.Reason == ephemeralclusterv1.TooManyProwJobsBoundReason) {
+			result.phase = ephemeralclusterv1.EphemeralClusterInitializationFailed
+		}
+	}
+
+	if phaseRanks[result.phase] > phaseRanks[observedStatus.Phase] {
+		result.updatePhaseTransitionCounter = true
+
+		switch result.phase {
+		case ephemeralclusterv1.EphemeralClusterInitializationFailed,
+			ephemeralclusterv1.EphemeralClusterProvisioningFailed,
+			ephemeralclusterv1.EphemeralClusterReady:
+			result.updateProvisionDuration = true
+		case ephemeralclusterv1.EphemeralClusterDeprovisioned,
+			ephemeralclusterv1.EphemeralClusterDeprovisioningFailure:
+			result.updateDeprovisionDuration = true
+		}
+	} else {
+		// This means that no phase update is needed.
+		result.phase = ""
+	}
+
+	return result
+}
+
+func (r *reconciler) updateMetrics(ec *ephemeralclusterv1.EphemeralCluster, transition phaseTransition) {
+	if transition.duration != nil && transition.updateProvisionDuration {
+		r.collectProvisioningDurationMetricFunc(ec, transition.duration.Seconds())
+	}
+
+	if transition.duration != nil && transition.updateDeprovisionDuration {
+		r.collectDeprovisioningDurationMetricFunc(ec, transition.duration.Seconds())
+	}
+
+	if transition.updatePhaseTransitionCounter {
+		r.collectPhaseTransitionsMetricFunc(ec, string(transition.phase))
+	}
 }

@@ -166,15 +166,16 @@ func TestReconcileCreateProwJob(t *testing.T) {
 	}
 
 	for _, tc := range []struct {
-		name         string
-		ec           ephemeralclusterv1.EphemeralCluster
-		pjs          []ctrlclient.Object
-		req          reconcile.Request
-		interceptors interceptor.Funcs
-		prowConfig   *prowconfig.Config
-		wantRes      reconcile.Result
-		wantEvents   []string
-		wantErr      error
+		name                        string
+		ec                          ephemeralclusterv1.EphemeralCluster
+		pjs                         []ctrlclient.Object
+		req                         reconcile.Request
+		interceptors                interceptor.Funcs
+		prowConfig                  *prowconfig.Config
+		wantRes                     reconcile.Result
+		wantEvents                  []string
+		wantErr                     error
+		wantPhaseTransitionsCounter []metric
 	}{
 		{
 			name: "An EphemeralCluster request creates a ProwJob",
@@ -223,6 +224,18 @@ func TestReconcileCreateProwJob(t *testing.T) {
 			wantEvents: []string{
 				"Normal ProwJobCreated Created ProwJob foobar",
 			},
+			wantPhaseTransitionsCounter: []metric{{
+				Counter: &counter{
+					Labels: map[string]string{
+						"konflux_cluster": "kcluster",
+						"konflux_tenant":  "ktenant",
+						"cluster_profile": "aws",
+						"workflow":        "test-workflow",
+						"phase":           "Provisioning",
+					},
+					Value: 1,
+				},
+			}},
 		},
 		{
 			name: "Privileged tenant",
@@ -270,6 +283,18 @@ func TestReconcileCreateProwJob(t *testing.T) {
 			wantEvents: []string{
 				"Normal ProwJobCreated Created ProwJob foobar",
 			},
+			wantPhaseTransitionsCounter: []metric{{
+				Counter: &counter{
+					Labels: map[string]string{
+						"konflux_cluster": "",
+						"konflux_tenant":  "ktenant-privileged",
+						"cluster_profile": "aws",
+						"workflow":        "test-workflow",
+						"phase":           "Provisioning",
+					},
+					Value: 1,
+				},
+			}},
 		},
 		{
 			name: "Invalid cluster profile",
@@ -298,6 +323,18 @@ func TestReconcileCreateProwJob(t *testing.T) {
 				`Warning ValidationFailed konflux cluster "foo" and tenant "bar" don't own the cluster profile "aws-2"`,
 			},
 			wantErr: errors.New(`terminal error: validate ephemeral cluster: konflux cluster "foo" and tenant "bar" don't own the cluster profile "aws-2"`),
+			wantPhaseTransitionsCounter: []metric{{
+				Counter: &counter{
+					Labels: map[string]string{
+						"konflux_cluster": "foo",
+						"konflux_tenant":  "bar",
+						"cluster_profile": "aws-2",
+						"workflow":        "test-workflow",
+						"phase":           "InitializationFailed",
+					},
+					Value: 1,
+				},
+			}},
 		},
 		{
 			name: "Cluster profile is not set",
@@ -325,6 +362,18 @@ func TestReconcileCreateProwJob(t *testing.T) {
 				"Warning ValidationFailed cluster profile has not been set",
 			},
 			wantErr: errors.New(`terminal error: validate ephemeral cluster: cluster profile has not been set`),
+			wantPhaseTransitionsCounter: []metric{{
+				Counter: &counter{
+					Labels: map[string]string{
+						"konflux_cluster": "foo",
+						"konflux_tenant":  "bar",
+						"cluster_profile": "",
+						"workflow":        "test-workflow",
+						"phase":           "InitializationFailed",
+					},
+					Value: 1,
+				},
+			}},
 		},
 		{
 			name: "Hive cluster request creates a ProwJob",
@@ -374,6 +423,18 @@ func TestReconcileCreateProwJob(t *testing.T) {
 			wantEvents: []string{
 				"Normal ProwJobCreated Created ProwJob foobar",
 			},
+			wantPhaseTransitionsCounter: []metric{{
+				Counter: &counter{
+					Labels: map[string]string{
+						"konflux_cluster": "",
+						"konflux_tenant":  "",
+						"cluster_profile": "",
+						"workflow":        "generic-claim",
+						"phase":           "Provisioning",
+					},
+					Value: 1,
+				},
+			}},
 		},
 		{
 			name: "Handle invalid prow config",
@@ -411,6 +472,18 @@ func TestReconcileCreateProwJob(t *testing.T) {
 			req:     reconcile.Request{NamespacedName: types.NamespacedName{Namespace: "ns", Name: "ec"}},
 			wantRes: reconcile.Result{},
 			wantErr: errors.New("terminal error: default periodic: job periodic-ci-org-repo-branch-cluster-provisioning failed to merge presets for podspec: volume duplicated in pod spec: boskos"),
+			wantPhaseTransitionsCounter: []metric{{
+				Counter: &counter{
+					Labels: map[string]string{
+						"konflux_cluster": "kcluster",
+						"konflux_tenant":  "ktenant",
+						"cluster_profile": "aws",
+						"workflow":        "test-workflow",
+						"phase":           "InitializationFailed",
+					},
+					Value: 1,
+				},
+			}},
 		},
 		{
 			name: "Fail to create a ProwJob",
@@ -448,6 +521,18 @@ func TestReconcileCreateProwJob(t *testing.T) {
 				"Warning ProwJobCreationFailed Failed to create ProwJob: create prowjob: fake err",
 			},
 			wantErr: errors.New("create prowjob: fake err"),
+			wantPhaseTransitionsCounter: []metric{{
+				Counter: &counter{
+					Labels: map[string]string{
+						"konflux_cluster": "kcluster",
+						"konflux_tenant":  "ktenant",
+						"cluster_profile": "aws",
+						"workflow":        "test-workflow",
+						"phase":           "Initializing",
+					},
+					Value: 1,
+				},
+			}},
 		},
 		{
 			name: "Invalid ci-operator configuration",
@@ -472,6 +557,18 @@ func TestReconcileCreateProwJob(t *testing.T) {
 			req:     reconcile.Request{NamespacedName: types.NamespacedName{Namespace: "ns", Name: "ec"}},
 			wantRes: reconcile.Result{},
 			wantErr: errors.New("terminal error: generate ci-operator config: releases stanza not set"),
+			wantPhaseTransitionsCounter: []metric{{
+				Counter: &counter{
+					Labels: map[string]string{
+						"konflux_cluster": "kcluster",
+						"konflux_tenant":  "ktenant",
+						"cluster_profile": "aws",
+						"workflow":        "test-workflow",
+						"phase":           "InitializationFailed",
+					},
+					Value: 1,
+				},
+			}},
 		},
 		{
 			name: "Invalid ci-operator configuration and fail to update EC",
@@ -534,6 +631,18 @@ func TestReconcileCreateProwJob(t *testing.T) {
 			},
 			wantRes: reconcile.Result{},
 			wantErr: errors.New("terminal error: too many ProwJobs associated"),
+			wantPhaseTransitionsCounter: []metric{{
+				Counter: &counter{
+					Labels: map[string]string{
+						"konflux_cluster": "kcluster",
+						"konflux_tenant":  "ktenant",
+						"cluster_profile": "aws",
+						"workflow":        "",
+						"phase":           "InitializationFailed",
+					},
+					Value: 1,
+				},
+			}},
 		},
 		{
 			name: "PJ found but was not bound to the EC",
@@ -558,6 +667,18 @@ func TestReconcileCreateProwJob(t *testing.T) {
 				Namespace: prowJobNamespace,
 			}}},
 			wantRes: reconcile.Result{RequeueAfter: pollingTime},
+			wantPhaseTransitionsCounter: []metric{{
+				Counter: &counter{
+					Labels: map[string]string{
+						"konflux_cluster": "kcluster",
+						"konflux_tenant":  "ktenant",
+						"cluster_profile": "aws",
+						"workflow":        "",
+						"phase":           "Provisioning",
+					},
+					Value: 1,
+				},
+			}},
 		},
 	} {
 		t.Run(tc.name, func(t *testing.T) {
@@ -580,20 +701,23 @@ func TestReconcileCreateProwJob(t *testing.T) {
 				pc = tc.prowConfig
 			}
 
+			phaseTransitionsCounter := newPhaseTransitionsCounterVec()
+			metricsGatherer := newMetricsGatherer(logrus.NewEntry(logrus.StandardLogger()),
+				nil, nil, phaseTransitionsCounter, nil, nil, "", 0)
+
 			fakeEventRecorder := record.NewFakeRecorder(100)
 			r := reconciler{
-				logger:                 logrus.NewEntry(logrus.StandardLogger()),
-				masterClient:           client,
-				now:                    func() time.Time { return fakeNow },
-				polling:                func() time.Duration { return pollingTime },
-				cliISTagRef:            api.ImageStreamTagReference{Namespace: "ocp", Name: "4.22", Tag: "cli"},
-				newProwJob:             newProwJobFaker("foobar", fakeNow),
-				prowConfigAgent:        prowConfigAgent(pc),
-				clusterProfileResolver: clusterProfileResolverAdapter(&fakeRegistryAgent),
-				privilegedTenants:      sets.New("ktenant-privileged"),
-				recorder:               fakeEventRecorder,
-				collectStateTransitionMetricFunc: func(ec *ephemeralclusterv1.EphemeralCluster, oldStatus, observedStatus *ephemeralclusterv1.EphemeralClusterStatus) {
-				},
+				logger:                            logrus.NewEntry(logrus.StandardLogger()),
+				masterClient:                      client,
+				now:                               func() time.Time { return fakeNow },
+				polling:                           func() time.Duration { return pollingTime },
+				cliISTagRef:                       api.ImageStreamTagReference{Namespace: "ocp", Name: "4.22", Tag: "cli"},
+				newProwJob:                        newProwJobFaker("foobar", fakeNow),
+				prowConfigAgent:                   prowConfigAgent(pc),
+				clusterProfileResolver:            clusterProfileResolverAdapter(&fakeRegistryAgent),
+				privilegedTenants:                 sets.New("ktenant-privileged"),
+				recorder:                          fakeEventRecorder,
+				collectPhaseTransitionsMetricFunc: metricsGatherer.collectPhaseTransitions,
 			}
 
 			gotRes, gotErr := r.Reconcile(context.TODO(), reconcile.Request{NamespacedName: types.NamespacedName{Name: tc.ec.Name, Namespace: tc.ec.Namespace}})
@@ -620,6 +744,8 @@ func TestReconcileCreateProwJob(t *testing.T) {
 			if diff := cmp.Diff(tc.wantEvents, drainEvents(fakeEventRecorder)); diff != "" {
 				t.Errorf("events differ: %s\n", diff)
 			}
+
+			assertPhaseTransitionsCounter(t, phaseTransitionsCounter, tc.wantPhaseTransitionsCounter)
 		})
 	}
 }
@@ -640,6 +766,7 @@ func TestReconcile(t *testing.T) {
 		wantRes                             reconcile.Result
 		wantProvisioningDurationHistogram   []metric
 		wantDeprovisioningDurationHistogram []metric
+		wantPhaseTransitionsCounter         []metric
 		wantEvents                          []string
 		wantErr                             error
 	}{
@@ -741,6 +868,18 @@ func TestReconcile(t *testing.T) {
 					Buckets:     histogramBuckets(provisioningDurationBuckets, 1),
 				},
 			}},
+			wantPhaseTransitionsCounter: []metric{{
+				Counter: &counter{
+					Labels: map[string]string{
+						"konflux_cluster": "",
+						"konflux_tenant":  "",
+						"cluster_profile": "",
+						"workflow":        "e2e-aws",
+						"phase":           "Ready",
+					},
+					Value: 1,
+				},
+			}},
 		},
 		{
 			name: "Only Kubeconfig available: object is ready anyway",
@@ -837,6 +976,18 @@ func TestReconcile(t *testing.T) {
 					Labels:      []string{"e2e-aws"},
 					SampleCount: 1,
 					Buckets:     histogramBuckets(provisioningDurationBuckets, 1),
+				},
+			}},
+			wantPhaseTransitionsCounter: []metric{{
+				Counter: &counter{
+					Labels: map[string]string{
+						"konflux_cluster": "",
+						"konflux_tenant":  "",
+						"cluster_profile": "",
+						"workflow":        "e2e-aws",
+						"phase":           "Ready",
+					},
+					Value: 1,
 				},
 			}},
 		},
@@ -1038,7 +1189,7 @@ func TestReconcile(t *testing.T) {
 					ResourceVersion: "1000",
 				},
 				Status: ephemeralclusterv1.EphemeralClusterStatus{
-					Phase:     ephemeralclusterv1.EphemeralClusterFailed,
+					Phase:     ephemeralclusterv1.EphemeralClusterProvisioningFailed,
 					ProwJobID: "pj-123",
 					Conditions: []metav1.Condition{{
 						Type:               ephemeralclusterv1.ProwJobCreated,
@@ -1051,15 +1202,41 @@ func TestReconcile(t *testing.T) {
 						Reason:             ephemeralclusterv1.SecretsFetchFailureReason,
 						Message:            "build client not found for cluster build01",
 						LastTransitionTime: metav1.NewTime(fakeNow),
+					}, {
+						Type:               ephemeralclusterv1.ProwJobCompleted,
+						Status:             metav1.ConditionTrue,
+						Reason:             ephemeralclusterv1.ProwJobFailureReason,
+						Message:            "prowjob state: aborted",
+						LastTransitionTime: metav1.NewTime(fakeNow),
 					}},
 				},
 			},
 			wantRes: reconcile.Result{},
+			wantProvisioningDurationHistogram: []metric{{
+				Histogram: &histogram{
+					Labels:      []string{""},
+					SampleCount: 1,
+					Buckets:     histogramBuckets(provisioningDurationBuckets, 0, 0, 0, 0, 0, 0, 0, 0, 0, 1),
+				},
+			}},
 			wantEvents: []string{
 				"Warning BuildClientNotFound Build client not found, aborting ProwJob pj-123: build client not found for cluster build01",
 				"Warning ProwJobAborted ProwJob pj-123 aborted: Build client not found: build client not found for cluster build01",
+				"Warning ProwJobFailed ProwJob pj-123 finished with state: aborted",
 			},
 			wantErr: reconcile.TerminalError(errors.New("build client not found for cluster build01")),
+			wantPhaseTransitionsCounter: []metric{{
+				Counter: &counter{
+					Labels: map[string]string{
+						"konflux_cluster": "",
+						"konflux_tenant":  "",
+						"cluster_profile": "",
+						"workflow":        "",
+						"phase":           "ProvisioningFailed",
+					},
+					Value: 1,
+				},
+			}},
 		},
 		{
 			name: "Aborted ProwJob maps to ProwJobCompleted condition",
@@ -1111,13 +1288,32 @@ func TestReconcile(t *testing.T) {
 						Message:            "prowjob state: aborted",
 						LastTransitionTime: metav1.NewTime(fakeNow),
 					}},
-					Phase: ephemeralclusterv1.EphemeralClusterFailed,
+					Phase: ephemeralclusterv1.EphemeralClusterProvisioningFailed,
 				},
 			},
 			wantRes: reconcile.Result{},
 			wantEvents: []string{
 				"Warning ProwJobFailed ProwJob pj-123 finished with state: aborted",
 			},
+			wantProvisioningDurationHistogram: []metric{{
+				Histogram: &histogram{
+					Labels:      []string{""},
+					SampleCount: 1,
+					Buckets:     histogramBuckets(provisioningDurationBuckets, 0, 0, 0, 0, 0, 0, 0, 0, 0, 1),
+				},
+			}},
+			wantPhaseTransitionsCounter: []metric{{
+				Counter: &counter{
+					Labels: map[string]string{
+						"konflux_cluster": "",
+						"konflux_tenant":  "",
+						"cluster_profile": "",
+						"workflow":        "",
+						"phase":           "ProvisioningFailed",
+					},
+					Value: 1,
+				},
+			}},
 		},
 		{
 			name: "Succeeded ProwJob maps to ProwJobCompleted condition",
@@ -1180,7 +1376,7 @@ func TestReconcile(t *testing.T) {
 					}, {
 						Type:               ephemeralclusterv1.ProwJobCompleted,
 						Status:             metav1.ConditionTrue,
-						Reason:             string(ephemeralclusterv1.ProwJobCompletedReason),
+						Reason:             ephemeralclusterv1.ProwJobCompletedReason,
 						Message:            "prowjob state: success",
 						LastTransitionTime: metav1.NewTime(fakeNow),
 					}},
@@ -1191,11 +1387,23 @@ func TestReconcile(t *testing.T) {
 				"Normal ClusterReady Cluster credentials are available",
 				"Normal ProwJobSucceeded ProwJob pj-123 completed successfully",
 			},
-			wantProvisioningDurationHistogram: []metric{{
+			wantDeprovisioningDurationHistogram: []metric{{
 				Histogram: &histogram{
 					Labels:      []string{""},
 					SampleCount: 1,
-					Buckets:     histogramBuckets(provisioningDurationBuckets, 0, 0, 0, 1),
+					Buckets:     histogramBuckets(provisioningDurationBuckets, 1),
+				},
+			}},
+			wantPhaseTransitionsCounter: []metric{{
+				Counter: &counter{
+					Labels: map[string]string{
+						"konflux_cluster": "",
+						"konflux_tenant":  "",
+						"cluster_profile": "",
+						"workflow":        "",
+						"phase":           "Deprovisioned",
+					},
+					Value: 1,
 				},
 			}},
 		},
@@ -1281,6 +1489,25 @@ func TestReconcile(t *testing.T) {
 			wantEvents: []string{
 				"Normal ProwJobSucceeded ProwJob pj-123 completed successfully",
 			},
+			wantDeprovisioningDurationHistogram: []metric{{
+				Histogram: &histogram{
+					Labels:      []string{""},
+					SampleCount: 1,
+					Buckets:     histogramBuckets(provisioningDurationBuckets, 0, 0, 0, 0, 0, 0, 0, 0, 0, 1),
+				},
+			}},
+			wantPhaseTransitionsCounter: []metric{{
+				Counter: &counter{
+					Labels: map[string]string{
+						"konflux_cluster": "",
+						"konflux_tenant":  "",
+						"cluster_profile": "",
+						"workflow":        "",
+						"phase":           "Deprovisioned",
+					},
+					Value: 1,
+				},
+			}},
 		},
 		{
 			name: "Test completed, create secret",
@@ -1355,11 +1582,16 @@ func TestReconcile(t *testing.T) {
 				"Normal ClusterReady Cluster credentials are available",
 				"Normal DeprovisioningStarted Deprovisioning signal sent",
 			},
-			wantProvisioningDurationHistogram: []metric{{
-				Histogram: &histogram{
-					Labels:      []string{""},
-					SampleCount: 1,
-					Buckets:     histogramBuckets(provisioningDurationBuckets, 0, 0, 1),
+			wantPhaseTransitionsCounter: []metric{{
+				Counter: &counter{
+					Labels: map[string]string{
+						"konflux_cluster": "",
+						"konflux_tenant":  "",
+						"cluster_profile": "",
+						"workflow":        "",
+						"phase":           "Deprovisioning",
+					},
+					Value: 1,
 				},
 			}},
 		},
@@ -1374,6 +1606,18 @@ func TestReconcile(t *testing.T) {
 				Spec: ephemeralclusterv1.EphemeralClusterSpec{TearDownCluster: true},
 				Status: ephemeralclusterv1.EphemeralClusterStatus{
 					ProwJobID: "pj-123",
+					Conditions: []metav1.Condition{{
+						Type:               ephemeralclusterv1.ProwJobCreated,
+						Status:             metav1.ConditionTrue,
+						Reason:             ephemeralclusterv1.ProwJobProperlyCreatedReason,
+						LastTransitionTime: metav1.NewTime(fakeNow),
+					}, {
+						Type:               ephemeralclusterv1.ClusterReady,
+						Status:             metav1.ConditionFalse,
+						Reason:             ephemeralclusterv1.SecretsFetchFailureReason,
+						Message:            ephemeralclusterv1.CIOperatorNSNotFoundMsg,
+						LastTransitionTime: metav1.NewTime(fakeNow),
+					}},
 				},
 			},
 			objs: []ctrlclient.Object{
@@ -1396,7 +1640,7 @@ func TestReconcile(t *testing.T) {
 				},
 				Spec: ephemeralclusterv1.EphemeralClusterSpec{TearDownCluster: true},
 				Status: ephemeralclusterv1.EphemeralClusterStatus{
-					Phase:     ephemeralclusterv1.EphemeralClusterDeprovisioning,
+					Phase:     ephemeralclusterv1.EphemeralClusterProvisioning,
 					ProwJobID: "pj-123",
 					Conditions: []metav1.Condition{{
 						Type:               ephemeralclusterv1.ProwJobCreated,
@@ -1419,6 +1663,18 @@ func TestReconcile(t *testing.T) {
 				},
 			},
 			wantRes: reconcile.Result{RequeueAfter: pollingTime},
+			wantPhaseTransitionsCounter: []metric{{
+				Counter: &counter{
+					Labels: map[string]string{
+						"konflux_cluster": "",
+						"konflux_tenant":  "",
+						"cluster_profile": "",
+						"workflow":        "",
+						"phase":           "Provisioning",
+					},
+					Value: 1,
+				},
+			}},
 		},
 		{
 			name: "Test completed, secret exists do nothing",
@@ -1493,6 +1749,18 @@ func TestReconcile(t *testing.T) {
 			wantEvents: []string{
 				"Normal DeprovisioningStarted Deprovisioning signal sent",
 			},
+			wantPhaseTransitionsCounter: []metric{{
+				Counter: &counter{
+					Labels: map[string]string{
+						"konflux_cluster": "",
+						"konflux_tenant":  "",
+						"cluster_profile": "",
+						"workflow":        "",
+						"phase":           "Deprovisioning",
+					},
+					Value: 1,
+				},
+			}},
 		},
 		{
 			name: "Hive cluster provisioned, report secrets",
@@ -1595,6 +1863,18 @@ func TestReconcile(t *testing.T) {
 					Buckets:     histogramBuckets(provisioningDurationBuckets, 0, 0, 0, 0, 1),
 				},
 			}},
+			wantPhaseTransitionsCounter: []metric{{
+				Counter: &counter{
+					Labels: map[string]string{
+						"konflux_cluster": "",
+						"konflux_tenant":  "",
+						"cluster_profile": "",
+						"workflow":        "",
+						"phase":           "Ready",
+					},
+					Value: 1,
+				},
+			}},
 		},
 		{
 			name: "Hive cluster not ready yet, kubeconfig missing",
@@ -1692,6 +1972,11 @@ func TestReconcile(t *testing.T) {
 					ProwJobID: "pj-123",
 					Phase:     ephemeralclusterv1.EphemeralClusterDeprovisioning,
 					Conditions: []metav1.Condition{{
+						Type:               ephemeralclusterv1.ClusterReady,
+						Status:             metav1.ConditionTrue,
+						Reason:             ephemeralclusterv1.CredentialsReadyReason,
+						LastTransitionTime: metav1.NewTime(parseTime(t, "2025-04-02 12:45:00")),
+					}, {
 						Type:               ephemeralclusterv1.TestCompleted,
 						Status:             metav1.ConditionTrue,
 						Reason:             ephemeralclusterv1.TestDoneReason,
@@ -1730,7 +2015,7 @@ func TestReconcile(t *testing.T) {
 					"build01": ctrlruntimetest.NewFakeClient(c, scheme, ctrlruntimetest.WithInitObjects(objs...)),
 				}
 			},
-			now: ptr.To(parseTime(t, "2025-04-02 12:45:00")),
+			now: new(parseTime(t, "2025-04-02 12:45:00")),
 			wantEC: &ephemeralclusterv1.EphemeralCluster{
 				ObjectMeta: metav1.ObjectMeta{
 					Name:              "foo",
@@ -1746,8 +2031,13 @@ func TestReconcile(t *testing.T) {
 				Status: ephemeralclusterv1.EphemeralClusterStatus{
 					Phase:     ephemeralclusterv1.EphemeralClusterDeprovisioned,
 					ProwJobID: "pj-123",
-					SecretRef: "foo-credentials",
+					SecretRef: "",
 					Conditions: []metav1.Condition{{
+						Type:               ephemeralclusterv1.ClusterReady,
+						Status:             metav1.ConditionTrue,
+						Reason:             ephemeralclusterv1.CredentialsReadyReason,
+						LastTransitionTime: metav1.NewTime(parseTime(t, "2025-04-02 12:45:00")),
+					}, {
 						Type:               ephemeralclusterv1.TestCompleted,
 						Status:             metav1.ConditionTrue,
 						Reason:             ephemeralclusterv1.TestDoneReason,
@@ -1756,11 +2046,6 @@ func TestReconcile(t *testing.T) {
 						Type:               ephemeralclusterv1.ProwJobCreated,
 						Status:             metav1.ConditionTrue,
 						Reason:             ephemeralclusterv1.ProwJobProperlyCreatedReason,
-						LastTransitionTime: metav1.NewTime(parseTime(t, "2025-04-02 12:45:00")),
-					}, {
-						Type:               ephemeralclusterv1.ClusterReady,
-						Status:             metav1.ConditionTrue,
-						Reason:             ephemeralclusterv1.CredentialsReadyReason,
 						LastTransitionTime: metav1.NewTime(parseTime(t, "2025-04-02 12:45:00")),
 					}, {
 						Type:               ephemeralclusterv1.ProwJobCompleted,
@@ -1773,21 +2058,25 @@ func TestReconcile(t *testing.T) {
 			},
 			wantRes: reconcile.Result{},
 			wantEvents: []string{
-				"Normal ClusterReady Cluster credentials are available",
 				"Normal ProwJobSucceeded ProwJob pj-123 completed successfully",
 			},
-			wantProvisioningDurationHistogram: []metric{{
-				Histogram: &histogram{
-					Labels:      []string{"e2e-aws"},
-					SampleCount: 1,
-					Buckets:     histogramBuckets(provisioningDurationBuckets, 0, 0, 0, 0, 1),
-				},
-			}},
 			wantDeprovisioningDurationHistogram: []metric{{
 				Histogram: &histogram{
 					Labels:      []string{"e2e-aws"},
 					SampleCount: 1,
 					Buckets:     histogramBuckets(deprovisioningDurationBuckets, 0, 0, 1),
+				},
+			}},
+			wantPhaseTransitionsCounter: []metric{{
+				Counter: &counter{
+					Labels: map[string]string{
+						"konflux_cluster": "",
+						"konflux_tenant":  "",
+						"cluster_profile": "",
+						"workflow":        "e2e-aws",
+						"phase":           "Deprovisioned",
+					},
+					Value: 1,
 				},
 			}},
 		},
@@ -1813,9 +2102,9 @@ func TestReconcile(t *testing.T) {
 
 			provisioningDurationHistogramVec := newProvisioningDurationHistogramVec()
 			deprovisioningDurationHistogramVec := newDeprovisioningDurationHistogramVec()
-			statesTransitionCounter := newStateTransitionCounterVec()
+			phaseTransitionsCounter := newPhaseTransitionsCounterVec()
 			metricsGatherer := newMetricsGatherer(logrus.NewEntry(logrus.StandardLogger()),
-				nil, nil, statesTransitionCounter, provisioningDurationHistogramVec, deprovisioningDurationHistogramVec, "", 0)
+				nil, nil, phaseTransitionsCounter, provisioningDurationHistogramVec, deprovisioningDurationHistogramVec, "", 0)
 
 			subTestFakeNow := fakeNow
 			if tc.now != nil {
@@ -1837,7 +2126,7 @@ func TestReconcile(t *testing.T) {
 				}),
 				collectProvisioningDurationMetricFunc:   metricsGatherer.collectProvisioningDuration,
 				collectDeprovisioningDurationMetricFunc: metricsGatherer.collectDeprovisioningDuration,
-				collectStateTransitionMetricFunc:        metricsGatherer.collectStateTransition,
+				collectPhaseTransitionsMetricFunc:       metricsGatherer.collectPhaseTransitions,
 			}
 
 			gotRes, gotErr := r.Reconcile(context.TODO(), reconcile.Request{NamespacedName: types.NamespacedName{Name: tc.ec.Name, Namespace: tc.ec.Namespace}})
@@ -1915,6 +2204,8 @@ func TestReconcile(t *testing.T) {
 			if diff := cmp.Diff(tc.wantEvents, drainEvents(fakeEventRecorder)); diff != "" {
 				t.Errorf("events differ: %s\n", diff)
 			}
+
+			assertPhaseTransitionsCounter(t, phaseTransitionsCounter, tc.wantPhaseTransitionsCounter)
 		})
 	}
 }
@@ -1934,6 +2225,7 @@ func TestReconcileDeleteEphemeralCluster(t *testing.T) {
 		wantSecret                          *corev1.Secret
 		wantRes                             reconcile.Result
 		wantDeprovisioningDurationHistogram []metric
+		wantPhaseTransitionsCounter         []metric
 		wantEvents                          []string
 		wantErr                             error
 	}{
@@ -2000,6 +2292,18 @@ func TestReconcileDeleteEphemeralCluster(t *testing.T) {
 			wantEvents: []string{
 				"Normal DeprovisioningStarted Deprovisioning signal sent",
 			},
+			wantPhaseTransitionsCounter: []metric{{
+				Counter: &counter{
+					Labels: map[string]string{
+						"konflux_cluster": "",
+						"konflux_tenant":  "",
+						"cluster_profile": "",
+						"workflow":        "",
+						"phase":           "Deprovisioning",
+					},
+					Value: 1,
+				},
+			}},
 		},
 		{
 			name: "ProwJob is gone already, remove the finalizer and delete EC",
@@ -2051,7 +2355,20 @@ func TestReconcileDeleteEphemeralCluster(t *testing.T) {
 			wantRes: reconcile.Result{},
 			wantEvents: []string{
 				"Warning ProwJobAborted ProwJob pj-123 aborted: EphemeralCluster being deleted: ci-operator NS not found",
+				"Warning ProwJobFailed ProwJob pj-123 finished with state: aborted",
 			},
+			wantPhaseTransitionsCounter: []metric{{
+				Counter: &counter{
+					Labels: map[string]string{
+						"konflux_cluster": "",
+						"konflux_tenant":  "",
+						"cluster_profile": "",
+						"workflow":        "",
+						"phase":           "Initializing",
+					},
+					Value: 1,
+				},
+			}},
 		},
 		{
 			name: "Aborted ProwJob remove the finalizer and delete",
@@ -2076,6 +2393,18 @@ func TestReconcileDeleteEphemeralCluster(t *testing.T) {
 			wantEvents: []string{
 				"Warning ProwJobFailed ProwJob pj-123 finished with state: aborted",
 			},
+			wantPhaseTransitionsCounter: []metric{{
+				Counter: &counter{
+					Labels: map[string]string{
+						"konflux_cluster": "",
+						"konflux_tenant":  "",
+						"cluster_profile": "",
+						"workflow":        "",
+						"phase":           "Initializing",
+					},
+					Value: 1,
+				},
+			}},
 		},
 		{
 			name: "Build client not found: remove finalizer and abort PJ",
@@ -2105,7 +2434,20 @@ func TestReconcileDeleteEphemeralCluster(t *testing.T) {
 			wantRes: reconcile.Result{},
 			wantEvents: []string{
 				"Warning ProwJobAborted ProwJob pj-123 aborted: EphemeralCluster being deleted: build client not found for cluster build01",
+				"Warning ProwJobFailed ProwJob pj-123 finished with state: aborted",
 			},
+			wantPhaseTransitionsCounter: []metric{{
+				Counter: &counter{
+					Labels: map[string]string{
+						"konflux_cluster": "",
+						"konflux_tenant":  "",
+						"cluster_profile": "",
+						"workflow":        "",
+						"phase":           "Initializing",
+					},
+					Value: 1,
+				},
+			}},
 		},
 		{
 			name: "ProwJob succeeded after deprovisioning, collect deprovisioning metric",
@@ -2152,6 +2494,76 @@ func TestReconcileDeleteEphemeralCluster(t *testing.T) {
 					Buckets:     histogramBuckets(deprovisioningDurationBuckets, 0, 0, 1),
 				},
 			}},
+			wantPhaseTransitionsCounter: []metric{{
+				Counter: &counter{
+					Labels: map[string]string{
+						"konflux_cluster": "",
+						"konflux_tenant":  "",
+						"cluster_profile": "",
+						"workflow":        "e2e-aws",
+						"phase":           "Deprovisioned",
+					},
+					Value: 1,
+				},
+			}},
+		},
+		{
+			name: "ProwJob failed after deprovisioning, collect deprovisioning metric",
+			ec: &ephemeralclusterv1.EphemeralCluster{
+				ObjectMeta: metav1.ObjectMeta{
+					Name:              "foo",
+					Namespace:         "bar",
+					DeletionTimestamp: ptr.To(metav1.NewTime(fakeNow)),
+					Finalizers:        []string{DependentProwJobFinalizer},
+				},
+				Spec: ephemeralclusterv1.EphemeralClusterSpec{
+					CIOperator: ephemeralclusterv1.CIOperatorSpec{
+						Test: ephemeralclusterv1.TestSpec{Workflow: "e2e-aws"},
+					},
+				},
+				Status: ephemeralclusterv1.EphemeralClusterStatus{
+					ProwJobID: "pj-123",
+					Phase:     ephemeralclusterv1.EphemeralClusterDeprovisioning,
+					Conditions: []metav1.Condition{{
+						Type:               ephemeralclusterv1.TestCompleted,
+						Status:             metav1.ConditionTrue,
+						LastTransitionTime: metav1.NewTime(parseTime(t, "2025-04-02 12:00:00")),
+					}},
+				},
+			},
+			pj: &prowv1.ProwJob{
+				ObjectMeta: metav1.ObjectMeta{Name: "pj-123", Namespace: prowJobNamespace},
+				Spec:       prowv1.ProwJobSpec{Cluster: "build01"},
+				Status:     prowv1.ProwJobStatus{State: prowv1.FailureState},
+			},
+			wantPJ: &prowv1.ProwJob{
+				ObjectMeta: metav1.ObjectMeta{Name: "pj-123", Namespace: prowJobNamespace},
+				Spec:       prowv1.ProwJobSpec{Cluster: "build01"},
+				Status:     prowv1.ProwJobStatus{State: prowv1.FailureState},
+			},
+			wantRes: reconcile.Result{},
+			wantEvents: []string{
+				"Warning ProwJobFailed ProwJob pj-123 finished with state: failure",
+			},
+			wantDeprovisioningDurationHistogram: []metric{{
+				Histogram: &histogram{
+					Labels:      []string{"e2e-aws"},
+					SampleCount: 1,
+					Buckets:     histogramBuckets(deprovisioningDurationBuckets, 0, 0, 1),
+				},
+			}},
+			wantPhaseTransitionsCounter: []metric{{
+				Counter: &counter{
+					Labels: map[string]string{
+						"konflux_cluster": "",
+						"konflux_tenant":  "",
+						"cluster_profile": "",
+						"workflow":        "e2e-aws",
+						"phase":           "DeprovisioningFailure",
+					},
+					Value: 1,
+				},
+			}},
 		},
 	} {
 		t.Run(tc.name, func(t *testing.T) {
@@ -2177,8 +2589,9 @@ func TestReconcileDeleteEphemeralCluster(t *testing.T) {
 			}
 
 			deprovisioningDurationHistogramVec := newDeprovisioningDurationHistogramVec()
+			phaseTransitionsCounter := newPhaseTransitionsCounterVec()
 			metricsGatherer := newMetricsGatherer(logrus.NewEntry(logrus.StandardLogger()),
-				nil, nil, nil, nil, deprovisioningDurationHistogramVec, "", 0)
+				nil, nil, phaseTransitionsCounter, nil, deprovisioningDurationHistogramVec, "", 0)
 
 			fakeEventRecorder := record.NewFakeRecorder(100)
 			r := reconciler{
@@ -2192,8 +2605,7 @@ func TestReconcileDeleteEphemeralCluster(t *testing.T) {
 					ProwConfig: prowconfig.ProwConfig{ProwJobNamespace: prowJobNamespace},
 				}),
 				collectDeprovisioningDurationMetricFunc: metricsGatherer.collectDeprovisioningDuration,
-				collectStateTransitionMetricFunc: func(ec *ephemeralclusterv1.EphemeralCluster, oldStatus, observedStatus *ephemeralclusterv1.EphemeralClusterStatus) {
-				},
+				collectPhaseTransitionsMetricFunc:       metricsGatherer.collectPhaseTransitions,
 			}
 
 			gotRes, gotErr := r.Reconcile(context.TODO(), reconcile.Request{NamespacedName: types.NamespacedName{Name: tc.ec.Name, Namespace: tc.ec.Namespace}})
@@ -2273,6 +2685,8 @@ func TestReconcileDeleteEphemeralCluster(t *testing.T) {
 			if diff := cmp.Diff(tc.wantEvents, drainEvents(fakeEventRecorder)); diff != "" {
 				t.Errorf("events differ: %s\n", diff)
 			}
+
+			assertPhaseTransitionsCounter(t, phaseTransitionsCounter, tc.wantPhaseTransitionsCounter)
 		})
 	}
 }

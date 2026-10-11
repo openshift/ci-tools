@@ -27,4 +27,4 @@ status:
     reason: CIOperatorJobsGenerateFailure
     status: "False"
     type: ProwJobCreated
-  phase: Failed
+  phase: InitializationFailed

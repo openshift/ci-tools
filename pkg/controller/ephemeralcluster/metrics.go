@@ -8,7 +8,6 @@ import (
 	"github.com/prometheus/client_golang/prometheus"
 	"github.com/sirupsen/logrus"
 
-	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	ctrlruntimeclient "sigs.k8s.io/controller-runtime/pkg/client"
 	"sigs.k8s.io/controller-runtime/pkg/manager"
 	"sigs.k8s.io/controller-runtime/pkg/metrics"
@@ -39,11 +38,13 @@ func newCountGaugeVec() *prometheus.GaugeVec {
 	}, []string{"konflux_cluster", "konflux_tenant", "cluster_profile", "workflow", "phase"})
 }
 
-func newStateTransitionCounterVec() *prometheus.CounterVec {
+func newPhaseTransitionsCounterVec() *prometheus.CounterVec {
 	return prometheus.NewCounterVec(prometheus.CounterOpts{
 		Namespace: metricsNamespace,
-		Name:      "statetransition_total",
-		Help:      "This counter keeps track of transitions between ephemeral cluster's phases",
+		Name:      "phase_transitions_total",
+		Help: "This counter keeps track of transitions between cluster's phases. " +
+			"The provisioning outcome is reliable, the deprovisioning one is a lower bound: a workflow is free to " +
+			"run its teardown as a best effort post step, in which case the ProwJob succeeds no matter what happened",
 	}, []string{"konflux_cluster", "konflux_tenant", "cluster_profile", "workflow", "phase"})
 }
 
@@ -77,7 +78,7 @@ type metricsGatherer struct {
 	logger                             *logrus.Entry
 	client                             ctrlruntimeclient.Client
 	countGauge                         *prometheus.GaugeVec
-	statesTransitionCounter            *prometheus.CounterVec
+	phaseTransitionsCounter            *prometheus.CounterVec
 	provisioningDurationHistogramVec   *prometheus.HistogramVec
 	deprovisioningDurationHistogramVec *prometheus.HistogramVec
 	ecNS                               string
@@ -90,9 +91,9 @@ func addMetricsToManager(logger *logrus.Entry, mgr manager.Manager, ecNS string,
 		return nil, fmt.Errorf("failed to register count gauge: %w", err)
 	}
 
-	statesTransitionCounter := newStateTransitionCounterVec()
-	if err := metrics.Registry.Register(statesTransitionCounter); err != nil {
-		return nil, fmt.Errorf("failed to register statetransition_total counter: %w", err)
+	phaseOutcomeCounter := newPhaseTransitionsCounterVec()
+	if err := metrics.Registry.Register(phaseOutcomeCounter); err != nil {
+		return nil, fmt.Errorf("failed to register phase_outcome_total counter: %w", err)
 	}
 
 	provisioningDurationHistogram := newProvisioningDurationHistogramVec()
@@ -106,7 +107,7 @@ func addMetricsToManager(logger *logrus.Entry, mgr manager.Manager, ecNS string,
 	}
 
 	metricsGatherer := newMetricsGatherer(logger.WithField("controller", "ephemeral_cluster_metrics"),
-		mgr.GetClient(), countGauge, statesTransitionCounter,
+		mgr.GetClient(), countGauge, phaseOutcomeCounter,
 		provisioningDurationHistogram, deprovisioningDurationHistogram, ecNS, interval)
 	if err := mgr.Add(metricsGatherer); err != nil {
 		return nil, fmt.Errorf("add metrics to manager: %w", err)
@@ -172,88 +173,44 @@ func (mg *metricsGatherer) collectCount(ecList *ephemeralclusterv1.EphemeralClus
 	}
 }
 
-func (mg *metricsGatherer) collectProvisioningDuration(ec *ephemeralclusterv1.EphemeralCluster, status *ephemeralclusterv1.EphemeralClusterStatus) bool {
-	find := func(t string) (time.Time, bool) {
-		for i := range status.Conditions {
-			if c := &status.Conditions[i]; c.Type == t && c.Status == metav1.ConditionTrue {
-				return c.LastTransitionTime.Time, true
-			}
-		}
-		return time.Time{}, false
-	}
-
-	if end, ok := find(ephemeralclusterv1.ClusterReady); ok {
-		start := ec.CreationTimestamp.Time
-		duration := end.Sub(start).Seconds()
-		mg.provisioningDurationHistogramVec.WithLabelValues(workflowLabel(ec)).Observe(duration)
-		return true
-	}
-
-	return false
+func (mg *metricsGatherer) collectProvisioningDuration(ec *ephemeralclusterv1.EphemeralCluster, duration float64) {
+	mg.provisioningDurationHistogramVec.WithLabelValues(workflowLabel(ec)).Observe(duration)
 }
 
-func (mg *metricsGatherer) collectDeprovisioningDuration(ec *ephemeralclusterv1.EphemeralCluster, oldStatus, observedStatus *ephemeralclusterv1.EphemeralClusterStatus) bool {
-	find := func(status *ephemeralclusterv1.EphemeralClusterStatus, t string) (time.Time, bool) {
-		for i := range status.Conditions {
-			if c := &status.Conditions[i]; c.Type == t && c.Status == metav1.ConditionTrue {
-				return c.LastTransitionTime.Time, true
-			}
-		}
-		return time.Time{}, false
-	}
-
-	// Normally TestCompleted is in oldStatus from a prior reconcile. After a controller
-	// restart both TestCompleted and ProwJobCompleted may be set in the same cycle,
-	// so fall back to observedStatus to avoid losing the data point.
-	start, startOk := find(oldStatus, ephemeralclusterv1.TestCompleted)
-	if !startOk {
-		start, startOk = find(observedStatus, ephemeralclusterv1.TestCompleted)
-	}
-	end, endOk := find(observedStatus, ephemeralclusterv1.ProwJobCompleted)
-	if startOk && endOk {
-		duration := end.Sub(start).Seconds()
-		mg.deprovisioningDurationHistogramVec.WithLabelValues(workflowLabel(ec)).Observe(duration)
-		return true
-	}
-
-	return false
+func (mg *metricsGatherer) collectDeprovisioningDuration(ec *ephemeralclusterv1.EphemeralCluster, duration float64) {
+	mg.deprovisioningDurationHistogramVec.WithLabelValues(workflowLabel(ec)).Observe(duration)
 }
 
-func (mg *metricsGatherer) collectStateTransition(ec *ephemeralclusterv1.EphemeralCluster, oldStatus, observedStatus *ephemeralclusterv1.EphemeralClusterStatus) {
-	find := func(status *ephemeralclusterv1.EphemeralClusterStatus, t string, statuses ...metav1.ConditionStatus) bool {
-		for i := range status.Conditions {
-			if c := &status.Conditions[i]; c.Type == t {
-				for _, s := range statuses {
-					if c.Status == s {
-						return true
-					}
-				}
-			}
-		}
-		return false
+func (mg *metricsGatherer) collectPhaseTransitions(ec *ephemeralclusterv1.EphemeralCluster, phase string) {
+	k := struct {
+		konfluxCluster string
+		konfluxTenant  string
+		clusterProfile string
+		workflow       string
+		phase          string
+	}{
+		konfluxCluster: ec.KonfluxCluster(),
+		konfluxTenant:  ec.KonfluxTenant(),
+		clusterProfile: ec.Spec.CIOperator.Test.ClusterProfile,
+		workflow:       workflowLabel(ec),
+		phase:          phase,
 	}
 
-	clusterNotReady := find(oldStatus, ephemeralclusterv1.ClusterReady, metav1.ConditionFalse)
-	clusterReady := find(observedStatus, ephemeralclusterv1.ClusterReady, metav1.ConditionTrue)
-
-	if clusterNotReady && clusterReady {
-		mg.statesTransitionCounter.
-			WithLabelValues(ec.KonfluxCluster(), ec.KonfluxTenant(), ec.Spec.CIOperator.Test.ClusterProfile, workflowLabel(ec), "ready").
-			Inc()
-	}
+	mg.phaseTransitionsCounter.
+		WithLabelValues(k.konfluxCluster, k.konfluxTenant, k.clusterProfile, k.workflow, k.phase).Inc()
 }
 
 func (mg *metricsGatherer) NeedLeaderElection() bool { return true }
 
 func newMetricsGatherer(logger *logrus.Entry, client ctrlruntimeclient.Client,
-	countGauge *prometheus.GaugeVec, statesTransitionCounter *prometheus.CounterVec,
+	countGauge *prometheus.GaugeVec, phaseTransitionsCounter *prometheus.CounterVec,
 	provisioningDurationHistogramVec, deprovisioningDurationHistogramVec *prometheus.HistogramVec,
 	ecNS string, interval time.Duration) *metricsGatherer {
 	return &metricsGatherer{
 		logger:                             logger,
 		client:                             client,
 		countGauge:                         countGauge,
-		statesTransitionCounter:            statesTransitionCounter,
+		phaseTransitionsCounter:            phaseTransitionsCounter,
 		provisioningDurationHistogramVec:   provisioningDurationHistogramVec,
 		deprovisioningDurationHistogramVec: deprovisioningDurationHistogramVec,
 		ecNS:                               ecNS,

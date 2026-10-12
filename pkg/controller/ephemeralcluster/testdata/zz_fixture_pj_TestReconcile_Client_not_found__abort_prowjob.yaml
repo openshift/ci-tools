@@ -6,7 +6,7 @@ items:
   spec:
     cluster: build01
   status:
-    completionTime: "2025-04-02T10:12:12Z"
+    completionTime: "2025-04-02T12:12:12Z"
     description: 'Build client not found: build client not found for cluster build01'
     startTime: null
     state: aborted

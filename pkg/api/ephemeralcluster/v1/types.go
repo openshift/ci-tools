@@ -71,7 +71,7 @@ const (
 	// EphemeralClusterProvisioning describes everything that happens after the ProwJob was created
 	// and before the kubeconfig is available.
 	EphemeralClusterProvisioning EphemeralClusterPhase = "Provisioning"
-	// EphemeralClusterInitializationFailed means the controller could not provision the cluster.
+	// EphemeralClusterProvisioningFailed means the controller could not provision the cluster.
 	EphemeralClusterProvisioningFailed EphemeralClusterPhase = "ProvisioningFailed"
 	// EphemeralClusterReady means the cluster is running and the kubeconfig is available.
 	EphemeralClusterReady EphemeralClusterPhase = "Ready"

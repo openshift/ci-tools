@@ -11,7 +11,7 @@ spec:
       clusterProfile: aws
 status:
   conditions:
-  - lastTransitionTime: "2025-04-02T10:12:12Z"
+  - lastTransitionTime: "2025-04-02T12:12:12Z"
     message: Too many ProwJobs bound, this is a bug
     reason: TooManyProwJobsBound
     status: Unknown

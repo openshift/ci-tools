@@ -91,9 +91,9 @@ func addMetricsToManager(logger *logrus.Entry, mgr manager.Manager, ecNS string,
 		return nil, fmt.Errorf("failed to register count gauge: %w", err)
 	}
 
-	phaseOutcomeCounter := newPhaseTransitionsCounterVec()
-	if err := metrics.Registry.Register(phaseOutcomeCounter); err != nil {
-		return nil, fmt.Errorf("failed to register phase_outcome_total counter: %w", err)
+	phaseTransitionsCounter := newPhaseTransitionsCounterVec()
+	if err := metrics.Registry.Register(phaseTransitionsCounter); err != nil {
+		return nil, fmt.Errorf("failed to register phase_transitions_total counter: %w", err)
 	}
 
 	provisioningDurationHistogram := newProvisioningDurationHistogramVec()
@@ -107,7 +107,7 @@ func addMetricsToManager(logger *logrus.Entry, mgr manager.Manager, ecNS string,
 	}
 
 	metricsGatherer := newMetricsGatherer(logger.WithField("controller", "ephemeral_cluster_metrics"),
-		mgr.GetClient(), countGauge, phaseOutcomeCounter,
+		mgr.GetClient(), countGauge, phaseTransitionsCounter,
 		provisioningDurationHistogram, deprovisioningDurationHistogram, ecNS, interval)
 	if err := mgr.Add(metricsGatherer); err != nil {
 		return nil, fmt.Errorf("add metrics to manager: %w", err)

@@ -190,7 +190,7 @@ func cmpMetrics(a, b []metric) string {
 }
 
 func parseTime(t *testing.T, timeStr string) time.Time {
-	parsed, err := time.ParseInLocation("2006-01-02 15:04:05", timeStr, time.Local)
+	parsed, err := time.ParseInLocation("2006-01-02 15:04:05", timeStr, time.UTC)
 	if err != nil {
 		t.Fatalf("parse fake now: %s", err)
 	}

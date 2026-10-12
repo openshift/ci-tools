@@ -410,6 +410,7 @@ func (r *reconciler) generateCIOperatorConfig(log *logrus.Entry, ec *ephemeralcl
 						As:       WaitTestStepName,
 						From:     cliImgName,
 						Commands: waitKubeconfigSh,
+						Timeout:  ec.Spec.CIOperator.Test.WaitForTearDownTimeout,
 						Resources: api.ResourceRequirements{
 							Requests: api.ResourceList{"cpu": "10m"},
 							Limits:   api.ResourceList{"memory": "100Mi"},

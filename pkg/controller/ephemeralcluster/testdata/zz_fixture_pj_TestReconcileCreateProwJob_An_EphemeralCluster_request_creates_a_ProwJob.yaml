@@ -117,6 +117,7 @@ items:
                       memory: 100Mi
                     requests:
                       cpu: 10m
+                  timeout: 4h0m0s
                 workflow: test-workflow
             zz_generated_metadata:
               branch: branch

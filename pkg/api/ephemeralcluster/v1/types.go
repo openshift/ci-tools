@@ -2,6 +2,7 @@ package v1
 
 import (
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
+	prowv1 "sigs.k8s.io/prow/pkg/apis/prowjobs/v1"
 
 	"github.com/openshift/ci-tools/pkg/api"
 )
@@ -142,6 +143,8 @@ type TestSpec struct {
 	Env            map[string]string `json:"env,omitempty"`
 	ClusterProfile string            `json:"clusterProfile,omitempty"`
 	ClusterClaim   *api.ClusterClaim `json:"clusterClaim,omitempty"`
+	// WaitForTearDownTimeout is how long to wait for the tearDown signal before automatically deprovisioning the cluster.
+	WaitForTearDownTimeout *prowv1.Duration `json:"waitForTearDownTimeout,omitempty"`
 }
 
 type EphemeralClusterStatus struct {

@@ -26,5 +26,5 @@ status:
       failed to merge presets for podspec: volume duplicated in pod spec: boskos'
     reason: CIOperatorJobsGenerateFailure
     status: "False"
-    type: ProwJobCreating
-  phase: Failed
+    type: ProwJobCreated
+  phase: InitializationFailed

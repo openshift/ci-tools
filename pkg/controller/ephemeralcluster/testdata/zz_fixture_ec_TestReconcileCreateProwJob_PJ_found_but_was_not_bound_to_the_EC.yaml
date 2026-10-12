@@ -17,6 +17,6 @@ status:
     message: ""
     reason: OrphanProwJobFound
     status: "True"
-    type: ProwJobCreating
+    type: ProwJobCreated
   phase: Provisioning
   prowJobId: pj

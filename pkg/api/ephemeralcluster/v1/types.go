@@ -7,24 +7,6 @@ import (
 )
 
 const (
-	CIOperatorJobsGenerateFailureReason     = "CIOperatorJobsGenerateFailure"
-	EphemeralClusterValidReason             = "EphemeralClusterValid"
-	ProwJobFailureReason                    = "ProwJobFailure"
-	ProwJobCompletedReason                  = "ProwJobCompleted"
-	ProwJobProperlyCreatedReason            = "ProwJobProperlyCreated"
-	OrphanProwJobFoundReason                = "OrphanProwJobFound"
-	TooManyProwJobsBoundReason              = "TooManyProwJobsBound"
-	SecretsFetchFailureReason               = "SecretsFetchFailure"
-	CreateTestCompletedSecretFailureReason  = "CreateTestCompletedSecretFailure"
-	EphemeralClusterValidationFailureReason = "EphemeralClusterValidationFailure"
-	HiveCredentialsReadyReason              = "HiveCredentialsReady"
-	CredentialsReadyReason                  = "CredentialsReady"
-	TestDoneReason                          = "TestDone"
-
-	CIOperatorNSNotFoundMsg = "ci-operator NS not found"
-	KubeconfigNotReadyMsg   = "kubeconfig not ready"
-	HiveSecretsNotReadyMsg  = "hive secrets not ready"
-
 	// Event reasons
 	EventReasonBuildClientNotFound   = "BuildClientNotFound"
 	EventReasonAborted               = "Aborted"
@@ -43,31 +25,62 @@ const (
 
 // Conditions
 const (
-	// ProwJobCreating indicates whether the prowjob is being created.
-	ProwJobCreating string = "ProwJobCreating"
-	// ContainersReady indicates whether the cluster is up and running.
+	// ProwJobCreated indicates whether the prowjob was created.
+	ProwJobCreated string = "ProwJobCreated"
+	// Reasons
+	CIOperatorJobsGenerateFailureReason     = "CIOperatorJobsGenerateFailure"
+	CouldNotPersistProwJobReason            = "CouldNotPersistProwJob"
+	ProwJobProperlyCreatedReason            = "ProwJobProperlyCreated"
+	OrphanProwJobFoundReason                = "OrphanProwJobFound"
+	TooManyProwJobsBoundReason              = "TooManyProwJobsBound"
+	EphemeralClusterValidationFailureReason = "EphemeralClusterValidationFailure"
+
+	// ClusterReady type indicates whether the cluster is up and running.
 	ClusterReady string = "ClusterReady"
-	// ProwJobCompleted indicates whether the ProwJob has done.
-	ProwJobCompleted string = "ProwJobCompleted"
+	// Reasons
+	SecretsFetchFailureReason  = "SecretsFetchFailure"
+	HiveCredentialsReadyReason = "HiveCredentialsReady"
+	CredentialsReadyReason     = "CredentialsReady"
+	KubeconfigNotReadyMsg      = "kubeconfig not ready"
+	HiveSecretsNotReadyMsg     = "hive secrets not ready"
+
 	// TestCompleted indicates test has completed and the ephemeral cluster isn't needed anymore.
 	TestCompleted string = "TestCompleted"
+	// Reasons
+	TestDoneReason                         = "TestDone"
+	CreateTestCompletedSecretFailureReason = "CreateTestCompletedSecretFailure"
+
+	// ProwJobCompleted type indicates whether the ProwJob has done.
+	ProwJobCompleted string = "ProwJobCompleted"
+	// Reasons
+	ProwJobFailureReason   string = "ProwJobFailure"
+	ProwJobCompletedReason string = "ProwJobCompleted"
+
+	// Shared resons
+	CIOperatorNSNotFoundMsg = "ci-operator NS not found"
 )
 
+// EphemeralClusterPhase is an high level description of where the ephemeral cluster is in its lifecycle
 type EphemeralClusterPhase string
 
 const (
-	// EphemeralClusterProvisioning describes everything that happens before the kubeconfig is available.
-	// This phase includes creating a ProwJob and waiting for the kubeconfig to show up.
+	// EphemeralClusterInitializing describes everything that happens before the ProwJob is created.
+	EphemeralClusterInitializing EphemeralClusterPhase = "Initializing"
+	// EphemeralClusterInitializationFailed describes an initialization failure.
+	EphemeralClusterInitializationFailed EphemeralClusterPhase = "InitializationFailed"
+	// EphemeralClusterProvisioning describes everything that happens after the ProwJob was created
+	// and before the kubeconfig is available.
 	EphemeralClusterProvisioning EphemeralClusterPhase = "Provisioning"
+	// EphemeralClusterProvisioningFailed means the controller could not provision the cluster.
+	EphemeralClusterProvisioningFailed EphemeralClusterPhase = "ProvisioningFailed"
 	// EphemeralClusterReady means the cluster is running and the kubeconfig is available.
 	EphemeralClusterReady EphemeralClusterPhase = "Ready"
 	// EphemeralClusterDeprovisioning means that the deprovisioning procedures are happening.
 	EphemeralClusterDeprovisioning EphemeralClusterPhase = "Deprovisioning"
+	// EphemeralClusterDeprovisioning means the controller could not deprovisioning the cluster.
+	EphemeralClusterDeprovisioningFailure EphemeralClusterPhase = "DeprovisioningFailure"
 	// EphemeralClusterDeprovisioning means that the cluster has been deprovisioned.
 	EphemeralClusterDeprovisioned EphemeralClusterPhase = "Deprovisioned"
-	// EphemeralClusterFailed means that either the cluster is in a error state or the
-	// provisioning/deprovisioning procedures didn't succeed.
-	EphemeralClusterFailed EphemeralClusterPhase = "Failed"
 )
 
 // +k8s:deepcopy-gen:interfaces=k8s.io/apimachinery/pkg/runtime.Object

@@ -60,12 +60,14 @@ func TestStart(t *testing.T) {
 
 		client := fake.NewClientBuilder().WithScheme(scheme).Build()
 		countGauge := newCountGaugeVec()
+		phaseOutcomeCounter := newPhaseTransitionsCounterVec()
 		provisioningDurationHistogram := newProvisioningDurationHistogramVec()
 
 		deprovisioningDurationHistogram := newDeprovisioningDurationHistogramVec()
 
 		mg := newMetricsGatherer(logrus.NewEntry(logrus.StandardLogger()), client,
-			countGauge, provisioningDurationHistogram, deprovisioningDurationHistogram, EphemeralClusterNamespace, gatherInterval)
+			countGauge, phaseOutcomeCounter,
+			provisioningDurationHistogram, deprovisioningDurationHistogram, EphemeralClusterNamespace, gatherInterval)
 		go func() {
 			if err := mg.Start(ctx); err != nil {
 				t.Errorf("Failed to start metrics gatherer: %s", err.Error())
@@ -80,7 +82,7 @@ func TestStart(t *testing.T) {
 				ecs: []*ephemeralclusterv1.EphemeralCluster{
 					ec("stone-prd-rh01", "tp-ci-tenant", "aws", "e2e-aws-workflow", "", ephemeralclusterv1.EphemeralClusterProvisioning),
 					ec("stone-prd-rh01", "tp-ci-tenant", "aws", "e2e-aws-workflow", "", ephemeralclusterv1.EphemeralClusterProvisioning),
-					ec("stone-stg-rh01", "tp-ci-tenant-2", "aws-2", "e2e-aws-workflow", "", ephemeralclusterv1.EphemeralClusterFailed),
+					ec("stone-stg-rh01", "tp-ci-tenant-2", "aws-2", "e2e-aws-workflow", "", ephemeralclusterv1.EphemeralClusterDeprovisioningFailure),
 				},
 				wantMetricVals: []metric{{
 					Gauge: &gauge{
@@ -89,19 +91,19 @@ func TestStart(t *testing.T) {
 					},
 				}, {
 					Gauge: &gauge{
-						Labels: []string{"stone-stg-rh01", "tp-ci-tenant-2", "aws-2", "e2e-aws-workflow", "Failed"},
+						Labels: []string{"stone-stg-rh01", "tp-ci-tenant-2", "aws-2", "e2e-aws-workflow", "DeprovisioningFailure"},
 						Value:  1,
 					},
 				}},
 			},
 			{
 				ecs: []*ephemeralclusterv1.EphemeralCluster{
-					ec("stone-stg-rh01", "tp-ci-tenant-2", "aws-2", "e2e-aws-workflow", "", ephemeralclusterv1.EphemeralClusterFailed),
+					ec("stone-stg-rh01", "tp-ci-tenant-2", "aws-2", "e2e-aws-workflow", "", ephemeralclusterv1.EphemeralClusterProvisioningFailed),
 					ec("stone-prd-rh01", "amisstea-tenant", "aws-konflux-prod", "hypershift-hostedcluster-workflow", "hosted-mgmt2", ephemeralclusterv1.EphemeralClusterDeprovisioning),
 				},
 				wantMetricVals: []metric{{
 					Gauge: &gauge{
-						Labels: []string{"stone-stg-rh01", "tp-ci-tenant-2", "aws-2", "e2e-aws-workflow", "Failed"},
+						Labels: []string{"stone-stg-rh01", "tp-ci-tenant-2", "aws-2", "e2e-aws-workflow", "ProvisioningFailed"},
 						Value:  1,
 					},
 				}, {

@@ -42,8 +42,8 @@ status:
   conditions:
   - lastTransitionTime: "2025-04-02T12:12:12Z"
     message: ""
-    reason: EphemeralClusterValid
+    reason: ProwJobProperlyCreated
     status: "True"
-    type: ProwJobCreating
+    type: ProwJobCreated
   phase: Provisioning
   prowJobId: foobar

@@ -26,6 +26,12 @@ import (
 type metric struct {
 	Gauge     *gauge
 	Histogram *histogram
+	Counter   *counter
+}
+
+type counter struct {
+	Labels map[string]string
+	Value  float64
 }
 
 type gauge struct {
@@ -34,8 +40,9 @@ type gauge struct {
 }
 
 type histogram struct {
-	Labels      []string
+	Labels      map[string]string
 	SampleCount uint64
+	SampleSum   float64
 	Buckets     []bucket
 }
 
@@ -50,11 +57,18 @@ func sortMetrics(a, b metric) int {
 			sort.Strings(m.Gauge.Labels)
 			return m.Gauge.Labels
 		}
+		var labels map[string]string
 		if m.Histogram != nil {
-			sort.Strings(m.Histogram.Labels)
-			return m.Histogram.Labels
+			labels = m.Histogram.Labels
+		} else if m.Counter != nil {
+			labels = m.Counter.Labels
 		}
-		return nil
+		labelPairs := make([]string, 0, len(labels))
+		for name, value := range labels {
+			labelPairs = append(labelPairs, name+"="+value)
+		}
+		sort.Strings(labelPairs)
+		return labelPairs
 	}
 	as := strings.Join(metricLabels(a), "")
 	bs := strings.Join(metricLabels(b), "")
@@ -62,6 +76,14 @@ func sortMetrics(a, b metric) int {
 }
 
 type metricTransformer func(in *dto.Metric) metric
+
+func counterTransformer(in *dto.Metric) metric {
+	out := metric{Counter: &counter{Labels: make(map[string]string), Value: in.Counter.GetValue()}}
+	for _, label := range in.Label {
+		out.Counter.Labels[label.GetName()] = label.GetValue()
+	}
+	return out
+}
 
 func gaugeTransformer(in *dto.Metric) metric {
 	out := metric{Gauge: &gauge{Value: *in.Gauge.Value}}
@@ -76,7 +98,9 @@ func gaugeTransformer(in *dto.Metric) metric {
 func histogramTransformer(in *dto.Metric) metric {
 	out := metric{
 		Histogram: &histogram{
+			Labels:      make(map[string]string),
 			SampleCount: in.Histogram.GetSampleCount(),
+			SampleSum:   in.Histogram.GetSampleSum(),
 			Buckets:     make([]bucket, len(in.Histogram.Bucket)),
 		},
 	}
@@ -95,8 +119,8 @@ func histogramTransformer(in *dto.Metric) metric {
 		Count:      in.Histogram.GetSampleCount() - prevCumulativeCount,
 	})
 
-	for _, l := range in.Label {
-		out.Histogram.Labels = append(out.Histogram.Labels, *l.Value)
+	for _, label := range in.Label {
+		out.Histogram.Labels[label.GetName()] = label.GetValue()
 	}
 
 	return out
@@ -148,6 +172,17 @@ func collectHistogram(v *prometheus.MetricVec) (result []metric, err error) {
 	return collect(v, histogramTransformer)
 }
 
+func assertPhaseTransitionsCounter(t *testing.T, v *prometheus.CounterVec, want []metric) {
+	t.Helper()
+	got, err := collect(v.MetricVec, counterTransformer)
+	if err != nil {
+		t.Fatalf("collect phase transitions counter: %s", err)
+	}
+	if diff := cmpMetrics(want, got); diff != "" {
+		t.Errorf("phase transitions counter differs (-want +got): %s", diff)
+	}
+}
+
 func cmpMetrics(a, b []metric) string {
 	slices.SortFunc(a, sortMetrics)
 	slices.SortFunc(b, sortMetrics)
@@ -155,7 +190,7 @@ func cmpMetrics(a, b []metric) string {
 }
 
 func parseTime(t *testing.T, timeStr string) time.Time {
-	parsed, err := time.Parse("2006-01-02 15:04:05", timeStr)
+	parsed, err := time.ParseInLocation("2006-01-02 15:04:05", timeStr, time.UTC)
 	if err != nil {
 		t.Fatalf("parse fake now: %s", err)
 	}

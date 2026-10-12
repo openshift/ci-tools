@@ -215,7 +215,7 @@ func TestReconcileCreateProwJob(t *testing.T) {
 							Workflow:               "test-workflow",
 							Env:                    map[string]string{"foo": "bar"},
 							ClusterProfile:         "aws",
-							WaitForTearDownTimeout: &prowv1.Duration{Duration: 4 * time.Hour},
+							WaitForTearDownTimeout: ptr.To("4h"),
 						},
 					},
 				},

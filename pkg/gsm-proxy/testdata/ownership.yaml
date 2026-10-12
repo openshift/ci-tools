@@ -1,0 +1,24 @@
+cluster_groups:
+  build-farm:
+    - build01
+groups:
+  team-a:
+    rename_to: kubernetes-team-a
+    clusters:
+      - build01
+    secret_collections:
+      - foo
+      - foo-extra
+      - shared
+  team-b:
+    cluster_groups:
+      - build-farm
+    secret_collections:
+      - bar
+      - shared
+  team-without-collections: {}
+  unclaimed-secrets:
+    unclaimed: true
+    secret_collections:
+      - orphaned
+      - shared

@@ -41,9 +41,14 @@ users:
 EOF
 ```
 
-The server uses the standard loading method (`KUBECONFIG` followed by in-cluster
-credentials), so to start the server from a locally-built executable using these
-credentials, do:
+The server loads credentials from `--kubeconfig` when set; otherwise it uses
+`KUBECONFIG` then in-cluster config. Locally:
+
+```console
+$ payload-testing-ui --kubeconfig kubeconfig.yaml --port 8000
+```
+
+Or via env:
 
 ```console
 $ KUBECONFIG=kubeconfig.yaml payload-testing-ui --port 8000

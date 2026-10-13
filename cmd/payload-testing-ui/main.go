@@ -12,6 +12,7 @@ import (
 	"github.com/sirupsen/logrus"
 
 	"k8s.io/client-go/kubernetes/scheme"
+	"k8s.io/client-go/rest"
 	ctrlruntimeclient "sigs.k8s.io/controller-runtime/pkg/client"
 	"sigs.k8s.io/prow/pkg/flagutil"
 	"sigs.k8s.io/prow/pkg/interrupts"
@@ -29,6 +30,7 @@ type options struct {
 	gracePeriod            time.Duration
 	instrumentationOptions flagutil.InstrumentationOptions
 	namespace              string
+	kubeconfigPath         string
 }
 
 func gatherOptions() options {
@@ -37,6 +39,7 @@ func gatherOptions() options {
 	fs.StringVar(&o.logLevel, "log-level", "info", "Level at which to log output.")
 	fs.IntVar(&o.port, "port", 8080, "Port to run server on")
 	fs.StringVar(&o.namespace, "namespace", "", "Namespace where resources are located")
+	fs.StringVar(&o.kubeconfigPath, "kubeconfig", "", "Path to a kubeconfig. If unset, KUBECONFIG or in-cluster config is used.")
 	o.instrumentationOptions.AddFlags(fs)
 	if err := fs.Parse(os.Args[1:]); err != nil {
 		logrus.WithError(err).Fatalf("cannot parse args: '%s'", os.Args[1:])
@@ -52,6 +55,15 @@ func validateOptions(o options) error {
 	return nil
 }
 
+// loadRESTConfig returns a REST config from --kubeconfig when set, otherwise
+// KUBECONFIG / in-cluster (util.LoadClusterConfig).
+func loadRESTConfig(kubeconfigPath string) (*rest.Config, error) {
+	if kubeconfigPath != "" {
+		return util.LoadKubeConfig(kubeconfigPath)
+	}
+	return util.LoadClusterConfig()
+}
+
 func main() {
 	logrusutil.ComponentInit()
 	o := gatherOptions()
@@ -63,7 +75,7 @@ func main() {
 	if err := prpqv1.AddToScheme(scheme.Scheme); err != nil {
 		logrus.WithError(err).Fatal("failed to add prpqv1 to scheme")
 	}
-	kubeconfig, err := util.LoadClusterConfig()
+	kubeconfig, err := loadRESTConfig(o.kubeconfigPath)
 	if err != nil {
 		logrus.WithError(err).Fatal("failed to load kubeconfig")
 	}

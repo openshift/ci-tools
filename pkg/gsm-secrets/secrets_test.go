@@ -109,6 +109,11 @@ func TestExtractCollectionFromSecretName(t *testing.T) {
 			expectedCollection: "my-creds",
 		},
 		{
+			name:               "with underscore",
+			secretName:         "col_name__group_w_underscore__some-field",
+			expectedCollection: "col_name",
+		},
+		{
 			name:               "3-level: collection, group, field",
 			secretName:         "vsphere__ibmcloud__username",
 			expectedCollection: "vsphere",

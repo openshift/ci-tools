@@ -29,7 +29,7 @@ const (
 )
 
 // ListSecretsHandler serves the secret names of one collection.
-// Verifier, Authorizer, and Lister are the three steps still to be filled in.
+// Requests are verified and authorized before the lister is called.
 type ListSecretsHandler struct {
 	Verifier   TokenVerifier
 	Authorizer Authorizer
@@ -37,8 +37,7 @@ type ListSecretsHandler struct {
 	Log        *logrus.Entry
 }
 
-// NewServeMux registers healthz, and the list route when h is non-nil.
-// The list route stays off until the three dependencies exist.
+// NewServeMux registers healthz and, when a handler is supplied, the list route.
 func NewServeMux(handler *ListSecretsHandler) *http.ServeMux {
 	mux := http.NewServeMux()
 	mux.HandleFunc("GET /healthz", func(w http.ResponseWriter, _ *http.Request) {

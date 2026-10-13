@@ -27,10 +27,16 @@ type CollectionAuthorizer struct {
 
 var _ Authorizer = (*CollectionAuthorizer)(nil)
 
+// NewCollectionAuthorizer returns an authorizer deciding access from the given
+// ownership configuration.
 func NewCollectionAuthorizer(config *group.Config) *CollectionAuthorizer {
 	return &CollectionAuthorizer{config: config}
 }
 
+// Authorize allows the collection when at least one of the caller's Rover groups
+// is a claimed owner of it in the configuration. Groups marked unclaimed never grant
+// access, and without a configuration every request is denied, so access fails closed.
+// Every denial wraps ErrForbidden.
 func (a *CollectionAuthorizer) Authorize(id Identity, collection string) error {
 	if a.config != nil {
 		for _, name := range id.Groups {

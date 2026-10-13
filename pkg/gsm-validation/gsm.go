@@ -40,7 +40,8 @@ var (
 	secretNameRegexp = regexp.MustCompile(SecretNameRegex)
 )
 
-// ValidateCollectionName validates a GSM collection name
+// ValidateCollectionName validates whether the collection string isn't malformed
+// and contains only allowed characters.
 func ValidateCollectionName(collection string) bool {
 	if collection == "" || len(collection) > MaxCollectionLength {
 		return false

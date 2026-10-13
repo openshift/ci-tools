@@ -212,9 +212,10 @@ func TestReconcileCreateProwJob(t *testing.T) {
 							"latest":  {Integration: &api.Integration{Name: "4.17", Namespace: "ocp"}},
 						},
 						Test: ephemeralclusterv1.TestSpec{
-							Workflow:       "test-workflow",
-							Env:            map[string]string{"foo": "bar"},
-							ClusterProfile: "aws",
+							Workflow:               "test-workflow",
+							Env:                    map[string]string{"foo": "bar"},
+							ClusterProfile:         "aws",
+							WaitForTearDownTimeout: ptr.To("4h"),
 						},
 					},
 				},

@@ -369,6 +369,11 @@ func (r *reconciler) handleBuildClientNotFoundError(ctx context.Context, log *lo
 
 func (r *reconciler) generateCIOperatorConfig(log *logrus.Entry, ec *ephemeralclusterv1.EphemeralCluster) (*api.ReleaseBuildConfiguration, error) {
 	log.Info("Generating ci-operator config")
+	waitTimeout, err := parseWaitForTearDownTimeout(ec.Spec.CIOperator.Test.WaitForTearDownTimeout)
+	if err != nil {
+		return nil, err
+	}
+
 	resources := ec.Spec.CIOperator.Resources
 	if len(resources) == 0 {
 		log.Info("ci-operator resources stanza is not set, using default values")
@@ -410,6 +415,7 @@ func (r *reconciler) generateCIOperatorConfig(log *logrus.Entry, ec *ephemeralcl
 						As:       WaitTestStepName,
 						From:     cliImgName,
 						Commands: waitKubeconfigSh,
+						Timeout:  waitTimeout,
 						Resources: api.ResourceRequirements{
 							Requests: api.ResourceList{"cpu": "10m"},
 							Limits:   api.ResourceList{"memory": "100Mi"},
@@ -448,8 +454,26 @@ func (r *reconciler) injectCLIIntoBaseImages(baseImages map[string]api.ImageStre
 	return longestName
 }
 
+func parseWaitForTearDownTimeout(timeout *string) (*prowv1.Duration, error) {
+	if timeout == nil {
+		return nil, nil
+	}
+	duration, err := time.ParseDuration(*timeout)
+	if err != nil {
+		return nil, fmt.Errorf("invalid waitForTearDownTimeout: %w", err)
+	}
+	if duration <= 0 {
+		return nil, errors.New("waitForTearDownTimeout must be greater than zero")
+	}
+	return &prowv1.Duration{Duration: duration}, nil
+}
+
 func (r *reconciler) validateEphemeralCluster(log *logrus.Entry, ec *ephemeralclusterv1.EphemeralCluster) error {
 	log.Info("Validating the Ephemeral Cluster")
+
+	if _, err := parseWaitForTearDownTimeout(ec.Spec.CIOperator.Test.WaitForTearDownTimeout); err != nil {
+		return err
+	}
 
 	// When the cluser claim is set, there is no need to validate the cluster profile.
 	if ec.Spec.CIOperator.Test.ClusterClaim != nil {

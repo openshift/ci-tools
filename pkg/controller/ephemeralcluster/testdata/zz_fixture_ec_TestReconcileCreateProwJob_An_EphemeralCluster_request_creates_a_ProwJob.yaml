@@ -38,6 +38,7 @@ spec:
       clusterProfile: aws
       env:
         foo: bar
+      waitForTearDownTimeout: 4h
       workflow: test-workflow
 status:
   conditions:

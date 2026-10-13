@@ -428,6 +428,11 @@ spec:
                         additionalProperties:
                           type: string
                         type: object
+                      waitForTearDownTimeout:
+                        description: WaitForTearDownTimeout is how long to wait for
+                          the tearDown signal before automatically deprovisioning
+                          the cluster.
+                        type: string
                       workflow:
                         type: string
                     type: object

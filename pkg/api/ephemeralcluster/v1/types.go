@@ -142,6 +142,8 @@ type TestSpec struct {
 	Env            map[string]string `json:"env,omitempty"`
 	ClusterProfile string            `json:"clusterProfile,omitempty"`
 	ClusterClaim   *api.ClusterClaim `json:"clusterClaim,omitempty"`
+	// WaitForTearDownTimeout is how long to wait for the tearDown signal before automatically deprovisioning the cluster.
+	WaitForTearDownTimeout *string `json:"waitForTearDownTimeout,omitempty"`
 }
 
 type EphemeralClusterStatus struct {

@@ -1,10 +1,10 @@
 package gsmproxy
 
 import (
+	"bytes"
 	"context"
 	"encoding/json"
 	"errors"
-	"io"
 	"net/http"
 	"net/http/httptest"
 	"strings"
@@ -56,8 +56,10 @@ func TestListSecretsHandlerServeHTTP(t *testing.T) {
 	for _, tc := range testCases {
 		t.Run(tc.name, func(t *testing.T) {
 			lister := &fakeLister{names: tc.names, err: tc.err}
+			var logs bytes.Buffer
 			logger := logrus.New()
-			logger.SetOutput(io.Discard)
+			logger.SetOutput(&logs)
+			logger.SetLevel(logrus.TraceLevel)
 			handler := &ListSecretsHandler{
 				Lister: lister,
 				Log:    logrus.NewEntry(logger),
@@ -89,6 +91,11 @@ func TestListSecretsHandlerServeHTTP(t *testing.T) {
 				}
 				if strings.Contains(recorder.Body.String(), sentinel) {
 					t.Errorf("response leaked upstream error: %s", recorder.Body.String())
+				}
+			}
+			for _, sensitive := range append([]string{"test-user", "kerberos", tc.collection, sentinel}, tc.names...) {
+				if strings.Contains(logs.String(), sensitive) {
+					t.Errorf("logs contain sensitive request data %q: %s", sensitive, logs.String())
 				}
 			}
 			if !lister.called || lister.gotCollection != tc.collection {

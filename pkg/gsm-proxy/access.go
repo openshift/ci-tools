@@ -25,26 +25,25 @@ func RequireCollectionAccess(verifier TokenVerifier, authorizer Authorizer, logg
 
 		token, err := BearerToken(r.Header.Get("Authorization"))
 		if err != nil {
-			logger.WithError(err).Debug("rejected a request without a usable bearer token")
+			logger.Debug("rejected a request without a usable bearer token")
 			writeError(w, http.StatusUnauthorized, MessageUnauthenticated)
 			return
 		}
 
 		identity, err := verifier.Verify(r.Context(), token)
 		if err != nil {
-			logger.WithError(err).Debug("rejected a token")
+			logger.Debug("rejected a token")
 			writeError(w, http.StatusUnauthorized, MessageUnauthenticated)
 			return
 		}
 
-		log := logger.WithFields(logrus.Fields{"kerberos": identity.Username, "collection": collection})
 		if err := authorizer.Authorize(identity, collection); err != nil {
 			if errors.Is(err, ErrForbidden) {
-				log.WithError(err).Info("denied collection access")
+				logger.Info("denied collection access")
 				writeError(w, http.StatusForbidden, MessageForbidden)
 				return
 			}
-			log.WithError(err).Error("authorization failed")
+			logger.Error("authorization failed")
 			writeError(w, http.StatusInternalServerError, MessageInternal)
 			return
 		}

@@ -12,7 +12,7 @@ var ErrUnauthenticated = errors.New("unauthenticated")
 
 // Identity is the caller named by a Dex ID token.
 // Username is preferred_username, the kerberos id. Groups are the rover groups
-// carried in the token. The handler logs Username and never logs Groups.
+// carried in the token.
 type Identity struct {
 	Username string
 	Groups   []string

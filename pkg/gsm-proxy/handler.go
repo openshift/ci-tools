@@ -13,7 +13,7 @@ type ListSecretsResponse struct {
 	Secrets []string `json:"secrets"`
 }
 
-// ErrorResponse carries a fixed message. Upstream errors are logged, never written back.
+// ErrorResponse carries a fixed message without exposing upstream error details.
 type ErrorResponse struct {
 	Error string `json:"error"`
 }
@@ -46,22 +46,16 @@ func NewServeMux(handler http.Handler) *http.ServeMux {
 
 func (h *ListSecretsHandler) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 	collection := r.PathValue("collection")
-	identity, _ := IdentityFromContext(r.Context())
-	log := h.Log.WithFields(logrus.Fields{
-		"kerberos":   identity.Username,
-		"collection": collection,
-	})
-
 	names, err := h.Lister.List(r.Context(), collection)
 	if err != nil {
-		log.WithError(err).Error("failed to list secrets")
+		h.Log.Error("failed to list secrets")
 		writeError(w, http.StatusInternalServerError, MessageInternal)
 		return
 	}
 	if names == nil {
 		names = []string{}
 	}
-	log.Infof("listed secrets in collection %q", collection)
+	h.Log.Info("listed secrets")
 	writeJSON(w, http.StatusOK, ListSecretsResponse{Secrets: names})
 }
 
@@ -73,6 +67,6 @@ func writeJSON(w http.ResponseWriter, status int, body any) {
 	w.Header().Set("Content-Type", "application/json")
 	w.WriteHeader(status)
 	if err := json.NewEncoder(w).Encode(body); err != nil {
-		logrus.WithError(err).Error("failed to write response")
+		logrus.Error("failed to write response")
 	}
 }

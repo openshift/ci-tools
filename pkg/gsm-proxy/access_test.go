@@ -1,11 +1,11 @@
 package gsmproxy
 
 import (
+	"bytes"
 	"context"
 	"encoding/json"
 	"errors"
 	"fmt"
-	"io"
 	"net/http"
 	"net/http/httptest"
 	"strings"
@@ -110,8 +110,10 @@ func TestRequireCollectionAccess(t *testing.T) {
 			identity := Identity{Username: "test-user", Groups: []string{"team-a"}}
 			verifier := &fakeVerifier{id: identity, err: tc.verifyErr}
 			authorizer := &fakeAuthorizer{err: tc.authzErr}
+			var logs bytes.Buffer
 			logger := logrus.New()
-			logger.SetOutput(io.Discard)
+			logger.SetOutput(&logs)
+			logger.SetLevel(logrus.TraceLevel)
 			ctx := t.Context()
 			var nextCalled bool
 			next := http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
@@ -156,6 +158,11 @@ func TestRequireCollectionAccess(t *testing.T) {
 			}
 			if strings.Contains(recorder.Body.String(), sentinel) {
 				t.Errorf("response leaked upstream error: %s", recorder.Body.String())
+			}
+			for _, sensitive := range []string{identity.Username, identity.Groups[0], tc.collection, "good", sentinel, "kerberos"} {
+				if sensitive != "" && strings.Contains(logs.String(), sensitive) {
+					t.Errorf("logs contain sensitive request data %q: %s", sensitive, logs.String())
+				}
 			}
 			if verifier.called != tc.wantVerify {
 				t.Errorf("verifier called = %t, want %t", verifier.called, tc.wantVerify)

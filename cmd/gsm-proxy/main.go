@@ -120,12 +120,13 @@ func run(o *options) error {
 }
 
 func newServer(o *options, config *group.Config, lister gsmproxy.SecretLister) *http.Server {
-	handler := &gsmproxy.ListSecretsHandler{
-		Verifier:   gsmproxy.NewDexTokenVerifier(),
-		Authorizer: gsmproxy.NewCollectionAuthorizer(config),
-		Lister:     lister,
-		Log:        logrus.NewEntry(logrus.StandardLogger()),
-	}
+	log := logrus.NewEntry(logrus.StandardLogger())
+	handler := gsmproxy.RequireCollectionAccess(
+		gsmproxy.NewDexTokenVerifier(),
+		gsmproxy.NewCollectionAuthorizer(config),
+		log,
+		&gsmproxy.ListSecretsHandler{Lister: lister, Log: log},
+	)
 	return &http.Server{
 		Addr:              o.listenAddr,
 		Handler:           gsmproxy.NewServeMux(handler),

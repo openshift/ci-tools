@@ -4,7 +4,6 @@ import (
 	"context"
 	"encoding/json"
 	"errors"
-	"fmt"
 	"io"
 	"net/http"
 	"net/http/httptest"
@@ -15,231 +14,104 @@ import (
 	"github.com/sirupsen/logrus"
 )
 
-func TestListSecretsHandler(t *testing.T) {
-	sentinel := "upstream-detail-must-not-leak"
-
+func TestListSecretsHandlerServeHTTP(t *testing.T) {
+	const sentinel = "upstream-detail-must-not-leak"
 	testCases := []struct {
 		name       string
 		collection string
-		token      string
-		verifier   *fakeVerifier
-		authorizer *fakeAuthorizer
-		lister     *fakeLister
-
+		names      []string
+		err        error
 		wantStatus int
-		wantBody   string
-		wantVerify bool
-		wantAuthz  bool
-		wantList   bool
+		wantNames  []string
+		wantError  string
 	}{
-		{
-			name:       "malformed collection is rejected before any dependency is called",
-			collection: "Bad_Name_",
-			token:      "good",
-			wantStatus: http.StatusBadRequest,
-			wantBody:   MessageBadCollection,
-		},
-		{
-			name:       "missing token is rejected before the verifier",
-			collection: "acm-qe",
-			wantStatus: http.StatusUnauthorized,
-			wantBody:   MessageUnauthenticated,
-		},
-		{
-			name:       "rejected token does not authorize or list",
-			collection: "acm-qe",
-			token:      "bad",
-			verifier:   &fakeVerifier{err: fmtWrap(ErrUnauthenticated, "expired")},
-			wantStatus: http.StatusUnauthorized,
-			wantBody:   MessageUnauthenticated,
-			wantVerify: true,
-		},
-		{
-			name:       "forbidden caller does not list",
-			collection: "acm-qe",
-			token:      "good",
-			verifier:   &fakeVerifier{id: Identity{Username: "psalajov", Groups: []string{"acm-pics"}}},
-			authorizer: &fakeAuthorizer{err: fmtWrap(ErrForbidden, "not an owner")},
-			wantStatus: http.StatusForbidden,
-			wantBody:   MessageForbidden,
-			wantVerify: true,
-			wantAuthz:  true,
-		},
 		{
 			name:       "lister failure returns the fixed message",
 			collection: "acm-qe",
-			token:      "good",
-			verifier:   &fakeVerifier{id: Identity{Username: "psalajov", Groups: []string{"acm-pics"}}},
-			authorizer: &fakeAuthorizer{},
-			lister:     &fakeLister{err: errors.New(sentinel)},
+			err:        errors.New(sentinel),
 			wantStatus: http.StatusInternalServerError,
-			wantBody:   MessageInternal,
-			wantVerify: true,
-			wantAuthz:  true,
-			wantList:   true,
+			wantError:  MessageInternal,
 		},
 		{
-			name:       "success returns the lister's names and nothing else",
+			name:       "success returns the lister's names",
 			collection: "acm-qe",
-			token:      "good",
-			verifier:   &fakeVerifier{id: Identity{Username: "psalajov", Groups: []string{"acm-pics"}}},
-			authorizer: &fakeAuthorizer{},
-			lister:     &fakeLister{names: []string{"aws/key-id", "gcp/sa"}},
+			names:      []string{"aws/key-id", "gcp/sa"},
 			wantStatus: http.StatusOK,
-			wantVerify: true,
-			wantAuthz:  true,
-			wantList:   true,
+			wantNames:  []string{"aws/key-id", "gcp/sa"},
+		},
+		{
+			name:       "nil list returns an empty array",
+			collection: "foo",
+			wantStatus: http.StatusOK,
+			wantNames:  []string{},
+		},
+		{
+			name:       "empty list returns an empty array",
+			collection: "foo",
+			names:      []string{},
+			wantStatus: http.StatusOK,
+			wantNames:  []string{},
 		},
 	}
-
 	for _, tc := range testCases {
 		t.Run(tc.name, func(t *testing.T) {
-			if tc.verifier == nil {
-				tc.verifier = &fakeVerifier{}
+			lister := &fakeLister{names: tc.names, err: tc.err}
+			logger := logrus.New()
+			logger.SetOutput(io.Discard)
+			handler := &ListSecretsHandler{
+				Lister: lister,
+				Log:    logrus.NewEntry(logger),
 			}
-			if tc.authorizer == nil {
-				tc.authorizer = &fakeAuthorizer{}
-			}
-			if tc.lister == nil {
-				tc.lister = &fakeLister{}
-			}
-			log := logrus.New()
-			log.SetOutput(io.Discard)
-			h := &ListSecretsHandler{
-				Verifier:   tc.verifier,
-				Authorizer: tc.authorizer,
-				Lister:     tc.lister,
-				Log:        logrus.NewEntry(log),
-			}
+			ctx := context.WithValue(context.Background(), identityContextKey{}, Identity{Username: "test-user"})
+			request := httptest.NewRequest(http.MethodGet, "/api/v1/collections/"+tc.collection+"/secrets", nil).WithContext(ctx)
+			request.SetPathValue("collection", tc.collection)
+			recorder := httptest.NewRecorder()
+			handler.ServeHTTP(recorder, request)
 
-			req := httptest.NewRequest(http.MethodGet, "/api/v1/collections/"+tc.collection+"/secrets", nil)
-			req.SetPathValue("collection", tc.collection)
-			if tc.token != "" {
-				req.Header.Set("Authorization", "Bearer "+tc.token)
-			}
-			rec := httptest.NewRecorder()
-			h.ServeHTTP(rec, req)
-
-			if rec.Code != tc.wantStatus {
-				t.Fatalf("status = %d, want %d, body %s", rec.Code, tc.wantStatus, rec.Body.String())
+			if recorder.Code != tc.wantStatus {
+				t.Fatalf("status = %d, want %d, body %s", recorder.Code, tc.wantStatus, recorder.Body.String())
 			}
 			if tc.wantStatus == http.StatusOK {
 				var got ListSecretsResponse
-				if err := json.Unmarshal(rec.Body.Bytes(), &got); err != nil {
+				if err := json.Unmarshal(recorder.Body.Bytes(), &got); err != nil {
 					t.Fatal(err)
 				}
-				if diff := cmp.Diff(tc.lister.names, got.Secrets); diff != "" {
-					t.Fatalf("secrets mismatch: %s", diff)
+				if diff := cmp.Diff(tc.wantNames, got.Secrets); diff != "" {
+					t.Errorf("secrets mismatch (-want +got): %s", diff)
 				}
 			} else {
 				var got ErrorResponse
-				if err := json.Unmarshal(rec.Body.Bytes(), &got); err != nil {
+				if err := json.Unmarshal(recorder.Body.Bytes(), &got); err != nil {
 					t.Fatal(err)
 				}
-				if got.Error != tc.wantBody {
-					t.Fatalf("error = %q, want %q", got.Error, tc.wantBody)
+				if got.Error != tc.wantError {
+					t.Errorf("error = %q, want %q", got.Error, tc.wantError)
 				}
-				if tc.lister.err != nil && strings.Contains(rec.Body.String(), sentinel) {
-					t.Fatalf("response leaked upstream error: %s", rec.Body.String())
+				if strings.Contains(recorder.Body.String(), sentinel) {
+					t.Errorf("response leaked upstream error: %s", recorder.Body.String())
 				}
 			}
-			if tc.verifier.called != tc.wantVerify {
-				t.Fatalf("verifier called = %v, want %v", tc.verifier.called, tc.wantVerify)
+			if !lister.called || lister.gotCollection != tc.collection {
+				t.Errorf("lister called = %t, collection = %q, want %q", lister.called, lister.gotCollection, tc.collection)
 			}
-			if tc.verifier.called && tc.verifier.gotToken != tc.token {
-				t.Fatalf("verifier token = %q, want %q", tc.verifier.gotToken, tc.token)
-			}
-			if tc.authorizer.called != tc.wantAuthz {
-				t.Fatalf("authorizer called = %v, want %v", tc.authorizer.called, tc.wantAuthz)
-			}
-			if tc.lister.called != tc.wantList {
-				t.Fatalf("lister called = %v, want %v", tc.lister.called, tc.wantList)
+			if lister.gotContext != ctx {
+				t.Error("lister did not receive the request context")
 			}
 		})
 	}
-}
-
-func TestNewServeMuxOmitsListRouteUntilHandlerExists(t *testing.T) {
-	mux := NewServeMux(nil)
-	rec := httptest.NewRecorder()
-	mux.ServeHTTP(rec, httptest.NewRequest(http.MethodGet, "/healthz", nil))
-	if rec.Code != http.StatusOK {
-		t.Fatalf("healthz status = %d", rec.Code)
-	}
-
-	rec = httptest.NewRecorder()
-	mux.ServeHTTP(rec, httptest.NewRequest(http.MethodGet, "/api/v1/collections/acm-qe/secrets", nil))
-	if rec.Code != http.StatusNotFound {
-		t.Fatalf("list route status = %d, want 404 while the handler is unwired", rec.Code)
-	}
-}
-
-func TestBearerToken(t *testing.T) {
-	testCases := []struct {
-		name    string
-		header  string
-		want    string
-		wantErr bool
-	}{
-		{name: "bearer", header: "Bearer abc", want: "abc"},
-		{name: "case insensitive scheme", header: "bearer abc", want: "abc"},
-		{name: "missing", wantErr: true},
-		{name: "empty token", header: "Bearer   ", wantErr: true},
-		{name: "not bearer", header: "Basic abc", wantErr: true},
-	}
-	for _, tc := range testCases {
-		t.Run(tc.name, func(t *testing.T) {
-			got, err := BearerToken(tc.header)
-			if tc.wantErr {
-				if err == nil {
-					t.Fatal("expected an error")
-				}
-				return
-			}
-			if err != nil {
-				t.Fatal(err)
-			}
-			if got != tc.want {
-				t.Fatalf("token = %q, want %q", got, tc.want)
-			}
-		})
-	}
-}
-
-func fmtWrap(sentinel error, msg string) error {
-	return fmt.Errorf("%s: %w", msg, sentinel)
-}
-
-type fakeVerifier struct {
-	id       Identity
-	err      error
-	called   bool
-	gotToken string
-}
-
-func (f *fakeVerifier) Verify(_ context.Context, rawToken string) (Identity, error) {
-	f.called = true
-	f.gotToken = rawToken
-	return f.id, f.err
-}
-
-type fakeAuthorizer struct {
-	err    error
-	called bool
-}
-
-func (f *fakeAuthorizer) Authorize(_ Identity, _ string) error {
-	f.called = true
-	return f.err
 }
 
 type fakeLister struct {
-	names  []string
-	err    error
-	called bool
+	names         []string
+	err           error
+	called        bool
+	gotCollection string
+	gotContext    context.Context
 }
 
-func (f *fakeLister) List(_ context.Context, _ string) ([]string, error) {
+func (f *fakeLister) List(ctx context.Context, collection string) ([]string, error) {
 	f.called = true
+	f.gotCollection = collection
+	f.gotContext = ctx
 	return f.names, f.err
 }

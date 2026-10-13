@@ -2,12 +2,9 @@ package gsmproxy
 
 import (
 	"encoding/json"
-	"errors"
 	"net/http"
 
 	"github.com/sirupsen/logrus"
-
-	gsmvalidation "github.com/openshift/ci-tools/pkg/gsm-validation"
 )
 
 const ListSecretsPattern = "GET /api/v1/collections/{collection}/secrets"
@@ -29,16 +26,14 @@ const (
 )
 
 // ListSecretsHandler serves the secret names of one collection.
-// Requests are verified and authorized before the lister is called.
+// It must be registered behind RequireCollectionAccess.
 type ListSecretsHandler struct {
-	Verifier   TokenVerifier
-	Authorizer Authorizer
-	Lister     SecretLister
-	Log        *logrus.Entry
+	Lister SecretLister
+	Log    *logrus.Entry
 }
 
-// NewServeMux registers healthz and, when a handler is supplied, the list route.
-func NewServeMux(handler *ListSecretsHandler) *http.ServeMux {
+// NewServeMux registers healthz and, when supplied, the protected list handler.
+func NewServeMux(handler http.Handler) *http.ServeMux {
 	mux := http.NewServeMux()
 	mux.HandleFunc("GET /healthz", func(w http.ResponseWriter, _ *http.Request) {
 		w.WriteHeader(http.StatusOK)
@@ -51,36 +46,11 @@ func NewServeMux(handler *ListSecretsHandler) *http.ServeMux {
 
 func (h *ListSecretsHandler) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 	collection := r.PathValue("collection")
-	if !gsmvalidation.ValidateCollectionName(collection) {
-		writeError(w, http.StatusBadRequest, MessageBadCollection)
-		return
-	}
-
-	token, err := BearerToken(r.Header.Get("Authorization"))
-	if err != nil {
-		h.Log.WithError(err).Debug("rejected a request without a usable bearer token")
-		writeError(w, http.StatusUnauthorized, MessageUnauthenticated)
-		return
-	}
-
-	identity, err := h.Verifier.Verify(r.Context(), token)
-	if err != nil {
-		h.Log.WithError(err).Debug("rejected a token")
-		writeError(w, http.StatusUnauthorized, MessageUnauthenticated)
-		return
-	}
-
-	log := h.Log.WithFields(logrus.Fields{"kerberos": identity.Username, "collection": collection})
-	if err := h.Authorizer.Authorize(identity, collection); err != nil {
-		if errors.Is(err, ErrForbidden) {
-			log.WithError(err).Info("denied collection access")
-			writeError(w, http.StatusForbidden, MessageForbidden)
-			return
-		}
-		log.WithError(err).Error("authorization failed")
-		writeError(w, http.StatusInternalServerError, MessageInternal)
-		return
-	}
+	identity, _ := IdentityFromContext(r.Context())
+	log := h.Log.WithFields(logrus.Fields{
+		"kerberos":   identity.Username,
+		"collection": collection,
+	})
 
 	names, err := h.Lister.List(r.Context(), collection)
 	if err != nil {

@@ -8,10 +8,10 @@ import (
 	"github.com/openshift/ci-tools/pkg/group"
 )
 
-// ErrForbidden is returned when the caller may not list a collection.
+// ErrForbidden is returned when the caller may not access a collection.
 var ErrForbidden = errors.New("forbidden")
 
-// Authorizer checks whether an authenticated caller may list a collection.
+// Authorizer checks whether an authenticated caller may access a collection.
 // The caller's Rover groups (Identity.Groups) come from a Dex ID token already validated by TokenVerifier.
 // Collection ownership comes from sync-rover-groups/_config.yaml in release repository.
 // Access denials must return an error wrapping ErrForbidden.

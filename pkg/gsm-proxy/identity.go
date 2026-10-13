@@ -7,7 +7,7 @@ import (
 )
 
 // ErrUnauthenticated is returned when a bearer token is missing or rejected.
-// The handler maps every such error to one fixed 401 message.
+// The collection-access handler maps every such error to one fixed 401 message.
 var ErrUnauthenticated = errors.New("unauthenticated")
 
 // Identity is the caller named by a Dex ID token.
@@ -16,6 +16,14 @@ var ErrUnauthenticated = errors.New("unauthenticated")
 type Identity struct {
 	Username string
 	Groups   []string
+}
+
+type identityContextKey struct{}
+
+// IdentityFromContext returns the verified caller set by RequireCollectionAccess.
+func IdentityFromContext(ctx context.Context) (Identity, bool) {
+	identity, ok := ctx.Value(identityContextKey{}).(Identity)
+	return identity, ok
 }
 
 // TokenVerifier checks a bearer token and returns the caller it identifies.

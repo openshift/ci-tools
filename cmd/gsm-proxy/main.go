@@ -104,7 +104,7 @@ func run(o *options) error {
 	lister, err := gsmproxy.NewGSMSecretLister(interrupts.Context(), gsmsecrets.Config{ProjectIdString: o.gsmProjectID},
 		option.WithAuthCredentials(gcpCredentials))
 	if err != nil {
-		return errors.New("failed to initialize GSM lister")
+		return fmt.Errorf("failed to initialize GSM lister: %w", err)
 	}
 	defer func() {
 		if err := lister.Close(); err != nil {

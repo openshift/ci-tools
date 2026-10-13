@@ -5,6 +5,7 @@ go 1.26.4
 replace github.com/docker/distribution => github.com/docker/distribution v2.7.1+incompatible
 
 require (
+	cloud.google.com/go/auth v0.23.2
 	cloud.google.com/go/bigquery v1.81.0
 	cloud.google.com/go/storage v1.67.1
 	github.com/GoogleCloudPlatform/testgrid v0.0.176
@@ -243,7 +244,6 @@ require (
 require (
 	bitbucket.org/creachadair/stringset v0.0.11 // indirect
 	cel.dev/expr v0.25.3 // indirect
-	cloud.google.com/go/auth v0.23.2 // indirect
 	cloud.google.com/go/auth/oauth2adapt v0.2.8 // indirect
 	cloud.google.com/go/compute/metadata v0.9.0 // indirect
 	cloud.google.com/go/iam v1.13.0

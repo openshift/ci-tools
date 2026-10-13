@@ -122,7 +122,7 @@ func TestGSMSecretListerList(t *testing.T) {
 				}},
 			},
 			wantRequests: 1,
-			want: []string{"g/service-account"},
+			want:         []string{"g/service-account"},
 		},
 		{
 			name:         "first page failure",

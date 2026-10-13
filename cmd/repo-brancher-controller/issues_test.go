@@ -93,6 +93,24 @@ func TestSlackDigestShowsFiveMostRecentIssues(t *testing.T) {
 	}
 }
 
+func TestSlackDigestLinksToManualRecovery(t *testing.T) {
+	for _, issueCount := range []int{1, maxSlackIssues + 1} {
+		store := newBranchIssueStore()
+		for i := 0; i < issueCount; i++ {
+			store.upsert(branchIssue{key: branchIssueKey{org: "org", repo: "repo", source: "main", target: "release-5." + string(rune('0'+i))}, reason: "non_fast_forward"})
+		}
+		publisher := newSlackDigestPublisher(&recordingSlackClient{}, "CHAN", store)
+		issues := store.snapshot()
+		for _, rendered := range []string{renderSlackBlocks(publisher.blocks(issues)), fallbackDigestText(issues)} {
+			for _, want := range []string{"Inspect the branch histories, forwarding configuration, and error first.", recoveryDocURL, manualResetURL} {
+				if !strings.Contains(rendered, want) {
+					t.Errorf("digest with %d issues did not include %q: %s", issueCount, want, rendered)
+				}
+			}
+		}
+	}
+}
+
 func TestSlackDigestPublishError(t *testing.T) {
 	store := newBranchIssueStore()
 	store.upsert(branchIssue{key: branchIssueKey{org: "org", repo: "repo", source: "main", target: "release-5.0"}, reason: "non_fast_forward", lastError: "boom"})

@@ -1,0 +1,110 @@
+# GSM proxy
+
+`gsm-proxy` lets authenticated CI users list secret names in Google Secret Manager (GSM)
+collections owned by their Rover groups. It returns sorted `group/field` paths, never
+secret values, and excludes collection indexes and updater-service-account secrets.
+
+GSM listing is project-wide, so granting it directly to users would expose other teams'
+secret names. The proxy authorizes each collection before listing with its own Google
+service account. This is intended to replace the CLI's index-based listing and eventually
+remove most per-group viewer IAM bindings. Writes and `get-sa` remain outside its scope.
+
+## Authentication and authorization
+
+Dex authenticates users through Red Hat SSO and issues signed ID tokens containing their
+username and Rover groups. The proxy accepts tokens only from the `Authorization: Bearer`
+header and verifies RS256 signatures, issuer `https://idp.ci.openshift.org`, sole audience
+`gsm-cli`, expiration, and identity claims. Dex signing keys are cached; remote fetch
+attempts are limited to once per minute.
+
+Collection ownership comes from the release repository's
+[`core-services/sync-rover-groups/_config.yaml`](https://github.com/openshift/release/blob/main/core-services/sync-rover-groups/_config.yaml),
+loaded with `group.LoadConfig`. Access requires an exact group/collection match under a
+claimed owner. `unclaimed` groups, Kubernetes group renames, and `groups.yaml` grant no access.
+
+The diagram shows the intended end-to-end CLI flow. **Production CLI login/token handling
+and proxy-backed listing are not implemented in this change.** The proxy-side token
+verification, authorization, and listing are implemented.
+
+```mermaid
+sequenceDiagram
+    participant CLI as Secret-manager CLI
+    participant Browser
+    participant Dex as Dex (idp.ci.openshift.org)
+    participant SSO as Red Hat SSO
+    participant Proxy as GSM proxy
+    participant GSM as Google Secret Manager
+
+    Note over CLI,SSO: Login (planned CLI integration)
+    CLI->>Browser: Open authorization URL with state and PKCE S256 challenge
+    Browser->>Dex: Authorize client gsm-cli
+    Dex-->>Browser: Redirect to Red Hat SSO
+    Browser->>SSO: Authenticate
+    SSO-->>Browser: Redirect back to Dex
+    Browser->>Dex: Complete upstream callback
+    Dex->>SSO: Obtain identity and Rover groups
+    Dex-->>Browser: Redirect to loopback callback with code and state
+    Browser->>CLI: http://127.0.0.1:8085/callback
+    CLI->>CLI: Validate state
+    CLI->>Dex: Exchange code with PKCE verifier and registered client credentials
+    Dex-->>CLI: Signed ID token (username and groups)
+
+    Note over CLI,GSM: Collection listing (implemented proxy API)
+    CLI->>Proxy: GET /api/v1/collections/{collection}/secrets<br/>Authorization: Bearer ID_TOKEN
+    Proxy->>Proxy: Validate collection name
+    opt Signing keys need fetching (rate limited)
+        Proxy->>Dex: GET /keys
+        Dex-->>Proxy: Public signing keys
+    end
+    Proxy->>Proxy: Verify signature, issuer, sole audience, expiry and identity claims
+    alt Missing or invalid token
+        Proxy-->>CLI: 401 Unauthorized
+    else Valid token
+        Proxy->>Proxy: Check token groups against loaded ownership config
+        alt No claimed group owns the collection
+            Proxy-->>CLI: 403 Forbidden
+        else Authorized
+            Proxy->>GSM: ListSecrets using proxy service account (all matching pages)
+            GSM-->>Proxy: Secret metadata
+            Proxy->>Proxy: Extract names only, enforce exact collection match,<br/>exclude internal secrets and sort paths
+            Proxy-->>CLI: 200 JSON secrets array
+        end
+    end
+```
+
+The caller's Google credentials are not sent to the proxy. Its Google service account
+must have only `secretmanager.secrets.list`, with no payload-read or write permissions.
+GSM metadata can contain sensitive annotations, so responses use only `Secret.Name`;
+Google SDK logging is suppressed and public errors use fixed messages.
+
+## Running locally
+
+From the repository root, using a proxy service-account key and a release checkout:
+
+```bash
+go run ./cmd/gsm-proxy \
+  --groups-ownership-file=/path/to/release/core-services/sync-rover-groups/_config.yaml \
+  --gsm-project-id=openshift-ci-secrets \
+  --gsm-credentials-file=/path/to/gsm-proxy-service-account.json
+```
+
+The default listener is `127.0.0.1:8080`. `GET /healthz` returns 200 without authentication.
+The list endpoint returns `{"secrets":["group/field"]}` (or `{"secrets":[]}`), 400 for a
+malformed collection, 401 for missing/invalid authentication, and 403 for denied access.
+Upstream listing failures return a fixed 500 response, without partial results.
+Use `--help` for listener and graceful-shutdown options.
+
+## Before production deployment
+
+The intended deployment is on core-ci, with an ownership ConfigMap and read-only credential
+mount. The binary serves plain HTTP: require external HTTPS, restrict direct backend
+access, and explicitly protect the ingress-to-pod transport boundary.
+
+Ownership is currently loaded **only at startup**. Validated, atomic reload with fail-closed
+behavior on invalid/unreadable replacements is required before deployment. Reload alone
+does not revoke group membership in an already-issued token: the proxy trusts that signed
+snapshot until expiry. Define and verify the acceptable membership-revocation window,
+token lifetime/refresh behavior, and emergency revocation mechanism before production use.
+Backend request deadlines and listing resource limits also remain deployment prerequisites.
+
+Run the proxy tests with `go test ./cmd/gsm-proxy ./pkg/gsm-proxy`.

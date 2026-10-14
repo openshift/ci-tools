@@ -5,6 +5,7 @@ go 1.26.4
 replace github.com/docker/distribution => github.com/docker/distribution v2.7.1+incompatible
 
 require (
+	cloud.google.com/go/auth v0.23.2
 	cloud.google.com/go/bigquery v1.81.0
 	cloud.google.com/go/storage v1.67.1
 	github.com/GoogleCloudPlatform/testgrid v0.0.176
@@ -13,9 +14,11 @@ require (
 	github.com/andygrunwald/go-jira v1.17.0
 	github.com/blang/semver v3.5.1+incompatible
 	github.com/bombsimon/logrusr/v3 v3.0.0
+	github.com/coreos/go-oidc/v3 v3.21.0
 	github.com/docker/distribution v2.8.3+incompatible
 	github.com/getlantern/deepcopy v0.0.0-20160317154340-7f45deb8130a
 	github.com/ghodss/yaml v1.0.0
+	github.com/go-jose/go-jose/v4 v4.1.4
 	github.com/go-ldap/ldap/v3 v3.4.11
 	github.com/google/go-cmp v0.7.0
 	github.com/google/gofuzz v1.2.1-0.20210504230335-f78f29fc09ea
@@ -241,7 +244,6 @@ require (
 require (
 	bitbucket.org/creachadair/stringset v0.0.11 // indirect
 	cel.dev/expr v0.25.3 // indirect
-	cloud.google.com/go/auth v0.23.2 // indirect
 	cloud.google.com/go/auth/oauth2adapt v0.2.8 // indirect
 	cloud.google.com/go/compute/metadata v0.9.0 // indirect
 	cloud.google.com/go/iam v1.13.0
@@ -287,7 +289,6 @@ require (
 	github.com/go-git/gcfg v1.5.1-0.20230307220236-3a3c6141e376 // indirect
 	github.com/go-git/go-billy/v5 v5.9.0 // indirect
 	github.com/go-git/go-git/v5 v5.19.2 // indirect
-	github.com/go-jose/go-jose/v4 v4.1.4 // indirect
 	github.com/go-logr/stdr v1.2.2 // indirect
 	github.com/go-openapi/jsonpointer v1.0.0 // indirect
 	github.com/go-openapi/jsonreference v1.0.0 // indirect

@@ -135,35 +135,6 @@ func getInjectTestFromQuery(w http.ResponseWriter, r *http.Request) (*api.Metada
 	return &ret, nil
 }
 
-func injectTest(injectTo api.ReleaseBuildConfiguration, configs Getter, resolverMetrics *metrics.Metrics, w http.ResponseWriter, r *http.Request, logger *logrus.Entry) *api.ReleaseBuildConfiguration {
-	inject, err := getInjectTestFromQuery(w, r)
-	if err != nil {
-		// getInjectTestFromQuery deals with setting status code and writing response
-		// so we need to just log the error here
-		metrics.RecordError("invalid query", resolverMetrics.ErrorRate)
-		logrus.WithError(err).Warning("failed to read query from request")
-		return nil
-	}
-	injectFromConfig, err := configs.GetMatchingConfig(inject.Metadata)
-	if err != nil {
-		metrics.RecordError("config not found", resolverMetrics.ErrorRate)
-		w.WriteHeader(http.StatusNotFound)
-		fmt.Fprintf(w, "failed to get config to inject from: %v", err)
-		logger.WithError(err).Warning("failed to get config")
-		return nil
-	}
-	configWithInjectedTest, err := injectTo.WithPresubmitFrom(&injectFromConfig, inject.Test)
-	if err != nil {
-		metrics.RecordError("test injection failed", resolverMetrics.ErrorRate)
-		w.WriteHeader(http.StatusInternalServerError) // TODO: Can be be 400 in some cases but meh
-		fmt.Fprintf(w, "failed to inject test into config: %v", err)
-		logger.WithError(err).Warning("failed to inject test into config")
-		return nil
-	}
-
-	return configWithInjectedTest
-}
-
 func ResolveConfig(configs Getter, resolver Resolver, resolverMetrics *metrics.Metrics) http.HandlerFunc {
 	return func(w http.ResponseWriter, r *http.Request) {
 		if r.Method != "GET" {

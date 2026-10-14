@@ -235,33 +235,32 @@ func ResolveAndMergeConfigsAndInjectTest(configs Getter, resolver Resolver, reso
 		}
 		logger := logrus.WithField("merged", "true")
 
-		// If the requested injected test is from one of the configs to be merged, we will use that entire config as the base to merge into
 		injected, err := getInjectTestFromQuery(w, r)
 		if err != nil {
 			metrics.RecordError("invalid query", resolverMetrics.ErrorRate)
 			logrus.WithError(err).Warning("failed to read inject query from request")
+			return
 		}
 		var metadataToMerge []api.Metadata
-		var mergedConfig *api.ReleaseBuildConfiguration
-		var injectedTestIncluded bool
+		source, err := configs.GetMatchingConfig(injected.Metadata)
+		if err != nil {
+			metrics.RecordError("config not found", resolverMetrics.ErrorRate)
+			w.WriteHeader(http.StatusNotFound)
+			fmt.Fprintf(w, "failed to get config to inject from: %v", err)
+			return
+		}
+		mergedConfig, err := source.WithPresubmitFrom(&source, injected.Test)
+		if err != nil {
+			metrics.RecordError("test injection failed", resolverMetrics.ErrorRate)
+			w.WriteHeader(http.StatusBadRequest)
+			fmt.Fprintf(w, "failed to select injected test: %v", err)
+			return
+		}
+		mergedConfig.Metadata = injected.Metadata
 		for _, metadata := range metadataList {
-			if injected.Metadata == metadata {
-				config, err := configs.GetMatchingConfig(metadata)
-				if err != nil {
-					metrics.RecordError("config not found", resolverMetrics.ErrorRate)
-					w.WriteHeader(http.StatusNotFound)
-					fmt.Fprintf(w, "failed to get config: %v", err)
-					logger.WithError(err).Warning("failed to get config")
-					return
-				}
-				mergedConfig = &config
-				injectedTestIncluded = true
-			} else {
+			if injected.Metadata != metadata {
 				metadataToMerge = append(metadataToMerge, metadata)
 			}
-		}
-		if mergedConfig == nil {
-			mergedConfig = &api.ReleaseBuildConfiguration{}
 		}
 		defaultMissingConfigValues(mergedConfig)
 		for _, metadata := range metadataToMerge {
@@ -411,10 +410,6 @@ func ResolveAndMergeConfigsAndInjectTest(configs Getter, resolver Resolver, reso
 			}
 		}
 
-		// Only inject the test if the config containing it is not already included in the result
-		if !injectedTestIncluded {
-			mergedConfig = injectTest(*mergedConfig, configs, resolverMetrics, w, r, logger)
-		}
 		if mergedConfig != nil {
 			resolveAndRespond(resolver, *mergedConfig, w, logger, resolverMetrics)
 		}

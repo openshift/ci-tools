@@ -634,14 +634,22 @@ func FromConfigStatic(config *api.ReleaseBuildConfiguration) api.GraphConfigurat
 		}})
 	}
 
+	namespacedOutputs := sets.New[string]()
+	for _, image := range config.Images.Items {
+		if image.Ref != "" {
+			namespacedOutputs.Insert(strings.TrimSuffix(string(image.To), "-"+image.Ref))
+		}
+	}
 	for i := range config.Images.Items {
 		image := &config.Images.Items[i]
+		buildSteps = append(buildSteps, api.StepConfiguration{ProjectDirectoryImageBuildStepConfiguration: image})
 		stableImageTag := string(image.To)
 		if image.Ref != "" {
 			stableImageTag = strings.TrimSuffix(stableImageTag, fmt.Sprintf("-%s", image.Ref))
+		} else if namespacedOutputs.Has(stableImageTag) {
+			continue
 		}
 		buildSteps = append(buildSteps,
-			api.StepConfiguration{ProjectDirectoryImageBuildStepConfiguration: image},
 			api.StepConfiguration{OutputImageTagStepConfiguration: &api.OutputImageTagStepConfiguration{
 				From: image.To,
 				To: api.ImageStreamTagReference{
@@ -811,9 +819,28 @@ func runtimeStepConfigsForBuild(
 	}
 
 	buildSteps = append(buildSteps, getSourceStepsForJobSpec(jobSpec, injectedTest)...)
+	if injectedTest {
+		if primary := determinePrimaryRef(jobSpec, true); primary != nil {
+			if _, exists := buildRoots[fmt.Sprintf("%s.%s", primary.Org, primary.Repo)]; exists {
+				buildSteps = append(buildSteps, sourceStepForRef(primary, false))
+			}
+		}
+	}
 
 	// Detect Dockerfile inputs for project images and add InputImageTagStepConfiguration entries
-	dockerfileInputSteps, images := detectDockerfileInputs(config.Images.Items, config.BaseImages, readFile, jobSpec)
+	readDockerfile := readFile
+	if injectedTest {
+		if primary := determinePrimaryRef(jobSpec, true); primary != nil {
+			basePath := decorate.DetermineWorkDir(codeMountPath, []prowapi.Refs{*primary})
+			readDockerfile = func(path string) ([]byte, error) {
+				if !filepath.IsAbs(path) {
+					path = filepath.Join(basePath, path)
+				}
+				return readFile(path)
+			}
+		}
+	}
+	dockerfileInputSteps, images := detectDockerfileInputs(config.Images.Items, config.BaseImages, readDockerfile, jobSpec)
 	config.Images.Items = images
 	buildSteps = append(buildSteps, dockerfileInputSteps...)
 
@@ -953,13 +980,23 @@ func getSourceStepsForJobSpec(jobSpec *api.JobSpec, injectedTest bool) []api.Ste
 	var sourceSteps []api.StepConfiguration
 	primaryRef := determinePrimaryRef(jobSpec, injectedTest)
 	if primaryRef != nil {
-		sourceSteps = append(sourceSteps, sourceStepForRef(primaryRef, true))
+		source := sourceStepForRef(primaryRef, true)
+		if injectedTest && jobSpec.Metadata.Org != "" && jobSpec.Metadata.Repo != "" {
+			source.SourceStepConfiguration.Ref = fmt.Sprintf("%s.%s", primaryRef.Org, primaryRef.Repo)
+		}
+		sourceSteps = append(sourceSteps, source)
 	}
 
 	// Any extra_refs for an injected test scenario are secondary refs
 	if injectedTest {
 		for _, ref := range jobSpec.ExtraRefs {
+			if primaryRef != nil && ref.Org == primaryRef.Org && ref.Repo == primaryRef.Repo {
+				continue
+			}
 			sourceSteps = append(sourceSteps, sourceStepForRef(&ref, false))
+		}
+		if ref := jobSpec.Refs; ref != nil && (primaryRef == nil || ref.Org != primaryRef.Org || ref.Repo != primaryRef.Repo) {
+			sourceSteps = append(sourceSteps, sourceStepForRef(ref, false))
 		}
 	}
 
@@ -967,6 +1004,14 @@ func getSourceStepsForJobSpec(jobSpec *api.JobSpec, injectedTest bool) []api.Ste
 }
 
 func determinePrimaryRef(jobSpec *api.JobSpec, injectedTest bool) *prowapi.Refs {
+	if injectedTest && jobSpec.Metadata.Org != "" && jobSpec.Metadata.Repo != "" {
+		for _, ref := range matchingRefsForImage(fmt.Sprintf("%s.%s", jobSpec.Metadata.Org, jobSpec.Metadata.Repo), jobSpec) {
+			if ref.BaseRef == jobSpec.Metadata.Branch {
+				return &ref
+			}
+		}
+		return nil
+	}
 	// Firstly, if any of the extra_refs set the 'workdir' to 'true' it will be primary
 	for _, ref := range jobSpec.ExtraRefs {
 		if ref.WorkDir {

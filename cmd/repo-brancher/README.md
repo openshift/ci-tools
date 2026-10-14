@@ -16,6 +16,12 @@ be continuously updated with code merged to the development branch.
 For more information about OCP branching scheme, see
 the [Centralized Branch Management](https://docs.ci.openshift.org/architecture/branching/) document.
 
+## Troubleshooting
+
+For fast-forward failures, inspect the branch histories, forwarding configuration,
+and error first. The [recovery documentation](documentation.md#fast-forward-failures)
+describes that investigation and when to use the [manual reset script](reset-branch.sh).
+
 ## How it works
 
 The tool iterates over all ci-operator config files in openshift/release, and it selects a set of repositories to

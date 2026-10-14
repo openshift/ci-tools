@@ -14,7 +14,11 @@ import (
 	"k8s.io/apimachinery/pkg/util/sets"
 )
 
-const maxSlackIssues = 5
+const (
+	maxSlackIssues = 5
+	recoveryDocURL = "https://github.com/openshift/ci-tools/blob/main/cmd/repo-brancher/documentation.md#fast-forward-failures"
+	manualResetURL = "https://github.com/openshift/ci-tools/blob/main/cmd/repo-brancher/reset-branch.sh"
+)
 
 type branchIssueKey struct {
 	org, repo, source, target string
@@ -167,6 +171,7 @@ func (p *slackDigestPublisher) blocks(issues []branchIssue) []slack.Block {
 	if len(issues) > len(shown) {
 		blocks = append(blocks, slack.NewContextBlock("", slack.NewTextBlockObject(slack.MarkdownType, fmt.Sprintf("Showing %d of %d active failures. Search repo-brancher-controller logs for `branch fast-forward requires manual intervention` for the full list.", len(shown), len(issues)), false, false)))
 	}
+	blocks = append(blocks, slack.NewContextBlock("", slack.NewTextBlockObject(slack.MarkdownType, fmt.Sprintf("Inspect the branch histories, forwarding configuration, and error first. See <%s|recovery documentation> before using the <%s|manual reset script>.", recoveryDocURL, manualResetURL), false, false)))
 	return blocks
 }
 
@@ -185,7 +190,7 @@ func formatIssue(index int, issue branchIssue) string {
 }
 
 func fallbackDigestText(issues []branchIssue) string {
-	return fmt.Sprintf("Repo brancher has %d active fast-forward failure(s). Showing the %d most recent in Slack blocks.", len(issues), min(len(issues), maxSlackIssues))
+	return fmt.Sprintf("Repo brancher has %d active fast-forward failure(s). Showing the %d most recent in Slack blocks. Inspect the branch histories, forwarding configuration, and error first. Recovery documentation: %s. Manual reset script: %s.", len(issues), min(len(issues), maxSlackIssues), recoveryDocURL, manualResetURL)
 }
 
 func shortSHA(sha string) string {

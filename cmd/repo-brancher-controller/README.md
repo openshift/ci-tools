@@ -33,6 +33,10 @@ shows the five most recently observed entries with compare links. A failure is
 removed from the digest after the matching source-to-target branch forwarding
 succeeds or the target is removed from desired state.
 
+The digest links to the [fast-forward failure recovery documentation](../repo-brancher/documentation.md#fast-forward-failures)
+and [manual reset script](../repo-brancher/reset-branch.sh). Inspect the branch
+histories, forwarding configuration, and error before considering a reset.
+
 ## Forwarding configuration
 
 The forwarding config separates default branches from release branches:

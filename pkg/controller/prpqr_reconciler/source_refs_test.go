@@ -4,6 +4,7 @@ import (
 	"testing"
 
 	"github.com/google/go-cmp/cmp"
+
 	prowv1 "sigs.k8s.io/prow/pkg/apis/prowjobs/v1"
 
 	"github.com/openshift/ci-tools/pkg/api"

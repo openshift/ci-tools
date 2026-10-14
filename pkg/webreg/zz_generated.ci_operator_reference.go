@@ -788,6 +788,8 @@ const ciOperatorReferenceYaml = "# The list of base images describe\n" +
 	"                  dependencies:\n" +
 	"                    - # Env is the environment variable that the image's pull spec is exposed with\n" +
 	"                      env: ' '\n" +
+	"                      # MountPath is where the dependency image will be mounted as a read-only volume.\n" +
+	"                      mount_path: ' '\n" +
 	"                      # Name is the tag or stream:tag that this dependency references\n" +
 	"                      name: ' '\n" +
 	"                  # DnsConfig for step's Pod.\n" +
@@ -896,6 +898,8 @@ const ciOperatorReferenceYaml = "# The list of base images describe\n" +
 	"                  dependencies:\n" +
 	"                    - # Env is the environment variable that the image's pull spec is exposed with\n" +
 	"                      env: ' '\n" +
+	"                      # MountPath is where the dependency image will be mounted as a read-only volume.\n" +
+	"                      mount_path: ' '\n" +
 	"                      # Name is the tag or stream:tag that this dependency references\n" +
 	"                      name: ' '\n" +
 	"                  # DnsConfig for step's Pod.\n" +
@@ -1004,6 +1008,8 @@ const ciOperatorReferenceYaml = "# The list of base images describe\n" +
 	"                  dependencies:\n" +
 	"                    - # Env is the environment variable that the image's pull spec is exposed with\n" +
 	"                      env: ' '\n" +
+	"                      # MountPath is where the dependency image will be mounted as a read-only volume.\n" +
+	"                      mount_path: ' '\n" +
 	"                      # Name is the tag or stream:tag that this dependency references\n" +
 	"                      name: ' '\n" +
 	"                  # DnsConfig for step's Pod.\n" +
@@ -1278,6 +1284,7 @@ const ciOperatorReferenceYaml = "# The list of base images describe\n" +
 	"                  dependencies:\n" +
 	"                    # LiteralTestStep is a full test step definition.\n" +
 	"                    - env: ' '\n" +
+	"                      mount_path: ' '\n" +
 	"                      name: ' '\n" +
 	"                  dnsConfig:\n" +
 	"                    # LiteralTestStep is a full test step definition.\n" +
@@ -1349,6 +1356,7 @@ const ciOperatorReferenceYaml = "# The list of base images describe\n" +
 	"                  dependencies:\n" +
 	"                    # LiteralTestStep is a full test step definition.\n" +
 	"                    - env: ' '\n" +
+	"                      mount_path: ' '\n" +
 	"                      name: ' '\n" +
 	"                  dnsConfig:\n" +
 	"                    # LiteralTestStep is a full test step definition.\n" +
@@ -1420,6 +1428,7 @@ const ciOperatorReferenceYaml = "# The list of base images describe\n" +
 	"                  dependencies:\n" +
 	"                    # LiteralTestStep is a full test step definition.\n" +
 	"                    - env: ' '\n" +
+	"                      mount_path: ' '\n" +
 	"                      name: ' '\n" +
 	"                  dnsConfig:\n" +
 	"                    # LiteralTestStep is a full test step definition.\n" +
@@ -1779,6 +1788,8 @@ const ciOperatorReferenceYaml = "# The list of base images describe\n" +
 	"              dependencies:\n" +
 	"                - # Env is the environment variable that the image's pull spec is exposed with\n" +
 	"                  env: ' '\n" +
+	"                  # MountPath is where the dependency image will be mounted as a read-only volume.\n" +
+	"                  mount_path: ' '\n" +
 	"                  # Name is the tag or stream:tag that this dependency references\n" +
 	"                  name: ' '\n" +
 	"              # DnsConfig for step's Pod.\n" +
@@ -1887,6 +1898,8 @@ const ciOperatorReferenceYaml = "# The list of base images describe\n" +
 	"              dependencies:\n" +
 	"                - # Env is the environment variable that the image's pull spec is exposed with\n" +
 	"                  env: ' '\n" +
+	"                  # MountPath is where the dependency image will be mounted as a read-only volume.\n" +
+	"                  mount_path: ' '\n" +
 	"                  # Name is the tag or stream:tag that this dependency references\n" +
 	"                  name: ' '\n" +
 	"              # DnsConfig for step's Pod.\n" +
@@ -1995,6 +2008,8 @@ const ciOperatorReferenceYaml = "# The list of base images describe\n" +
 	"              dependencies:\n" +
 	"                - # Env is the environment variable that the image's pull spec is exposed with\n" +
 	"                  env: ' '\n" +
+	"                  # MountPath is where the dependency image will be mounted as a read-only volume.\n" +
+	"                  mount_path: ' '\n" +
 	"                  # Name is the tag or stream:tag that this dependency references\n" +
 	"                  name: ' '\n" +
 	"              # DnsConfig for step's Pod.\n" +
@@ -2269,6 +2284,7 @@ const ciOperatorReferenceYaml = "# The list of base images describe\n" +
 	"              dependencies:\n" +
 	"                # LiteralTestStep is a full test step definition.\n" +
 	"                - env: ' '\n" +
+	"                  mount_path: ' '\n" +
 	"                  name: ' '\n" +
 	"              dnsConfig:\n" +
 	"                # LiteralTestStep is a full test step definition.\n" +
@@ -2340,6 +2356,7 @@ const ciOperatorReferenceYaml = "# The list of base images describe\n" +
 	"              dependencies:\n" +
 	"                # LiteralTestStep is a full test step definition.\n" +
 	"                - env: ' '\n" +
+	"                  mount_path: ' '\n" +
 	"                  name: ' '\n" +
 	"              dnsConfig:\n" +
 	"                # LiteralTestStep is a full test step definition.\n" +
@@ -2411,6 +2428,7 @@ const ciOperatorReferenceYaml = "# The list of base images describe\n" +
 	"              dependencies:\n" +
 	"                # LiteralTestStep is a full test step definition.\n" +
 	"                - env: ' '\n" +
+	"                  mount_path: ' '\n" +
 	"                  name: ' '\n" +
 	"              dnsConfig:\n" +
 	"                # LiteralTestStep is a full test step definition.\n" +

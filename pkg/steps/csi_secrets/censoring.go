@@ -5,6 +5,7 @@ import (
 	"fmt"
 
 	"k8s.io/apimachinery/pkg/util/sets"
+	"sigs.k8s.io/yaml"
 
 	"github.com/openshift/ci-tools/pkg/api"
 	gsm "github.com/openshift/ci-tools/pkg/gsm-secrets"
@@ -40,6 +41,37 @@ func RegisterGSMCredentialsForCensoring(
 			return fmt.Errorf("could not read GSM secret %s in order to censor it: %w", name, err)
 		}
 		censor.AddSecrets(string(payload))
+		addYAMLValuesToCensor(payload, censor)
 	}
 	return nil
+}
+
+// addYAMLValuesToCensor parses the payload as YAML and recursively adds every
+// string value found in mappings and sequences as a separate censor pattern.
+// This ensures that values extracted individually from a YAML secret (via yq,
+// awk, sed, cut, etc.) are also censored in CI logs, not just the full file
+// content. Non-YAML payloads are silently ignored.
+func addYAMLValuesToCensor(payload []byte, censor *secrets.DynamicCensor) {
+	var data interface{}
+	if err := yaml.Unmarshal(payload, &data); err != nil || data == nil {
+		return
+	}
+	collectStrings(data, censor)
+}
+
+func collectStrings(v interface{}, censor *secrets.DynamicCensor) {
+	switch val := v.(type) {
+	case string:
+		if val != "" {
+			censor.AddSecrets(val)
+		}
+	case map[string]interface{}:
+		for _, child := range val {
+			collectStrings(child, censor)
+		}
+	case []interface{}:
+		for _, child := range val {
+			collectStrings(child, censor)
+		}
+	}
 }

@@ -2444,9 +2444,6 @@ func (o *options) getResolverInfo(jobSpec *api.JobSpec) *api.Metadata {
 			if i == 0 {
 				variant = info.Variant
 			}
-			if injected != nil && ref.Org == injected.Org && ref.Repo == injected.Repo && ref.BaseRef == injected.Branch {
-				variant = injected.Variant
-			}
 			variants = append(variants, variant)
 			hasVariant = hasVariant || variant != ""
 		}

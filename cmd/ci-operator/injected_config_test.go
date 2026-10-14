@@ -20,7 +20,7 @@ func TestInjectedTestResolverInfo(t *testing.T) {
 		want  api.Metadata
 	}{
 		{name: "checkout only source uses injection coordinates", want: api.Metadata{Org: "openshift", Repo: "installer", Branch: "main"}},
-		{name: "source PR is retained", pulls: []prowapi.Pull{{Number: 1}}, want: api.Metadata{Org: "openshift,openshift", Repo: "installer,cluster-api-actuator-pkg", Branch: "main,release-5.0", Variant: ",periodics"}},
+		{name: "source PR keeps its own build config variant", pulls: []prowapi.Pull{{Number: 1}}, want: api.Metadata{Org: "openshift,openshift", Repo: "installer,cluster-api-actuator-pkg", Branch: "main,release-5.0"}},
 	} {
 		t.Run(testCase.name, func(t *testing.T) {
 			job := &api.JobSpec{JobSpec: downwardapi.JobSpec{Refs: &prowapi.Refs{Org: "openshift", Repo: "installer", BaseRef: "main", Pulls: []prowapi.Pull{{Number: 10978}}}, ExtraRefs: []prowapi.Refs{{Org: "openshift", Repo: "cluster-api-actuator-pkg", BaseRef: "release-5.0", Pulls: testCase.pulls}}}}

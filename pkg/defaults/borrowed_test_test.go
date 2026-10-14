@@ -9,6 +9,7 @@ import (
 	"testing"
 
 	"github.com/google/go-cmp/cmp"
+	"github.com/google/go-cmp/cmp/cmpopts"
 
 	prowapi "sigs.k8s.io/prow/pkg/apis/prowjobs/v1"
 	"sigs.k8s.io/prow/pkg/metrics"
@@ -41,6 +42,8 @@ func (literalResolver) ResolveConfig(config api.ReleaseBuildConfiguration) (api.
 func TestBorrowedTestBuildGraph(t *testing.T) {
 	t.Parallel()
 	source := api.Metadata{Org: "openshift", Repo: "cluster-api-actuator-pkg", Branch: "release-5.0", Variant: "periodics"}
+	sourcePR := source
+	sourcePR.Variant = ""
 	component := api.Metadata{Org: "openshift", Repo: "installer", Branch: "main"}
 	root := api.ImageStreamTagReference{Namespace: "ci", Name: "builder", Tag: "latest"}
 	configs := borrowedConfigs{
@@ -64,27 +67,56 @@ func TestBorrowedTestBuildGraph(t *testing.T) {
 			},
 			Images: api.ImageConfiguration{Items: []api.ProjectDirectoryImageBuildStepConfiguration{{To: "test-image", From: "src", ProjectDirectoryImageBuildInputs: api.ProjectDirectoryImageBuildInputs{DockerfilePath: "Dockerfile.ci", Inputs: map[string]api.ImageBuildInputs{"tools": {As: []string{"builder"}}}}}}},
 		},
+		sourcePR: {
+			InputConfiguration: api.InputConfiguration{BuildRootImage: &api.BuildRootImageConfiguration{ImageStreamTagReference: &root}},
+			Images:             api.ImageConfiguration{Items: []api.ProjectDirectoryImageBuildStepConfiguration{{To: "controller", From: "src", ProjectDirectoryImageBuildInputs: api.ProjectDirectoryImageBuildInputs{DockerfilePath: "Dockerfile"}}}},
+		},
 	}
-	for _, included := range []bool{false, true} {
-		t.Run(fmt.Sprintf("source already included=%t", included), func(t *testing.T) {
+	for _, testCase := range []struct {
+		name          string
+		included      bool
+		defaultConfig bool
+	}{
+		{name: "borrowed repository"},
+		{name: "source PR with same variant", included: true},
+		{name: "source PR with independent build variant", included: true, defaultConfig: true},
+	} {
+		t.Run(testCase.name, func(t *testing.T) {
 			handler := server.ResolveAndMergeConfigsAndInjectTest(configs, literalResolver{}, borrowedResolverMetrics)
 			httpServer := httptest.NewServer(handler)
 			defer httpServer.Close()
 			base := component
-			if included {
+			if testCase.included {
 				base.Org += "," + source.Org
 				base.Repo += "," + source.Repo
 				base.Branch += "," + source.Branch
 				base.Variant = "," + source.Variant
+				if testCase.defaultConfig {
+					base.Variant = ","
+				}
 			}
 			config, err := server.NewResolverClient(httpServer.URL).ConfigWithTest(&base, &api.MetadataWithTest{Metadata: source, Test: "e2e-gcp-operator-periodic"})
 			if err != nil {
 				t.Fatal(err)
 			}
-			if len(config.Tests) != 1 || !config.BuildRootImage.FromRepository || len(config.Images.Items) != 2 {
+			expectedImages := []api.PipelineImageStreamTagReference{"test-image", "test-image-openshift.installer"}
+			if testCase.defaultConfig {
+				expectedImages = append(expectedImages, "controller-openshift.cluster-api-actuator-pkg")
+			}
+			if len(config.Tests) != 1 || !config.BuildRootImage.FromRepository || len(config.Images.Items) != len(expectedImages) {
 				t.Fatalf("borrowed build/test inputs lost: %#v", config)
 			}
-			if config.Images.Items[0].To != "test-image" || config.Images.Items[1].To != "test-image-openshift.installer" || config.Images.Items[1].From != "src-openshift.installer" {
+			imagesByName := map[api.PipelineImageStreamTagReference]api.ProjectDirectoryImageBuildStepConfiguration{}
+			for _, image := range config.Images.Items {
+				imagesByName[image.To] = image
+			}
+			if testCase.defaultConfig {
+				image := imagesByName["controller-openshift.cluster-api-actuator-pkg"]
+				if image.From != "src-openshift.cluster-api-actuator-pkg" || image.Ref != "openshift.cluster-api-actuator-pkg" {
+					t.Fatalf("source PR payload image lost its own source/build config: %#v", image)
+				}
+			}
+			if imagesByName["test-image"].To != "test-image" || imagesByName["test-image-openshift.installer"].From != "src-openshift.installer" {
 				t.Fatalf("image collision/namespacing: %#v", config.Images)
 			}
 			if diff := cmp.Diff(configs[source].Releases, config.Releases); diff != "" {
@@ -100,14 +132,14 @@ func TestBorrowedTestBuildGraph(t *testing.T) {
 				t.Errorf("borrowed build inputs changed: %s", diff)
 			}
 			expectedInputs := map[string]api.ImageBuildInputs{"tools-openshift.installer": configs[component].Images.Items[0].Inputs["tools"]}
-			if diff := cmp.Diff(expectedInputs, config.Images.Items[1].Inputs); diff != "" {
+			if diff := cmp.Diff(expectedInputs, imagesByName["test-image-openshift.installer"].Inputs); diff != "" {
 				t.Errorf("PR build inputs not namespaced: %s", diff)
 			}
 			job := &api.JobSpec{JobSpec: downwardapi.JobSpec{
 				Refs:      &prowapi.Refs{Org: component.Org, Repo: component.Repo, BaseRef: component.Branch, BaseSHA: "base", WorkDir: true, Pulls: []prowapi.Pull{{Number: 10978, SHA: "head"}}},
 				ExtraRefs: []prowapi.Refs{{Org: source.Org, Repo: source.Repo, BaseRef: source.Branch}},
 			}, Metadata: config.Metadata}
-			if !included {
+			if !testCase.included {
 				job.ExtraRefs = append([]prowapi.Refs{*job.Refs}, job.ExtraRefs...)
 				job.Refs = nil
 			} else {
@@ -131,7 +163,7 @@ func TestBorrowedTestBuildGraph(t *testing.T) {
 			if len(stableOutputs) != 1 || stableOutputs[0].To.Name != api.StableImageStream || stableOutputs[0].From != "test-image-openshift.installer" {
 				t.Fatalf("PR must own the collided stable output: %#v", stableOutputs)
 			}
-			if diff := cmp.Diff([]api.PipelineImageStreamTagReference{"test-image", "test-image-openshift.installer"}, pipelineImages); diff != "" {
+			if diff := cmp.Diff(expectedImages, pipelineImages, cmpopts.SortSlices(func(first, second api.PipelineImageStreamTagReference) bool { return first < second })); diff != "" {
 				t.Fatalf("required pipeline images were dropped: %s", diff)
 			}
 			readRoot := false
@@ -207,6 +239,15 @@ func TestBorrowedTestBuildGraph(t *testing.T) {
 			}
 			if diff := cmp.Diff([]string{"test-image-openshift.installer"}, payloadBuilds); diff != "" {
 				t.Fatalf("payload output depends on borrowed rather than PR build: %s", diff)
+			}
+			if testCase.defaultConfig {
+				sourcePayload, err := api.BuildPartialGraph(buildSteps, []string{"[output:stable:controller]"})
+				if err != nil {
+					t.Fatal(err)
+				}
+				if _, sortErrors := sourcePayload.TopologicalSort(); len(sortErrors) != 0 {
+					t.Fatalf("source PR payload needs its namespaced src/build root: %v", sortErrors)
+				}
 			}
 			var withoutSource []api.Step
 			for _, step := range buildSteps {

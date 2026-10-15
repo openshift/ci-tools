@@ -1185,6 +1185,11 @@ type StepParameter struct {
 	Default *string `json:"default,omitempty"`
 	// Documentation is a textual description of the parameter.
 	Documentation string `json:"documentation,omitempty"`
+	// Overridable, if true, allows this parameter to be set via a trigger-time
+	// environment variable on ci-operator (its own name, or the legacy
+	// MULTISTAGE_PARAM_OVERRIDE_<NAME> form, which takes precedence).
+	// Must be explicitly opted into per parameter.
+	Overridable bool `json:"overridable,omitempty"`
 }
 
 // CredentialReference defines a secret to mount into a step and where to mount it.
@@ -1339,6 +1344,10 @@ type MultiStageTestConfigurationLiteral struct {
 	Post []LiteralTestStep `json:"post,omitempty"`
 	// Environment has the values of parameters for the steps.
 	Environment TestEnvironment `json:"env,omitempty"`
+	// ParamOverrides holds trigger-time parameter values, populated by
+	// ci-operator from the environment. Only honored for parameters
+	// declared with Overridable: true. Not meant to be set in CI config.
+	ParamOverrides TestEnvironment `json:"param_overrides,omitempty"`
 	// Dependencies holds override values for dependency parameters.
 	Dependencies TestDependencies `json:"dependencies,omitempty"`
 	// DnsConfig for step's Pod.

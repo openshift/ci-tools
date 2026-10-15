@@ -413,6 +413,13 @@ func (s *multiStageTestStep) generateParams(env []api.StepParameter) []coreapi.E
 		if v, ok := s.env[env.Name]; ok {
 			value = v
 		}
+		// paramOverrides carries untrusted, trigger-time values. Only honor it if this exact
+		// parameter opted in, so a same-named parameter on another step never receives it.
+		if env.Overridable {
+			if v, ok := s.paramOverrides[env.Name]; ok {
+				value = v
+			}
+		}
 		ret = append(ret, coreapi.EnvVar{Name: env.Name, Value: value})
 	}
 	return ret

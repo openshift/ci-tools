@@ -101,6 +101,7 @@ type multiStageTestStep struct {
 	// params exposes getters for variables created by other steps
 	params                           api.Parameters
 	env                              api.TestEnvironment
+	paramOverrides                   api.TestEnvironment
 	client                           kubernetes.PodClient
 	jobSpec                          *api.JobSpec
 	observers                        []api.Observer
@@ -174,6 +175,7 @@ func newMultiStageTestStep(
 		config:                           config,
 		params:                           params,
 		env:                              ms.Environment,
+		paramOverrides:                   ms.ParamOverrides,
 		client:                           client,
 		jobSpec:                          jobSpec,
 		observers:                        ms.Observers,

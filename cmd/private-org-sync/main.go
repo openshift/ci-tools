@@ -321,6 +321,19 @@ func maybeTooShallow(pushOutput string) bool {
 	return false
 }
 
+func hasTagBranchCollision(pushOutput string) bool {
+	patterns := []string{
+		"tag already exists",
+		"would clobber existing tag",
+	}
+	for _, item := range patterns {
+		if strings.Contains(pushOutput, item) {
+			return true
+		}
+	}
+	return false
+}
+
 // location specifies a GitHub repository branch used as a source or destination
 type location struct {
 	org, repo, branch string
@@ -505,6 +518,23 @@ func (g gitSyncer) mirror(repoDir string, src, dst location, srcCommitHash strin
 			return nil, nil
 		}
 
+		if err == nil && hasTagBranchCollision(out) {
+			logger.WithField("branch", dst.branch).Warn("Push failed because a tag with the same name as the branch exists in the remote, retrying without --tags")
+			retryCmd := []string{"push"}
+			if !g.confirm {
+				retryCmd = append(retryCmd, "--dry-run")
+			}
+			retryCmd = append(retryCmd, destUrl, fmt.Sprintf("FETCH_HEAD:refs/heads/%s", dst.branch))
+			retryOut, retryExitCode, retryErr := g.git(logger, repoDir, retryCmd...)
+			if retryErr == nil && retryExitCode == 0 {
+				logger.Debug("Successfully pushed to destination without --tags")
+				return nil, nil
+			}
+			message := "failed to push to destination even without --tags"
+			logger.WithError(retryErr).WithField("exit-code", retryExitCode).WithField("output", retryOut).Error(message)
+			return nil, fmt.Errorf("%s", message)
+		}
+
 		if !maybeTooShallow(out) || err != nil {
 			message := "failed to push to destination, no retry possible"
 			logger.WithError(err).WithField("exit-code", exitCode).WithField("output", out).Error(message)
@@ -615,13 +645,30 @@ func mergeRemotesAndPush(logger *logrus.Entry, git gitFunc, repoDir, srcRemote, 
 	}
 	cmd = append(cmd, destURL, fmt.Sprintf("HEAD:%s", branch))
 
-	err := checkGitError(git(logger, repoDir, cmd...))
+	out, exitCode, err := git(logger, repoDir, cmd...)
+	if err == nil && exitCode == 0 {
+		logger.Info("Successfully pushed to destination")
+		return nil
+	}
+
+	if err == nil && hasTagBranchCollision(out) {
+		logger.WithField("branch", branch).Warn("Push failed because a tag with the same name as the branch exists in the remote, retrying without --tags")
+		retryCmd := []string{"push"}
+		if !confirm {
+			retryCmd = append(retryCmd, "--dry-run")
+		}
+		retryCmd = append(retryCmd, destURL, fmt.Sprintf("HEAD:%s", branch))
+		if retryErr := checkGitError(git(logger, repoDir, retryCmd...)); retryErr != nil {
+			return fmt.Errorf("failed to push to destination even without --tags: %w", retryErr)
+		}
+		logger.Info("Successfully pushed to destination without --tags")
+		return nil
+	}
+
 	if err != nil {
 		return fmt.Errorf("failed to push to destination: %w", err)
 	}
-
-	logger.Info("Successfully pushed to destination")
-	return nil
+	return fmt.Errorf("failed to push to destination: failed with %d exit code: %s", exitCode, out)
 }
 
 func checkGitError(out string, exitCode int, err error) error {

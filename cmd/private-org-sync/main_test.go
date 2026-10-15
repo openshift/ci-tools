@@ -530,6 +530,85 @@ func TestMirror(t *testing.T) {
 			},
 		},
 		{
+			description: "tag/branch name collision -> retry push without --tags succeeds",
+			src:         location{org: org, repo: repo, branch: branch},
+			dst:         location{org: destOrg, repo: repo, branch: branch},
+			srcHeads:    RemoteBranchHeads{branch: "source-sha"},
+			dstHeads:    RemoteBranchHeads{branch: "dest-sha"},
+			expectedGitCalls: []mockGitCall{
+				{call: "fetch --tags org-repo branch --depth=2"},
+				{
+					call:     "push --tags --dry-run https://TOKEN@github.com/dest/repo FETCH_HEAD:refs/heads/branch",
+					exitCode: 1,
+					output:   "! [remote rejected] FETCH_HEAD -> branch (failed)\nerror: Updates were rejected because the tag already exists in the remote",
+				},
+				{call: "push --dry-run https://TOKEN@github.com/dest/repo FETCH_HEAD:refs/heads/branch"},
+			},
+		},
+		{
+			description: "tag/branch name collision -> retry push without --tags also fails -> error",
+			src:         location{org: org, repo: repo, branch: branch},
+			dst:         location{org: destOrg, repo: repo, branch: branch},
+			srcHeads:    RemoteBranchHeads{branch: "source-sha"},
+			dstHeads:    RemoteBranchHeads{branch: "dest-sha"},
+			expectedGitCalls: []mockGitCall{
+				{call: "fetch --tags org-repo branch --depth=2"},
+				{
+					call:     "push --tags --dry-run https://TOKEN@github.com/dest/repo FETCH_HEAD:refs/heads/branch",
+					exitCode: 1,
+					output:   "error: Updates were rejected because the tag already exists in the remote",
+				},
+				{
+					call:     "push --dry-run https://TOKEN@github.com/dest/repo FETCH_HEAD:refs/heads/branch",
+					exitCode: 1,
+					output:   "some other error",
+				},
+			},
+			expectError: true,
+		},
+		{
+			description: "tag/branch collision in merge push path -> retry without --tags succeeds",
+			src:         location{org: org, repo: repo, branch: branch},
+			dst:         location{org: destOrg, repo: repo, branch: branch},
+			srcHeads:    RemoteBranchHeads{branch: "source-sha"},
+			dstHeads:    RemoteBranchHeads{branch: "dest-sha"},
+			expectedGitCalls: []mockGitCall{
+				{call: "fetch --tags org-repo branch --depth=2"},
+				{
+					call:     "push --tags --dry-run https://TOKEN@github.com/dest/repo FETCH_HEAD:refs/heads/branch",
+					exitCode: 1,
+					output:   "...Updates were rejected because the remote contains work that you do...",
+				},
+				{call: "rev-parse --is-shallow-repository", output: "false"},
+				{call: "fetch https://TOKEN@github.com/dest/repo branch"},
+				{call: "checkout FETCH_HEAD"},
+				{call: "-c user.name=openshift-bot -c user.email=openshift-bot@redhat.com merge org-repo/branch -m DPTP reconciliation from upstream"},
+				{
+					call:     "push --tags --dry-run https://TOKEN@github.com/dest/repo HEAD:branch",
+					exitCode: 1,
+					output:   "error: Updates were rejected because the tag already exists in the remote",
+				},
+				{call: "push --dry-run https://TOKEN@github.com/dest/repo HEAD:branch"},
+			},
+		},
+		{
+			description: "tag/branch collision with would-clobber message -> retry succeeds",
+			src:         location{org: org, repo: repo, branch: branch},
+			dst:         location{org: destOrg, repo: repo, branch: branch},
+			confirm:     true,
+			srcHeads:    RemoteBranchHeads{branch: "source-sha"},
+			dstHeads:    RemoteBranchHeads{branch: "dest-sha"},
+			expectedGitCalls: []mockGitCall{
+				{call: "fetch --tags org-repo branch --depth=2"},
+				{
+					call:     "push --tags https://TOKEN@github.com/dest/repo FETCH_HEAD:refs/heads/branch",
+					exitCode: 1,
+					output:   "error: would clobber existing tag",
+				},
+				{call: "push https://TOKEN@github.com/dest/repo FETCH_HEAD:refs/heads/branch"},
+			},
+		},
+		{
 			description: "conflicting histories after a force-push result in an error",
 			src:         location{org: org, repo: repo, branch: branch},
 			dst:         location{org: destOrg, repo: repo, branch: branch},
@@ -1023,4 +1102,46 @@ func TestGetWhitelistedLocationsExcludesBranches(t *testing.T) {
 			t.Errorf("expected 3 locations, got %d: %v", len(locations), locations)
 		}
 	})
+}
+
+func TestHasTagBranchCollision(t *testing.T) {
+	testCases := []struct {
+		name     string
+		output   string
+		expected bool
+	}{
+		{
+			name:     "tag already exists message",
+			output:   "! [remote rejected] FETCH_HEAD -> v1.22.0-mce-217 (failed)\nerror: Updates were rejected because the tag already exists in the remote",
+			expected: true,
+		},
+		{
+			name:     "would clobber existing tag message",
+			output:   "error: would clobber existing tag",
+			expected: true,
+		},
+		{
+			name:     "shallow update not allowed is not a collision",
+			output:   "shallow update not allowed",
+			expected: false,
+		},
+		{
+			name:     "generic rejection is not a collision",
+			output:   "Updates were rejected because the remote contains work that you do",
+			expected: false,
+		},
+		{
+			name:     "empty output",
+			output:   "",
+			expected: false,
+		},
+	}
+	for _, tc := range testCases {
+		t.Run(tc.name, func(t *testing.T) {
+			result := hasTagBranchCollision(tc.output)
+			if result != tc.expected {
+				t.Errorf("hasTagBranchCollision(%q) = %v, want %v", tc.output, result, tc.expected)
+			}
+		})
+	}
 }

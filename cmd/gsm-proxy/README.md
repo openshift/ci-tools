@@ -22,6 +22,15 @@ Collection ownership comes from the release repository's
 loaded with `group.LoadConfig`. Access requires an exact group/collection match under a
 claimed owner. `unclaimed` groups, Kubernetes group renames, and `groups.yaml` grant no access.
 
+Ownership reloads directly on filesystem changes without restarting the proxy or polling.
+Invalid or unreadable updates are logged and leave the
+last valid snapshot active; startup requires valid configuration. A failed update can
+therefore retain an old grant until a valid replacement arrives. Watcher errors are also
+logged and retain the last valid snapshot; investigate them rather than assuming updates
+are still being observed. Mount the ConfigMap as a directory, not with `subPath`. For local
+container testing, mount the containing directory too, so atomic file replacements reach
+the container.
+
 The diagram shows the intended end-to-end CLI flow. **Production CLI login/token handling
 and proxy-backed listing are not implemented in this change.** The proxy-side token
 verification, authorization, and listing are implemented.
@@ -100,11 +109,9 @@ The intended deployment is on core-ci, with an ownership ConfigMap and read-only
 mount. The binary serves plain HTTP: require external HTTPS, restrict direct backend
 access, and explicitly protect the ingress-to-pod transport boundary.
 
-Ownership is currently loaded **only at startup**. Validated, atomic reload with fail-closed
-behavior on invalid/unreadable replacements is required before deployment. Reload alone
-does not revoke group membership in an already-issued token: the proxy trusts that signed
-snapshot until expiry. Define and verify the acceptable membership-revocation window,
-token lifetime/refresh behavior, and emergency revocation mechanism before production use.
+Ownership reload does not revoke group membership in an already-issued token: the proxy
+trusts that signed snapshot until expiry. Define and verify the acceptable membership-revocation
+window, token lifetime/refresh behavior, and emergency revocation mechanism before production use.
 Backend request deadlines and listing resource limits also remain deployment prerequisites.
 
 Run the proxy tests with `go test ./cmd/gsm-proxy ./pkg/gsm-proxy`.

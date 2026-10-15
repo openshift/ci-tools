@@ -1,6 +1,7 @@
 package main
 
 import (
+	"context"
 	"errors"
 	"flag"
 	"fmt"
@@ -18,7 +19,6 @@ import (
 	"sigs.k8s.io/prow/pkg/logrusutil"
 	"sigs.k8s.io/prow/pkg/version"
 
-	"github.com/openshift/ci-tools/pkg/group"
 	gsmproxy "github.com/openshift/ci-tools/pkg/gsm-proxy"
 	gsmsecrets "github.com/openshift/ci-tools/pkg/gsm-secrets"
 )
@@ -87,11 +87,12 @@ func main() {
 }
 
 func run(o *options) error {
-	config, err := group.LoadConfig(o.groupsOwnershipFile)
+	ctx, cancel := context.WithCancel(interrupts.Context())
+	defer cancel()
+	authorizer, err := gsmproxy.NewReloadingCollectionAuthorizer(ctx, o.groupsOwnershipFile, logrus.NewEntry(logrus.StandardLogger()))
 	if err != nil {
-		return fmt.Errorf("failed to load rover groups config: %w", err)
+		return fmt.Errorf("failed to initialize ownership configuration: %w", err)
 	}
-	logrus.WithField("groups", len(config.Groups)).Info("loaded rover group config")
 
 	gcpCredentials, err := credentials.NewCredentialsFromFile(credentials.ServiceAccount, o.gsmCredentialsFile, &credentials.DetectOptions{
 		Scopes: secretmanager.DefaultAuthScopes(),
@@ -112,18 +113,18 @@ func run(o *options) error {
 		}
 	}()
 
-	server := newServer(o, config, lister)
+	server := newServer(o, authorizer, lister)
 	logrus.WithField("listen-addr", o.listenAddr).Info("starting gsm-proxy")
 	interrupts.ListenAndServe(server, o.gracePeriod)
 	interrupts.WaitForGracefulShutdown()
 	return nil
 }
 
-func newServer(o *options, config *group.Config, lister gsmproxy.SecretLister) *http.Server {
+func newServer(o *options, authorizer gsmproxy.Authorizer, lister gsmproxy.SecretLister) *http.Server {
 	log := logrus.NewEntry(logrus.StandardLogger())
 	handler := gsmproxy.RequireCollectionAccess(
 		gsmproxy.NewDexTokenVerifier(),
-		gsmproxy.NewCollectionAuthorizer(config),
+		authorizer,
 		log,
 		&gsmproxy.ListSecretsHandler{Lister: lister, Log: log},
 	)

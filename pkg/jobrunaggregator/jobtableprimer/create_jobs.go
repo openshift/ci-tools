@@ -20,6 +20,10 @@ type CreateJobsOptions struct {
 	gcsBucket   string
 }
 
+func eligibleRelease(release jobrunaggregatorapi.ReleaseRow) bool {
+	return release.Product.StringVal == "OCP" && (release.Major > minMajor || (release.Major == minMajor && release.Minor >= minMinor))
+}
+
 // getNewReleases get a list of releases defined in the Releases table in BigQuery. It then filters
 // out older releases whose jobs we do not care about importing.
 func (o *CreateJobsOptions) getNewReleases(ctx context.Context, ciDataClient jobrunaggregatorlib.CIDataClient) ([]jobrunaggregatorapi.ReleaseRow, error) {
@@ -29,8 +33,7 @@ func (o *CreateJobsOptions) getNewReleases(ctx context.Context, ciDataClient job
 		return newReleases, err
 	}
 	for _, release := range releases {
-		recentEnough := release.Major > minMajor || (release.Major == minMajor && release.Minor >= minMinor)
-		if release.Product.StringVal == "OCP" && recentEnough { // aggregation not defined for other products yet
+		if eligibleRelease(release) {
 			newReleases = append(newReleases, release)
 		}
 	}

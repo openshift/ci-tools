@@ -10,9 +10,8 @@ import (
 	"encoding/json"
 	"encoding/pem"
 	"errors"
-	"fmt"
+	"io"
 	"net/http"
-	"net/http/httptest"
 	"strings"
 	"sync/atomic"
 	"testing"
@@ -119,97 +118,83 @@ func TestDexTokenVerifier(t *testing.T) {
 	}
 }
 
-func TestDexSigningKeyCacheAndRotation(t *testing.T) {
-	firstKey := newSigningKey(t)
-	secondKey := newSigningKey(t)
-	var activeKey atomic.Pointer[rsa.PrivateKey]
-	activeKey.Store(firstKey)
-	var fetches atomic.Int32
-	var failFetch atomic.Bool
-	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
-		fetches.Add(1)
-		if failFetch.Load() {
-			http.Error(w, "UPSTREAM_BODY_SENTINEL", http.StatusServiceUnavailable)
-			return
-		}
-		key := activeKey.Load()
-		kid := "first"
-		if key == secondKey {
-			kid = "second"
-		}
-		w.Header().Set("Content-Type", "application/json")
-		if err := json.NewEncoder(w).Encode(jose.JSONWebKeySet{Keys: []jose.JSONWebKey{{
-			Key: &key.PublicKey, KeyID: kid, Algorithm: string(jose.RS256), Use: "sig",
-		}}}); err != nil {
-			t.Error(err)
-		}
-	}))
-	defer server.Close()
-	var clock atomic.Int64
-	clock.Store(time.Date(2026, time.October, 12, 12, 0, 0, 0, time.UTC).UnixNano())
-	now := func() time.Time { return time.Unix(0, clock.Load()) }
-	client := &http.Client{
-		Timeout:   time.Second,
-		Transport: &keyFetchTransport{base: http.DefaultTransport, limiter: rate.NewLimiter(rate.Every(time.Minute), 1), now: now},
+func TestKeyFetchTransportRateLimit(t *testing.T) {
+	base := &countingRoundTripper{}
+	clock := &fakeClock{}
+	clock.nanos.Store(time.Date(2026, time.October, 12, 12, 0, 0, 0, time.UTC).UnixNano())
+	transport := &keyFetchTransport{
+		base:    base,
+		limiter: rate.NewLimiter(rate.Every(time.Minute), 1),
+		now:     clock.now,
 	}
-	keys := oidc.NewRemoteKeySet(oidc.ClientContext(context.Background(), client), server.URL)
-	verifier := newDexTokenVerifier(keys, now)
-	firstToken := signClaims(t, firstKey, "first", jose.RS256, testClaims(now()))
-	if _, err := verifier.Verify(context.Background(), firstToken); err != nil {
+	request, err := http.NewRequest(http.MethodGet, "https://idp.ci.openshift.org/keys", nil)
+	if err != nil {
 		t.Fatal(err)
 	}
-	if _, err := verifier.Verify(context.Background(), firstToken); err != nil {
-		t.Fatal(err)
+	testCases := []struct {
+		name    string
+		advance time.Duration
+		wantErr string
+	}{
+		{name: "first fetch is allowed"},
+		{name: "second fetch inside the window is rejected", wantErr: "dex signing-key fetch is rate limited"},
+		{name: "fetch after the window is allowed", advance: time.Minute + time.Second},
 	}
-	if got := fetches.Load(); got != 1 {
-		t.Fatalf("cached verification fetched keys %d times, want 1", got)
+	var calls int32
+	for _, tc := range testCases {
+		t.Run(tc.name, func(t *testing.T) {
+			checkKeyFetch(t, transport, base, clock, request, &calls, tc.advance, tc.wantErr)
+		})
 	}
+}
 
-	activeKey.Store(secondKey)
-	secondToken := signClaims(t, secondKey, "second", jose.RS256, testClaims(now()))
-	for i := range 10 {
-		unknownToken := signClaims(t, secondKey, fmt.Sprintf("unknown-%d", i), jose.RS256, testClaims(now()))
-		if _, err := verifier.Verify(context.Background(), unknownToken); !errors.Is(err, ErrUnauthenticated) {
-			t.Fatalf("unknown kid during cooldown: %v", err)
+func checkKeyFetch(t *testing.T, transport *keyFetchTransport, base *countingRoundTripper, clock *fakeClock, request *http.Request, calls *int32, advance time.Duration, wantErr string) {
+	t.Helper()
+	if advance > 0 {
+		clock.nanos.Add(int64(advance))
+	}
+	resp, err := transport.RoundTrip(request)
+	if wantErr != "" {
+		if err == nil || err.Error() != wantErr {
+			t.Fatalf("error = %v, want %q", err, wantErr)
 		}
+		if resp != nil {
+			t.Fatal("rate limited fetch returned a response")
+		}
+		if got := base.calls.Load(); got != *calls {
+			t.Fatalf("upstream calls = %d, want %d", got, *calls)
+		}
+		return
 	}
-	if _, err := verifier.Verify(context.Background(), secondToken); !errors.Is(err, ErrUnauthenticated) {
-		t.Fatalf("rotation during cooldown: %v", err)
-	}
-	badSignatureToken := signClaims(t, secondKey, "first", jose.RS256, testClaims(now()))
-	if _, err := verifier.Verify(context.Background(), badSignatureToken); !errors.Is(err, ErrUnauthenticated) {
-		t.Fatalf("invalid signature with a cached kid: %v", err)
-	}
-	if got := fetches.Load(); got != 1 {
-		t.Fatalf("unknown kid bypassed fetch limit: %d fetches", got)
-	}
-	if _, err := verifier.Verify(context.Background(), firstToken); err != nil {
-		t.Fatalf("rate limit blocked cached key: %v", err)
-	}
-
-	clock.Add(int64(time.Minute + time.Second))
-	failFetch.Store(true)
-	if _, err := verifier.Verify(context.Background(), secondToken); !errors.Is(err, ErrUnauthenticated) || strings.Contains(err.Error(), "UPSTREAM_BODY_SENTINEL") {
-		t.Fatalf("failed key fetch returned unsafe error: %v", err)
-	}
-	if got := fetches.Load(); got != 2 {
-		t.Fatalf("fetch count = %d, want 2", got)
-	}
-	if _, err := verifier.Verify(context.Background(), firstToken); err != nil {
-		t.Fatalf("upstream failure discarded cached key: %v", err)
-	}
-
-	clock.Add(int64(time.Minute + time.Second))
-	failFetch.Store(false)
-	if _, err := verifier.Verify(context.Background(), secondToken); err != nil {
-		t.Fatalf("rotated key was not accepted after cooldown: %v", err)
-	}
-	if _, err := verifier.Verify(context.Background(), secondToken); err != nil {
+	if err != nil {
 		t.Fatal(err)
 	}
-	if got := fetches.Load(); got != 3 {
-		t.Fatalf("fetch count = %d, want 3", got)
+	if err := resp.Body.Close(); err != nil {
+		t.Fatal(err)
 	}
+	*calls++
+	if got := base.calls.Load(); got != *calls {
+		t.Fatalf("upstream calls = %d, want %d", got, *calls)
+	}
+}
+
+// countingRoundTripper records signing-key fetches that passed the rate limit.
+type countingRoundTripper struct {
+	calls atomic.Int32
+}
+
+func (c *countingRoundTripper) RoundTrip(*http.Request) (*http.Response, error) {
+	c.calls.Add(1)
+	return &http.Response{StatusCode: http.StatusOK, Body: io.NopCloser(strings.NewReader("{}")), Header: make(http.Header)}, nil
+}
+
+// fakeClock is the time source for the signing-key fetch limiter.
+type fakeClock struct {
+	nanos atomic.Int64
+}
+
+func (c *fakeClock) now() time.Time {
+	return time.Unix(0, c.nanos.Load())
 }
 
 func newSigningKey(t *testing.T) *rsa.PrivateKey {

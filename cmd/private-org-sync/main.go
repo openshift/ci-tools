@@ -321,17 +321,25 @@ func maybeTooShallow(pushOutput string) bool {
 	return false
 }
 
-func hasTagBranchCollision(pushOutput string) bool {
+func hasTagBranchCollision(pushOutput, branch string) bool {
 	patterns := []string{
 		"tag already exists",
 		"would clobber existing tag",
 	}
+	hasTagError := false
 	for _, item := range patterns {
 		if strings.Contains(pushOutput, item) {
-			return true
+			hasTagError = true
+			break
 		}
 	}
-	return false
+	if !hasTagError {
+		return false
+	}
+	// Only classify as a collision when the rejected tag shares the
+	// branch name. An unrelated tag rejection should not trigger the
+	// tag-free retry.
+	return strings.Contains(pushOutput, branch)
 }
 
 // location specifies a GitHub repository branch used as a source or destination
@@ -518,7 +526,7 @@ func (g gitSyncer) mirror(repoDir string, src, dst location, srcCommitHash strin
 			return nil, nil
 		}
 
-		if err == nil && hasTagBranchCollision(out) {
+		if err == nil && hasTagBranchCollision(out, dst.branch) {
 			logger.WithField("branch", dst.branch).Warn("Push failed because a tag with the same name as the branch exists in the remote, retrying without --tags")
 			retryCmd := []string{"push"}
 			if !g.confirm {
@@ -656,7 +664,7 @@ func mergeRemotesAndPush(logger *logrus.Entry, git gitFunc, repoDir, srcRemote, 
 		return nil
 	}
 
-	if err == nil && hasTagBranchCollision(out) {
+	if err == nil && hasTagBranchCollision(out, branch) {
 		logger.WithField("branch", branch).Warn("Push failed because a tag with the same name as the branch exists in the remote, retrying without --tags")
 		retryCmd := []string{"push"}
 		if !confirm {

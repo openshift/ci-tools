@@ -556,7 +556,7 @@ func TestMirror(t *testing.T) {
 				{
 					call:     "push --tags --dry-run https://TOKEN@github.com/dest/repo FETCH_HEAD:refs/heads/branch",
 					exitCode: 1,
-					output:   "error: Updates were rejected because the tag already exists in the remote",
+					output:   "! [rejected] branch -> branch (already exists)\nerror: Updates were rejected because the tag already exists in the remote",
 				},
 				{
 					call:     "push --dry-run https://TOKEN@github.com/dest/repo FETCH_HEAD:refs/heads/branch",
@@ -577,7 +577,7 @@ func TestMirror(t *testing.T) {
 				{
 					call:     "push --tags --dry-run https://TOKEN@github.com/dest/repo FETCH_HEAD:refs/heads/branch",
 					exitCode: 1,
-					output:   "error: Updates were rejected because the tag already exists in the remote",
+					output:   "! [rejected] branch -> branch (already exists)\nerror: Updates were rejected because the tag already exists in the remote",
 				},
 				{
 					call:     "push --dry-run https://TOKEN@github.com/dest/repo FETCH_HEAD:refs/heads/branch",
@@ -611,7 +611,7 @@ func TestMirror(t *testing.T) {
 				{
 					call:     "push --tags --dry-run https://TOKEN@github.com/dest/repo HEAD:refs/heads/branch",
 					exitCode: 1,
-					output:   "error: Updates were rejected because the tag already exists in the remote",
+					output:   "! [rejected] branch -> branch (already exists)\nerror: Updates were rejected because the tag already exists in the remote",
 				},
 				{call: "push --dry-run https://TOKEN@github.com/dest/repo HEAD:refs/heads/branch"},
 			},
@@ -628,7 +628,7 @@ func TestMirror(t *testing.T) {
 				{
 					call:     "push --tags https://TOKEN@github.com/dest/repo FETCH_HEAD:refs/heads/branch",
 					exitCode: 1,
-					output:   "error: would clobber existing tag",
+					output:   "! [remote rejected] branch -> branch (would clobber existing tag)",
 				},
 				{call: "push https://TOKEN@github.com/dest/repo FETCH_HEAD:refs/heads/branch"},
 			},
@@ -1133,39 +1133,57 @@ func TestHasTagBranchCollision(t *testing.T) {
 	testCases := []struct {
 		name     string
 		output   string
+		branch   string
 		expected bool
 	}{
 		{
-			name:     "tag already exists message",
+			name:     "tag already exists message for matching branch",
 			output:   "! [remote rejected] FETCH_HEAD -> v1.22.0-mce-217 (failed)\nerror: Updates were rejected because the tag already exists in the remote",
+			branch:   "v1.22.0-mce-217",
 			expected: true,
 		},
 		{
-			name:     "would clobber existing tag message",
-			output:   "error: would clobber existing tag",
+			name:     "would clobber existing tag for matching branch",
+			output:   "! [remote rejected] release-4.12 -> release-4.12 (would clobber existing tag)",
+			branch:   "release-4.12",
 			expected: true,
+		},
+		{
+			name:     "tag already exists but for unrelated tag",
+			output:   "! [rejected] v1.0.0 -> v1.0.0 (already exists)\nerror: Updates were rejected because the tag already exists in the remote",
+			branch:   "main",
+			expected: false,
+		},
+		{
+			name:     "would clobber existing tag but for unrelated tag",
+			output:   "! [remote rejected] v2.0 -> v2.0 (would clobber existing tag)",
+			branch:   "release-4.12",
+			expected: false,
 		},
 		{
 			name:     "shallow update not allowed is not a collision",
 			output:   "shallow update not allowed",
+			branch:   "main",
 			expected: false,
 		},
 		{
 			name:     "generic rejection is not a collision",
 			output:   "Updates were rejected because the remote contains work that you do",
+			branch:   "main",
 			expected: false,
 		},
 		{
 			name:     "empty output",
 			output:   "",
+			branch:   "main",
 			expected: false,
 		},
 	}
 	for _, tc := range testCases {
 		t.Run(tc.name, func(t *testing.T) {
-			result := hasTagBranchCollision(tc.output)
+			result := hasTagBranchCollision(tc.output, tc.branch)
 			if result != tc.expected {
-				t.Errorf("hasTagBranchCollision(%q) = %v, want %v", tc.output, result, tc.expected)
+				t.Errorf("hasTagBranchCollision(%q, %q) = %v, want %v", tc.output, tc.branch, result, tc.expected)
 			}
 		})
 	}

@@ -13,6 +13,13 @@ the current development branch to the next version during the code freeze.
 
 In both modes, it also enforces the basic promotion destination consistency.
 
+When `--pipeline-controller-config` points to `core-services/pipeline-controller/config.yaml` in an
+`openshift/release` checkout, the tool adds generated `release-*` branches to existing explicit branch lists
+for the corresponding org/repo. For repositories mirrored from `openshift` to `openshift-priv`, it also updates
+an already-configured private counterpart. Repos without an explicit branch list already cover all branches;
+unconfigured repos are left alone. Dry runs do not change the file. The auto-config-brancher supplies this flag
+by default; standalone config-brancher invocations must supply it explicitly.
+
 ## Why it exists
 
 The tool allows the users to only maintain a single CI Operator configuration file: the one for main development branch.

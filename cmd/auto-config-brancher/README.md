@@ -24,7 +24,8 @@ _(subject to bitrot, always consult the code)_
 - [clusterimageset-updater](https://github.com/openshift/ci-tools/tree/master/cmd/clusterimageset-updater): updates
   cluster pool manifests to use the latest stable OCP releases
 - [config-brancher](https://github.com/openshift/ci-tools/tree/master/cmd/config-brancher): propagates ci-operator
-  config changes from `master`/`main` configs to future release branches
+  config changes from `master`/`main` configs to future release branches and extends configured
+  pipeline-controller branch lists for those releases
 - [determinize-ci-operator](https://github.com/openshift/ci-tools/tree/master/cmd/determinize-ci-operator): loads and
   saves ci-operator config to fix ordering, formatting etc
 - [determinize-prow-config](https://github.com/openshift/ci-tools/tree/main/cmd/determinize-prow-config): loads

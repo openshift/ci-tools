@@ -4,6 +4,8 @@ import (
 	"os"
 	"os/exec"
 	"testing"
+
+	"github.com/google/go-cmp/cmp"
 )
 
 func TestRunSteps(t *testing.T) {
@@ -70,6 +72,31 @@ func TestRunSteps(t *testing.T) {
 			}
 			if needsPushing != tc.expectNeedsPushing {
 				t.Errorf("expectNeedsPushing: %t, needsPushing: %t", tc.expectNeedsPushing, needsPushing)
+			}
+		})
+	}
+}
+
+func TestConfigBrancherArgs(t *testing.T) {
+	testCases := []struct {
+		name     string
+		releases []string
+		want     []string
+	}{
+		{name: "one release", releases: []string{"4.22"}, want: []string{"--config-dir", "./ci-operator/config", "--current-release", "4.21", "--skip-periodics", "--pipeline-controller-config", "./core-services/pipeline-controller/config.yaml", "--future-release", "4.22", "--confirm"}},
+		{name: "two releases", releases: []string{"4.21", "4.22"}, want: []string{"--config-dir", "./ci-operator/config", "--current-release", "4.21", "--skip-periodics", "--pipeline-controller-config", "./core-services/pipeline-controller/config.yaml", "--future-release", "4.21", "--future-release", "4.22", "--confirm"}},
+	}
+	for _, testCase := range testCases {
+		t.Run(testCase.name, func(t *testing.T) {
+			var opts options
+			opts.CurrentRelease = "4.21"
+			for _, release := range testCase.releases {
+				if err := opts.FutureReleases.Set(release); err != nil {
+					t.Fatalf("setting release: %v", err)
+				}
+			}
+			if diff := cmp.Diff(testCase.want, configBrancherArgs(opts)); diff != "" {
+				t.Errorf("arguments (-want +got):\n%s", diff)
 			}
 		})
 	}

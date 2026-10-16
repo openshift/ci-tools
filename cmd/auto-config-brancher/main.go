@@ -141,6 +141,15 @@ func prowgenArgs(o options) []string {
 	return args
 }
 
+// configBrancherArgs enables pipeline protection for each generated release branch.
+func configBrancherArgs(o options) []string {
+	args := []string{"--config-dir", "./ci-operator/config", "--current-release", o.CurrentRelease, "--skip-periodics", "--pipeline-controller-config", "./core-services/pipeline-controller/config.yaml"}
+	for _, futureRelease := range o.FutureReleases.Strings() {
+		args = append(args, "--future-release", futureRelease)
+	}
+	return append(args, "--confirm")
+}
+
 func main() {
 	o := parseOptions()
 	if err := validateOptions(o); err != nil {
@@ -164,15 +173,8 @@ func main() {
 
 	steps := []step{
 		{
-			command: "/usr/bin/config-brancher",
-			arguments: func() []string {
-				args := []string{"--config-dir", "./ci-operator/config", "--current-release", o.CurrentRelease, "--skip-periodics"}
-				for _, fr := range o.FutureReleases.Strings() {
-					args = append(args, "--future-release", fr)
-				}
-				args = append(args, "--confirm")
-				return args
-			}(),
+			command:   "/usr/bin/config-brancher",
+			arguments: configBrancherArgs(o),
 		},
 		{
 			command: "/usr/bin/ci-operator-config-mirror",

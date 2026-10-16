@@ -611,6 +611,7 @@ func TestOptions_Bind(t *testing.T) {
 				"--current-release=one",
 				"--future-release=two",
 				"--bump-release=three",
+				"--pipeline-controller-config=/tmp/pipeline.yaml",
 			},
 			expected: options{
 				FutureOptions: promotion.FutureOptions{
@@ -627,7 +628,8 @@ func TestOptions_Bind(t *testing.T) {
 					},
 					FutureReleases: flagutil.Strings{},
 				},
-				BumpRelease: "three",
+				BumpRelease:              "three",
+				pipelineControllerConfig: "/tmp/pipeline.yaml",
 			},
 			expectedFutureOpts: []string{"two"},
 		},

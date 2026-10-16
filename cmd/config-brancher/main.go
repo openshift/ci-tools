@@ -20,8 +20,9 @@ import (
 type options struct {
 	promotion.FutureOptions
 
-	BumpRelease   string
-	skipPeriodics bool
+	BumpRelease              string
+	pipelineControllerConfig string
+	skipPeriodics            bool
 	// skipDerivedConfigBranches lists org/repo values for which main/master is not mirrored to release-*.
 	skipDerivedConfigBranches flagutil.Strings
 }
@@ -41,6 +42,7 @@ func (o *options) Validate() error {
 
 func (o *options) Bind(fs *flag.FlagSet) {
 	fs.StringVar(&o.BumpRelease, "bump-release", "", "Bump the dev config to this release and manage mirroring.")
+	fs.StringVar(&o.pipelineControllerConfig, "pipeline-controller-config", "", "Update branches for configured repos in this pipeline-controller config file.")
 	fs.Var(&o.skipDerivedConfigBranches, "skip-derived-config-branch", "Do not mirror main/master to release-* for this org/repo (repeatable). If unset, defaults to openshift/etcd and openshift-priv/etcd.")
 	o.FutureOptions.Bind(fs)
 }
@@ -128,6 +130,11 @@ func main() {
 	}
 	if failed {
 		logrus.Fatal("Failed to commit configuration to disk.")
+	}
+	if o.pipelineControllerConfig != "" {
+		if err := updatePipelineControllerConfig(o.pipelineControllerConfig, toCommit); err != nil {
+			logrus.WithError(err).Fatal("Could not update pipeline-controller configuration.")
+		}
 	}
 }
 

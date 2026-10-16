@@ -462,7 +462,7 @@ func TestMirror(t *testing.T) {
 				{call: "fetch https://TOKEN@github.com/dest/repo branch"},
 				{call: "checkout FETCH_HEAD"},
 				{call: "-c user.name=openshift-bot -c user.email=openshift-bot@redhat.com merge org-repo/branch -m DPTP reconciliation from upstream"},
-				{call: "push --tags --dry-run https://TOKEN@github.com/dest/repo HEAD:branch"},
+				{call: "push --tags --dry-run https://TOKEN@github.com/dest/repo HEAD:refs/heads/branch"},
 			},
 		},
 		{
@@ -567,6 +567,31 @@ func TestMirror(t *testing.T) {
 			expectError: true,
 		},
 		{
+			description: "tag/branch collision -> retry fails with shallow error -> falls through to merge recovery",
+			src:         location{org: org, repo: repo, branch: branch},
+			dst:         location{org: destOrg, repo: repo, branch: branch},
+			srcHeads:    RemoteBranchHeads{branch: "source-sha"},
+			dstHeads:    RemoteBranchHeads{branch: "dest-sha"},
+			expectedGitCalls: []mockGitCall{
+				{call: "fetch --tags org-repo branch --depth=2"},
+				{
+					call:     "push --tags --dry-run https://TOKEN@github.com/dest/repo FETCH_HEAD:refs/heads/branch",
+					exitCode: 1,
+					output:   "error: Updates were rejected because the tag already exists in the remote",
+				},
+				{
+					call:     "push --dry-run https://TOKEN@github.com/dest/repo FETCH_HEAD:refs/heads/branch",
+					exitCode: 1,
+					output:   "Updates were rejected because the remote contains work that you do",
+				},
+				{call: "rev-parse --is-shallow-repository", output: "false"},
+				{call: "fetch https://TOKEN@github.com/dest/repo branch"},
+				{call: "checkout FETCH_HEAD"},
+				{call: "-c user.name=openshift-bot -c user.email=openshift-bot@redhat.com merge org-repo/branch -m DPTP reconciliation from upstream"},
+				{call: "push --tags --dry-run https://TOKEN@github.com/dest/repo HEAD:refs/heads/branch"},
+			},
+		},
+		{
 			description: "tag/branch collision in merge push path -> retry without --tags succeeds",
 			src:         location{org: org, repo: repo, branch: branch},
 			dst:         location{org: destOrg, repo: repo, branch: branch},
@@ -584,11 +609,11 @@ func TestMirror(t *testing.T) {
 				{call: "checkout FETCH_HEAD"},
 				{call: "-c user.name=openshift-bot -c user.email=openshift-bot@redhat.com merge org-repo/branch -m DPTP reconciliation from upstream"},
 				{
-					call:     "push --tags --dry-run https://TOKEN@github.com/dest/repo HEAD:branch",
+					call:     "push --tags --dry-run https://TOKEN@github.com/dest/repo HEAD:refs/heads/branch",
 					exitCode: 1,
 					output:   "error: Updates were rejected because the tag already exists in the remote",
 				},
-				{call: "push --dry-run https://TOKEN@github.com/dest/repo HEAD:branch"},
+				{call: "push --dry-run https://TOKEN@github.com/dest/repo HEAD:refs/heads/branch"},
 			},
 		},
 		{

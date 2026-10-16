@@ -530,9 +530,14 @@ func (g gitSyncer) mirror(repoDir string, src, dst location, srcCommitHash strin
 				logger.Debug("Successfully pushed to destination without --tags")
 				return nil, nil
 			}
-			message := "failed to push to destination even without --tags"
-			logger.WithError(retryErr).WithField("exit-code", retryExitCode).WithField("output", retryOut).Error(message)
-			return nil, fmt.Errorf("%s", message)
+			if retryErr == nil && maybeTooShallow(retryOut) {
+				logger.WithField("branch", dst.branch).Info("Tag-free retry failed due to shallow history, continuing to deeper fetch recovery")
+				out = retryOut
+			} else {
+				message := "failed to push to destination even without --tags"
+				logger.WithError(retryErr).WithField("exit-code", retryExitCode).WithField("output", retryOut).Error(message)
+				return nil, fmt.Errorf("%s", message)
+			}
 		}
 
 		if !maybeTooShallow(out) || err != nil {
@@ -643,7 +648,7 @@ func mergeRemotesAndPush(logger *logrus.Entry, git gitFunc, repoDir, srcRemote, 
 	if !confirm {
 		cmd = append(cmd, "--dry-run")
 	}
-	cmd = append(cmd, destURL, fmt.Sprintf("HEAD:%s", branch))
+	cmd = append(cmd, destURL, fmt.Sprintf("HEAD:refs/heads/%s", branch))
 
 	out, exitCode, err := git(logger, repoDir, cmd...)
 	if err == nil && exitCode == 0 {
@@ -657,7 +662,7 @@ func mergeRemotesAndPush(logger *logrus.Entry, git gitFunc, repoDir, srcRemote, 
 		if !confirm {
 			retryCmd = append(retryCmd, "--dry-run")
 		}
-		retryCmd = append(retryCmd, destURL, fmt.Sprintf("HEAD:%s", branch))
+		retryCmd = append(retryCmd, destURL, fmt.Sprintf("HEAD:refs/heads/%s", branch))
 		if retryErr := checkGitError(git(logger, repoDir, retryCmd...)); retryErr != nil {
 			return fmt.Errorf("failed to push to destination even without --tags: %w", retryErr)
 		}

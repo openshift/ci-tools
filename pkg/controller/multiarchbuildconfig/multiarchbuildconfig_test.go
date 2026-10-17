@@ -47,8 +47,64 @@ type mockManifestPusher struct {
 	errToReturn error
 }
 
-func (m *mockManifestPusher) PushImageWithManifest(builds []buildv1.Build, targetImageRef string) error {
+func (m *mockManifestPusher) PushImageWithManifest(builds []buildv1.Build, buildImageRef string) error {
 	return m.errToReturn
+}
+
+func TestTargetImageRef(t *testing.T) {
+	tests := []struct {
+		name            string
+		outputNamespace string
+		want            string
+	}{
+		{name: "explicit namespace", outputNamespace: "ocp", want: "ocp/cli-yq:latest"},
+		{name: "default namespace", want: "ci/cli-yq:latest"},
+	}
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			mabc := &v1.MultiArchBuildConfig{
+				ObjectMeta: metav1.ObjectMeta{Namespace: "ci"},
+				Spec: v1.MultiArchBuildConfigSpec{
+					BuildSpec: buildv1.BuildConfigSpec{CommonSpec: buildv1.CommonSpec{
+						Output: buildv1.BuildOutput{To: &corev1.ObjectReference{Namespace: tt.outputNamespace, Name: "cli-yq:latest"}},
+					}},
+				},
+			}
+			if got := targetImageRef(mabc); got != tt.want {
+				t.Errorf("targetImageRef() = %q, want %q", got, tt.want)
+			}
+		})
+	}
+}
+
+func TestBuildImageRef(t *testing.T) {
+	tests := []struct {
+		name               string
+		outputNamespace    string
+		externalRegistries []string
+		want               string
+	}{
+		{name: "cross namespace external target", outputNamespace: "ocp", externalRegistries: []string{"quay.io/openshift/ci"}, want: "ci/ocp-cli-yq:latest"},
+		{name: "same namespace external target", outputNamespace: "ci", externalRegistries: []string{"quay.io/openshift/ci"}, want: "ci/cli-yq:latest"},
+		{name: "default output namespace", externalRegistries: []string{"quay.io/openshift/ci"}, want: "ci/cli-yq:latest"},
+		{name: "cross namespace without external target", outputNamespace: "ocp", want: "ocp/cli-yq:latest"},
+	}
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			mabc := &v1.MultiArchBuildConfig{
+				ObjectMeta: metav1.ObjectMeta{Namespace: "ci"},
+				Spec: v1.MultiArchBuildConfigSpec{
+					BuildSpec: buildv1.BuildConfigSpec{CommonSpec: buildv1.CommonSpec{
+						Output: buildv1.BuildOutput{To: &corev1.ObjectReference{Namespace: tt.outputNamespace, Name: "cli-yq:latest"}},
+					}},
+					ExternalRegistries: tt.externalRegistries,
+				},
+			}
+			if got := buildImageRef(mabc); got != tt.want {
+				t.Errorf("buildImageRef() = %q, want %q", got, tt.want)
+			}
+		})
+	}
 }
 
 type buildBuilder struct {

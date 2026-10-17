@@ -1,6 +1,7 @@
 package prcreation
 
 import (
+	"context"
 	"flag"
 	"fmt"
 	"io"
@@ -22,6 +23,9 @@ import (
 type PRCreationOptions struct {
 	SelfApprove  bool
 	PRSourceMode string
+	// APICommit creates the commit through the GitHub API instead of git
+	// push, so GitHub signs it. Only supported with PRSourceMode "branch".
+	APICommit bool
 	flagutil.GitHubOptions
 	GithubClient github.Client
 }
@@ -36,6 +40,7 @@ type upsertContext struct {
 func (o *PRCreationOptions) AddFlags(fs *flag.FlagSet) {
 	fs.BoolVar(&o.SelfApprove, "self-approve", false, "If the created PR should be self-approved by adding the lgtm+approved labels")
 	fs.StringVar(&o.PRSourceMode, "pr-source-mode", "fork", "How to push PR source: fork or branch")
+	fs.BoolVar(&o.APICommit, "api-commit", false, "Create the commit through the GitHub API so GitHub signs it. Requires --pr-source-mode=branch")
 	o.GitHubOptions.AddFlags(fs)
 }
 
@@ -44,6 +49,9 @@ func (o *PRCreationOptions) Finalize() error {
 	case "fork", "branch":
 	default:
 		return fmt.Errorf("invalid --pr-source-mode %q, expected one of: fork, branch", o.PRSourceMode)
+	}
+	if o.APICommit && o.PRSourceMode != "branch" {
+		return fmt.Errorf("--api-commit requires --pr-source-mode=branch")
 	}
 	if err := o.GitHubOptions.Validate(false); err != nil {
 		return err
@@ -278,6 +286,24 @@ func (o *PRCreationOptions) upsertWithAppAuth(localSourceDir, org, repo, branch,
 	}
 	if ctx == nil {
 		return nil
+	}
+
+	if o.APICommit {
+		if err := bumper.Call(ctx.stdout, ctx.stderr, "git", []string{"add", "-A"}); err != nil {
+			return fmt.Errorf("failed to stage changes: %w", err)
+		}
+		l.WithField("branch", ctx.sourceBranchName).Info("Creating commit through the GitHub API")
+		oid, err := commitViaAPI(context.Background(), o.GithubClient, ".", org, repo, ctx.sourceBranchName,
+			prTitle, commitMessage(prArgs.prBody, prArgs.gitCommitMessage))
+		if err != nil {
+			return err
+		}
+		l.WithFields(logrus.Fields{"branch": ctx.sourceBranchName, "commit": oid}).Info("Created commit through the GitHub API")
+		if prArgs.skipPRCreation {
+			l.Info("SkipPRCreation is set, not creating a PR")
+			return nil
+		}
+		return o.ensurePR(org, repo, branch, prTitle, ctx.sourceBranchName, ctx.sourceBranchName, true, prArgs)
 	}
 
 	// Create branch, stage, and commit locally

@@ -819,6 +819,13 @@ func TestDetermineJobRuns(t *testing.T) {
 				ghc: fghc,
 			}
 
+			for i := range tc.expected {
+				for _, pr := range tc.expected[i].AdditionalPRs {
+					original := fghc.prs[referenceForPR(pr).String()]
+					tc.expected[i].ResolvedPRs = append(tc.expected[i].ResolvedPRs, *original)
+				}
+				tc.expected[i].ResolvedPRs = append(tc.expected[i].ResolvedPRs, tc.originPR)
+			}
 			jobRuns, err := s.determineJobRuns(tc.comment, tc.originPR)
 			if diff := cmp.Diff(err, tc.expectedError, testhelper.EquateErrorMessage); diff != "" {
 				t.Fatalf("eror doesn't match expected, (-want +got):\n %v", err)

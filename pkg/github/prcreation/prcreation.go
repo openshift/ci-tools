@@ -20,8 +20,9 @@ import (
 )
 
 type PRCreationOptions struct {
-	SelfApprove  bool
-	PRSourceMode string
+	SelfApprove         bool
+	PRSourceMode        string
+	GitHubSignedCommits bool
 	flagutil.GitHubOptions
 	GithubClient github.Client
 }
@@ -36,10 +37,14 @@ type upsertContext struct {
 func (o *PRCreationOptions) AddFlags(fs *flag.FlagSet) {
 	fs.BoolVar(&o.SelfApprove, "self-approve", false, "If the created PR should be self-approved by adding the lgtm+approved labels")
 	fs.StringVar(&o.PRSourceMode, "pr-source-mode", "fork", "How to push PR source: fork or branch")
+	fs.BoolVar(&o.GitHubSignedCommits, "github-signed-commits", false, "Create verified commits through the GitHub API (requires App auth and --pr-source-mode=branch)")
 	o.GitHubOptions.AddFlags(fs)
 }
 
 func (o *PRCreationOptions) Finalize() error {
+	if o.GitHubSignedCommits && (o.PRSourceMode != "branch" || o.AppID == "") {
+		return fmt.Errorf("--github-signed-commits requires --pr-source-mode=branch and GitHub App authentication")
+	}
 	switch o.PRSourceMode {
 	case "fork", "branch":
 	default:
@@ -278,6 +283,16 @@ func (o *PRCreationOptions) upsertWithAppAuth(localSourceDir, org, repo, branch,
 	}
 	if ctx == nil {
 		return nil
+	}
+
+	if o.GitHubSignedCommits {
+		if err := publishSignedCommit(o.GithubClient, org, repo, ctx.sourceBranchName, prTitle, commitMessage(prArgs.prBody, prArgs.gitCommitMessage)); err != nil {
+			return fmt.Errorf("failed to publish GitHub-signed commit: %w", err)
+		}
+		if prArgs.skipPRCreation {
+			return nil
+		}
+		return o.ensurePR(org, repo, branch, prTitle, ctx.sourceBranchName, ctx.sourceBranchName, true, prArgs)
 	}
 
 	// Create branch, stage, and commit locally

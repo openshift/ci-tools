@@ -717,10 +717,19 @@ func writeSnapshot(path string, snapshot *PolicySnapshot) error {
 // Lookup returns the current decision for job. Expired runtime policy fails back
 // to the Git-materialized baseline even if a cleanup controller is unavailable.
 func (m *SnapshotManager) Lookup(job string, now time.Time) (Decision, bool) {
-	if !m.Ready() {
-		return Decision{}, false
+	return snapshotDecision(m.servingSnapshot(), job, now)
+}
+
+// servingSnapshot captures an immutable generation without copying its job maps.
+func (m *SnapshotManager) servingSnapshot() *PolicySnapshot {
+	if m == nil || !m.verified.Load() {
+		return nil
 	}
-	snapshot := m.current.Load()
+	return m.current.Load()
+}
+
+// snapshotDecision evaluates expiry against one captured generation and time.
+func snapshotDecision(snapshot *PolicySnapshot, job string, now time.Time) (Decision, bool) {
 	if snapshot == nil {
 		return Decision{}, false
 	}

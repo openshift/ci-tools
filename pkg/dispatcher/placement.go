@@ -38,7 +38,7 @@ func overridePlacementUnits(override *dispatcherv1.DispatchOverride, baseline ma
 		unit.names = append(unit.names, name)
 		unit.job.Demand += effectiveDemand(job.Demand)
 		unit.job.PlacementKnown = unit.job.PlacementKnown && job.PlacementKnown
-		unit.job.Relocatable = unit.job.Relocatable && job.Relocatable && job.Affinity == (PlacementAffinity{})
+		unit.job.Relocatable = unit.job.Relocatable && job.Relocatable
 		unit.job.Capabilities = append(unit.job.Capabilities, job.Capabilities...)
 	}
 	result := make([]placementUnit, 0, len(units))
@@ -71,20 +71,4 @@ func overridePlacementUnits(override *dispatcherv1.DispatchOverride, baseline ma
 		return result[i].key < result[j].key
 	})
 	return result, nil
-}
-
-// overrideCapacities isolates capability-scoped reductions from unrelated work.
-func overrideCapacities(override *dispatcherv1.DispatchOverride, capacities map[string]int) map[string]int {
-	if override.Spec.Scope.Capability == "" {
-		return capacities
-	}
-	result := make(map[string]int, len(capacities))
-	for cluster, capacity := range capacities {
-		result[cluster] = capacity
-	}
-	result[override.Spec.Cluster] = 0
-	if override.Spec.Kind == dispatcherv1.OverrideKindCapacity {
-		result[override.Spec.Cluster] = int(*override.Spec.Capacity)
-	}
-	return result
 }

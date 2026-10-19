@@ -48,7 +48,6 @@ import (
 	"github.com/openshift/ci-tools/pkg/rehearse"
 	"github.com/openshift/ci-tools/pkg/sanitizer"
 	"github.com/openshift/ci-tools/pkg/util"
-	"github.com/openshift/ci-tools/pkg/util/gzip"
 )
 
 const (
@@ -71,8 +70,6 @@ type options struct {
 	clusterConfigPath   string
 	jobsStoragePath     string
 	snapshotStoragePath string
-	affinityStoragePath string
-	rebalanceInterval   time.Duration
 
 	prometheusDaysBefore       int
 	rebalanceHysteresisPercent float64
@@ -133,8 +130,6 @@ func gatherOptions() options {
 
 	fs.StringVar(&o.groupOrder, "group-order", "file-size", "Baseline group ordering: file-size or demand (effective relocatable demand).")
 	fs.StringVar(&o.shadowGroupOrder, "shadow-group-order", "demand", "Alternative baseline ordering evaluated without publishing assignments: file-size, demand, or disabled.")
-	fs.StringVar(&o.affinityStoragePath, "group-affinity-storage-path", "", "Opt-in durable conservative group freeze. Preserve configured fallback hosts; bindings never expire automatically.")
-	fs.DurationVar(&o.rebalanceInterval, "rebalance-interval", 0, "Optional periodic full demand refresh and planning interval, at least 5m. Requires durable group affinity; zero keeps the weekly schedule.")
 	fs.BoolVar(&o.createPR, "create-pr", false, "Create a pull request to the change made with this tool.")
 	fs.StringVar(&o.upstreamBranch, "upstream-branch", upstreamBranch, "Upstream branch where the PR should be created")
 	fs.StringVar(&o.githubLogin, "github-login", githubLogin, "The GitHub username to use.")
@@ -181,9 +176,6 @@ func (o *options) validate() error {
 	}
 
 	if err := validateGroupOrders(o.groupOrder, o.shadowGroupOrder); err != nil {
-		return err
-	}
-	if err := validateAffinityOptions(*o); err != nil {
 		return err
 	}
 	if o.prometheusDaysBefore < 0 || o.prometheusDaysBefore > 15 {
@@ -394,39 +386,17 @@ func (cv *clusterVolume) findClusterForJobConfig(cloudProvider string, jc *prowc
 	if _, ok := cv.clusterVolumeMap[cloudProvider]; !ok {
 		cloudProvider = ""
 	}
-	boundCluster, err := boundClusterForConfig(jc, path, config, cv.previousAssignments, cv.clusterMap, cv.blocked)
+	var cluster string
+	classifiedJobs, err := cv.classifyJobsForProjection(jc, path, config, jobVolumes)
 	if err != nil {
 		return "", err
-	}
-	var cluster string
-	projectedVolumes := make(map[string]float64)
-	var jobsForProjection []projectedJob
-	var jobsForProjectionErr error
-	jobsClassified := false
-	projectedVolume := func(candidate string) (float64, error) {
-		if volume, exists := projectedVolumes[candidate]; exists {
-			return volume, nil
-		}
-		if !jobsClassified {
-			jobsClassified = true
-			jobsForProjection, jobsForProjectionErr = cv.classifyJobsForProjection(jc, path, config, jobVolumes)
-		}
-		if jobsForProjectionErr != nil {
-			return 0, jobsForProjectionErr
-		}
-		volume := projectedVolumeForCandidate(candidate, string(config.Default), jobsForProjection)
-		projectedVolumes[candidate] = volume
-		return volume, nil
 	}
 
 	mostUsedCluster := dispatcher.FindMostUsedCluster(jc)
 	// TODO: 75% as we still have manual assignments and these are affecting even distribution, re-evaluate when manual assignments are gone
 	if determinedCloudProvider := config.IsInBuildFarm(api.Cluster(mostUsedCluster)); determinedCloudProvider != "" &&
 		(cloudProvider == "" || cloudProvider == string(determinedCloudProvider)) {
-		volume, err := projectedVolume(mostUsedCluster)
-		if err != nil {
-			return "", err
-		}
+		volume := projectedVolumeForCandidate(mostUsedCluster, string(config.Default), classifiedJobs)
 		if cv.clusterVolumeMap[string(determinedCloudProvider)][mostUsedCluster]+volume < cv.volumeDistribution[mostUsedCluster]*0.75 {
 			cluster = mostUsedCluster
 		}
@@ -451,10 +421,7 @@ func (cv *clusterVolume) findClusterForJobConfig(cloudProvider string, jc *prowc
 					continue
 				}
 				if cloudProvider == "" || cloudProvider == cp {
-					candidateVolume, err := projectedVolume(candidate)
-					if err != nil {
-						return "", err
-					}
+					candidateVolume := projectedVolumeForCandidate(candidate, string(config.Default), classifiedJobs)
 					score := (m[candidate] + candidateVolume) / float64(clusterInfo.Capacity)
 					tieBreak := stableClusterTieBreak(tieBreakPath, candidate)
 					if minScore < 0 || score < minScore ||
@@ -468,23 +435,7 @@ func (cv *clusterVolume) findClusterForJobConfig(cloudProvider string, jc *prowc
 		}
 	}
 
-	classifiedJobs, err := func() ([]projectedJob, error) {
-		if !jobsClassified {
-			jobsClassified = true
-			jobsForProjection, jobsForProjectionErr = cv.classifyJobsForProjection(jc, path, config, jobVolumes)
-		}
-		return jobsForProjection, jobsForProjectionErr
-	}()
-	if err != nil {
-		return "", err
-	}
-	if boundCluster != "" {
-		cluster = boundCluster
-	}
 	previousCluster := previousClusterForProjectedJobs(classifiedJobs)
-	if boundCluster != "" {
-		previousCluster = ""
-	}
 	if previousCluster != "" && previousCluster != cluster {
 		previousInfo, previousExists := cv.clusterMap[previousCluster]
 		previousProviderVolumes, previousProviderExists := cv.clusterVolumeMap[previousInfo.Provider]
@@ -492,18 +443,12 @@ func (cv *clusterVolume) findClusterForJobConfig(cloudProvider string, jc *prowc
 		previousEligible := previousExists && previousProviderExists && previousTracked && previousInfo.Capacity > 0 && !cv.blocked.Has(previousCluster) &&
 			(cloudProvider == "" || cloudProvider == previousInfo.Provider)
 		if previousEligible {
-			previousVolume, err := projectedVolume(previousCluster)
-			if err != nil {
-				return "", err
-			}
+			previousVolume := projectedVolumeForCandidate(previousCluster, string(config.Default), classifiedJobs)
 			selectedInfo, selectedExists := cv.clusterMap[cluster]
 			selectedProviderVolumes, selectedProviderExists := cv.clusterVolumeMap[selectedInfo.Provider]
 			_, selectedTracked := selectedProviderVolumes[cluster]
 			if selectedExists && selectedProviderExists && selectedTracked && selectedInfo.Capacity > 0 {
-				selectedVolume, err := projectedVolume(cluster)
-				if err != nil {
-					return "", err
-				}
+				selectedVolume := projectedVolumeForCandidate(cluster, string(config.Default), classifiedJobs)
 				previousScore := (previousProviderVolumes[previousCluster] + previousVolume) / float64(previousInfo.Capacity)
 				selectedScore := (selectedProviderVolumes[cluster] + selectedVolume) / float64(selectedInfo.Capacity)
 				withinHysteresis := previousScore <= selectedScore*(1+cv.hysteresis)
@@ -519,23 +464,8 @@ func (cv *clusterVolume) findClusterForJobConfig(cloudProvider string, jc *prowc
 	}
 
 	var errs []error
-	for _, k := range sortedStringKeys(jc.PresubmitsStatic) {
-		for _, job := range jc.PresubmitsStatic[k] {
-			if err := cv.addToVolume(cluster, job.JobBase, path, config, jobVolumes); err != nil {
-				errs = append(errs, err)
-			}
-		}
-	}
-
-	for _, k := range sortedStringKeys(jc.PostsubmitsStatic) {
-		for _, job := range jc.PostsubmitsStatic[k] {
-			if err := cv.addToVolume(cluster, job.JobBase, path, config, jobVolumes); err != nil {
-				errs = append(errs, err)
-			}
-		}
-	}
-	for _, job := range jc.Periodics {
-		if err := cv.addToVolume(cluster, job.JobBase, path, config, jobVolumes); err != nil {
+	for _, job := range jobBases(jc) {
+		if err := cv.addToVolume(cluster, job, path, config, jobVolumes); err != nil {
 			errs = append(errs, err)
 		}
 	}
@@ -545,14 +475,10 @@ func (cv *clusterVolume) findClusterForJobConfig(cloudProvider string, jc *prowc
 
 func (cv *clusterVolume) classifyJobsForProjection(jc *prowconfig.JobConfig, path string, config *dispatcher.Config, jobVolumes map[string]float64) ([]projectedJob, error) {
 	var jobsForProjection []projectedJob
-	addProjectedJob := func(jobBase prowconfig.JobBase) error {
+	for _, jobBase := range jobBases(jc) {
 		determinedCluster, canBeRelocated, err := config.DetermineClusterForJob(jobBase, path, cv.clusterMap)
 		if err != nil {
-			return fmt.Errorf("failed to determine projected cluster for job %s in path %q: %w", jobBase.Name, path, err)
-		}
-		if canBeRelocated && cv.previousAssignments[jobBase.Name].Affinity.Cluster != "" {
-			determinedCluster = api.Cluster(cv.previousAssignments[jobBase.Name].Affinity.Cluster)
-			canBeRelocated = false
+			return nil, fmt.Errorf("failed to determine projected cluster for job %s in path %q: %w", jobBase.Name, path, err)
 		}
 		volume := demandForJob(jobVolumes, jobBase.Name, cv.minimumJobDemand)
 		if cv.prechargedJobs.Has(jobBase.Name) {
@@ -566,27 +492,6 @@ func (cv *clusterVolume) classifyJobsForProjection(jc *prowconfig.JobConfig, pat
 		})
 		if previous, exists := cv.previousAssignments[jobBase.Name]; exists {
 			jobsForProjection[len(jobsForProjection)-1].previousCluster = previous.Cluster
-		}
-		return nil
-	}
-
-	for _, k := range sortedStringKeys(jc.PresubmitsStatic) {
-		for _, job := range jc.PresubmitsStatic[k] {
-			if err := addProjectedJob(job.JobBase); err != nil {
-				return nil, err
-			}
-		}
-	}
-	for _, k := range sortedStringKeys(jc.PostsubmitsStatic) {
-		for _, job := range jc.PostsubmitsStatic[k] {
-			if err := addProjectedJob(job.JobBase); err != nil {
-				return nil, err
-			}
-		}
-	}
-	for _, job := range jc.Periodics {
-		if err := addProjectedJob(job.JobBase); err != nil {
-			return nil, err
 		}
 	}
 	return jobsForProjection, nil
@@ -699,12 +604,8 @@ func (cv *clusterVolume) addToVolume(cluster string, jobBase prowconfig.JobBase,
 	if err != nil {
 		return err
 	}
-	affinity := cv.previousAssignments[jobBase.Name].Affinity
-	if canBeRelocated && affinity.Cluster != "" {
-		c = affinity.Cluster
-	}
 	demand := demandForJob(jobVolumes, jobBase.Name, cv.minimumJobDemand)
-	cv.pjs[jobBase.Name] = dispatcher.ProwJobData{Affinity: affinity, Cluster: c, Capabilities: extractCapabilities(jobBase.Labels), Demand: demand, Group: group, PlacementKnown: true, Relocatable: canBeRelocated, PlacementDigest: placementDigest(jobBase, string(determinedCluster), canBeRelocated, group, config)}
+	cv.pjs[jobBase.Name] = dispatcher.ProwJobData{Cluster: c, Capabilities: extractCapabilities(jobBase.Labels), Demand: demand, Group: group, PlacementKnown: true, Relocatable: canBeRelocated, PlacementDigest: placementDigest(jobBase, string(determinedCluster), canBeRelocated, group, config)}
 	if cv.prechargedJobs.Has(jobBase.Name) {
 		return nil
 	}
@@ -730,15 +631,8 @@ func (cv *clusterVolume) dispatchJobConfig(jc *prowconfig.JobConfig, path string
 	return cluster, nil
 }
 
-type configResult struct {
-	cluster  string
-	filename string
-	path     string
-}
-
 type fileSizeInfo struct {
 	path      string
-	info      fs.DirEntry
 	size      int64
 	jobConfig *prowconfig.JobConfig
 	demand    float64
@@ -1016,7 +910,7 @@ func dispatchJobsFromFiles(prowJobConfigDir string, config *dispatcher.Config, j
 	if config == nil {
 		return nil, fmt.Errorf("config is nil")
 	}
-	fileList, err := orderDispatchFiles(fileList, order, config, jobVolumes, cm, minimumJobDemand, previous)
+	fileList, err := orderDispatchFiles(fileList, order, config, jobVolumes, cm, minimumJobDemand)
 	if err != nil {
 		return nil, err
 	}
@@ -1060,33 +954,29 @@ func dispatchJobsFromFiles(prowJobConfigDir string, config *dispatcher.Config, j
 	results := map[string][]string{}
 	var errs []error
 
-	dispatch := func(jobConfig *prowconfig.JobConfig, path string, info fs.DirEntry) {
-		cluster, err := cv.dispatchJobConfig(jobConfig, path, config, jobVolumes)
-		if err != nil {
-			errs = append(errs, fmt.Errorf("failed to dispatch job config %q: %w", path, err))
-
-		}
-		cr := configResult{cluster: cluster, path: path, filename: info.Name()}
-		if !config.MatchingPathRegEx(cr.path) {
-			results[cr.cluster] = append(results[cr.cluster], cr.filename)
-		}
-	}
 	if movementBudgetPercent >= 0 {
-		movementBudget, err := movementBudgetForConfiguredJobFiles(fileList, jobVolumes, movementBudgetPercent, minimumJobDemand)
-		if err != nil {
-			return nil, fmt.Errorf("failed to calculate movement budget from configured jobs: %w", err)
-		}
-		cv.movementBudget = movementBudget
+		cv.movementBudget = movementBudgetForConfiguredJobFiles(fileList, jobVolumes, movementBudgetPercent, minimumJobDemand)
 	}
-	if err := dispatchEveryFile(fileList, dispatch); err != nil {
-		errs = append(errs, err)
+	for _, file := range fileList {
+		cluster, err := cv.dispatchJobConfig(file.jobConfig, file.path, config, jobVolumes)
+		if err != nil {
+			errs = append(errs, fmt.Errorf("failed to dispatch job config %q: %w", file.path, err))
+			continue
+		}
+		if !config.MatchingPathRegEx(file.path) {
+			results[cluster] = append(results[cluster], filepath.Base(file.path))
+		}
 	}
 
+	// Replace the assignment maps so selected and shadow plans can share read-only config.
+	buildFarm := make(map[api.Cloud]map[api.Cluster]*dispatcher.BuildFarmConfig, len(config.BuildFarm))
 	for cloudProvider, jobGroups := range config.BuildFarm {
+		buildFarm[cloudProvider] = make(map[api.Cluster]*dispatcher.BuildFarmConfig, len(jobGroups))
 		for cluster := range jobGroups {
-			config.BuildFarm[cloudProvider][cluster] = &dispatcher.BuildFarmConfig{FilenamesRaw: results[string(cluster)]}
+			buildFarm[cloudProvider][cluster] = &dispatcher.BuildFarmConfig{FilenamesRaw: results[string(cluster)]}
 		}
 	}
+	config.BuildFarm = buildFarm
 
 	return cv.pjs, utilerrors.NewAggregate(errs)
 }
@@ -1096,26 +986,13 @@ func dispatchDeltaJobs(prowJobConfigDir string, config *dispatcher.Config, block
 	if err != nil {
 		return fmt.Errorf("failed to load delta job configuration: %w", err)
 	}
-	return dispatchDeltaFiles(fileList, prowJobConfigDir, config, blocked, pjs, cm, minimumJobDemand)
-}
-
-// dispatchDeltaFiles refreshes assignments from the same snapshot used to freeze affinity.
-func dispatchDeltaFiles(fileList []fileSizeInfo, prowJobConfigDir string, config *dispatcher.Config, blocked sets.Set[string], pjs map[string]dispatcher.ProwJobData, cm dispatcher.ClusterMap, minimumJobDemand float64) error {
 	var errs []error
-	dispatch := func(jobConfig *prowconfig.JobConfig, path string, info fs.DirEntry) {
-		if err := findClusterAssigmentsForJobs(jobConfig, prowJobConfigDir, path, config, pjs, blocked, cm, minimumJobDemand); err != nil {
+	for _, file := range fileList {
+		if err := findClusterAssigmentsForJobs(file.jobConfig, prowJobConfigDir, file.path, config, pjs, blocked, cm, minimumJobDemand); err != nil {
 			errs = append(errs, err)
 		}
 	}
-	sort.Slice(fileList, func(i, j int) bool {
-		if fileList[i].size != fileList[j].size {
-			return fileList[i].size > fileList[j].size
-		}
-		return fileList[i].path < fileList[j].path
-	})
-	if err := dispatchEveryFile(fileList, dispatch); err != nil {
-		errs = append(errs, err)
-	}
+
 	return utilerrors.NewAggregate(errs)
 }
 
@@ -1126,31 +1003,6 @@ func assignmentsRequireMetadataMigration(assignments map[string]dispatcher.ProwJ
 		}
 	}
 	return false
-}
-
-func dispatchEveryFile(fileList []fileSizeInfo, dispatch func(jobConfig *prowconfig.JobConfig, path string, info fs.DirEntry)) error {
-	var errs []error
-	for _, file := range fileList {
-		if file.jobConfig != nil {
-			dispatch(file.jobConfig, file.path, file.info)
-			continue
-		}
-		func(path string, info fs.DirEntry) {
-			data, err := gzip.ReadFileMaybeGZIP(path)
-			if err != nil {
-				errs = append(errs, fmt.Errorf("failed to read file %q: %w", path, err))
-				return
-			}
-
-			jobConfig := &prowconfig.JobConfig{}
-			if err := yaml.Unmarshal(data, jobConfig); err != nil {
-				errs = append(errs, fmt.Errorf("failed to unmarshal file %q: %w", path, err))
-				return
-			}
-			dispatch(jobConfig, path, info)
-		}(file.path, file.info)
-	}
-	return utilerrors.NewAggregate(errs)
 }
 
 func addConfiguredJobNames(jobConfig *prowconfig.JobConfig, jobNames sets.Set[string]) {
@@ -1169,14 +1021,13 @@ func addConfiguredJobNames(jobConfig *prowconfig.JobConfig, jobNames sets.Set[st
 	}
 }
 
-func movementBudgetForConfiguredJobFiles(fileList []fileSizeInfo, jobVolumes map[string]float64, movementBudgetPercent, minimumJobDemand float64) (float64, error) {
+// movementBudgetForConfiguredJobFiles counts each configured job once against the budget.
+func movementBudgetForConfiguredJobFiles(fileList []fileSizeInfo, jobVolumes map[string]float64, movementBudgetPercent, minimumJobDemand float64) float64 {
 	jobNames := sets.New[string]()
-	if err := dispatchEveryFile(fileList, func(jobConfig *prowconfig.JobConfig, _ string, _ fs.DirEntry) {
-		addConfiguredJobNames(jobConfig, jobNames)
-	}); err != nil {
-		return 0, err
+	for _, file := range fileList {
+		addConfiguredJobNames(file.jobConfig, jobNames)
 	}
-	return movementBudgetForConfiguredJobs(jobNames, jobVolumes, movementBudgetPercent, minimumJobDemand), nil
+	return movementBudgetForConfiguredJobs(jobNames, jobVolumes, movementBudgetPercent, minimumJobDemand)
 }
 
 func movementBudgetForConfiguredJobs(jobNames sets.Set[string], jobVolumes map[string]float64, movementBudgetPercent, minimumJobDemand float64) float64 {
@@ -1207,7 +1058,6 @@ func composeFileInfoList(prowJobConfigDir string) ([]fileSizeInfo, error) {
 
 		fileList = append(fileList, fileSizeInfo{
 			path: path,
-			info: info,
 			size: fileInfo.Size(),
 		})
 		return nil
@@ -1313,7 +1163,7 @@ func main() {
 	var metricsErr error
 	o.planMetrics, metricsErr = newPlanMetrics(prometheus.DefaultRegisterer)
 	if metricsErr != nil {
-		logrus.WithError(metricsErr).Fatal("failed to initialize plan measurements")
+		logrus.WithError(metricsErr).Fatal("failed to initialize plan metrics")
 	}
 	if err := o.validate(); err != nil {
 		logrus.WithError(err).Fatal("Failed to complete options.")
@@ -1334,14 +1184,6 @@ func main() {
 	if o.PrometheusOptions.PrometheusBearerTokenPath != "" {
 		if err := secret.Add(o.PrometheusOptions.PrometheusBearerTokenPath); err != nil {
 			logrus.WithError(err).Fatal("Failed to start secrets agent")
-		}
-	}
-	var affinity *dispatcher.AffinityStore
-	if o.affinityStoragePath != "" {
-		var err error
-		affinity, err = dispatcher.OpenAffinityStore(o.affinityStoragePath)
-		if err != nil {
-			logrus.WithError(err).Fatal("failed to initialize durable group affinity")
 		}
 	}
 
@@ -1449,23 +1291,9 @@ func main() {
 			}
 
 			pjs := prowjobs.GetDataCopy()
-			files, err := loadDispatchFiles(o.prowJobConfigDir)
-			if err != nil {
-				return err
-			}
-			pjs, err = affinityPreviousFromFiles(affinity, o.prowJobConfigDir, files, config, cm, pjs, o.MinimumJobDemand, o.snapshotStoragePath)
-			if err != nil {
-				return fmt.Errorf("failed to preserve delta affinity: %w", err)
-			}
 
-			if err := dispatchDeltaFiles(files, o.prowJobConfigDir, config, blocked, pjs, cm, o.MinimumJobDemand); err != nil {
+			if err := dispatchDeltaJobs(o.prowJobConfigDir, config, blocked, pjs, cm, o.MinimumJobDemand); err != nil {
 				return fmt.Errorf("failed to dispatch delta jobs: %w", err)
-			}
-			if affinity != nil {
-				pjs, err = affinity.Commit(pjs, cm)
-				if err != nil {
-					return fmt.Errorf("failed to commit delta affinity: %w", err)
-				}
 			}
 			if err := dispatcher.WriteGob(o.jobsStoragePath, pjs); err != nil {
 				if !dispatcher.IsGobWriteCommitted(err) {
@@ -1506,20 +1334,10 @@ func main() {
 
 			newBlockedClusters := prowjobs.HasAnyOfClusters(blocked)
 			currentAssignments := prowjobs.GetDataCopy()
-			files, err := loadDispatchFiles(o.prowJobConfigDir)
-			if err != nil {
-				return err
-			}
-			preservedAssignments, err := affinityPreviousFromFiles(affinity, o.prowJobConfigDir, files, config, configClusterMap, currentAssignments, o.MinimumJobDemand, o.snapshotStoragePath)
-			if err != nil {
-				return fmt.Errorf("failed to preserve baseline affinity: %w", err)
-			}
-			affinityChanged := !reflect.DeepEqual(currentAssignments, preservedAssignments)
-			currentAssignments = preservedAssignments
 			missingAssignments := len(currentAssignments) == 0
 			metadataMigrationRequired := assignmentsRequireMetadataMigration(currentAssignments)
 
-			if !forceDispatch && !inventoryChanged && !newBlockedClusters && !missingAssignments && !metadataMigrationRequired && !affinityChanged {
+			if !forceDispatch && !inventoryChanged && !newBlockedClusters && !missingAssignments && !metadataMigrationRequired {
 				// The ephemeral scheduler is not persisted in the Gob cache, so it still
 				// needs initialization after a restart when no generation is necessary.
 				ecd.Reset(sets.List(clustersFromConfig))
@@ -1531,15 +1349,9 @@ func main() {
 				return fmt.Errorf("failed to get job volumes: %w", err)
 			}
 
-			pjs, err := evaluateDispatchFiles(o, config, jobVolumes, blocked, promVolumes.CalculateVolumeDistribution(configClusterMap), configClusterMap, currentAssignments, files)
+			pjs, err := evaluateDispatchPlan(o, config, jobVolumes, blocked, promVolumes.CalculateVolumeDistribution(configClusterMap), configClusterMap, currentAssignments)
 			if err != nil {
 				return fmt.Errorf("failed to dispatch jobs: %w", err)
-			}
-			if affinity != nil {
-				pjs, err = affinity.Commit(pjs, configClusterMap)
-				if err != nil {
-					return fmt.Errorf("failed to commit baseline affinity: %w", err)
-				}
 			}
 
 			markerPath := fallbackPublicationMarkerPath(o.jobsStoragePath)
@@ -1613,11 +1425,6 @@ func main() {
 	_, err = c.AddFunc("0 7 * * 0", cronDispatchWrapper)
 	if err != nil {
 		logrus.WithError(err).Fatal("error scheduling cron job")
-	}
-	if o.rebalanceInterval > 0 {
-		if _, err := c.AddFunc("@every "+o.rebalanceInterval.String(), cronDispatchWrapper); err != nil {
-			logrus.WithError(err).Fatal("error scheduling periodic demand refresh")
-		}
 	}
 	c.Start()
 

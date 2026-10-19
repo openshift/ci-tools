@@ -15,8 +15,6 @@ type Prowjobs struct {
 }
 
 type ProwJobData struct {
-	// Affinity freezes the namespace host when durable conservative affinity is enabled.
-	Affinity PlacementAffinity
 	// PlacementKnown distinguishes classified jobs from legacy persisted records.
 	PlacementKnown bool
 	// Relocatable records whether Git placement permits automatic reassignment.

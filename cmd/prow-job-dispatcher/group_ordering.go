@@ -67,7 +67,7 @@ func loadDispatchFiles(root string) ([]fileSizeInfo, error) {
 }
 
 // orderDispatchFiles counts only movable demand, since pinned jobs cannot benefit from ordering.
-func orderDispatchFiles(input []fileSizeInfo, order string, config *dispatcher.Config, volumes map[string]float64, inventory dispatcher.ClusterMap, minimum float64, previous map[string]dispatcher.ProwJobData) ([]fileSizeInfo, error) {
+func orderDispatchFiles(input []fileSizeInfo, order string, config *dispatcher.Config, volumes map[string]float64, inventory dispatcher.ClusterMap, minimum float64) ([]fileSizeInfo, error) {
 	files := append([]fileSizeInfo(nil), input...)
 	for i := range files {
 		files[i].demand = 0
@@ -75,9 +75,6 @@ func orderDispatchFiles(input []fileSizeInfo, order string, config *dispatcher.C
 			continue
 		}
 		for _, job := range jobBases(files[i].jobConfig) {
-			if previous[job.Name].Affinity.Cluster != "" {
-				continue
-			}
 			_, movable, err := config.DetermineClusterForJob(job, files[i].path, inventory)
 			if err != nil {
 				return nil, fmt.Errorf("classifying group %q for ordering: %w", files[i].path, err)
@@ -129,65 +126,23 @@ func refreshJobAssignment(job prowconfig.JobBase, candidate, group, path string,
 	return nil
 }
 
-// boundClusterForConfig prevents one reuse unit from being split across namespace hosts.
-func boundClusterForConfig(jc *prowconfig.JobConfig, path string, config *dispatcher.Config, previous map[string]dispatcher.ProwJobData, inventory dispatcher.ClusterMap, blocked sets.Set[string]) (string, error) {
-	preferredProvider := ""
-	clouds := getCloudProvidersForE2ETests(jc)
-	if clouds.Len() == 1 {
-		provider := sets.List(clouds)[0]
-		// Match the planner's fallback when the requested cloud has no farm pool.
-		if len(config.BuildFarm[api.Cloud(provider)]) > 0 {
-			preferredProvider = provider
-		}
-	}
-	bound := ""
-	for _, job := range jobBases(jc) {
-		_, movable, err := config.DetermineClusterForJob(job, path, inventory)
-		if err != nil {
-			return "", err
-		}
-		affinity := previous[job.Name].Affinity.Cluster
-		if !movable || affinity == "" {
-			continue
-		}
-		info, exists := inventory[affinity]
-		if !exists || info.Capacity <= 0 || blocked.Has(affinity) || config.IsInBuildFarm(api.Cluster(affinity)) == "" {
-			return "", fmt.Errorf("affinity host %q for job %q is unavailable", affinity, job.Name)
-		}
-		if preferredProvider != "" && preferredProvider != info.Provider {
-			return "", fmt.Errorf("affinity host %q is incompatible with group cloud in %q", affinity, path)
-		}
-		if bound != "" && bound != affinity {
-			return "", fmt.Errorf("group %q has incompatible affinity hosts %q and %q", path, bound, affinity)
-		}
-		bound = affinity
-	}
-	return bound, nil
-}
-
 // prechargeFixedDemand exposes immovable load before the first greedy placement.
 func (cv *clusterVolume) prechargeFixedDemand(files []fileSizeInfo, config *dispatcher.Config, volumes map[string]float64) error {
 	cv.prechargedJobs = sets.New[string]()
 	for _, file := range files {
-		if _, err := boundClusterForConfig(file.jobConfig, file.path, config, cv.previousAssignments, cv.clusterMap, cv.blocked); err != nil {
-			return err
-		}
 		for _, job := range jobBases(file.jobConfig) {
 			cluster, movable, err := config.DetermineClusterForJob(job, file.path, cv.clusterMap)
 			if err != nil {
 				return err
 			}
-			affinity := cv.previousAssignments[job.Name].Affinity.Cluster
-			if movable && affinity == "" {
+			if movable {
 				continue
 			}
-			if !movable && blockedClustersForJob(job.Name, string(cluster), cv.blocked).Has(string(cluster)) {
+			blocked := blockedClustersForJob(job.Name, string(cluster), cv.blocked)
+			if blocked.Has(string(cluster)) {
 				continue
 			}
-			target := dispatcher.DetermineTargetCluster("", string(cluster), string(config.Default), movable, blockedClustersForJob(job.Name, string(cluster), cv.blocked))
-			if movable && affinity != "" {
-				target = affinity
-			}
+			target := dispatcher.DetermineTargetCluster("", string(cluster), string(config.Default), false, blocked)
 			if cv.prechargedJobs.Has(job.Name) {
 				continue
 			}

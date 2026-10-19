@@ -23,7 +23,6 @@ func TestCompileSnapshotColocationUnits(t *testing.T) {
 		baseline      map[string]ProwJobData
 		inventory     ClusterMap
 		kind          dispatcherv1.OverrideKind
-		capability    string
 		wantClusters  map[string]string
 		wantMoved     int
 		wantGroups    int
@@ -36,14 +35,16 @@ func TestCompileSnapshotColocationUnits(t *testing.T) {
 				"a": runtimePlacementJob("family", "source", 5),
 				"b": runtimePlacementJob("family", "source", 5, "gpu"),
 				"c": runtimePlacementJob("other", "source", 10),
+				"d": runtimePlacementJob("family", "gcp", 1),
 			},
 			inventory: ClusterMap{
 				"source": {Provider: "aws", Capacity: 100, Capabilities: []string{"gpu"}},
 				"plain":  {Provider: "aws", Capacity: 100},
 				"gpu":    {Provider: "aws", Capacity: 100, Capabilities: []string{"gpu"}},
+				"gcp":    {Provider: "gcp", Capacity: 100},
 			},
 			kind:         dispatcherv1.OverrideKindDrain,
-			wantClusters: map[string]string{"a": "gpu", "b": "gpu", "c": "plain"}, wantMoved: 3, wantGroups: 2,
+			wantClusters: map[string]string{"a": "gpu", "b": "gpu", "c": "plain", "d": "gcp"}, wantMoved: 3, wantGroups: 2,
 		},
 		{
 			name: "capacity uses summed unit demand and moves siblings atomically",
@@ -56,13 +57,6 @@ func TestCompileSnapshotColocationUnits(t *testing.T) {
 			inventory:    ClusterMap{"source": {Provider: "aws", Capacity: 100}, "target": {Provider: "aws", Capacity: 100}},
 			kind:         dispatcherv1.OverrideKindCapacity,
 			wantClusters: map[string]string{"a": "target", "b": "target", "c": "source", "d": "target"}, wantMoved: 2, wantGroups: 2,
-		},
-		{
-			name:         "explicit cross provider exception remains separate",
-			baseline:     map[string]ProwJobData{"a": runtimePlacementJob("family", "source", 1), "b": runtimePlacementJob("family", "gcp", 1)},
-			inventory:    ClusterMap{"source": {Provider: "aws", Capacity: 100}, "target": {Provider: "aws", Capacity: 100}, "gcp": {Provider: "gcp", Capacity: 100}},
-			kind:         dispatcherv1.OverrideKindDrain,
-			wantClusters: map[string]string{"a": "target", "b": "gcp"}, wantMoved: 1, wantGroups: 1,
 		},
 		{
 			name:         "pinned member immobilizes siblings",
@@ -84,24 +78,6 @@ func TestCompileSnapshotColocationUnits(t *testing.T) {
 			inventory: ClusterMap{"source": {Provider: "aws", Capacity: 100, Capabilities: []string{"gpu", "arm"}}, "gpu": {Provider: "aws", Capacity: 100, Capabilities: []string{"gpu"}}, "arm": {Provider: "aws", Capacity: 100, Capabilities: []string{"arm"}}},
 			kind:      dispatcherv1.OverrideKindDrain, wantError: "2 affected workloads",
 		},
-		{
-			name:      "scoped drain rejects splitting a unit",
-			baseline:  map[string]ProwJobData{"a": runtimePlacementJob("family", "source", 1, "gpu"), "b": runtimePlacementJob("family", "source", 1)},
-			inventory: ClusterMap{"source": {Provider: "aws", Capacity: 100, Capabilities: []string{"gpu"}}, "target": {Provider: "aws", Capacity: 100, Capabilities: []string{"gpu"}}},
-			kind:      dispatcherv1.OverrideKindDrain, capability: "gpu", wantError: "splits colocation group",
-		},
-		{
-			name:      "scoped capacity rejects splitting a unit",
-			baseline:  map[string]ProwJobData{"a": runtimePlacementJob("family", "source", 1, "gpu"), "b": runtimePlacementJob("family", "source", 1)},
-			inventory: ClusterMap{"source": {Provider: "aws", Capacity: 100, Capabilities: []string{"gpu"}}, "target": {Provider: "aws", Capacity: 100, Capabilities: []string{"gpu"}}},
-			kind:      dispatcherv1.OverrideKindCapacity, capability: "gpu", wantError: "splits colocation group",
-		},
-		{
-			name:      "drain rejects pinned sibling instead of partial relocation",
-			baseline:  map[string]ProwJobData{"a": runtimePlacementJob("family", "source", 1), "b": {Group: "family", Cluster: "source", PlacementKnown: true, Demand: 1}},
-			inventory: ClusterMap{"source": {Provider: "aws", Capacity: 100}, "target": {Provider: "aws", Capacity: 100}},
-			kind:      dispatcherv1.OverrideKindDrain, wantError: "2 affected workloads",
-		},
 	}
 	for _, tc := range tests {
 		t.Run(tc.name, func(t *testing.T) {
@@ -109,7 +85,7 @@ func TestCompileSnapshotColocationUnits(t *testing.T) {
 			if tc.kind == dispatcherv1.OverrideKindCapacity {
 				requestedCapacity = &capacity
 			}
-			snapshot, summary, err := CompileSnapshot(CompileInput{Baseline: tc.baseline, Inventory: tc.inventory, Now: now, Overrides: []dispatcherv1.DispatchOverride{activeOverride("override", tc.kind, "source", requestedCapacity, tc.capability, now)}})
+			snapshot, summary, err := CompileSnapshot(CompileInput{Baseline: tc.baseline, Inventory: tc.inventory, Now: now, Overrides: []dispatcherv1.DispatchOverride{activeOverride("override", tc.kind, "source", requestedCapacity, "", now)}})
 			if tc.wantError != "" {
 				if err == nil || !strings.Contains(err.Error(), tc.wantError) {
 					t.Fatalf("expected error containing %q, got %v", tc.wantError, err)
@@ -134,6 +110,34 @@ func TestCompileSnapshotColocationUnits(t *testing.T) {
 			}
 			if diff := cmp.Diff(tc.wantImmovable, summary.ImmovableJobs); diff != "" {
 				t.Errorf("unexpected immovable jobs (-want +got):\n%s", diff)
+			}
+		})
+	}
+}
+
+func TestCompileSnapshotRejectsPartialGroupScope(t *testing.T) {
+	now := time.Date(2026, 10, 19, 12, 0, 0, 0, time.UTC)
+	capacity := int32(25)
+	for _, tc := range []struct {
+		name     string
+		kind     dispatcherv1.OverrideKind
+		capacity *int32
+	}{
+		{name: "drain", kind: dispatcherv1.OverrideKindDrain},
+		{name: "capacity", kind: dispatcherv1.OverrideKindCapacity, capacity: &capacity},
+	} {
+		t.Run(tc.name, func(t *testing.T) {
+			snapshot, _, err := CompileSnapshot(CompileInput{
+				Baseline:  map[string]ProwJobData{"a": runtimePlacementJob("family", "source", 1, "gpu"), "b": runtimePlacementJob("family", "source", 1)},
+				Inventory: ClusterMap{"source": {Provider: "aws", Capacity: 100, Capabilities: []string{"gpu"}}, "target": {Provider: "aws", Capacity: 100, Capabilities: []string{"gpu"}}},
+				Now:       now,
+				Overrides: []dispatcherv1.DispatchOverride{activeOverride("override", tc.kind, "source", tc.capacity, "gpu", now)},
+			})
+			if err == nil || !strings.Contains(err.Error(), "splits colocation group") {
+				t.Fatalf("expected split group error, got %v", err)
+			}
+			if snapshot != nil {
+				t.Fatal("rejected override returned a snapshot")
 			}
 		})
 	}

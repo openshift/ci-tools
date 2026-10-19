@@ -1,58 +1,20 @@
 package main
 
 import (
-	"math"
 	"os"
 	"path/filepath"
 	"strings"
 	"testing"
 
 	"github.com/google/go-cmp/cmp"
-	"github.com/openshift/ci-tools/pkg/api"
 	"github.com/openshift/ci-tools/pkg/dispatcher"
 	"github.com/prometheus/client_golang/prometheus"
+	dto "github.com/prometheus/client_model/go"
 	"k8s.io/apimachinery/pkg/util/sets"
 )
 
-func TestRecordDemandCoverage(t *testing.T) {
-	testCases := []struct {
-		name         string
-		bound        bool
-		sample       float64
-		wantSampled  int
-		wantFallback int
-	}{
-		{name: "observed movable", sample: 7, wantSampled: 1},
-		{name: "observed affinity bound", bound: true, sample: 7, wantSampled: 1},
-		{name: "no positive history", wantFallback: 1},
-		{name: "invalid history", sample: math.Inf(1), wantFallback: 1},
-	}
-	for _, tc := range testCases {
-		t.Run(tc.name, func(t *testing.T) {
-			job := dispatcher.ProwJobData{Cluster: "build01", Demand: 7, PlacementKnown: true, Relocatable: true}
-			if tc.bound {
-				job.Affinity = dispatcher.PlacementAffinity{ID: "unit", Cluster: "build01"}
-			}
-			var report planPrediction
-			recordDemandCoverage(&report, map[string]dispatcher.ProwJobData{"job": job}, map[string]float64{"job": tc.sample})
-			if report.SampledJobs != tc.wantSampled || report.FallbackDemandJobs != tc.wantFallback {
-				t.Fatalf("sample coverage: %#v", report.planEligibility)
-			}
-			if tc.bound {
-				if report.AffinityBoundJobs != 1 || report.AffinityBoundDemand != 7 || report.UnboundRelocatableJobs != 0 {
-					t.Fatalf("bound coverage: %#v", report.planEligibility)
-				}
-				return
-			}
-			if report.AffinityBoundJobs != 0 || report.UnboundRelocatableJobs != 1 || report.UnboundRelocatableDemand != 7 {
-				t.Fatalf("movable coverage: %#v", report.planEligibility)
-			}
-		})
-	}
-}
-
-func TestEvaluateDispatchPlan(t *testing.T) {
-	cases := []struct{ name, shadow string }{{name: "demand shadow", shadow: "demand"}, {name: "disabled shadow", shadow: "disabled"}}
+func TestEvaluateDispatchFiles(t *testing.T) {
+	cases := []struct{ name, shadow string }{{name: "isolated demand shadow", shadow: "demand"}, {name: "disabled shadow", shadow: "disabled"}}
 	for _, tc := range cases {
 		t.Run(tc.name, func(t *testing.T) {
 			root := t.TempDir()
@@ -61,77 +23,77 @@ func TestEvaluateDispatchPlan(t *testing.T) {
 					t.Fatal(err)
 				}
 			}
+			files, err := loadDispatchFiles(root)
+			if err != nil {
+				t.Fatal(err)
+			}
 			config := orderingConfig()
-			before := cloneDispatchConfig(config)
+			originalFarm := config.BuildFarm
+			expectedConfig, shadowConfig := *config, *config
 			inventory := dispatcher.ClusterMap{"build01": {Provider: "aws", Capacity: 1}, "build02": {Provider: "aws", Capacity: 1}}
 			previous := map[string]dispatcher.ProwJobData{"a": {Cluster: "build01", Demand: 7}}
-			registry := prometheus.NewRegistry()
-			metrics, err := newPlanMetrics(registry)
+			volumes := map[string]float64{"a": 1, "b": 2, "c": 10}
+			expected, err := dispatchJobsFromFiles(root, &expectedConfig, volumes, sets.New[string](), nil, inventory, previous, 0, 100, 0, files, "file-size")
 			if err != nil {
 				t.Fatal(err)
 			}
-			o := options{prowJobConfigDir: root, groupOrder: "file-size", shadowGroupOrder: tc.shadow, movementBudgetPercent: 100, planMetrics: metrics}
-			got, err := evaluateDispatchPlan(o, config, map[string]float64{"a": 1, "b": 2, "c": 10}, sets.New[string](), nil, inventory, previous)
+			shadow, err := dispatchJobsFromFiles(root, &shadowConfig, volumes, sets.New[string](), nil, inventory, previous, 0, 100, 0, files, "demand")
 			if err != nil {
 				t.Fatal(err)
 			}
-			expectedConfig := cloneDispatchConfig(before)
-			expected, err := dispatchJobsWithPolicy(root, expectedConfig, map[string]float64{"a": 1, "b": 2, "c": 10}, sets.New[string](), nil, inventory, previous, 0, 100, 0)
-			if err != nil {
+			if cmp.Equal(expected, shadow) {
+				t.Fatal("test requires distinct selected and shadow placements")
+			}
+			// Both policies must use the loaded revision, even if git-sync replaces a file.
+			if err := os.WriteFile(filepath.Join(root, "a.yaml"), []byte("invalid: ["), 0600); err != nil {
 				t.Fatal(err)
 			}
-			if tc.shadow == "demand" {
-				shadowFiles, loadErr := loadDispatchFiles(root)
-				if loadErr != nil {
-					t.Fatal(loadErr)
-				}
-				shadowAssignments, shadowErr := dispatchJobsFromFiles(root, cloneDispatchConfig(before), map[string]float64{"a": 1, "b": 2, "c": 10}, sets.New[string](), nil, inventory, previous, 0, 100, 0, shadowFiles, "demand")
-				if shadowErr != nil {
-					t.Fatal(shadowErr)
-				}
-				if cmp.Equal(got, shadowAssignments) {
-					t.Fatal("test requires a shadow plan that differs from selected placement")
-				}
+			o := options{prowJobConfigDir: root, groupOrder: "file-size", shadowGroupOrder: tc.shadow, movementBudgetPercent: 100}
+			got, err := evaluateDispatchFiles(o, config, volumes, sets.New[string](), nil, inventory, previous, files)
+			if err != nil {
+				t.Fatal(err)
 			}
 			if diff := cmp.Diff(expected, got); diff != "" {
-				t.Errorf("shadow changed selected assignments (-want +got):\n%s", diff)
+				t.Errorf("unexpected selected assignments (-want +got):\n%s", diff)
 			}
 			if diff := cmp.Diff(expectedConfig.BuildFarm, config.BuildFarm); diff != "" {
-				t.Errorf("shadow changed selected config (-want +got):\n%s", diff)
+				t.Errorf("unexpected selected config (-want +got):\n%s", diff)
 			}
-			if previous["a"].Demand != 7 {
-				t.Error("evaluation mutated prior assignments")
-			}
-			clone := cloneDispatchConfig(before)
-			clone.BuildFarm[api.CloudAWS]["build01"].FilenamesRaw = []string{"changed"}
-			clone.BuildFarm[api.CloudAWS]["build01"].Filenames.Insert("changed")
-			if len(before.BuildFarm[api.CloudAWS]["build01"].FilenamesRaw) != 0 || before.BuildFarm[api.CloudAWS]["build01"].Filenames.Has("changed") {
-				t.Error("configuration clone aliases mutable assignments")
-			}
-			families, err := registry.Gather()
-			if err != nil || len(families) != 1 {
-				t.Fatalf("gathered metrics = %v, %v", families, err)
+			if previous["a"].Demand != 7 || len(originalFarm["aws"]["build01"].FilenamesRaw) != 0 {
+				t.Error("evaluation mutated shared inputs")
 			}
 		})
 	}
 }
 
-func TestPredictPlan(t *testing.T) {
+func TestPlanMetrics(t *testing.T) {
 	cases := []struct {
-		name            string
-		capacity        int
-		mean, max, skew float64
-	}{{name: "equal capacity", capacity: 1, mean: 5, max: 10, skew: 2}, {name: "capacity normalized", capacity: 2, mean: 2.5, max: 5, skew: 2}}
+		name     string
+		capacity int
+		wantLoad float64
+	}{{name: "unit capacity", capacity: 1, wantLoad: 10}, {name: "normalized capacity", capacity: 2, wantLoad: 5}}
 	for _, tc := range cases {
 		t.Run(tc.name, func(t *testing.T) {
-			jobs := map[string]dispatcher.ProwJobData{"a": {Cluster: "build01", Demand: 10, Group: "group", PlacementKnown: true, Relocatable: true}, "b": {Cluster: "build02", Group: "group", PlacementKnown: true, Relocatable: true}, "unknown": {Cluster: "manual", Demand: 2}}
-			report := predictPlan("demand", jobs, map[string]dispatcher.ProwJobData{"a": {Cluster: "build02"}}, dispatcher.ClusterMap{"build01": {Provider: "aws", Capacity: tc.capacity}, "build02": {Provider: "aws", Capacity: tc.capacity}}, sets.New[string]())
-			if len(report.Providers) != 1 {
-				t.Fatalf("providers: %#v", report.Providers)
+			jobs := map[string]dispatcher.ProwJobData{"a": {Cluster: "build01", Demand: 10}}
+			report := predictPlan("demand", jobs, map[string]dispatcher.ProwJobData{"a": {Cluster: "build02"}}, dispatcher.ClusterMap{"build01": {Capacity: tc.capacity}, "build02": {Capacity: 1}, "blocked": {Capacity: 1}, "disabled": {}}, sets.New[string]("blocked"))
+			want := planPrediction{Order: "demand", NormalizedLoad: map[string]float64{"build01": tc.wantLoad, "build02": 0}, MovedDemand: 10}
+			if diff := cmp.Diff(want, report); diff != "" {
+				t.Errorf("unexpected prediction (-want +got):\n%s", diff)
 			}
-			provider := report.Providers[0]
-			if provider.NormalizedMean != tc.mean || provider.NormalizedMax != tc.max || provider.MaxMeanSkew != tc.skew || report.MovedJobs != 1 || report.MovedGroups != 1 || report.MovedDemand != 10 || report.SplitGroups != 1 || report.UnknownJobs != 1 || report.UnclassifiedJobs != 1 {
-				t.Errorf("unexpected report: %#v", report)
+			metrics, err := newPlanMetrics(prometheus.NewRegistry())
+			if err != nil {
+				t.Fatal(err)
+			}
+			metrics.record("selected", report)
+			var load, moved dto.Metric
+			if err := metrics.normalizedLoad.WithLabelValues("selected", "build01").Write(&load); err != nil {
+				t.Fatal(err)
+			}
+			if err := metrics.movedDemand.WithLabelValues("selected").Write(&moved); err != nil {
+				t.Fatal(err)
+			}
+			if load.GetGauge().GetValue() != tc.wantLoad || moved.GetGauge().GetValue() != 10 {
+				t.Errorf("unexpected metrics: load=%v, moved=%v", &load, &moved)
 			}
 		})
 	}

@@ -446,24 +446,19 @@ func CompileSnapshot(input CompileInput) (*PolicySnapshot, CompileSummary, error
 		if override.Spec.Kind == dispatcherv1.OverrideKindCapacity {
 			targetLoad = targetLoadForCapacity(override, baseline, inventory, capacities)
 		}
-		candidateCapacities := overrideCapacities(override, capacities)
 		for _, unit := range units {
 			demand := unit.job.Demand
-			for _, jobName := range unit.names {
-				job := baseline[jobName]
-				jobDemand := effectiveDemand(job.Demand)
-				summary.AffectedJobs++
-				overrideSummary.AffectedJobs++
-				group := job.Group
-				if group == "" {
-					group = jobName
-				}
-				affectedGroups.Insert(group)
-				overrideAffectedGroups.Insert(group)
-				summary.AffectedDemand += jobDemand
-				overrideSummary.AffectedDemand += jobDemand
+			summary.AffectedJobs += len(unit.names)
+			overrideSummary.AffectedJobs += len(unit.names)
+			group := unit.job.Group
+			if group == "" {
+				group = unit.names[0]
 			}
-			destination := chooseDestination(unit.key, unit.job, override.Spec.Cluster, inventory, candidateCapacities, blocked, loads)
+			affectedGroups.Insert(group)
+			overrideAffectedGroups.Insert(group)
+			summary.AffectedDemand += demand
+			overrideSummary.AffectedDemand += demand
+			destination := chooseDestination(unit.key, unit.job, override.Spec.Cluster, inventory, capacities, blocked, loads)
 			if destination == "" {
 				summary.ImmovableJobs = append(summary.ImmovableJobs, unit.names...)
 				overrideSummary.ImmovableJobs = append(overrideSummary.ImmovableJobs, unit.names...)

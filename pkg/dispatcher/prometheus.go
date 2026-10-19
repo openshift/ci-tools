@@ -29,13 +29,9 @@ type PrometheusOptions struct {
 	CPUHourWeight             float64
 	MemoryGBHourWeight        float64
 	MinimumJobDemand          float64
-	DemandCacheTTL            time.Duration
 }
 
 func (o *PrometheusOptions) demandDefaults() {
-	if o.DemandCacheTTL == 0 {
-		o.DemandCacheTTL = time.Hour
-	}
 	if o.MinimumJobDemand == 0 {
 		o.MinimumJobDemand = 1
 	}
@@ -51,9 +47,6 @@ func isFinite(value float64) bool {
 // Validate validates the values in the options
 func (o *PrometheusOptions) Validate() error {
 	o.demandDefaults()
-	if o.DemandCacheTTL < 0 || o.DemandCacheTTL > 24*time.Hour {
-		return fmt.Errorf("--prometheus-demand-cache-ttl must be positive and no greater than 24h")
-	}
 	if (o.PrometheusUsername == "") != (o.PrometheusPasswordPath == "") {
 		return fmt.Errorf("--prometheus-username and --prometheus-password-path must be specified together")
 	}
@@ -81,7 +74,6 @@ func (o *PrometheusOptions) AddFlags(fs *flag.FlagSet) {
 	fs.Float64Var(&o.CPUHourWeight, "job-cpu-hour-weight", 1, "Demand weight applied to each observed CPU-hour.")
 	fs.Float64Var(&o.MemoryGBHourWeight, "job-memory-gb-hour-weight", 0.25, "Demand weight applied to each observed GiB-hour.")
 	fs.Float64Var(&o.MinimumJobDemand, "minimum-job-demand", 1, "Demand assigned to jobs with no usable historical samples.")
-	fs.DurationVar(&o.DemandCacheTTL, "prometheus-demand-cache-ttl", time.Hour, "Maximum age of cached successful demand queries, up to 24h.")
 }
 
 type basicAuthRoundTripper struct {

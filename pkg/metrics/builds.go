@@ -18,8 +18,6 @@ const (
 
 // BuildEvent defines a build event for the metrics system.
 type BuildEvent struct {
-	UID               string         `json:"uid,omitempty"`
-	CreationTime      time.Time      `json:"creation_time,omitempty"`
 	Namespace         string         `json:"namespace"`
 	Name              string         `json:"name"`
 	StartTime         time.Time      `json:"start_time"`
@@ -68,8 +66,6 @@ func (p *buildPlugin) Record(ev MetricsEvent) {
 
 	be.Namespace = build.Namespace
 	be.Name = build.Name
-	be.UID = string(build.UID)
-	be.CreationTime = build.CreationTimestamp.Time
 
 	var start, comp time.Time
 	if build.Status.StartTimestamp != nil {

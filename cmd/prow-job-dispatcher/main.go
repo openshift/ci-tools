@@ -18,7 +18,6 @@ import (
 	"path/filepath"
 	"reflect"
 	"regexp"
-	"slices"
 	"sort"
 	"strings"
 	"sync"
@@ -326,6 +325,7 @@ type clusterVolume struct {
 	movementBudget      float64
 	movedDemand         float64
 	minimumJobDemand    float64
+	prechargedJobs      sets.Set[string]
 }
 
 func sortedStringKeys[T any](values map[string]T) []string {
@@ -354,6 +354,7 @@ func previousClusterForProjectedJobs(jobs []projectedJob) string {
 }
 
 type projectedJob struct {
+	name              string
 	determinedCluster string
 	canBeRelocated    bool
 	blocked           sets.Set[string]
@@ -525,11 +526,15 @@ func (cv *clusterVolume) classifyJobsForProjection(jc *prowconfig.JobConfig, pat
 			return fmt.Errorf("failed to determine projected cluster for job %s in path %q: %w", jobBase.Name, path, err)
 		}
 		jobsForProjection = append(jobsForProjection, projectedJob{
+			name:              jobBase.Name,
 			determinedCluster: string(determinedCluster),
 			canBeRelocated:    canBeRelocated,
 			blocked:           blockedClustersForJob(jobBase.Name, string(determinedCluster), cv.blocked),
 			volume:            demandForJob(jobVolumes, jobBase.Name, cv.minimumJobDemand),
 		})
+		if cv.prechargedJobs.Has(jobBase.Name) {
+			jobsForProjection[len(jobsForProjection)-1].volume = 0
+		}
 		if previous, exists := cv.previousAssignments[jobBase.Name]; exists {
 			jobsForProjection[len(jobsForProjection)-1].previousCluster = previous.Cluster
 		}
@@ -642,25 +647,32 @@ func findClusterAssigmentsForJobs(jc *prowconfig.JobConfig, prowJobConfigDir, pa
 		return err
 	}
 
-	getClusterForMissingJob := func(cluster string, jobBase prowconfig.JobBase, pjs map[string]dispatcher.ProwJobData) error {
+	refreshJobAssignment := func(cluster string, jobBase prowconfig.JobBase, pjs map[string]dispatcher.ProwJobData) error {
 		determinedCluster, canBeRelocated, err := config.DetermineClusterForJob(jobBase, path, cm)
 		if err != nil {
 			return fmt.Errorf("failed to determine cluster for the job %s in path %q: %w", jobBase.Name, path, err)
 		}
 
-		blockedForJob := blockedClustersForJob(jobBase.Name, string(determinedCluster), blocked)
-		c := dispatcher.DetermineTargetCluster(cluster, string(determinedCluster), string(config.Default), canBeRelocated, blockedForJob)
 		demand := demandForJob(nil, jobBase.Name, minimumJobDemand)
-		jobGroup := group
 		if existing, exists := pjs[jobBase.Name]; exists {
 			if existing.Demand > 0 && !math.IsNaN(existing.Demand) && !math.IsInf(existing.Demand, 0) {
 				demand = existing.Demand
 			}
-			if existing.Group != "" {
-				jobGroup = existing.Group
+			// Delta refreshes restrictions without rebalancing compatible assignments.
+			if canBeRelocated {
+				cluster = string(determinedCluster)
+				if existing.Cluster == string(config.Default) || config.IsInBuildFarm(api.Cluster(existing.Cluster)) != "" {
+					cluster = existing.Cluster
+				}
 			}
 		}
-		pjs[jobBase.Name] = dispatcher.ProwJobData{Cluster: c, Capabilities: extractCapabilities(jobBase.Labels), Demand: demand, Group: jobGroup}
+		blockedForJob := blockedClustersForJob(jobBase.Name, string(determinedCluster), blocked)
+		c := dispatcher.DetermineTargetCluster(cluster, string(determinedCluster), string(config.Default), canBeRelocated, blockedForJob)
+		refreshed := dispatcher.ProwJobData{Cluster: c, Capabilities: extractCapabilities(jobBase.Labels), Demand: demand, Group: group}
+		if reflect.DeepEqual(pjs[jobBase.Name], refreshed) {
+			return nil
+		}
+		pjs[jobBase.Name] = refreshed
 		logrus.WithField("job", jobBase.Name).WithField("cluster", c).Info("found cluster for job")
 		return nil
 	}
@@ -668,32 +680,47 @@ func findClusterAssigmentsForJobs(jc *prowconfig.JobConfig, prowJobConfigDir, pa
 	var errs []error
 	for k := range jc.PresubmitsStatic {
 		for _, job := range jc.PresubmitsStatic[k] {
-			if _, ok := pjs[job.Name]; !ok || !slices.Equal(pjs[job.Name].Capabilities, extractCapabilities(job.Labels)) {
-				if err := getClusterForMissingJob(mostUsedCluster, job.JobBase, pjs); err != nil {
-					errs = append(errs, err)
-				}
+			if err := refreshJobAssignment(mostUsedCluster, job.JobBase, pjs); err != nil {
+				errs = append(errs, err)
 			}
 		}
 	}
 
 	for k := range jc.PostsubmitsStatic {
 		for _, job := range jc.PostsubmitsStatic[k] {
-			if _, ok := pjs[job.Name]; !ok || !slices.Equal(pjs[job.Name].Capabilities, extractCapabilities(job.Labels)) {
-				if err := getClusterForMissingJob(mostUsedCluster, job.JobBase, pjs); err != nil {
-					errs = append(errs, err)
-				}
-			}
-		}
-	}
-	for _, job := range jc.Periodics {
-		if _, ok := pjs[job.Name]; !ok || !slices.Equal(pjs[job.Name].Capabilities, extractCapabilities(job.Labels)) {
-			if err := getClusterForMissingJob(mostUsedCluster, job.JobBase, pjs); err != nil {
+			if err := refreshJobAssignment(mostUsedCluster, job.JobBase, pjs); err != nil {
 				errs = append(errs, err)
 			}
 		}
 	}
+	for _, job := range jc.Periodics {
+		if err := refreshJobAssignment(mostUsedCluster, job.JobBase, pjs); err != nil {
+			errs = append(errs, err)
+		}
+	}
 
 	return utilerrors.NewAggregate(errs)
+}
+
+// prechargeFixedDemand makes fixed load visible before any greedy placement.
+func (cv *clusterVolume) prechargeFixedDemand(jc *prowconfig.JobConfig, path string, config *dispatcher.Config, jobVolumes map[string]float64) error {
+	jobs, err := cv.classifyJobsForProjection(jc, path, config, jobVolumes)
+	if err != nil {
+		return err
+	}
+	for _, job := range jobs {
+		if job.canBeRelocated || job.blocked.Has(job.determinedCluster) || cv.prechargedJobs.Has(job.name) {
+			continue
+		}
+		target := dispatcher.DetermineTargetCluster("", job.determinedCluster, string(config.Default), false, job.blocked)
+		cv.prechargedJobs.Insert(job.name)
+		if provider := config.IsInBuildFarm(api.Cluster(target)); provider != "" {
+			cv.clusterVolumeMap[string(provider)][target] += job.volume
+			continue
+		}
+		cv.specialClusters[target] += job.volume
+	}
+	return nil
 }
 
 func (cv *clusterVolume) addToVolume(cluster string, jobBase prowconfig.JobBase, path string, config *dispatcher.Config, jobVolumes map[string]float64) error {
@@ -711,6 +738,9 @@ func (cv *clusterVolume) addToVolume(cluster string, jobBase prowconfig.JobBase,
 	}
 	demand := demandForJob(jobVolumes, jobBase.Name, cv.minimumJobDemand)
 	cv.pjs[jobBase.Name] = dispatcher.ProwJobData{Cluster: c, Capabilities: extractCapabilities(jobBase.Labels), Demand: demand, Group: group}
+	if cv.prechargedJobs.Has(jobBase.Name) {
+		return nil
+	}
 	if determinedCloudProvider := config.IsInBuildFarm(api.Cluster(c)); determinedCloudProvider != "" {
 		cv.clusterVolumeMap[string(determinedCloudProvider)][c] = cv.clusterVolumeMap[string(determinedCloudProvider)][c] + demand
 		return nil
@@ -1064,6 +1094,18 @@ func dispatchJobsWithPolicy(prowJobConfigDir string, config *dispatcher.Config, 
 		}
 		return fileList[i].path < fileList[j].path
 	})
+	cv.prechargedJobs = sets.New[string]()
+	precharge := func(jobConfig *prowconfig.JobConfig, path string, _ fs.DirEntry) {
+		if err := cv.prechargeFixedDemand(jobConfig, path, config, jobVolumes); err != nil {
+			errs = append(errs, err)
+		}
+	}
+	if err := dispatchEveryFile(fileList, precharge); err != nil {
+		errs = append(errs, err)
+	}
+	if err := utilerrors.NewAggregate(errs); err != nil {
+		return nil, err
+	}
 	if movementBudgetPercent >= 0 {
 		movementBudget, err := movementBudgetForConfiguredJobFiles(fileList, jobVolumes, movementBudgetPercent, minimumJobDemand)
 		if err != nil {

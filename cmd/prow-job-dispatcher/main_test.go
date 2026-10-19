@@ -164,8 +164,8 @@ func TestDispatchJobs(t *testing.T) {
 				"build02": dispatcher.ClusterInfo{Capacity: 100},
 			},
 			expectedBuildFarm: map[api.Cloud]map[api.Cluster]*dispatcher.BuildFarmConfig{
-				"aws": {"build01": {FilenamesRaw: []string{"ci-tools-presubmits.yaml"}}},
-				"gcp": {"build02": {FilenamesRaw: []string{"cluster-etcd-operator-master-presubmits.yaml", "cluster-api-provider-gcp-presubmits.yaml", "wildfly-operator-presubmits.yaml", "xyz-operator-presubmits.yaml"}}},
+				"aws": {"build01": {FilenamesRaw: []string{"cluster-etcd-operator-master-presubmits.yaml", "ci-tools-presubmits.yaml"}}},
+				"gcp": {"build02": {FilenamesRaw: []string{"cluster-api-provider-gcp-presubmits.yaml", "wildfly-operator-presubmits.yaml", "xyz-operator-presubmits.yaml"}}},
 			},
 		},
 	}
@@ -1316,10 +1316,10 @@ func TestDispatchDeltaJobs(t *testing.T) {
 			},
 			wantErr: false,
 			expectedPjs: map[string]dispatcher.ProwJobData{
-				"pull-ci-openshift-cluster-api-provider-gcp-master-e2e-gcp":          {Cluster: "build01", Capabilities: []string{"intranet"}, Demand: 7, Group: "preserved-group.yaml"},
-				"pull-ci-openshift-cluster-api-provider-gcp-master-govet":            {Cluster: "build02"},
+				"pull-ci-openshift-cluster-api-provider-gcp-master-e2e-gcp":          {Cluster: "build01", Capabilities: []string{"intranet"}, Demand: 7, Group: "capabilities/cluster-api-provider-gcp-presubmits.yaml"},
+				"pull-ci-openshift-cluster-api-provider-gcp-master-govet":            {Cluster: "build02", Demand: 5, Group: "capabilities/cluster-api-provider-gcp-presubmits.yaml"},
 				"pull-ci-openshift-cluster-api-provider-gcp-master-e2e-gcp-operator": {Cluster: "build01", Capabilities: []string{"intranet"}, Demand: 5, Group: "capabilities/cluster-api-provider-gcp-presubmits.yaml"},
-				"pull-ci-openshift-cluster-api-provider-gcp-master-goimports":        {Cluster: "build02"},
+				"pull-ci-openshift-cluster-api-provider-gcp-master-goimports":        {Cluster: "build02", Demand: 5, Group: "capabilities/cluster-api-provider-gcp-presubmits.yaml"},
 			},
 		},
 	}
@@ -1491,6 +1491,149 @@ func TestSendSlackMessage(t *testing.T) {
 		t.Run(tt.name, func(t *testing.T) {
 			if err := sendSlackMessage(tt.args.slackClient, tt.args.channelId); (err != nil) != tt.wantErr {
 				t.Errorf("sendSlackMessage() error = %v, wantErr %v", err, tt.wantErr)
+			}
+		})
+	}
+}
+
+// TestDispatchJobsPrechargesLaterFixedFile covers fixed load hidden by file-size order.
+func TestDispatchJobsPrechargesLaterFixedFile(t *testing.T) {
+	for _, tc := range []struct {
+		name       string
+		fixedFirst bool
+	}{
+		{name: "movable file first"},
+		{name: "fixed file first", fixedFirst: true},
+	} {
+		t.Run(tc.name, func(t *testing.T) {
+			root := t.TempDir()
+			pinned := "build01"
+			if stableClusterTieBreak("movable.yaml", "build02") < stableClusterTieBreak("movable.yaml", pinned) {
+				pinned = "build02"
+			}
+			want := "build02"
+			if pinned == want {
+				want = "build01"
+			}
+			movable := "periodics:\n- name: movable\n"
+			fixed := fmt.Sprintf("periodics:\n- name: fixed\n  labels:\n    %s: %s\n", api.ClusterLabel, pinned)
+			padding := "#" + strings.Repeat("x", 512) + "\n"
+			movable += padding
+			if tc.fixedFirst {
+				fixed += padding + padding
+			}
+			for name, data := range map[string]string{"movable.yaml": movable, "fixed.yaml": fixed} {
+				if err := os.WriteFile(filepath.Join(root, name), []byte(data), 0600); err != nil {
+					t.Fatal(err)
+				}
+			}
+			config := &dispatcher.Config{Default: "api.ci", BuildFarm: map[api.Cloud]map[api.Cluster]*dispatcher.BuildFarmConfig{
+				api.CloudAWS: {"build01": {}, "build02": {}},
+			}}
+			inventory := dispatcher.ClusterMap{"build01": {Provider: "aws", Capacity: 100}, "build02": {Provider: "aws", Capacity: 100}}
+			got, err := dispatchJobs(root, config, map[string]float64{"movable": 1, "fixed": 100}, sets.New[string](), nil, inventory)
+			if err != nil {
+				t.Fatal(err)
+			}
+			if got["movable"].Cluster != want || got["fixed"].Cluster != pinned {
+				t.Fatalf("assignments = %v, want movable on %s and fixed on %s", got, want, pinned)
+			}
+		})
+	}
+}
+
+// TestFixedDemandIsCountedOnce checks both candidate projection and recorded load.
+func TestFixedDemandIsCountedOnce(t *testing.T) {
+	for _, tc := range []struct {
+		name      string
+		blocked   sets.Set[string]
+		wantFixed float64
+	}{
+		{name: "fixed load precharged", blocked: sets.New[string](), wantFixed: 100},
+		{name: "blocked pin stays in ordinary placement", blocked: sets.New[string]("build01")},
+	} {
+		t.Run(tc.name, func(t *testing.T) {
+			config := &dispatcher.Config{Default: "api.ci", BuildFarm: map[api.Cloud]map[api.Cluster]*dispatcher.BuildFarmConfig{api.CloudAWS: {"build01": {}, "build02": {}}}}
+			cv := &clusterVolume{
+				clusterVolumeMap: map[string]map[string]float64{"aws": {"build01": 0, "build02": 0}},
+				clusterMap:       dispatcher.ClusterMap{"build01": {Provider: "aws", Capacity: 100}, "build02": {Provider: "aws", Capacity: 100}},
+				pjs:              map[string]dispatcher.ProwJobData{}, specialClusters: map[string]float64{},
+				blocked: tc.blocked, prechargedJobs: sets.New[string](),
+			}
+			jc := &prowconfig.JobConfig{Periodics: []prowconfig.Periodic{
+				{JobBase: prowconfig.JobBase{Name: "fixed", Labels: map[string]string{api.ClusterLabel: "build01"}}},
+				{JobBase: prowconfig.JobBase{Name: "movable"}},
+			}}
+			volumes := map[string]float64{"fixed": 100, "movable": 1}
+			if err := cv.prechargeFixedDemand(jc, "jobs.yaml", config, volumes); err != nil {
+				t.Fatal(err)
+			}
+			if got := cv.clusterVolumeMap["aws"]["build01"]; got != tc.wantFixed {
+				t.Fatalf("precharged load = %v, want %v", got, tc.wantFixed)
+			}
+			jobs, err := cv.classifyJobsForProjection(jc, "jobs.yaml", config, volumes)
+			if err != nil {
+				t.Fatal(err)
+			}
+			wantProjection := float64(1)
+			if tc.blocked.Len() > 0 {
+				wantProjection = 101
+			}
+			if got := projectedVolumeForCandidate("build02", "api.ci", jobs); got != wantProjection {
+				t.Fatalf("projected load = %v, want %v", got, wantProjection)
+			}
+			for _, job := range jc.Periodics {
+				if err := cv.addToVolume("build02", job.JobBase, "jobs.yaml", config, volumes); err != nil {
+					t.Fatal(err)
+				}
+			}
+			if got := cv.clusterVolumeMap["aws"]["build01"] + cv.clusterVolumeMap["aws"]["build02"]; got != 101 {
+				t.Fatalf("total load = %v, want 101", got)
+			}
+		})
+	}
+}
+
+// TestDeltaRefreshesRestrictions preserves compatible assignments while applying current routing.
+func TestDeltaRefreshesRestrictions(t *testing.T) {
+	for _, tc := range []struct {
+		name        string
+		labels      map[string]string
+		groups      dispatcher.JobGroups
+		cloud       bool
+		existing    dispatcher.ProwJobData
+		wantCluster string
+	}{
+		{name: "added explicit pin", labels: map[string]string{api.ClusterLabel: "build02"}, existing: dispatcher.ProwJobData{Cluster: "build01", Demand: 37}, wantCluster: "build02"},
+		{name: "changed explicit pin", labels: map[string]string{api.ClusterLabel: "build01"}, existing: dispatcher.ProwJobData{Cluster: "build02", Demand: 37}, wantCluster: "build01"},
+		{name: "removed manual pin leaves special cluster", existing: dispatcher.ProwJobData{Cluster: "app.ci", Demand: 37}, wantCluster: "build01"},
+		{name: "removed pin keeps compatible placement", existing: dispatcher.ProwJobData{Cluster: "build02", Demand: 37}, wantCluster: "build02"},
+		{name: "unchanged movable current assignment", existing: dispatcher.ProwJobData{Cluster: "build02", Demand: 37, Group: "jobs.yaml"}, wantCluster: "build02"},
+		{name: "legacy assignment gets metadata", existing: dispatcher.ProwJobData{Cluster: "build02"}, wantCluster: "build02"},
+		{name: "path group changes", groups: dispatcher.JobGroups{"build02": {PathREs: []*regexp.Regexp{regexp.MustCompile("jobs.yaml$")}}}, existing: dispatcher.ProwJobData{Cluster: "build01", Demand: 37, Group: "old.yaml"}, wantCluster: "build02"},
+		{name: "cloud routing changes", cloud: true, labels: map[string]string{api.CloudLabel: "gcp"}, existing: dispatcher.ProwJobData{Cluster: "build01", Demand: 37}, wantCluster: "build02"},
+		{name: "capability routing changes", labels: map[string]string{"capability/intranet": "intranet"}, existing: dispatcher.ProwJobData{Cluster: "build01", Demand: 37}, wantCluster: "build02"},
+		{name: "unchanged compatible pin", labels: map[string]string{api.ClusterLabel: "build02"}, existing: dispatcher.ProwJobData{Cluster: "build02", Demand: 37, Group: "jobs.yaml"}, wantCluster: "build02"},
+	} {
+		t.Run(tc.name, func(t *testing.T) {
+			config := &dispatcher.Config{Default: "build01", DetermineE2EByJob: tc.cloud, Groups: tc.groups,
+				BuildFarm:      map[api.Cloud]map[api.Cluster]*dispatcher.BuildFarmConfig{api.CloudAWS: {"build01": {}}, api.CloudGCP: {"build02": {}}},
+				BuildFarmCloud: map[api.Cloud][]string{api.CloudGCP: {"build02"}},
+			}
+			inventory := dispatcher.ClusterMap{"build01": {Provider: "aws", Capacity: 100}, "build02": {Provider: "gcp", Capacity: 100, Capabilities: []string{"intranet"}}}
+			job := prowconfig.JobBase{Name: "job", Cluster: "build01", Labels: tc.labels}
+			assignments := map[string]dispatcher.ProwJobData{"job": tc.existing}
+			jc := &prowconfig.JobConfig{Periodics: []prowconfig.Periodic{{JobBase: job}}}
+			if err := findClusterAssigmentsForJobs(jc, "/jobs", "/jobs/jobs.yaml", config, assignments, sets.New[string](), inventory, 5); err != nil {
+				t.Fatal(err)
+			}
+			wantDemand := tc.existing.Demand
+			if wantDemand <= 0 {
+				wantDemand = 5
+			}
+			want := dispatcher.ProwJobData{Cluster: tc.wantCluster, Demand: wantDemand, Group: "jobs.yaml", Capabilities: extractCapabilities(tc.labels)}
+			if diff := cmp.Diff(want, assignments["job"]); diff != "" {
+				t.Errorf("unexpected assignment (-want +got):\n%s", diff)
 			}
 		})
 	}

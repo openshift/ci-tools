@@ -10,6 +10,7 @@ import (
 	"time"
 
 	"github.com/google/go-cmp/cmp"
+
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 
 	dispatcherv1 "github.com/openshift/ci-tools/pkg/api/dispatcher/v1"

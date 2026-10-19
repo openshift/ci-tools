@@ -25,7 +25,7 @@ const (
 	// SnapshotFormatVersion is the persisted snapshot schema version.
 	SnapshotFormatVersion = 1
 	// SnapshotCompilerVersion identifies placement semantics included in the input digest.
-	SnapshotCompilerVersion = "dispatcher-future-v2"
+	SnapshotCompilerVersion = "dispatcher-future-v3"
 )
 
 // SnapshotAssignment is one immutable scheduling decision in a PolicySnapshot.
@@ -437,6 +437,9 @@ func CompileSnapshot(input CompileInput) (*PolicySnapshot, CompileSummary, error
 		if err != nil {
 			return nil, summary, err
 		}
+		if override.Spec.Kind == dispatcherv1.OverrideKindDrain {
+			units = drainPlacementUnits(units, baseline, inventory, capacities, blocked)
+		}
 		overrideImmovableJobs := 0
 		sourceAffectedLoad := 0.0
 		for _, unit := range units {
@@ -494,12 +497,14 @@ func CompileSnapshot(input CompileInput) (*PolicySnapshot, CompileSummary, error
 			overrideSummary.MovedDemand += demand
 			overrideSummary.Destinations[destination] += demand
 		}
-		if override.Spec.Kind == dispatcherv1.OverrideKindDrain && overrideImmovableJobs > 0 {
-			return nil, summary, fmt.Errorf("drain %q has no eligible destination for %d affected workloads", override.Spec.ID, overrideImmovableJobs)
-		}
 		sort.Strings(overrideSummary.ImmovableJobs)
 		overrideSummary.AffectedGroups = overrideAffectedGroups.Len()
 		summary.ByOverride[override.Spec.ID] = overrideSummary
+		if override.Spec.Kind == dispatcherv1.OverrideKindDrain && overrideImmovableJobs > 0 {
+			sort.Strings(summary.ImmovableJobs)
+			summary.AffectedGroups = affectedGroups.Len()
+			return nil, summary, fmt.Errorf("drain %q has no eligible destination for %d affected workloads: %q", override.Spec.ID, overrideImmovableJobs, overrideSummary.ImmovableJobs)
+		}
 	}
 	sort.Strings(summary.ImmovableJobs)
 	summary.AffectedGroups = affectedGroups.Len()

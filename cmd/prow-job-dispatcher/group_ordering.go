@@ -96,23 +96,27 @@ func orderDispatchFiles(input []fileSizeInfo, order string, config *dispatcher.C
 	return files, nil
 }
 
+// placementDigestPrefix invalidates classifications made before runtime eligibility was recorded.
+const placementDigestPrefix = "runtime-v1:"
+
 // placementDigest tracks restrictions independently of the selected baseline assignment.
-func placementDigest(job prowconfig.JobBase, determined string, movable bool, group string, config *dispatcher.Config) string {
-	if movable {
+func placementDigest(job prowconfig.JobBase, placement dispatcher.JobPlacement, group string, config *dispatcher.Config) string {
+	determined := string(placement.Cluster)
+	if placement.BaselineRelocatable && placement.RuntimeRelocatable {
 		determined = ""
 	}
 	hash := sha256.New()
-	fmt.Fprintf(hash, "%q %t %q %q %q", determined, movable, group, config.DetermineCloudMapping(job), extractCapabilities(job.Labels))
-	return hex.EncodeToString(hash.Sum(nil))
+	fmt.Fprintf(hash, "%q %t %t %q %q %q", determined, placement.BaselineRelocatable, placement.RuntimeRelocatable, group, config.DetermineCloudMapping(job), extractCapabilities(job.Labels))
+	return placementDigestPrefix + hex.EncodeToString(hash.Sum(nil))
 }
 
 // refreshJobAssignment preserves demand and placement unless current restrictions changed.
 func refreshJobAssignment(job prowconfig.JobBase, candidate, group, path string, config *dispatcher.Config, assignments map[string]dispatcher.ProwJobData, blocked sets.Set[string], inventory dispatcher.ClusterMap, minimum float64) error {
-	determined, movable, err := config.DetermineClusterForJob(job, path, inventory)
+	placement, err := config.DetermineJobPlacement(job, path, inventory)
 	if err != nil {
 		return fmt.Errorf("determining cluster for job %q: %w", job.Name, err)
 	}
-	digest := placementDigest(job, string(determined), movable, group, config)
+	digest := placementDigest(job, placement, group, config)
 	existing, exists := assignments[job.Name]
 	if exists && existing.PlacementKnown && existing.PlacementDigest == digest && existing.Group == group {
 		return nil
@@ -121,8 +125,8 @@ func refreshJobAssignment(job prowconfig.JobBase, candidate, group, path string,
 	if existing.Demand > 0 && !math.IsNaN(existing.Demand) && !math.IsInf(existing.Demand, 0) {
 		demand = existing.Demand
 	}
-	target := dispatcher.DetermineTargetCluster(candidate, string(determined), string(config.Default), movable, blockedClustersForJob(job.Name, string(determined), blocked))
-	assignments[job.Name] = dispatcher.ProwJobData{Cluster: target, Demand: demand, Group: group, Capabilities: extractCapabilities(job.Labels), PlacementKnown: true, Relocatable: movable, PlacementDigest: digest}
+	target := dispatcher.DetermineTargetCluster(candidate, string(placement.Cluster), string(config.Default), placement.BaselineRelocatable, blockedClustersForJob(job.Name, string(placement.Cluster), blocked))
+	assignments[job.Name] = dispatcher.ProwJobData{Cluster: target, Demand: demand, Group: group, Capabilities: extractCapabilities(job.Labels), PlacementKnown: true, Relocatable: placement.RuntimeRelocatable, PlacementDigest: digest}
 	return nil
 }
 

@@ -18,12 +18,16 @@ type placementUnit struct {
 	job   ProwJobData
 }
 
-// overridePlacementUnits rejects scopes that would split a colocation unit.
+// overridePlacementUnits keeps capacity changes atomic while allowing drains to
+// act on every workload matched by their scope.
 func overridePlacementUnits(override *dispatcherv1.DispatchOverride, baseline map[string]ProwJobData) ([]placementUnit, error) {
 	units := make(map[string]*placementUnit)
 	for _, name := range sortedProwJobNames(baseline) {
 		job := baseline[name]
 		if job.Cluster != override.Spec.Cluster {
+			continue
+		}
+		if override.Spec.Kind == dispatcherv1.OverrideKindDrain && !jobHasCapability(job, override.Spec.Scope.Capability) {
 			continue
 		}
 		key := "group:" + job.Group + "\x00" + job.Cluster
@@ -71,4 +75,35 @@ func overridePlacementUnits(override *dispatcherv1.DispatchOverride, baseline ma
 		return result[i].key < result[j].key
 	})
 	return result, nil
+}
+
+// drainPlacementUnits preserves colocation when possible, falling back to
+// individual jobs when their combined restrictions prevent evacuation.
+func drainPlacementUnits(units []placementUnit, baseline map[string]ProwJobData, inventory ClusterMap, capacities map[string]int, blocked sets.Set[string]) []placementUnit {
+	result := make([]placementUnit, 0, len(units))
+	for _, unit := range units {
+		eligible := false
+		for candidate := range inventory {
+			if eligibleDestination(unit.job, unit.job.Cluster, candidate, inventory, capacities, blocked) {
+				eligible = true
+				break
+			}
+		}
+		if eligible || len(unit.names) == 1 {
+			result = append(result, unit)
+			continue
+		}
+		for _, name := range unit.names {
+			job := baseline[name]
+			job.Demand = effectiveDemand(job.Demand)
+			result = append(result, placementUnit{key: "job:" + name + "\x00" + job.Cluster, names: []string{name}, job: job})
+		}
+	}
+	sort.Slice(result, func(i, j int) bool {
+		if result[i].job.Demand != result[j].job.Demand {
+			return result[i].job.Demand > result[j].job.Demand
+		}
+		return result[i].key < result[j].key
+	})
+	return result
 }

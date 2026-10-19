@@ -17,7 +17,7 @@ type Prowjobs struct {
 type ProwJobData struct {
 	// PlacementKnown distinguishes classified jobs from legacy persisted records.
 	PlacementKnown bool
-	// Relocatable records whether Git placement permits automatic reassignment.
+	// Relocatable records whether runtime scheduling may automatically reassign the job.
 	Relocatable bool
 	// PlacementDigest identifies configuration constraints used to classify placement.
 	PlacementDigest string

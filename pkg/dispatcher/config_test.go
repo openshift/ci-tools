@@ -18,6 +18,7 @@ import (
 	prowconfig "sigs.k8s.io/prow/pkg/config"
 
 	"github.com/openshift/ci-tools/pkg/api"
+	"github.com/openshift/ci-tools/pkg/jobconfig"
 	"github.com/openshift/ci-tools/pkg/testhelper"
 )
 
@@ -846,6 +847,51 @@ func TestConfigDetermineCloudMapping(t *testing.T) {
 			cfg := &tc.config
 			if got := cfg.DetermineCloudMapping(tc.jobBase); got != tc.want {
 				t.Errorf("Config.DetermineCloudMapping() = %v, want %v", got, tc.want)
+			}
+		})
+	}
+}
+
+func TestDetermineJobPlacement(t *testing.T) {
+	inventory := ClusterMap{"build01": {Provider: "aws", Capabilities: []string{"gpu"}}, "build02": {Provider: "gcp", Capabilities: []string{"gpu"}}}
+	testCases := []struct {
+		name string
+		job  prowconfig.JobBase
+		path string
+		want JobPlacement
+	}{
+		{name: "default remains baseline movable", job: prowconfig.JobBase{Name: "default"}, want: JobPlacement{Cluster: "build01", BaselineRelocatable: true, RuntimeRelocatable: true}},
+		{name: "automatic gpu capability", job: prowconfig.JobBase{Labels: map[string]string{"capability/gpu": "gpu"}}, want: JobPlacement{Cluster: "build02", RuntimeRelocatable: true}},
+		{name: "automatic gpu capability in cloud", job: prowconfig.JobBase{Labels: map[string]string{"capability/gpu": "gpu", api.CloudLabel: "aws"}}, want: JobPlacement{Cluster: "build01", RuntimeRelocatable: true}},
+		{name: "automatic configured cloud", job: prowconfig.JobBase{Labels: map[string]string{api.CloudLabel: "gcp"}}, want: JobPlacement{Cluster: "build02", RuntimeRelocatable: true}},
+		{name: "explicit cluster pin", job: prowconfig.JobBase{Labels: map[string]string{api.ClusterLabel: "build02", "capability/gpu": "gpu"}}, want: JobPlacement{Cluster: "build02"}},
+		{name: "manual cluster pin", job: prowconfig.JobBase{Cluster: "manual"}, want: JobPlacement{Cluster: "manual"}},
+		{name: "vsphere special pin", job: prowconfig.JobBase{Name: "vsphere"}, want: JobPlacement{Cluster: api.ClusterVSphere02}},
+		{name: "ssh special pin", job: prowconfig.JobBase{Labels: map[string]string{jobconfig.SSHBastionLabel: "true"}}, want: JobPlacement{Cluster: "ssh"}},
+		{name: "group pin", job: prowconfig.JobBase{Name: "group-pinned"}, want: JobPlacement{Cluster: "build02"}},
+		{name: "path pin", path: "pinned.yaml", want: JobPlacement{Cluster: "build02"}},
+		{name: "vsphere exception keeps baseline behavior for group pin", job: prowconfig.JobBase{Name: "vsphere-group", Labels: map[string]string{api.CloudClusterProfileLabel: "vsphere-elastic-poc"}}, want: JobPlacement{Cluster: "build02", BaselineRelocatable: true}},
+		{name: "kvm routing pin", job: prowconfig.JobBase{Labels: map[string]string{api.KVMDeviceLabel: "true"}}, want: JobPlacement{Cluster: "kvm"}},
+		{name: "no builds routing pin", job: prowconfig.JobBase{Labels: map[string]string{api.NoBuildsLabel: "true"}}, want: JobPlacement{Cluster: "no-builds"}},
+		{name: "non kubernetes agent", job: prowconfig.JobBase{Agent: "jenkins"}},
+	}
+	for _, tc := range testCases {
+		t.Run(tc.name, func(t *testing.T) {
+			config := &Config{Default: "build01", DetermineE2EByJob: true, SSHBastion: "ssh", ManualClusters: []api.Cluster{"manual"}, KVM: []api.Cluster{"kvm"}, NoBuilds: []api.Cluster{"no-builds"}, Groups: JobGroups{"build02": {Jobs: []string{"group-pinned", "vsphere-group"}, PathREs: []*regexp.Regexp{regexp.MustCompile(`^pinned\.yaml$`)}}}, BuildFarmCloud: map[api.Cloud][]string{api.CloudGCP: {"build02"}}}
+			path := tc.path
+			if path == "" {
+				path = "jobs.yaml"
+			}
+			got, err := config.DetermineJobPlacement(tc.job, path, inventory)
+			if err != nil {
+				t.Fatal(err)
+			}
+			if diff := cmp.Diff(tc.want, got); diff != "" {
+				t.Errorf("unexpected placement (-want +got):\n%s", diff)
+			}
+			cluster, movable, err := config.DetermineClusterForJob(tc.job, path, inventory)
+			if err != nil || cluster != tc.want.Cluster || movable != tc.want.BaselineRelocatable {
+				t.Errorf("baseline wrapper = %q, %t, %v; want %q, %t, nil", cluster, movable, err, tc.want.Cluster, tc.want.BaselineRelocatable)
 			}
 		})
 	}

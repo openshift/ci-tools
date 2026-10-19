@@ -4,10 +4,12 @@ import (
 	"testing"
 
 	"github.com/google/go-cmp/cmp"
-	"github.com/openshift/ci-tools/pkg/api"
-	"github.com/openshift/ci-tools/pkg/dispatcher"
+
 	"k8s.io/apimachinery/pkg/util/sets"
 	prowconfig "sigs.k8s.io/prow/pkg/config"
+
+	"github.com/openshift/ci-tools/pkg/api"
+	"github.com/openshift/ci-tools/pkg/dispatcher"
 )
 
 // orderingConfig provides two eligible destinations with independently mutable assignments.
@@ -71,7 +73,7 @@ func TestRefreshJobAssignment(t *testing.T) {
 		t.Run(tc.name, func(t *testing.T) {
 			config := orderingConfig()
 			original := prowconfig.JobBase{Name: "job"}
-			digest := placementDigest(original, "build01", true, "jobs.yaml", config)
+			digest := placementDigest(original, dispatcher.JobPlacement{Cluster: "build01", BaselineRelocatable: true, RuntimeRelocatable: true}, "jobs.yaml", config)
 			assignments := map[string]dispatcher.ProwJobData{"job": {Cluster: "build02", Demand: 7, Group: "jobs.yaml", PlacementKnown: true, Relocatable: true, PlacementDigest: digest}}
 			job := prowconfig.JobBase{Name: "job", Labels: tc.labels}
 			if err := refreshJobAssignment(job, "build01", tc.group, "jobs.yaml", config, assignments, sets.New[string](), nil, 1); err != nil {
@@ -121,6 +123,68 @@ func TestPrechargeFixedDemand(t *testing.T) {
 			}
 			if cv.pjs["fixed"].Cluster != "build01" {
 				t.Errorf("fixed placement lost: %#v", cv.pjs["fixed"])
+			}
+		})
+	}
+}
+
+func TestCapabilityAssignmentMetadata(t *testing.T) {
+	cases := []struct {
+		name   string
+		legacy bool
+	}{
+		{name: "new baseline assignment records runtime eligibility"},
+		{name: "old known assignment is migrated", legacy: true},
+	}
+	for _, tc := range cases {
+		t.Run(tc.name, func(t *testing.T) {
+			config := orderingConfig()
+			job := prowconfig.JobBase{Name: "gpu-job", Labels: map[string]string{"capability/gpu": "gpu"}}
+			inventory := dispatcher.ClusterMap{"build01": {Provider: "aws", Capacity: 1, Capabilities: []string{"gpu"}}}
+			assignments := map[string]dispatcher.ProwJobData{}
+			if tc.legacy {
+				assignments[job.Name] = dispatcher.ProwJobData{Cluster: "build01", Demand: 7, Group: "jobs.yaml", PlacementKnown: true, PlacementDigest: "old-digest"}
+				if !assignmentsRequireMetadataMigration(assignments) {
+					t.Fatal("old known metadata did not require migration")
+				}
+				if err := refreshJobAssignment(job, "build02", "jobs.yaml", "jobs.yaml", config, assignments, sets.New[string](), inventory, 1); err != nil {
+					t.Fatal(err)
+				}
+			} else {
+				cv := &clusterVolume{pjs: assignments, clusterMap: inventory, clusterVolumeMap: map[string]map[string]float64{"aws": {"build01": 0, "build02": 0}}, specialClusters: map[string]float64{}, prowJobConfigDir: ".", minimumJobDemand: 1}
+				if err := cv.addToVolume("build02", job, "jobs.yaml", config, map[string]float64{job.Name: 7}); err != nil {
+					t.Fatal(err)
+				}
+			}
+			got := assignments[job.Name]
+			if got.Cluster != "build01" || !got.Relocatable || !got.PlacementKnown || got.Demand != 7 {
+				t.Errorf("capability assignment lost baseline placement or runtime eligibility: %#v", got)
+			}
+			if assignmentsRequireMetadataMigration(assignments) {
+				t.Error("current classification still requires migration")
+			}
+		})
+	}
+}
+
+func TestPlacementDigestRestrictions(t *testing.T) {
+	cases := []struct {
+		name          string
+		first, second dispatcher.JobPlacement
+		equal         bool
+	}{
+		{name: "runtime eligibility is part of restrictions", first: dispatcher.JobPlacement{Cluster: "build01"}, second: dispatcher.JobPlacement{Cluster: "build01", RuntimeRelocatable: true}},
+		{name: "hard pin destination is part of restrictions", first: dispatcher.JobPlacement{Cluster: "build01"}, second: dispatcher.JobPlacement{Cluster: "build02"}},
+		{name: "group pin retains destination despite legacy baseline flag", first: dispatcher.JobPlacement{Cluster: "build01", BaselineRelocatable: true}, second: dispatcher.JobPlacement{Cluster: "build02", BaselineRelocatable: true}},
+		{name: "baseline movable destination is independent", first: dispatcher.JobPlacement{Cluster: "build01", BaselineRelocatable: true, RuntimeRelocatable: true}, second: dispatcher.JobPlacement{Cluster: "build02", BaselineRelocatable: true, RuntimeRelocatable: true}, equal: true},
+	}
+	for _, tc := range cases {
+		t.Run(tc.name, func(t *testing.T) {
+			config := orderingConfig()
+			first := placementDigest(prowconfig.JobBase{}, tc.first, "jobs.yaml", config)
+			second := placementDigest(prowconfig.JobBase{}, tc.second, "jobs.yaml", config)
+			if (first == second) != tc.equal {
+				t.Errorf("digest equal = %t, want %t", first == second, tc.equal)
 			}
 		})
 	}

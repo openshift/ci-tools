@@ -592,20 +592,20 @@ func findClusterAssigmentsForJobs(jc *prowconfig.JobConfig, prowJobConfigDir, pa
 }
 
 func (cv *clusterVolume) addToVolume(cluster string, jobBase prowconfig.JobBase, path string, config *dispatcher.Config, jobVolumes map[string]float64) error {
-	determinedCluster, canBeRelocated, err := config.DetermineClusterForJob(jobBase, path, cv.clusterMap)
+	placement, err := config.DetermineJobPlacement(jobBase, path, cv.clusterMap)
 
 	if err != nil {
 		return fmt.Errorf("failed to determine cluster for the job %s in path %q: %w", jobBase.Name, path, err)
 	}
 
-	blockedForJob := blockedClustersForJob(jobBase.Name, string(determinedCluster), cv.blocked)
-	c := dispatcher.DetermineTargetCluster(cluster, string(determinedCluster), string(config.Default), canBeRelocated, blockedForJob)
+	blockedForJob := blockedClustersForJob(jobBase.Name, string(placement.Cluster), cv.blocked)
+	c := dispatcher.DetermineTargetCluster(cluster, string(placement.Cluster), string(config.Default), placement.BaselineRelocatable, blockedForJob)
 	group, err := repositoryRelativeTieBreakPath(cv.prowJobConfigDir, path)
 	if err != nil {
 		return err
 	}
 	demand := demandForJob(jobVolumes, jobBase.Name, cv.minimumJobDemand)
-	cv.pjs[jobBase.Name] = dispatcher.ProwJobData{Cluster: c, Capabilities: extractCapabilities(jobBase.Labels), Demand: demand, Group: group, PlacementKnown: true, Relocatable: canBeRelocated, PlacementDigest: placementDigest(jobBase, string(determinedCluster), canBeRelocated, group, config)}
+	cv.pjs[jobBase.Name] = dispatcher.ProwJobData{Cluster: c, Capabilities: extractCapabilities(jobBase.Labels), Demand: demand, Group: group, PlacementKnown: true, Relocatable: placement.RuntimeRelocatable, PlacementDigest: placementDigest(jobBase, placement, group, config)}
 	if cv.prechargedJobs.Has(jobBase.Name) {
 		return nil
 	}
@@ -973,7 +973,8 @@ func dispatchJobsFromFiles(prowJobConfigDir string, config *dispatcher.Config, j
 	for cloudProvider, jobGroups := range config.BuildFarm {
 		buildFarm[cloudProvider] = make(map[api.Cluster]*dispatcher.BuildFarmConfig, len(jobGroups))
 		for cluster := range jobGroups {
-			buildFarm[cloudProvider][cluster] = &dispatcher.BuildFarmConfig{FilenamesRaw: results[string(cluster)]}
+			filenames := results[string(cluster)]
+			buildFarm[cloudProvider][cluster] = &dispatcher.BuildFarmConfig{FilenamesRaw: filenames, Filenames: sets.New(filenames...)}
 		}
 	}
 	config.BuildFarm = buildFarm
@@ -998,7 +999,7 @@ func dispatchDeltaJobs(prowJobConfigDir string, config *dispatcher.Config, block
 
 func assignmentsRequireMetadataMigration(assignments map[string]dispatcher.ProwJobData) bool {
 	for _, assignment := range assignments {
-		if assignment.Demand <= 0 || math.IsNaN(assignment.Demand) || math.IsInf(assignment.Demand, 0) || assignment.Group == "" || !assignment.PlacementKnown || assignment.PlacementDigest == "" {
+		if assignment.Demand <= 0 || math.IsNaN(assignment.Demand) || math.IsInf(assignment.Demand, 0) || assignment.Group == "" || !assignment.PlacementKnown || !strings.HasPrefix(assignment.PlacementDigest, placementDigestPrefix) {
 			return true
 		}
 	}

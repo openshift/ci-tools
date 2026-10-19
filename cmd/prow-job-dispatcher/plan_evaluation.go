@@ -3,10 +3,12 @@ package main
 import (
 	"fmt"
 
-	"github.com/openshift/ci-tools/pkg/dispatcher"
 	"github.com/prometheus/client_golang/prometheus"
 	"github.com/sirupsen/logrus"
+
 	"k8s.io/apimachinery/pkg/util/sets"
+
+	"github.com/openshift/ci-tools/pkg/dispatcher"
 )
 
 // planMetrics compares predicted demand without unbounded job or group labels.

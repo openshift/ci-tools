@@ -23,11 +23,13 @@ func TestCompileSnapshotColocationUnits(t *testing.T) {
 		baseline      map[string]ProwJobData
 		inventory     ClusterMap
 		kind          dispatcherv1.OverrideKind
+		capability    string
 		wantClusters  map[string]string
 		wantMoved     int
 		wantGroups    int
 		wantImmovable []string
 		wantError     string
+		wantSummary   *CompileSummary
 	}{
 		{
 			name: "drain keeps siblings together with multiple destinations",
@@ -73,10 +75,40 @@ func TestCompileSnapshotColocationUnits(t *testing.T) {
 			wantClusters: map[string]string{"a": "source", "b": "source"}, wantGroups: 1, wantImmovable: []string{"a", "b"},
 		},
 		{
-			name:      "drain rejects without whole unit capability intersection",
+			name:         "drain splits siblings without a common eligible destination",
+			baseline:     map[string]ProwJobData{"a": runtimePlacementJob("family", "source", 0, "gpu"), "b": runtimePlacementJob("family", "source", 2, "arm")},
+			inventory:    ClusterMap{"source": {Provider: "aws", Capacity: 100, Capabilities: []string{"gpu", "arm"}}, "gpu": {Provider: "aws", Capacity: 100, Capabilities: []string{"gpu"}}, "arm": {Provider: "aws", Capacity: 100, Capabilities: []string{"arm"}}},
+			kind:         dispatcherv1.OverrideKindDrain,
+			wantClusters: map[string]string{"a": "gpu", "b": "arm"}, wantMoved: 2, wantGroups: 1,
+			wantSummary: &CompileSummary{AffectedJobs: 2, AffectedGroups: 1, AffectedDemand: 3, MovableJobs: 2, MovableDemand: 3, MovedJobs: 2, MovedDemand: 3, Destinations: map[string]float64{"gpu": 1, "arm": 2}},
+		},
+		{
+			name:         "scoped drain moves matching sibling",
+			baseline:     map[string]ProwJobData{"a": runtimePlacementJob("family", "source", 2, "gpu"), "b": {Group: "family", Cluster: "source", Demand: 3, PlacementKnown: true}},
+			inventory:    ClusterMap{"source": {Provider: "aws", Capacity: 100, Capabilities: []string{"gpu"}}, "target": {Provider: "aws", Capacity: 100, Capabilities: []string{"gpu"}}},
+			kind:         dispatcherv1.OverrideKindDrain,
+			capability:   "gpu",
+			wantClusters: map[string]string{"a": "target", "b": "source"}, wantMoved: 1, wantGroups: 1,
+			wantSummary: &CompileSummary{AffectedJobs: 1, AffectedGroups: 1, AffectedDemand: 2, MovableJobs: 1, MovableDemand: 2, MovedJobs: 1, MovedDemand: 2, Destinations: map[string]float64{"target": 2}},
+		},
+		{
+			name:      "drain still rejects an individual job without an eligible destination",
 			baseline:  map[string]ProwJobData{"a": runtimePlacementJob("family", "source", 1, "gpu"), "b": runtimePlacementJob("family", "source", 1, "arm")},
-			inventory: ClusterMap{"source": {Provider: "aws", Capacity: 100, Capabilities: []string{"gpu", "arm"}}, "gpu": {Provider: "aws", Capacity: 100, Capabilities: []string{"gpu"}}, "arm": {Provider: "aws", Capacity: 100, Capabilities: []string{"arm"}}},
-			kind:      dispatcherv1.OverrideKindDrain, wantError: "2 affected workloads",
+			inventory: ClusterMap{"source": {Provider: "aws", Capacity: 100, Capabilities: []string{"gpu", "arm"}}, "gpu": {Provider: "aws", Capacity: 100, Capabilities: []string{"gpu"}}},
+			kind:      dispatcherv1.OverrideKindDrain, wantError: "1 affected workloads",
+		},
+		{
+			name:      "drain still rejects pinned sibling",
+			baseline:  map[string]ProwJobData{"a": runtimePlacementJob("family", "source", 1), "b": {Group: "family", Cluster: "source", PlacementKnown: true, Demand: 1}},
+			inventory: ClusterMap{"source": {Provider: "aws", Capacity: 100}, "target": {Provider: "aws", Capacity: 100}},
+			kind:      dispatcherv1.OverrideKindDrain, wantError: "1 affected workloads",
+			wantSummary: &CompileSummary{AffectedJobs: 2, AffectedGroups: 1, AffectedDemand: 2, MovableJobs: 1, MovableDemand: 1, MovedJobs: 1, MovedDemand: 1, ImmovableJobs: []string{"b"}, Destinations: map[string]float64{"target": 1}},
+		},
+		{
+			name:      "drain still rejects legacy sibling",
+			baseline:  map[string]ProwJobData{"a": runtimePlacementJob("family", "source", 1), "b": {Group: "family", Cluster: "source", Demand: 1}},
+			inventory: ClusterMap{"source": {Provider: "aws", Capacity: 100}, "target": {Provider: "aws", Capacity: 100}},
+			kind:      dispatcherv1.OverrideKindDrain, wantError: "1 affected workloads",
 		},
 	}
 	for _, tc := range tests {
@@ -85,7 +117,16 @@ func TestCompileSnapshotColocationUnits(t *testing.T) {
 			if tc.kind == dispatcherv1.OverrideKindCapacity {
 				requestedCapacity = &capacity
 			}
-			snapshot, summary, err := CompileSnapshot(CompileInput{Baseline: tc.baseline, Inventory: tc.inventory, Now: now, Overrides: []dispatcherv1.DispatchOverride{activeOverride("override", tc.kind, "source", requestedCapacity, "", now)}})
+			snapshot, summary, err := CompileSnapshot(CompileInput{Baseline: tc.baseline, Inventory: tc.inventory, Now: now, Overrides: []dispatcherv1.DispatchOverride{activeOverride("override", tc.kind, "source", requestedCapacity, tc.capability, now)}})
+			if tc.wantSummary != nil {
+				if diff := cmp.Diff(*tc.wantSummary, summary.ByOverride["override"]); diff != "" {
+					t.Errorf("unexpected override summary (-want +got):\n%s", diff)
+				}
+				summary.ByOverride = nil
+				if diff := cmp.Diff(*tc.wantSummary, summary); diff != "" {
+					t.Errorf("unexpected total summary (-want +got):\n%s", diff)
+				}
+			}
 			if tc.wantError != "" {
 				if err == nil || !strings.Contains(err.Error(), tc.wantError) {
 					t.Fatalf("expected error containing %q, got %v", tc.wantError, err)
@@ -123,7 +164,6 @@ func TestCompileSnapshotRejectsPartialGroupScope(t *testing.T) {
 		kind     dispatcherv1.OverrideKind
 		capacity *int32
 	}{
-		{name: "drain", kind: dispatcherv1.OverrideKindDrain},
 		{name: "capacity", kind: dispatcherv1.OverrideKindCapacity, capacity: &capacity},
 	} {
 		t.Run(tc.name, func(t *testing.T) {

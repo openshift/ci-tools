@@ -6,6 +6,7 @@ import (
 	"flag"
 	"fmt"
 	"log/slog"
+	"net"
 	"net/http"
 	"os"
 	"time"
@@ -29,16 +30,20 @@ type options struct {
 	gsmProjectID        string
 	gsmCredentialsFile  string
 	gracePeriod         time.Duration
+	tlsCertFile         string
+	tlsKeyFile          string
 }
 
 func gatherOptions(args []string) (*options, error) {
 	o := &options{}
 	fs := flag.NewFlagSet(os.Args[0], flag.ContinueOnError)
-	fs.StringVar(&o.listenAddr, "listen-addr", "127.0.0.1:8080", "Address to listen on. Non-loopback listeners require HTTPS ingress before accepting bearer tokens.")
+	fs.StringVar(&o.listenAddr, "listen-addr", "127.0.0.1:8080", "Address to listen on. Without TLS, only loopback IP addresses are allowed.")
 	fs.StringVar(&o.groupsOwnershipFile, "groups-ownership-file", "", "Path to core-services/sync-rover-groups/_config.yaml.")
 	fs.StringVar(&o.gsmProjectID, "gsm-project-id", "", "Google Cloud project ID containing the secrets.")
 	fs.StringVar(&o.gsmCredentialsFile, "gsm-credentials-file", "", "Path to the proxy's Google service account credentials (JSON).")
 	fs.DurationVar(&o.gracePeriod, "grace-period", 10*time.Second, "Grace period for server shutdown.")
+	fs.StringVar(&o.tlsCertFile, "tls-cert-file", "", "Path to the TLS certificate PEM file. Requires --tls-key-file.")
+	fs.StringVar(&o.tlsKeyFile, "tls-key-file", "", "Path to the TLS private key PEM file. Requires --tls-cert-file.")
 	if err := fs.Parse(args); err != nil {
 		return nil, err
 	}
@@ -63,6 +68,18 @@ func (o *options) validate() error {
 	}
 	if o.gracePeriod < 0 {
 		return errors.New("--grace-period must not be negative")
+	}
+	if (o.tlsCertFile == "") != (o.tlsKeyFile == "") {
+		return errors.New("--tls-cert-file and --tls-key-file must be provided together")
+	}
+	if o.tlsCertFile == "" {
+		host, _, err := net.SplitHostPort(o.listenAddr)
+		if err != nil {
+			return fmt.Errorf("invalid --listen-addr: %w", err)
+		}
+		if ip := net.ParseIP(host); ip == nil || !ip.IsLoopback() {
+			return errors.New("non-loopback listeners require --tls-cert-file and --tls-key-file")
+		}
 	}
 	return nil
 }
@@ -114,8 +131,16 @@ func run(o *options) error {
 	}()
 
 	server := newServer(o, authorizer, lister)
-	logrus.WithField("listen-addr", o.listenAddr).Info("starting gsm-proxy")
-	interrupts.ListenAndServe(server, o.gracePeriod)
+	var listener interrupts.ListenAndServer = server
+	if o.tlsCertFile != "" {
+		tlsServer, err := newTLSServer(server, o.tlsCertFile, o.tlsKeyFile)
+		if err != nil {
+			return fmt.Errorf("failed to initialize HTTPS server: %w", err)
+		}
+		listener = tlsServer
+	}
+	logrus.WithFields(logrus.Fields{"listen-addr": o.listenAddr, "tls": o.tlsCertFile != ""}).Info("starting gsm-proxy")
+	interrupts.ListenAndServe(listener, o.gracePeriod)
 	interrupts.WaitForGracefulShutdown()
 	return nil
 }

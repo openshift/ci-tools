@@ -103,11 +103,29 @@ malformed collection, 401 for missing/invalid authentication, and 403 for denied
 Upstream listing failures return a fixed 500 response, without partial results.
 Use `--help` for listener and graceful-shutdown options.
 
+## Serving HTTPS
+
+Set `--tls-cert-file` and `--tls-key-file` together to serve HTTPS, with TLS 1.2 or newer.
+For example, use `--listen-addr=0.0.0.0:8443`,
+`--tls-cert-file=/etc/gsm-proxy/tls/tls.crt`, and
+`--tls-key-file=/etc/gsm-proxy/tls/tls.key` alongside the GSM and ownership options.
+Without these flags, only literal loopback IP listeners are allowed; there is no
+plaintext listener alongside HTTPS.
+
+Startup requires a readable, valid certificate/key pair. The controller-runtime
+certificate watcher reloads replacements using filesystem events and a 10-second
+polling fallback, retaining the last valid pair if a replacement cannot be loaded.
+Mount the certificate Secret as a directory, not individual `subPath` files, so
+Kubernetes certificate renewals reach the watcher. Certificate issuance and renewal
+belong to deployment infrastructure, not the proxy.
+
 ## Before production deployment
 
 The intended deployment is on core-ci, with an ownership ConfigMap and read-only credential
-mount. The binary serves plain HTTP: require external HTTPS, restrict direct backend
-access, and explicitly protect the ingress-to-pod transport boundary.
+mount. Enable native HTTPS using a mounted serving certificate. Public routing must
+preserve encryption to the pod, for example with a reencrypt route that validates the
+backend certificate, or TLS passthrough with a certificate valid for the public hostname.
+Health probes must use HTTPS when TLS is enabled.
 
 Ownership reload does not revoke group membership in an already-issued token: the proxy
 trusts that signed snapshot until expiry. Define and verify the acceptable membership-revocation

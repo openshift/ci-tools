@@ -75,6 +75,8 @@ func TestReconciliationHealth(t *testing.T) {
 		{name: "override status persistence failed", statusErr: errors.New("status failed"), wantError: "status failed", wantFailures: 1},
 		{name: "final override read failed", failListAt: 2, listErr: errors.New("final read failed"), wantError: "final read failed", wantFailures: 1},
 		{name: "canceled reconciliation", failListAt: 1, listErr: context.Canceled, wantError: "context canceled"},
+		{name: "canceled status write", statusErr: context.Canceled, wantError: "context canceled"},
+		{name: "canceled status write and failed final read", statusErr: context.Canceled, failListAt: 2, listErr: errors.New("final read failed"), wantError: "final read failed", wantFailures: 1},
 	} {
 		t.Run(tc.name, func(t *testing.T) {
 			control, store, manager, now := testControlPlane(t, ControlOptions{})

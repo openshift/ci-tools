@@ -372,8 +372,29 @@ func (c *ControlPlane) observeReconcile(started time.Time, err *error) {
 		lastSuccessfulReconcileMetric.Set(float64(c.now().Unix()))
 		return
 	}
-	if !errors.Is(*err, context.Canceled) {
+	if !reconcileCanceledOnly(*err) {
 		reconcileErrorsMetric.Inc()
+	}
+}
+
+// reconcileCanceledOnly excludes shutdown cancellations without hiding independent reconciliation failures.
+func reconcileCanceledOnly(err error) bool {
+	switch wrapped := err.(type) {
+	case interface{ Unwrap() []error }:
+		causes := wrapped.Unwrap()
+		if len(causes) == 0 {
+			return false
+		}
+		for _, cause := range causes {
+			if !reconcileCanceledOnly(cause) {
+				return false
+			}
+		}
+		return true
+	case interface{ Unwrap() error }:
+		return reconcileCanceledOnly(wrapped.Unwrap())
+	default:
+		return errors.Is(err, context.Canceled)
 	}
 }
 

@@ -35,9 +35,9 @@ func testControlPlane(t *testing.T, options ControlOptions) (*ControlPlane, *Mem
 	}
 	control.now = func() time.Time { return now }
 	control.UpdateBaseline(map[string]ProwJobData{
-		"job-a": {Cluster: "build01", PlacementKnown: true, Relocatable: true, Demand: 10, Capabilities: []string{"intranet"}},
-		"job-b": {Cluster: "build01", PlacementKnown: true, Relocatable: true, Demand: 10},
-		"job-c": {Cluster: "build02", PlacementKnown: true, Relocatable: true, Demand: 10, Capabilities: []string{"intranet"}},
+		"job-a": {Cluster: "build01", Demand: 10, Capabilities: []string{"intranet"}},
+		"job-b": {Cluster: "build01", Demand: 10},
+		"job-c": {Cluster: "build02", Demand: 10, Capabilities: []string{"intranet"}},
 	}, ClusterMap{
 		"build01": {Provider: "aws", Capacity: 100, Capabilities: []string{"intranet"}},
 		"build02": {Provider: "aws", Capacity: 100, Capabilities: []string{"intranet"}},
@@ -207,7 +207,7 @@ func TestControlPlaneRejectsStalePlan(t *testing.T) {
 		t.Fatal(err)
 	}
 	control.UpdateBaseline(map[string]ProwJobData{
-		"new-job": {Cluster: "build01", PlacementKnown: true, Relocatable: true, Demand: 2},
+		"new-job": {Cluster: "build01", Demand: 2},
 	}, ClusterMap{
 		"build01": {Provider: "aws", Capacity: 100},
 		"build02": {Provider: "aws", Capacity: 100},
@@ -235,9 +235,9 @@ func TestControlPlaneAdditionalApplyOnActiveOverrideIsIdempotent(t *testing.T) {
 	}
 
 	control.UpdateBaseline(map[string]ProwJobData{
-		"job-a": {Cluster: "build01", PlacementKnown: true, Relocatable: true, Demand: 20, Capabilities: []string{"intranet"}},
-		"job-b": {Cluster: "build01", PlacementKnown: true, Relocatable: true, Demand: 10},
-		"job-c": {Cluster: "build02", PlacementKnown: true, Relocatable: true, Demand: 10, Capabilities: []string{"intranet"}},
+		"job-a": {Cluster: "build01", Demand: 20, Capabilities: []string{"intranet"}},
+		"job-b": {Cluster: "build01", Demand: 10},
+		"job-c": {Cluster: "build02", Demand: 10, Capabilities: []string{"intranet"}},
 	}, ClusterMap{
 		"build01": {Provider: "aws", Capacity: 100, Capabilities: []string{"intranet"}},
 		"build02": {Provider: "aws", Capacity: 100, Capabilities: []string{"intranet"}},

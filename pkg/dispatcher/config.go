@@ -201,28 +201,13 @@ func matchesAllCapabilities(clusterCapabilities, requiredCapabilities []string) 
 	return true
 }
 
-// JobPlacement separates baseline scheduling freedom from runtime relocation eligibility.
-type JobPlacement struct {
-	Cluster             api.Cluster
-	BaselineRelocatable bool
-	RuntimeRelocatable  bool
-}
-
-// DetermineClusterForJob returns the baseline cluster and whether baseline scheduling may relocate it.
-func (config *Config) DetermineClusterForJob(jobBase prowconfig.JobBase, path string, cm ClusterMap) (api.Cluster, bool, error) {
-	placement, err := config.DetermineJobPlacement(jobBase, path, cm)
-	return placement.Cluster, placement.BaselineRelocatable, err
-}
-
-// DetermineJobPlacement preserves deterministic baseline routing while identifying automatic runtime assignments.
-func (config *Config) DetermineJobPlacement(jobBase prowconfig.JobBase, path string, cm ClusterMap) (JobPlacement, error) {
-	var clusterName api.Cluster
-	var mayBeRelocated bool
+// DetermineClusterForJob return the cluster for a prow job and if it can be relocated to a cluster in build farm
+func (config *Config) DetermineClusterForJob(jobBase prowconfig.JobBase, path string, cm ClusterMap) (clusterName api.Cluster, mayBeRelocated bool, _ error) {
 	if jobBase.Agent != "kubernetes" && jobBase.Agent != "" {
-		return JobPlacement{}, nil
+		return "", false, nil
 	}
 	if jobBase.Cluster != "" && config.IsManualCluster(api.Cluster(jobBase.Cluster)) {
-		return JobPlacement{Cluster: api.Cluster(jobBase.Cluster)}, nil
+		return api.Cluster(jobBase.Cluster), false, nil
 	}
 
 	if strings.Contains(jobBase.Name, "vsphere") && !isApplyConfigJob(jobBase) {
@@ -237,16 +222,16 @@ func (config *Config) DetermineJobPlacement(jobBase prowconfig.JobBase, path str
 		}
 
 		if !vSphereNoVSphere02 {
-			return JobPlacement{Cluster: api.ClusterVSphere02}, nil
+			return api.ClusterVSphere02, false, nil
 		}
 	}
 
 	if isSSHBastionJob(jobBase) && config.SSHBastion != "" {
-		return JobPlacement{Cluster: config.SSHBastion}, nil
+		return config.SSHBastion, false, nil
 	}
 	if jobBase.Labels != nil {
 		if cluster, ok := jobBase.Labels[api.ClusterLabel]; ok {
-			return JobPlacement{Cluster: api.Cluster(cluster)}, nil
+			return api.Cluster(cluster), false, nil
 		}
 
 		requiredCapabilities := extractRequiredCapabilities(jobBase.Labels)
@@ -270,23 +255,23 @@ func (config *Config) DetermineJobPlacement(jobBase prowconfig.JobBase, path str
 						sort.Strings(clusters)
 						if len(clusters) > 0 {
 							// as in other places in this file, use this method to have basic deterministic distribution
-							return JobPlacement{Cluster: api.Cluster(clusters[len(filepath.Base(path))%len(clusters)]), RuntimeRelocatable: true}, nil
+							return api.Cluster(clusters[len(filepath.Base(path))%len(clusters)]), false, nil
 						}
 					}
 				}
 			}
 			if len(matchingClusters) == 0 {
 				sort.Strings(requiredCapabilities)
-				return JobPlacement{}, fmt.Errorf("job %s can't be matched with any cluster using provided capabilities: %s", jobBase.Name, strings.Join(requiredCapabilities, ","))
+				return "", false, fmt.Errorf("job %s can't be matched with any cluster using provided capabilities: %s", jobBase.Name, strings.Join(requiredCapabilities, ","))
 			}
 			// as in other places in this file, use this method to have basic deterministic distribution
-			return JobPlacement{Cluster: api.Cluster(matchingClusters[len(filepath.Base(path))%len(matchingClusters)]), RuntimeRelocatable: true}, nil
+			return api.Cluster(matchingClusters[len(filepath.Base(path))%len(matchingClusters)]), false, nil
 
 		}
 		if _, ok := jobBase.Labels[api.KVMDeviceLabel]; ok && len(config.KVM) > 0 {
 			// Any deterministic distribution is fine for now.
 			// We could implement more effective distribution when we understand more about the jobs.
-			return JobPlacement{Cluster: config.KVM[len(filepath.Base(path))%len(config.KVM)]}, nil
+			return config.KVM[len(filepath.Base(path))%len(config.KVM)], false, nil
 		}
 	}
 
@@ -294,7 +279,7 @@ func (config *Config) DetermineJobPlacement(jobBase prowconfig.JobBase, path str
 		if cloud := config.DetermineCloudMapping(jobBase); cloud != "" {
 			if clusters, ok := config.BuildFarmCloud[api.Cloud(cloud)]; ok {
 				if len(clusters) > 0 {
-					return JobPlacement{Cluster: api.Cluster(clusters[len(filepath.Base(path))%len(clusters)]), RuntimeRelocatable: true}, nil
+					return api.Cluster(clusters[len(filepath.Base(path))%len(clusters)]), false, nil
 				}
 			}
 		}
@@ -303,16 +288,14 @@ func (config *Config) DetermineJobPlacement(jobBase prowconfig.JobBase, path str
 	if jobBase.Labels != nil {
 		if _, ok := jobBase.Labels[api.NoBuildsLabel]; ok && len(config.NoBuilds) > 0 {
 			// Any deterministic distribution is fine for now.
-			return JobPlacement{Cluster: config.NoBuilds[len(filepath.Base(path))%len(config.NoBuilds)]}, nil
+			return config.NoBuilds[len(filepath.Base(path))%len(config.NoBuilds)], false, nil
 		}
 	}
 
 	var matches []string
-	var groupPinned bool
 	for cluster, group := range config.Groups {
 		for _, job := range group.Jobs {
 			if jobBase.Name == job {
-				groupPinned = true
 				clusterName = cluster
 			}
 		}
@@ -320,7 +303,6 @@ func (config *Config) DetermineJobPlacement(jobBase prowconfig.JobBase, path str
 	for cluster, group := range config.Groups {
 		for _, re := range group.PathREs {
 			if re.MatchString(path) {
-				groupPinned = true
 				if clusterName == "" {
 					clusterName = cluster
 				}
@@ -343,14 +325,14 @@ func (config *Config) DetermineJobPlacement(jobBase prowconfig.JobBase, path str
 	// sort for tests
 	sort.Strings(matches)
 	if len(matches) > 1 {
-		return JobPlacement{}, fmt.Errorf("path %s matches more than 1 regex: %s", path, matches)
+		return "", false, fmt.Errorf("path %s matches more than 1 regex: %s", path, matches)
 	}
 
 	if clusterName == "" {
 		clusterName = config.Default
 		mayBeRelocated = true
 	}
-	return JobPlacement{Cluster: clusterName, BaselineRelocatable: mayBeRelocated, RuntimeRelocatable: mayBeRelocated && !groupPinned}, nil
+	return clusterName, mayBeRelocated, nil
 }
 
 func isSSHBastionJob(base prowconfig.JobBase) bool {

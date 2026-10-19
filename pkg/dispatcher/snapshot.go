@@ -25,7 +25,7 @@ const (
 	// SnapshotFormatVersion is the persisted snapshot schema version.
 	SnapshotFormatVersion = 1
 	// SnapshotCompilerVersion identifies placement semantics included in the input digest.
-	SnapshotCompilerVersion = "dispatcher-future-v3"
+	SnapshotCompilerVersion = "dispatcher-future-v1"
 )
 
 // SnapshotAssignment is one immutable scheduling decision in a PolicySnapshot.
@@ -256,7 +256,7 @@ func jobHasCapability(job ProwJobData, capability string) bool {
 }
 
 func eligibleDestination(job ProwJobData, source string, candidate string, inventory ClusterMap, capacities map[string]int, blocked sets.Set[string]) bool {
-	if !job.PlacementKnown || !job.Relocatable || candidate == source || blocked.Has(candidate) || capacities[candidate] <= 0 {
+	if candidate == source || blocked.Has(candidate) || capacities[candidate] <= 0 {
 		return false
 	}
 	sourceInfo, sourceExists := inventory[source]
@@ -334,6 +334,25 @@ func validateOverride(override *dispatcherv1.DispatchOverride, baseline map[stri
 		}
 	}
 	return fmt.Errorf("override %q capability %q has no classified workload on cluster %q", override.Spec.ID, capability, override.Spec.Cluster)
+}
+
+func overrideJobs(override *dispatcherv1.DispatchOverride, baseline map[string]ProwJobData) []string {
+	jobs := make([]string, 0)
+	for _, name := range sortedProwJobNames(baseline) {
+		job := baseline[name]
+		if job.Cluster == override.Spec.Cluster && jobHasCapability(job, override.Spec.Scope.Capability) {
+			jobs = append(jobs, name)
+		}
+	}
+	sort.Slice(jobs, func(i, j int) bool {
+		iDemand := effectiveDemand(baseline[jobs[i]].Demand)
+		jDemand := effectiveDemand(baseline[jobs[j]].Demand)
+		if iDemand != jDemand {
+			return iDemand > jDemand
+		}
+		return jobs[i] < jobs[j]
+	})
+	return jobs
 }
 
 func targetLoadForCapacity(override *dispatcherv1.DispatchOverride, baseline map[string]ProwJobData, inventory ClusterMap, capacities map[string]int) float64 {
@@ -433,44 +452,51 @@ func CompileSnapshot(input CompileInput) (*PolicySnapshot, CompileSummary, error
 		override := &active[i]
 		overrideSummary := CompileSummary{Destinations: make(map[string]float64)}
 		overrideAffectedGroups := sets.New[string]()
-		units, err := overridePlacementUnits(override, baseline)
-		if err != nil {
-			return nil, summary, err
-		}
-		if override.Spec.Kind == dispatcherv1.OverrideKindDrain {
-			units = drainPlacementUnits(units, baseline, inventory, capacities, blocked)
-		}
+		jobs := overrideJobs(override, baseline)
 		overrideImmovableJobs := 0
 		sourceAffectedLoad := 0.0
-		for _, unit := range units {
-			sourceAffectedLoad += unit.job.Demand
+		for _, jobName := range jobs {
+			sourceAffectedLoad += effectiveDemand(baseline[jobName].Demand)
 		}
 		targetLoad := 0.0
 		if override.Spec.Kind == dispatcherv1.OverrideKindCapacity {
 			targetLoad = targetLoadForCapacity(override, baseline, inventory, capacities)
 		}
-		for _, unit := range units {
-			demand := unit.job.Demand
-			summary.AffectedJobs += len(unit.names)
-			overrideSummary.AffectedJobs += len(unit.names)
-			group := unit.job.Group
+		for _, jobName := range jobs {
+			job := baseline[jobName]
+			demand := effectiveDemand(job.Demand)
+			summary.AffectedJobs++
+			overrideSummary.AffectedJobs++
+			group := job.Group
 			if group == "" {
-				group = unit.names[0]
+				group = jobName
 			}
 			affectedGroups.Insert(group)
 			overrideAffectedGroups.Insert(group)
 			summary.AffectedDemand += demand
 			overrideSummary.AffectedDemand += demand
-			destination := chooseDestination(unit.key, unit.job, override.Spec.Cluster, inventory, capacities, blocked, loads)
+			candidateCapacities := capacities
+			if override.Spec.Scope.Capability != "" {
+				candidateCapacities = make(map[string]int, len(capacities))
+				for cluster, capacity := range capacities {
+					candidateCapacities[cluster] = capacity
+				}
+				if override.Spec.Kind == dispatcherv1.OverrideKindDrain {
+					candidateCapacities[override.Spec.Cluster] = 0
+				} else {
+					candidateCapacities[override.Spec.Cluster] = int(*override.Spec.Capacity)
+				}
+			}
+			destination := chooseDestination(jobName, job, override.Spec.Cluster, inventory, candidateCapacities, blocked, loads)
 			if destination == "" {
-				summary.ImmovableJobs = append(summary.ImmovableJobs, unit.names...)
-				overrideSummary.ImmovableJobs = append(overrideSummary.ImmovableJobs, unit.names...)
-				overrideImmovableJobs += len(unit.names)
+				summary.ImmovableJobs = append(summary.ImmovableJobs, jobName)
+				overrideSummary.ImmovableJobs = append(overrideSummary.ImmovableJobs, jobName)
+				overrideImmovableJobs++
 				continue
 			}
-			summary.MovableJobs += len(unit.names)
+			summary.MovableJobs++
 			summary.MovableDemand += demand
-			overrideSummary.MovableJobs += len(unit.names)
+			overrideSummary.MovableJobs++
 			overrideSummary.MovableDemand += demand
 			if override.Spec.Kind == dispatcherv1.OverrideKindCapacity && sourceAffectedLoad <= targetLoad {
 				continue
@@ -479,32 +505,28 @@ func CompileSnapshot(input CompileInput) (*PolicySnapshot, CompileSummary, error
 				math.Abs(sourceAffectedLoad-targetLoad) <= math.Abs(sourceAffectedLoad-demand-targetLoad) {
 				continue
 			}
-			for _, jobName := range unit.names {
-				assignment := assignments[jobName]
-				assignment.Cluster = destination
-				assignment.OverrideID = override.Spec.ID
-				assignment.ValidUntil = override.Spec.ExpiresAt.Time.UTC()
-				assignment.Explanation = fmt.Sprintf("%s override %s moved workload from %s", strings.ToLower(string(override.Spec.Kind)), override.Spec.ID, override.Spec.Cluster)
-				assignments[jobName] = assignment
-			}
+			assignment := assignments[jobName]
+			assignment.Cluster = destination
+			assignment.OverrideID = override.Spec.ID
+			assignment.ValidUntil = override.Spec.ExpiresAt.Time.UTC()
+			assignment.Explanation = fmt.Sprintf("%s override %s moved workload from %s", strings.ToLower(string(override.Spec.Kind)), override.Spec.ID, override.Spec.Cluster)
+			assignments[jobName] = assignment
 			loads[override.Spec.Cluster] -= demand
 			loads[destination] += demand
 			sourceAffectedLoad -= demand
-			summary.MovedJobs += len(unit.names)
+			summary.MovedJobs++
 			summary.MovedDemand += demand
 			summary.Destinations[destination] += demand
-			overrideSummary.MovedJobs += len(unit.names)
+			overrideSummary.MovedJobs++
 			overrideSummary.MovedDemand += demand
 			overrideSummary.Destinations[destination] += demand
+		}
+		if override.Spec.Kind == dispatcherv1.OverrideKindDrain && overrideImmovableJobs > 0 {
+			return nil, summary, fmt.Errorf("drain %q has no eligible destination for %d affected workloads", override.Spec.ID, overrideImmovableJobs)
 		}
 		sort.Strings(overrideSummary.ImmovableJobs)
 		overrideSummary.AffectedGroups = overrideAffectedGroups.Len()
 		summary.ByOverride[override.Spec.ID] = overrideSummary
-		if override.Spec.Kind == dispatcherv1.OverrideKindDrain && overrideImmovableJobs > 0 {
-			sort.Strings(summary.ImmovableJobs)
-			summary.AffectedGroups = affectedGroups.Len()
-			return nil, summary, fmt.Errorf("drain %q has no eligible destination for %d affected workloads: %q", override.Spec.ID, overrideImmovableJobs, overrideSummary.ImmovableJobs)
-		}
 	}
 	sort.Strings(summary.ImmovableJobs)
 	summary.AffectedGroups = affectedGroups.Len()

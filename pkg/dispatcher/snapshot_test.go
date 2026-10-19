@@ -28,10 +28,10 @@ func TestCompileSnapshotCapacityMovesOnlyNeededDemand(t *testing.T) {
 	now := time.Date(2026, 8, 20, 12, 0, 0, 0, time.UTC)
 	capacity := int32(25)
 	baseline := map[string]ProwJobData{
-		"job-a": {Cluster: "build01", Demand: 10},
-		"job-b": {Cluster: "build01", Demand: 10},
-		"job-c": {Cluster: "build01", Demand: 10},
-		"job-d": {Cluster: "build02", Demand: 10},
+		"job-a": {Cluster: "build01", PlacementKnown: true, Relocatable: true, Demand: 10},
+		"job-b": {Cluster: "build01", PlacementKnown: true, Relocatable: true, Demand: 10},
+		"job-c": {Cluster: "build01", PlacementKnown: true, Relocatable: true, Demand: 10},
+		"job-d": {Cluster: "build02", PlacementKnown: true, Relocatable: true, Demand: 10},
 	}
 	inventory := ClusterMap{
 		"build01": {Provider: "aws", Capacity: 100},
@@ -66,10 +66,10 @@ func TestCompileSnapshotCapabilityCapacityUsesScopedLoad(t *testing.T) {
 	capacity := int32(25)
 	snapshot, summary, err := CompileSnapshot(CompileInput{
 		Baseline: map[string]ProwJobData{
-			"source-unscoped": {Cluster: "build01", Demand: 100},
-			"source-cap-a":    {Cluster: "build01", Demand: 10, Capabilities: []string{"gpu"}},
-			"source-cap-b":    {Cluster: "build01", Demand: 10, Capabilities: []string{"gpu"}},
-			"target-cap":      {Cluster: "build02", Demand: 10, Capabilities: []string{"gpu"}},
+			"source-unscoped": {Cluster: "build01", PlacementKnown: true, Relocatable: true, Demand: 100},
+			"source-cap-a":    {Cluster: "build01", PlacementKnown: true, Relocatable: true, Demand: 10, Capabilities: []string{"gpu"}},
+			"source-cap-b":    {Cluster: "build01", PlacementKnown: true, Relocatable: true, Demand: 10, Capabilities: []string{"gpu"}},
+			"target-cap":      {Cluster: "build02", PlacementKnown: true, Relocatable: true, Demand: 10, Capabilities: []string{"gpu"}},
 		},
 		Inventory: ClusterMap{
 			"build01": {Provider: "aws", Capacity: 100, Capabilities: []string{"gpu"}},
@@ -90,7 +90,7 @@ func TestCompileSnapshotIsDeterministic(t *testing.T) {
 	now := time.Date(2026, 8, 20, 12, 0, 0, 0, time.UTC)
 	capacity := int32(25)
 	first, _, err := CompileSnapshot(CompileInput{
-		Baseline:   map[string]ProwJobData{"b": {Cluster: "build01", Demand: .1}, "a": {Cluster: "build01", Demand: .2}, "c": {Cluster: "build02", Demand: .3}},
+		Baseline:   map[string]ProwJobData{"b": {Cluster: "build01", PlacementKnown: true, Relocatable: true, Demand: .1}, "a": {Cluster: "build01", PlacementKnown: true, Relocatable: true, Demand: .2}, "c": {Cluster: "build02", PlacementKnown: true, Relocatable: true, Demand: .3}},
 		Inventory:  ClusterMap{"build02": {Provider: "aws", Capacity: 100}, "build01": {Provider: "aws", Capacity: 100}},
 		Overrides:  []dispatcherv1.DispatchOverride{activeOverride("capacity", dispatcherv1.OverrideKindCapacity, "build01", &capacity, "", now)},
 		Generation: 4, Now: now,
@@ -99,7 +99,7 @@ func TestCompileSnapshotIsDeterministic(t *testing.T) {
 		t.Fatal(err)
 	}
 	second, _, err := CompileSnapshot(CompileInput{
-		Baseline:   map[string]ProwJobData{"c": {Cluster: "build02", Demand: .3}, "a": {Cluster: "build01", Demand: .2}, "b": {Cluster: "build01", Demand: .1}},
+		Baseline:   map[string]ProwJobData{"c": {Cluster: "build02", PlacementKnown: true, Relocatable: true, Demand: .3}, "a": {Cluster: "build01", PlacementKnown: true, Relocatable: true, Demand: .2}, "b": {Cluster: "build01", PlacementKnown: true, Relocatable: true, Demand: .1}},
 		Inventory:  ClusterMap{"build01": {Provider: "aws", Capacity: 100}, "build02": {Provider: "aws", Capacity: 100}},
 		Overrides:  []dispatcherv1.DispatchOverride{activeOverride("capacity", dispatcherv1.OverrideKindCapacity, "build01", &capacity, "", now)},
 		Generation: 4, Now: now,
@@ -116,7 +116,7 @@ func TestCompileSnapshotRejectsUnrepresentedCapability(t *testing.T) {
 	now := time.Now().UTC()
 	override := activeOverride("cap", dispatcherv1.OverrideKindDrain, "build01", nil, "gpu", now)
 	_, _, err := CompileSnapshot(CompileInput{
-		Baseline:  map[string]ProwJobData{"job": {Cluster: "build01"}},
+		Baseline:  map[string]ProwJobData{"job": {Cluster: "build01", PlacementKnown: true, Relocatable: true}},
 		Inventory: ClusterMap{"build01": {Provider: "aws", Capacity: 100}, "build02": {Provider: "aws", Capacity: 100}},
 		Overrides: []dispatcherv1.DispatchOverride{override}, Generation: 1, Now: now,
 	})
@@ -148,8 +148,8 @@ func TestCompileSnapshotRejectsConcurrentOverridesInOneProviderPool(t *testing.T
 	second := activeOverride("second", dispatcherv1.OverrideKindDrain, "build02", nil, "", now)
 	_, _, err := CompileSnapshot(CompileInput{
 		Baseline: map[string]ProwJobData{
-			"job-a": {Cluster: "build01", Demand: 1},
-			"job-b": {Cluster: "build02", Demand: 1},
+			"job-a": {Cluster: "build01", PlacementKnown: true, Relocatable: true, Demand: 1},
+			"job-b": {Cluster: "build02", PlacementKnown: true, Relocatable: true, Demand: 1},
 		},
 		Inventory: ClusterMap{
 			"build01": {Provider: "aws", Capacity: 100},
@@ -170,8 +170,8 @@ func TestCompileSnapshotReportsImpactPerOverride(t *testing.T) {
 	second := activeOverride("second", dispatcherv1.OverrideKindCapacity, "build03", &capacity, "", now)
 	_, summary, err := CompileSnapshot(CompileInput{
 		Baseline: map[string]ProwJobData{
-			"aws-job": {Cluster: "build01", Demand: 10},
-			"gcp-job": {Cluster: "build03", Demand: 10},
+			"aws-job": {Cluster: "build01", PlacementKnown: true, Relocatable: true, Demand: 10},
+			"gcp-job": {Cluster: "build03", PlacementKnown: true, Relocatable: true, Demand: 10},
 		},
 		Inventory: ClusterMap{
 			"build01": {Provider: "aws", Capacity: 100},
@@ -194,8 +194,8 @@ func TestCompileSnapshotDrainRejectsPartialRelocation(t *testing.T) {
 	override := activeOverride("drain", dispatcherv1.OverrideKindDrain, "build01", nil, "", now)
 	_, summary, err := CompileSnapshot(CompileInput{
 		Baseline: map[string]ProwJobData{
-			"movable":   {Cluster: "build01", Demand: 1},
-			"immovable": {Cluster: "build01", Demand: 1, Capabilities: []string{"gpu"}},
+			"movable":   {Cluster: "build01", PlacementKnown: true, Relocatable: true, Demand: 1},
+			"immovable": {Cluster: "build01", PlacementKnown: true, Relocatable: true, Demand: 1, Capabilities: []string{"gpu"}},
 		},
 		Inventory: ClusterMap{
 			"build01": {Provider: "aws", Capacity: 100, Capabilities: []string{"gpu"}},
@@ -212,7 +212,7 @@ func TestCompileSnapshotDigestTracksEffectiveOverrideSet(t *testing.T) {
 	now := time.Now().UTC()
 	override := activeOverride("drain", dispatcherv1.OverrideKindDrain, "build01", nil, "", now)
 	input := CompileInput{
-		Baseline:  map[string]ProwJobData{"job": {Cluster: "build01", Demand: 1}},
+		Baseline:  map[string]ProwJobData{"job": {Cluster: "build01", PlacementKnown: true, Relocatable: true, Demand: 1}},
 		Inventory: ClusterMap{"build01": {Provider: "aws", Capacity: 100}, "build02": {Provider: "aws", Capacity: 100}},
 		Overrides: []dispatcherv1.DispatchOverride{override}, Generation: 1, Now: now,
 	}
@@ -235,7 +235,7 @@ func TestSnapshotLookupEvaluatesExpiryOnEveryDecision(t *testing.T) {
 	now := time.Now().UTC()
 	override := activeOverride("drain", dispatcherv1.OverrideKindDrain, "build01", nil, "", now)
 	snapshot, _, err := CompileSnapshot(CompileInput{
-		Baseline:  map[string]ProwJobData{"job": {Cluster: "build01", Demand: 1}},
+		Baseline:  map[string]ProwJobData{"job": {Cluster: "build01", PlacementKnown: true, Relocatable: true, Demand: 1}},
 		Inventory: ClusterMap{"build01": {Provider: "aws", Capacity: 100}, "build02": {Provider: "aws", Capacity: 100}},
 		Overrides: []dispatcherv1.DispatchOverride{override}, Generation: 1, Now: now,
 	})
@@ -259,7 +259,7 @@ func TestSnapshotLookupEvaluatesExpiryOnEveryDecision(t *testing.T) {
 func TestSnapshotCacheRoundTripAndCorruption(t *testing.T) {
 	path := filepath.Join(t.TempDir(), "snapshot.json")
 	snapshot, _, err := CompileSnapshot(CompileInput{
-		Baseline:  map[string]ProwJobData{"job": {Cluster: "build01"}},
+		Baseline:  map[string]ProwJobData{"job": {Cluster: "build01", PlacementKnown: true, Relocatable: true}},
 		Inventory: ClusterMap{"build01": {Provider: "aws", Capacity: 100}}, Generation: 1, Now: time.Now().UTC(),
 	})
 	if err != nil {
@@ -291,7 +291,7 @@ func TestSnapshotCacheRoundTripAndCorruption(t *testing.T) {
 func TestSnapshotManagerCurrentReturnsDeepCopy(t *testing.T) {
 	snapshot, _, err := CompileSnapshot(CompileInput{
 		Baseline: map[string]ProwJobData{
-			"job": {Cluster: "build01", Capabilities: []string{"gpu"}},
+			"job": {Cluster: "build01", PlacementKnown: true, Relocatable: true, Capabilities: []string{"gpu"}},
 		},
 		Inventory: ClusterMap{
 			"build01": {Provider: "aws", Capacity: 100, Capabilities: []string{"gpu"}},

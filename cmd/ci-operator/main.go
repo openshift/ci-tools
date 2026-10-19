@@ -1405,6 +1405,8 @@ func (o *options) initializeNamespace() error {
 	logrus.Debugf("Creating namespace %s", o.namespace)
 	authTimeout := 15 * time.Second
 	initBeginning := time.Now()
+	namespaceReused := false
+	namespaceUID := ""
 	for {
 		project, err := projectGetter.ProjectV1().ProjectRequests().Create(context.TODO(), &projectapi.ProjectRequest{
 			ObjectMeta: metav1.ObjectMeta{
@@ -1417,6 +1419,7 @@ func (o *options) initializeNamespace() error {
 		if err != nil && !kerrors.IsAlreadyExists(err) {
 			return fmt.Errorf("could not set up namespace for test: %w", err)
 		}
+		namespaceReused = kerrors.IsAlreadyExists(err)
 		if err != nil {
 			project, err = projectGetter.ProjectV1().Projects().Get(context.TODO(), o.namespace, metav1.GetOptions{})
 			if err != nil {
@@ -1436,6 +1439,7 @@ func (o *options) initializeNamespace() error {
 			time.Sleep(3 * time.Second)
 			continue
 		}
+		namespaceUID = string(project.UID)
 		break
 	}
 
@@ -1697,7 +1701,13 @@ func (o *options) initializeNamespace() error {
 	}
 	logrus.Debugf("Created PDB for pods with %s label", steps.CreatedByCILabel)
 
-	o.metricsAgent.Record(metrics.NewInsightsEvent(metrics.InsightNamespaceInitialized, metrics.Context{"namespace": o.namespace, "duration_seconds": time.Since(initBeginning).Seconds()}))
+	o.metricsAgent.Record(metrics.NewInsightsEvent(metrics.InsightNamespaceInitialized, metrics.Context{
+		"namespace":        o.namespace,
+		"namespace_uid":    namespaceUID,
+		"input_hash":       o.inputHash,
+		"reused":           namespaceReused,
+		"duration_seconds": time.Since(initBeginning).Seconds(),
+	}))
 	return nil
 }
 

@@ -36,8 +36,10 @@ func Test_buildPlugin_Record(t *testing.T) {
 			providedBuilds: []runtime.Object{
 				&buildapi.Build{
 					ObjectMeta: metav1.ObjectMeta{
-						Name:      "test-build",
-						Namespace: "test-namespace",
+						Name:              "test-build",
+						Namespace:         "test-namespace",
+						UID:               "build-uid",
+						CreationTimestamp: metav1.NewTime(time.Date(2025, time.January, 1, 0, 0, 0, 0, time.UTC)),
 					},
 					Status: buildapi.BuildStatus{
 						StartTimestamp:      &metav1.Time{Time: time.Date(2025, time.January, 1, 0, 0, 0, 0, time.UTC)},
@@ -63,6 +65,8 @@ func Test_buildPlugin_Record(t *testing.T) {
 				&BuildEvent{
 					Namespace:       "test-namespace",
 					Name:            "test-build",
+					UID:             "build-uid",
+					CreationTime:    time.Date(2025, time.January, 1, 0, 0, 0, 0, time.UTC),
 					StartTime:       time.Date(2025, time.January, 1, 0, 0, 0, 0, time.UTC),
 					CompletionTime:  time.Date(2025, time.January, 1, 0, 10, 0, 0, time.UTC),
 					DurationSeconds: 600,

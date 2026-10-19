@@ -13,6 +13,7 @@ import (
 )
 
 type PodLifecycleMetricsEvent struct {
+	UID            string     `json:"uid,omitempty"`
 	PodName        string     `json:"pod_name,omitempty"`
 	Namespace      string     `json:"namespace,omitempty"`
 	CreationTime   *time.Time `json:"creation_time,omitempty"`
@@ -72,6 +73,7 @@ func (p *PodLifecyclePlugin) Record(ev MetricsEvent) {
 	}
 
 	e.CreationTime = &pod.CreationTimestamp.Time
+	e.UID = string(pod.UID)
 	if pod.Status.StartTime != nil {
 		e.StartTime = &pod.Status.StartTime.Time
 	}

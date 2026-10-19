@@ -14,6 +14,7 @@ import (
 type prometheusVolumes struct {
 	jobVolumes           map[string]float64
 	timestamp            time.Time
+	evaluationTimestamp  time.Time
 	promClient           promapi.Client
 	prometheusDaysBefore int
 	options              PrometheusOptions
@@ -38,20 +39,32 @@ func NewPrometheusVolumes(promOptions PrometheusOptions, prometheusDaysBefore in
 func (pv *prometheusVolumes) GetJobVolumes() (map[string]float64, error) {
 	pv.m.Lock()
 	defer pv.m.Unlock()
-	if len(pv.jobVolumes) != 0 && time.Since(pv.timestamp) < 24*time.Hour {
+	pv.options.demandDefaults()
+	now := time.Now().UTC()
+	if demandCacheFresh(pv.timestamp, now, pv.options.DemandCacheTTL) {
 		return pv.jobVolumes, nil
 	}
 	v1api := prometheusapi.NewAPI(pv.promClient)
 	ctx, cancel := context.WithTimeout(context.Background(), 30*time.Second)
 	defer cancel()
-	ts := time.Now().UTC().Add(-time.Duration(24*pv.prometheusDaysBefore) * time.Hour)
+	ts := now.Add(-time.Duration(24*pv.prometheusDaysBefore) * time.Hour)
 	jv, err := GetWeightedJobDemandFromPrometheus(ctx, v1api, ts, pv.options)
 	if err != nil {
+		demandQueryErrorsMetric.Inc()
 		return nil, err
 	}
 	pv.jobVolumes = jv
 	pv.timestamp = time.Now()
+	pv.evaluationTimestamp = ts
+	demandRefreshTimestampMetric.Set(float64(pv.timestamp.Unix()))
+	demandEvaluationTimestampMetric.Set(float64(ts.Unix()))
+	demandSamplesMetric.Set(float64(len(jv)))
 	return pv.jobVolumes, nil
+}
+
+// demandCacheFresh rejects clock rollback and expires empty successful responses too.
+func demandCacheFresh(refreshedAt, now time.Time, ttl time.Duration) bool {
+	return !refreshedAt.IsZero() && !now.Before(refreshedAt) && now.Sub(refreshedAt) < ttl
 }
 
 func (pv *prometheusVolumes) getTotalVolume() float64 {

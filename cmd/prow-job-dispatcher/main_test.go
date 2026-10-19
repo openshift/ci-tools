@@ -12,6 +12,7 @@ import (
 	"time"
 
 	"github.com/google/go-cmp/cmp"
+	"github.com/google/go-cmp/cmp/cmpopts"
 	"github.com/slack-go/slack"
 
 	corev1 "k8s.io/api/core/v1"
@@ -164,8 +165,8 @@ func TestDispatchJobs(t *testing.T) {
 				"build02": dispatcher.ClusterInfo{Capacity: 100},
 			},
 			expectedBuildFarm: map[api.Cloud]map[api.Cluster]*dispatcher.BuildFarmConfig{
-				"aws": {"build01": {FilenamesRaw: []string{"ci-tools-presubmits.yaml"}}},
-				"gcp": {"build02": {FilenamesRaw: []string{"cluster-etcd-operator-master-presubmits.yaml", "cluster-api-provider-gcp-presubmits.yaml", "wildfly-operator-presubmits.yaml", "xyz-operator-presubmits.yaml"}}},
+				"aws": {"build01": {FilenamesRaw: []string{"cluster-etcd-operator-master-presubmits.yaml", "ci-tools-presubmits.yaml"}}},
+				"gcp": {"build02": {FilenamesRaw: []string{"cluster-api-provider-gcp-presubmits.yaml", "wildfly-operator-presubmits.yaml", "xyz-operator-presubmits.yaml"}}},
 			},
 		},
 	}
@@ -1316,10 +1317,10 @@ func TestDispatchDeltaJobs(t *testing.T) {
 			},
 			wantErr: false,
 			expectedPjs: map[string]dispatcher.ProwJobData{
-				"pull-ci-openshift-cluster-api-provider-gcp-master-e2e-gcp":          {Cluster: "build01", Capabilities: []string{"intranet"}, Demand: 7, Group: "preserved-group.yaml"},
-				"pull-ci-openshift-cluster-api-provider-gcp-master-govet":            {Cluster: "build02"},
-				"pull-ci-openshift-cluster-api-provider-gcp-master-e2e-gcp-operator": {Cluster: "build01", Capabilities: []string{"intranet"}, Demand: 5, Group: "capabilities/cluster-api-provider-gcp-presubmits.yaml"},
-				"pull-ci-openshift-cluster-api-provider-gcp-master-goimports":        {Cluster: "build02"},
+				"pull-ci-openshift-cluster-api-provider-gcp-master-e2e-gcp":          {Cluster: "build01", Capabilities: []string{"intranet"}, Demand: 7, Group: "capabilities/cluster-api-provider-gcp-presubmits.yaml", PlacementKnown: true},
+				"pull-ci-openshift-cluster-api-provider-gcp-master-govet":            {Cluster: "build02", Demand: 5, Group: "capabilities/cluster-api-provider-gcp-presubmits.yaml", PlacementKnown: true, Relocatable: true},
+				"pull-ci-openshift-cluster-api-provider-gcp-master-e2e-gcp-operator": {Cluster: "build01", Capabilities: []string{"intranet"}, Demand: 5, Group: "capabilities/cluster-api-provider-gcp-presubmits.yaml", PlacementKnown: true},
+				"pull-ci-openshift-cluster-api-provider-gcp-master-goimports":        {Cluster: "build02", Demand: 5, Group: "capabilities/cluster-api-provider-gcp-presubmits.yaml", PlacementKnown: true, Relocatable: true},
 			},
 		},
 	}
@@ -1328,8 +1329,13 @@ func TestDispatchDeltaJobs(t *testing.T) {
 			if err := dispatchDeltaJobs(tt.args.prowJobConfigDir, tt.args.config, tt.args.blocked, tt.args.pjs, tt.args.cm, 5); (err != nil) != tt.wantErr {
 				t.Errorf("dispatchDeltaJobs() error = %v, wantErr %v", err, tt.wantErr)
 			}
-			if !reflect.DeepEqual(tt.expectedPjs, tt.args.pjs) {
-				t.Errorf("Maps are not equal. Expected: %v, Got: %v", tt.expectedPjs, tt.args.pjs)
+			if diff := cmp.Diff(tt.expectedPjs, tt.args.pjs, cmpopts.IgnoreFields(dispatcher.ProwJobData{}, "PlacementDigest")); diff != "" {
+				t.Errorf("unexpected assignments (-want +got):\n%s", diff)
+			}
+			for name, job := range tt.args.pjs {
+				if job.PlacementDigest == "" {
+					t.Errorf("job %q missing placement digest", name)
+				}
 			}
 		})
 	}
@@ -1342,7 +1348,9 @@ func TestAssignmentsRequireMetadataMigration(t *testing.T) {
 		expected    bool
 	}{
 		{name: "empty", assignments: map[string]dispatcher.ProwJobData{}},
-		{name: "complete", assignments: map[string]dispatcher.ProwJobData{"job": {Cluster: "build01", Demand: 2, Group: "jobs.yaml"}}},
+		{name: "complete", assignments: map[string]dispatcher.ProwJobData{"job": {Cluster: "build01", Demand: 2, Group: "jobs.yaml", PlacementKnown: true, PlacementDigest: "known"}}},
+		{name: "unknown placement", assignments: map[string]dispatcher.ProwJobData{"job": {Cluster: "build01", Demand: 2, Group: "jobs.yaml"}}, expected: true},
+		{name: "missing restrictions digest", assignments: map[string]dispatcher.ProwJobData{"job": {Cluster: "build01", Demand: 2, Group: "jobs.yaml", PlacementKnown: true}}, expected: true},
 		{name: "missing demand", assignments: map[string]dispatcher.ProwJobData{"job": {Cluster: "build01", Group: "jobs.yaml"}}, expected: true},
 		{name: "missing group", assignments: map[string]dispatcher.ProwJobData{"job": {Cluster: "build01", Demand: 2}}, expected: true},
 	}

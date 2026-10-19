@@ -15,8 +15,16 @@ type Prowjobs struct {
 }
 
 type ProwJobData struct {
-	Cluster      string
-	Capabilities []string
+	// Affinity freezes the namespace host when durable conservative affinity is enabled.
+	Affinity PlacementAffinity
+	// PlacementKnown distinguishes classified jobs from legacy persisted records.
+	PlacementKnown bool
+	// Relocatable records whether Git placement permits automatic reassignment.
+	Relocatable bool
+	// PlacementDigest identifies configuration constraints used to classify placement.
+	PlacementDigest string
+	Cluster         string
+	Capabilities    []string
 	// Demand is the estimated scheduling load for this job. A non-positive value
 	// is treated as one so jobs with no historical runs still participate in plans.
 	Demand float64

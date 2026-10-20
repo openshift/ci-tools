@@ -12,14 +12,13 @@ import (
 	"github.com/google/go-cmp/cmp"
 
 	utilerrors "k8s.io/apimachinery/pkg/util/errors"
+	prowapi "sigs.k8s.io/prow/pkg/apis/prowjobs/v1"
+	"sigs.k8s.io/prow/pkg/pod-utils/downwardapi"
 
 	"github.com/openshift/ci-tools/pkg/api"
 	"github.com/openshift/ci-tools/pkg/results"
 	"github.com/openshift/ci-tools/pkg/secrets"
 	"github.com/openshift/ci-tools/pkg/testhelper"
-
-	prowapi "sigs.k8s.io/prow/pkg/apis/prowjobs/v1"
-	"sigs.k8s.io/prow/pkg/pod-utils/downwardapi"
 )
 
 func TestProwMetadata(t *testing.T) {

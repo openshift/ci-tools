@@ -10,9 +10,8 @@ import (
 	"strings"
 	"time"
 
-	"github.com/sirupsen/logrus"
-
 	egressfirewallv1 "github.com/ovn-org/ovn-kubernetes/go-controller/pkg/crd/egressfirewall/v1"
+	"github.com/sirupsen/logrus"
 
 	authapi "k8s.io/api/authorization/v1"
 	coreapi "k8s.io/api/core/v1"

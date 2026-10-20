@@ -13,6 +13,7 @@ import (
 
 	"github.com/bombsimon/logrusr/v3"
 	"github.com/go-logr/logr"
+	egressfirewallv1 "github.com/ovn-org/ovn-kubernetes/go-controller/pkg/crd/egressfirewall/v1"
 	"github.com/sirupsen/logrus"
 
 	appsv1 "k8s.io/api/apps/v1"
@@ -23,14 +24,13 @@ import (
 	_ "sigs.k8s.io/prow/pkg/cache"
 	"sigs.k8s.io/prow/pkg/logrusutil"
 	"sigs.k8s.io/prow/pkg/version"
+	csiapi "sigs.k8s.io/secrets-store-csi-driver/apis/v1"
 
 	buildv1 "github.com/openshift/api/build/v1"
 	configv1 "github.com/openshift/api/config/v1"
 	imageapi "github.com/openshift/api/image/v1"
 	routev1 "github.com/openshift/api/route/v1"
 	hivev1 "github.com/openshift/hive/apis/hive/v1"
-	egressfirewallv1 "github.com/ovn-org/ovn-kubernetes/go-controller/pkg/crd/egressfirewall/v1"
-	csiapi "sigs.k8s.io/secrets-store-csi-driver/apis/v1"
 
 	"github.com/openshift/ci-tools/pkg/api"
 	"github.com/openshift/ci-tools/pkg/metrics"

@@ -4,10 +4,9 @@ import (
 	"reflect"
 	"testing"
 
+	"k8s.io/utils/diff"
 	prowapi "sigs.k8s.io/prow/pkg/apis/prowjobs/v1"
 	"sigs.k8s.io/prow/pkg/pod-utils/downwardapi"
-
-	"k8s.io/utils/diff"
 
 	"github.com/openshift/ci-tools/pkg/api"
 )

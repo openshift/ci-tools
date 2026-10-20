@@ -50,7 +50,9 @@ Write idiomatic Go ([Effective Go](https://go.dev/doc/effective_go), [Go Code Re
       timeout = defaultTimeout
   }
   ```
-- **Naming and docs.** Choose concise names that are descriptive relative to their package. Every package-level name gets a doc comment, starting with the name, that explains _why_ it exists and any parameter that is not obvious from context. Avoid generic names such as `Manager`, `Handler`, `Util`, and method names that say nothing (`Process`, `Handle`, `Do`); prefer a name that evokes a specific concept (`TestResultAggregator`, not `Manager`).
+- **Naming.** Choose concise names that are descriptive relative to their package. Avoid generic names such as `Manager`, `Handler`, `Util`, and method names that say nothing (`Process`, `Handle`, `Do`); prefer a name that evokes a specific concept (`TestResultAggregator`, not `Manager`).
+- **Documentation above functions and methods.** Start each doc comment with the function or method name. Describe **what it does**, including relevant inputs, outputs, errors, and side effects, rather than why it exists. For example: `// LoadConfig reads and validates the configuration at path.`
+- **Documentation above other declarations.** Document package-level types, constants, and variables, starting with the declared name and describing what it represents.
 - **Focused units.** A package is one cohesive concept, a struct is one entity in that package, a method works at one level of abstraction. Refactor structs with more than about 7 top-level fields into focused sub-types.
 - **Errors.** Never discard an error with `_` without a clear justification. Wrap with context: `fmt.Errorf("doing x: %w", err)`. Compare with `errors.Is` / `errors.As` (`errorlint` is enabled). Aggregate several errors with `utilerrors.NewAggregate`. Error strings are lower case without trailing punctuation. Do not `panic` outside `init()` or fatal conditions, and check pointers for nil before dereferencing.
 - **Design.** Accept interfaces, return structs; keep interfaces small and define them where they are used; make the zero value useful; no package-level mutable state; `context.Context` is the first parameter; no naked returns.
@@ -58,12 +60,13 @@ Write idiomatic Go ([Effective Go](https://go.dev/doc/effective_go), [Go Code Re
 - **Time.** Use `time.Time` and `time.Duration`, never epoch integers or pre-formatted strings, for timestamps and durations in structs and APIs.
 - **Logging.** Use structured `logrus` logging; prefer `logrus.WithField("job", name)` and `logrus.WithError(err)` over formatting values into the message. Never log secrets or tokens.
 - **Reuse before writing.** Search the repository for an existing helper (`pkg/util/`, `pkg/testhelper/`) before adding inline utility logic, and do not add a dependency when the stdlib or an existing dependency already does the job. Avoid calling the same function repeatedly with identical arguments in one code path.
-- **Comments** are minimal and explain _why_, not _what_. Favor clarity and maintainability over cleverness.
+- **Comments inside functions.** Keep them minimal and explain **why**, not what. Avoid restating logic that is already clear from the code. Favor clarity and maintainability over cleverness.
 - Run `gofmt -s -w` on every file you modify; code must pass `make lint`.
 
 ## Testing
 
 - Write **only table-driven unit tests**, in `_test.go` files next to the code (`foo_test.go` beside `foo.go`). Give each case a descriptive `name`, its inputs, and the expected output or error; run cases with `t.Run(tc.name, ...)`. Search the same package for existing test patterns first.
+- **One test function per function or method under test.** Extend its existing table with other relevant cases. Do not create separate test functions for different scenarios, or hide separate tests behind renamed helpers.
 - New or modified behavior needs tests: every new exported function or method, non-trivial unexported logic (validation, transformation, aggregation), and a regression test for every bug fix that fails without the fix. Exceptions: renames, formatting, comments, generated code, config-only changes, and refactors already covered by tests.
 - If code is hard to test, refactor it: separate pure logic from calls to external systems and test the logic directly, rather than reaching for a mock. When one narrow call forces a connection, put it behind a small interface or a function-typed struct field wired in the constructor, and have the test supply a **named** fake (not a closure).
 - Use existing fakes (for example the controller-runtime fake client) and `testdata/` fixtures instead of hand-rolled mocks of broad clients. Unit tests must not need network access or credentials, and must be deterministic: no `time.Sleep`, no reliance on map order or the current time.

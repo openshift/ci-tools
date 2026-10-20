@@ -10,6 +10,7 @@ import (
 
 	githubql "github.com/shurcooL/githubv4"
 	"github.com/sirupsen/logrus"
+
 	"sigs.k8s.io/prow/pkg/github"
 )
 

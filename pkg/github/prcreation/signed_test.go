@@ -15,6 +15,7 @@ import (
 
 	"github.com/google/go-cmp/cmp"
 	githubql "github.com/shurcooL/githubv4"
+
 	"sigs.k8s.io/prow/pkg/github"
 )
 

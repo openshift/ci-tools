@@ -10,3 +10,5 @@ commits. The App needs Contents and Pull requests write permissions on the
 target repository. This mode supports non-executable regular files, including
 binary contents, and rejects executables, symlinks, and submodules. If GitHub
 does not return a valid signature, the PR branch is left unchanged.
+
+Renames are represented as a deletion plus an addition.

@@ -1511,7 +1511,12 @@ func TestSyncCluster(t *testing.T) {
 			desired := existing.DeepCopy()
 			desired.Data = map[string][]byte{"new": []byte("new value")}
 			results := make(chan clusterSyncResult, 1)
-			syncCluster("a", []*coreapi.Secret{desired}, map[string]Getter{"a": client.CoreV1()}, tc.force, nil, nil, nil, logrus.DebugLevel, results)
+			opts := clusterSyncOptions{
+				getters: map[string]Getter{"a": client.CoreV1()},
+				force:   tc.force,
+				level:   logrus.DebugLevel,
+			}
+			syncCluster("a", []*coreapi.Secret{desired}, opts, results)
 			result := <-results
 			if entries := hook.AllEntries(); len(entries) != 0 {
 				t.Fatalf("completed worker emitted logs instead of buffering them: %v", entries)

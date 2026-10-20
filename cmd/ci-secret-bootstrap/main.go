@@ -760,16 +760,26 @@ type clusterSyncResult struct {
 	errs    []error
 }
 
+// clusterSyncOptions contains the client getters and shared reconciliation settings.
+type clusterSyncOptions struct {
+	getters                  map[string]Getter
+	force                    bool
+	dryRunOptions            []string
+	osdGlobalPullSecretGroup sets.Set[string]
+	prowDisabledClusters     sets.Set[string]
+	level                    logrus.Level
+}
+
 // syncCluster reconciles one cluster's secrets and sends its buffered logs and errors to results channel.
-func syncCluster(cluster string, secrets []*coreapi.Secret, getters map[string]Getter, force bool, dryRunOptions []string, osdGlobalPullSecretGroup, prowDisabledClusters sets.Set[string], level logrus.Level, results chan<- clusterSyncResult) {
+func syncCluster(cluster string, secrets []*coreapi.Secret, opts clusterSyncOptions, results chan<- clusterSyncResult) {
 	result := clusterSyncResult{cluster: cluster}
 	logger := logrus.New()
 	logger.SetOutput(io.Discard)
-	logger.SetLevel(level)
+	logger.SetLevel(opts.level)
 	logger.AddHook(&result.logs)
 	entry := logger.WithField("cluster", cluster)
 	start := time.Now()
-	result.errs = updateClusterSecrets(cluster, secrets, getters, force, dryRunOptions, osdGlobalPullSecretGroup, prowDisabledClusters, entry)
+	result.errs = updateClusterSecrets(cluster, secrets, opts, entry)
 	entry.WithFields(logrus.Fields{
 		"duration": time.Since(start).String(),
 		"secrets":  len(secrets),
@@ -788,9 +798,16 @@ func updateSecrets(getters map[string]Getter, secretsMap map[string][]*coreapi.S
 	}
 
 	results := make(chan clusterSyncResult, len(secretsMap))
-	level := logrus.GetLevel()
+	opts := clusterSyncOptions{
+		getters:                  getters,
+		force:                    force,
+		dryRunOptions:            dryRunOptions,
+		osdGlobalPullSecretGroup: osdGlobalPullSecretGroup,
+		prowDisabledClusters:     prowDisabledClusters,
+		level:                    logrus.GetLevel(),
+	}
 	for cluster, secrets := range secretsMap {
-		go syncCluster(cluster, secrets, getters, force, dryRunOptions, osdGlobalPullSecretGroup, prowDisabledClusters, level, results)
+		go syncCluster(cluster, secrets, opts, results)
 	}
 
 	completed := make([]clusterSyncResult, 0, len(secretsMap))
@@ -810,7 +827,7 @@ func updateSecrets(getters map[string]Getter, secretsMap map[string][]*coreapi.S
 	return utilerrors.NewAggregate(errs)
 }
 
-func updateClusterSecrets(cluster string, secrets []*coreapi.Secret, getters map[string]Getter, force bool, dryRunOptions []string, osdGlobalPullSecretGroup, prowDisabledClusters sets.Set[string], logger *logrus.Entry) []error {
+func updateClusterSecrets(cluster string, secrets []*coreapi.Secret, opts clusterSyncOptions, logger *logrus.Entry) []error {
 	var errs []error
 	logger.Debug("Syncing secrets for cluster")
 	existingNamespaces := sets.New[string]()
@@ -818,12 +835,12 @@ func updateClusterSecrets(cluster string, secrets []*coreapi.Secret, getters map
 		logger := logger.WithFields(logrus.Fields{"namespace": secret.Namespace, "name": secret.Name, "type": secret.Type})
 		logger.Debug("handling secret")
 		// This should never happen if constructSecrets() is implemented correctly
-		if prowDisabledClusters.Has(cluster) {
+		if opts.prowDisabledClusters.Has(cluster) {
 			errs = append(errs, fmt.Errorf("attempted to update a secret %s in namespace %s on a Prow disabled cluster %s", secret.Name, secret.Namespace, cluster))
 			continue
 		}
 
-		clientGetter, ok := getters[cluster]
+		clientGetter, ok := opts.getters[cluster]
 		if !ok {
 			errs = append(errs, fmt.Errorf("failed to get client getter for cluster %s", cluster))
 			continue
@@ -839,7 +856,7 @@ func updateClusterSecrets(cluster string, secrets []*coreapi.Secret, getters map
 				if _, err := nsClient.Create(context.TODO(), &coreapi.Namespace{ObjectMeta: metav1.ObjectMeta{
 					Name:   secret.Namespace,
 					Labels: map[string]string{api.DPTPRequesterLabel: "ci-secret-bootstrap"},
-				}}, metav1.CreateOptions{DryRun: dryRunOptions}); err != nil && !kerrors.IsAlreadyExists(err) {
+				}}, metav1.CreateOptions{DryRun: opts.dryRunOptions}); err != nil && !kerrors.IsAlreadyExists(err) {
 					errs = append(errs, fmt.Errorf("failed to create namespace %s: %w", secret.Namespace, err))
 					continue
 				}
@@ -851,13 +868,13 @@ func updateClusterSecrets(cluster string, secrets []*coreapi.Secret, getters map
 
 		existingSecret, err := secretClient.Get(context.TODO(), secret.Name, metav1.GetOptions{})
 
-		if secret.Namespace == "openshift-config" && secret.Name == "pull-secret" && osdGlobalPullSecretGroup.Has(cluster) {
+		if secret.Namespace == "openshift-config" && secret.Name == "pull-secret" && opts.osdGlobalPullSecretGroup.Has(cluster) {
 			logger.Debug("handling the global pull secret on an OSD cluster")
 			if mutated, err := mutateGlobalPullSecret(existingSecret, secret); err != nil {
 				errs = append(errs, fmt.Errorf("failed to mutate secret %s:%s/%s: %w", cluster, secret.Namespace, secret.Name, err))
 			} else {
 				if mutated {
-					if _, err := secretClient.Update(context.TODO(), existingSecret, metav1.UpdateOptions{DryRun: dryRunOptions}); err != nil {
+					if _, err := secretClient.Update(context.TODO(), existingSecret, metav1.UpdateOptions{DryRun: opts.dryRunOptions}); err != nil {
 						errs = append(errs, fmt.Errorf("error updating global pull secret %s:%s/%s: %w", cluster, existingSecret.Namespace, existingSecret.Name, err))
 					}
 					logger.Debug("global pull secret updated")
@@ -876,11 +893,11 @@ func updateClusterSecrets(cluster string, secrets []*coreapi.Secret, getters map
 		shouldCreate := false
 		if err == nil {
 			if secret.Type != existingSecret.Type {
-				if !force {
+				if !opts.force {
 					errs = append(errs, fmt.Errorf("cannot change secret type from %q to %q (immutable field): %s:%s/%s", existingSecret.Type, secret.Type, cluster, secret.Namespace, secret.Name))
 					continue
 				}
-				if err := secretClient.Delete(context.TODO(), secret.Name, metav1.DeleteOptions{DryRun: dryRunOptions}); err != nil {
+				if err := secretClient.Delete(context.TODO(), secret.Name, metav1.DeleteOptions{DryRun: opts.dryRunOptions}); err != nil {
 					errs = append(errs, fmt.Errorf("error deleting secret: %w", err))
 					continue
 				}
@@ -913,13 +930,13 @@ func updateClusterSecrets(cluster string, secrets []*coreapi.Secret, getters map
 					}
 				}
 				change := fmt.Sprintf("added: %v, changed: %v, removed: %v", addedKeys, changedKeys, removedKeys)
-				if !force && differentData {
+				if !opts.force && differentData {
 					logger.Errorf("actual secret data differs the expected")
 					errs = append(errs, fmt.Errorf("secret %s:%s/%s needs updating in place (%s), use --force to do so", cluster, secret.Namespace, secret.Name, change))
 					continue
 				}
 				if existingSecret.Labels == nil || existingSecret.Labels[api.DPTPRequesterLabel] != "ci-secret-bootstrap" || differentData || differentLabels {
-					if _, err := secretClient.Update(context.TODO(), secret, metav1.UpdateOptions{DryRun: dryRunOptions}); err != nil {
+					if _, err := secretClient.Update(context.TODO(), secret, metav1.UpdateOptions{DryRun: opts.dryRunOptions}); err != nil {
 						errs = append(errs, fmt.Errorf("error updating secret %s:%s/%s: %w", cluster, secret.Namespace, secret.Name, err))
 						continue
 					}
@@ -931,7 +948,7 @@ func updateClusterSecrets(cluster string, secrets []*coreapi.Secret, getters map
 		}
 
 		if kerrors.IsNotFound(err) || shouldCreate {
-			if _, err := secretClient.Create(context.TODO(), secret, metav1.CreateOptions{DryRun: dryRunOptions}); err != nil {
+			if _, err := secretClient.Create(context.TODO(), secret, metav1.CreateOptions{DryRun: opts.dryRunOptions}); err != nil {
 				errs = append(errs, fmt.Errorf("error creating secret %s:%s/%s: %w", cluster, secret.Namespace, secret.Name, err))
 				continue
 			}

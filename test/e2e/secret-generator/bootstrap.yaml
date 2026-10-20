@@ -1,14 +1,14 @@
 cluster_groups:
   build_farm:
-  - api.ci
+  - core-ci
   - app.ci
   - build01
   - build02
   - vsphere
 secret_configs:
 - from:
-    sa.config-updater.api.ci.config:
-      field: sa.config-updater.api.ci.config
+    sa.config-updater.core-ci.config:
+      field: sa.config-updater.core-ci.config
       item: build_farm
     sa.config-updater.app.ci.config:
       field: sa.config-updater.app.ci.config

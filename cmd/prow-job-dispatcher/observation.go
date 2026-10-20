@@ -11,6 +11,7 @@ import (
 
 	"github.com/prometheus/client_golang/prometheus/promhttp"
 	"github.com/sirupsen/logrus"
+
 	"k8s.io/apimachinery/pkg/util/validation"
 	authenticationclient "k8s.io/client-go/kubernetes/typed/authentication/v1"
 

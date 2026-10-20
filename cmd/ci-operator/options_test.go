@@ -296,7 +296,13 @@ func TestGetClusterProfileNamesFromTargets(t *testing.T) {
 	for _, tc := range testCases {
 		t.Run(tc.name, func(t *testing.T) {
 			tc.options.getClusterProfileNamesFromTargets()
-			reflect.DeepEqual(tc.expectedProfileNames, tc.options.clusterProfiles)
+			var actual []string
+			for _, p := range tc.options.clusterProfiles {
+				actual = append(actual, p.ProfileName)
+			}
+			if !reflect.DeepEqual(tc.expectedProfileNames, actual) {
+				t.Errorf("expected profiles %v, got %v", tc.expectedProfileNames, actual)
+			}
 		})
 	}
 }

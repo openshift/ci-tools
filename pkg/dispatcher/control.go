@@ -192,6 +192,7 @@ func (c *ControlPlane) UpdateBaseline(baseline map[string]ProwJobData, inventory
 	c.baseline = copyBaseline(baseline)
 	c.inventory = copyInventory(inventory)
 	c.blocked = blocked.Clone()
+	lastBaselineUpdateMetric.Set(float64(c.now().Unix()))
 	c.mu.Unlock()
 	c.trigger()
 }
@@ -309,11 +310,11 @@ func (c *ControlPlane) updateStatus(ctx context.Context, override *dispatcherv1.
 }
 
 // Reconcile compiles and publishes one complete generation, preserving the last good snapshot on failure.
-func (c *ControlPlane) Reconcile(ctx context.Context) error {
+func (c *ControlPlane) Reconcile(ctx context.Context) (err error) {
 	c.reconcileMu.Lock()
 	defer c.reconcileMu.Unlock()
 	started := time.Now()
-	defer func() { compileDurationMetric.Observe(time.Since(started).Seconds()) }()
+	defer c.observeReconcile(started, &err)
 	baseline, inventory, blocked := c.inputs()
 	if len(baseline) == 0 || len(inventory) == 0 {
 		return errors.New("baseline and inventory are not loaded")
@@ -362,6 +363,39 @@ func (c *ControlPlane) Reconcile(ctx context.Context) error {
 		statusErrors = append(statusErrors, listErr)
 	}
 	return errors.Join(statusErrors...)
+}
+
+// observeReconcile records completion independently of whether the policy changed.
+func (c *ControlPlane) observeReconcile(started time.Time, err *error) {
+	compileDurationMetric.Observe(time.Since(started).Seconds())
+	if *err == nil {
+		lastSuccessfulReconcileMetric.Set(float64(c.now().Unix()))
+		return
+	}
+	if !reconcileCanceledOnly(*err) {
+		reconcileErrorsMetric.Inc()
+	}
+}
+
+// reconcileCanceledOnly excludes shutdown cancellations without hiding independent reconciliation failures.
+func reconcileCanceledOnly(err error) bool {
+	switch wrapped := err.(type) {
+	case interface{ Unwrap() []error }:
+		causes := wrapped.Unwrap()
+		if len(causes) == 0 {
+			return false
+		}
+		for _, cause := range causes {
+			if !reconcileCanceledOnly(cause) {
+				return false
+			}
+		}
+		return true
+	case interface{ Unwrap() error }:
+		return reconcileCanceledOnly(wrapped.Unwrap())
+	default:
+		return errors.Is(err, context.Canceled)
+	}
 }
 
 func stableID(prefix string, value interface{}) (string, error) {

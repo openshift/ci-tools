@@ -95,6 +95,7 @@ type options struct {
 
 	overrideNamespace               string
 	controlAPITokenPath             string
+	observationAPITokenPath         string
 	dispatchCommandChannelID        string
 	enableRuntimeCapacity           bool
 	enableRuntimeDrain              bool
@@ -139,6 +140,7 @@ func gatherOptions() options {
 	fs.StringVar(&o.opsChannelId, "ops-channel-id", "CHY2E1BL4", "Channel ID for #ops-testplatform")
 	fs.StringVar(&o.overrideNamespace, "dispatch-override-namespace", "", "Namespace containing DispatchOverride resources. Empty disables the runtime control plane.")
 	fs.StringVar(&o.controlAPITokenPath, "control-api-token-path", "", "Path to the bearer token accepted from the DPTP bot control client.")
+	fs.StringVar(&o.observationAPITokenPath, "observation-api-token-path", "", "Path to a separate bearer token for the read-only /observe/v1/ API. Empty disables observation.")
 	fs.StringVar(&o.dispatchCommandChannelID, "dispatch-command-channel-id", "", "Immutable Slack channel ID for #team-dp-testplatform.")
 	fs.BoolVar(&o.enableRuntimeCapacity, "enable-runtime-capacity", false, "Allow whole-cluster capacity overrides to be applied.")
 	fs.BoolVar(&o.enableRuntimeDrain, "enable-runtime-drain", false, "Allow whole-cluster drains to be applied.")
@@ -193,6 +195,9 @@ func (o *options) validate() error {
 
 	if o.slackTokenPath == "" {
 		logrus.Fatal("mandatory argument --slack-token-path wasn't set")
+	}
+	if o.observationAPITokenPath != "" && o.observationAPITokenPath == o.controlAPITokenPath {
+		return fmt.Errorf("--observation-api-token-path must differ from --control-api-token-path")
 	}
 	controlConfigured := o.overrideNamespace != "" || o.controlAPITokenPath != "" || o.dispatchCommandChannelID != "" ||
 		o.enableRuntimeCapacity || o.enableRuntimeDrain || o.enableRuntimeCapabilityScope
@@ -1377,6 +1382,9 @@ func main() {
 	if o.controlAPITokenPath != "" {
 		secretPaths = append(secretPaths, o.controlAPITokenPath)
 	}
+	if o.observationAPITokenPath != "" {
+		secretPaths = append(secretPaths, o.observationAPITokenPath)
+	}
 	if err := secret.Add(secretPaths...); err != nil {
 		logrus.WithError(err).Fatal("failed to start secrets agent")
 	}
@@ -1676,8 +1684,17 @@ func main() {
 	if o.legacyEventEndpoint {
 		mux.HandleFunc("/event", dispatchServer.EventHandler)
 	}
+	tokens := dispatcherAPITokens{control: secret.GetTokenGenerator(o.controlAPITokenPath)}
+	if o.observationAPITokenPath != "" {
+		tokens.observation = secret.GetTokenGenerator(o.observationAPITokenPath)
+		var overrides dispatcher.OverrideReader
+		if controlPlane != nil {
+			overrides = controlPlane
+		}
+		mux.Handle("/observe/v1/", dispatcher.NewObservationServer(snapshots, overrides, tokens.observation))
+	}
 	if controlPlane != nil {
-		mux.Handle("/control/v1/", dispatcher.NewControlServer(controlPlane, secret.GetTokenGenerator(o.controlAPITokenPath)))
+		mux.Handle("/control/v1/", dispatcher.NewControlServer(controlPlane, tokens.controlToken))
 	}
 	httpServer := &http.Server{
 		Addr:              ":8080",

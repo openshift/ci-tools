@@ -9,6 +9,18 @@ import (
 )
 
 var (
+	lastSuccessfulReconcileMetric = prometheus.NewGauge(prometheus.GaugeOpts{
+		Name: "prowjob_dispatcher_last_successful_reconcile_timestamp_seconds",
+		Help: "Unix timestamp of the last successful reconciliation, including reconciliations without policy changes.",
+	})
+	reconcileErrorsMetric = prometheus.NewCounter(prometheus.CounterOpts{
+		Name: "prowjob_dispatcher_reconcile_errors_total",
+		Help: "Number of failed reconciliations, excluding context cancellation.",
+	})
+	lastBaselineUpdateMetric = prometheus.NewGauge(prometheus.GaugeOpts{
+		Name: "prowjob_dispatcher_last_baseline_update_timestamp_seconds",
+		Help: "Unix timestamp of the last baseline input update, whether or not it changed policy inputs.",
+	})
 	policyGenerationMetric = prometheus.NewGauge(prometheus.GaugeOpts{
 		Name: "prowjob_dispatcher_policy_generation",
 		Help: "Current immutable dispatcher policy generation.",
@@ -47,6 +59,7 @@ var (
 
 func init() {
 	prometheus.MustRegister(
+		lastSuccessfulReconcileMetric, reconcileErrorsMetric, lastBaselineUpdateMetric,
 		policyGenerationMetric, policyReadyMetric, decisionMetric, overrideStateMetric,
 		capabilityCoverageJobsMetric, capabilityCoverageDemandMetric,
 		compileDurationMetric, overrideActivationMetric,

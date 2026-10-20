@@ -1,0 +1,23 @@
+cluster_groups:
+  build_farm:
+  - core-ci
+  - app.ci
+  - build01
+  - build02
+  - vsphere
+bundles:
+- name: gsm-build-farm-credentials
+  sync_to_cluster: true
+  targets:
+  - cluster_groups:
+    - build_farm
+    namespace: ci
+  gsm_secrets:
+  - collection: test-platform-infra
+    group: build_farm
+    fields:
+    - name: sa--dot--config-updater--dot--core-ci--dot--config
+    - name: sa--dot--config-updater--dot--app--dot--ci--dot--config
+    - name: sa--dot--config-updater--dot--build01--dot--config
+    - name: sa--dot--config-updater--dot--build02--dot--config
+    - name: sa--dot--config-updater--dot--vsphere--dot--config

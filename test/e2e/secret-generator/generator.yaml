@@ -7,7 +7,7 @@
     - build01
     - build02
     - vsphere
-    - api.ci
+    - core-ci
     - app.ci
     service_account:
     - config-updater

@@ -12,9 +12,7 @@ import (
 	"sort"
 	"strings"
 
-	secretmanager "cloud.google.com/go/secretmanager/apiv1"
 	"github.com/sirupsen/logrus"
-	"google.golang.org/api/option"
 
 	utilerrors "k8s.io/apimachinery/pkg/util/errors"
 	"k8s.io/apimachinery/pkg/util/sets"
@@ -447,9 +445,7 @@ func generateSecrets(o options, censor *secrets.DynamicCensor) (errs []error) {
 
 func readIndexSecret(o options) ([]byte, error) {
 	ctx := context.Background()
-	opts := []option.ClientOption{option.WithCredentialsFile(o.gsmCredentialsFile)}
-
-	gsmClient, err := secretmanager.NewClient(ctx, opts...)
+	gsmClient, err := gsm.NewClient(ctx, o.gsmCredentialsFile)
 	if err != nil {
 		return nil, err
 	}

@@ -58,11 +58,11 @@ func (oci *ocImage) mirror(images []string) error {
 	return nil
 }
 
-// Prepare the arguments for the command `oc image mirror`. Mirror src to each location
+// Prepare the arguments for the command `oc image mirror`. Mirror the built image to each location
 // specified in dst; duplicate locations will be removed.
 // Example:
 // image-registry.openshift-image-registry.svc:5000/ns/image:tag dst[0]/ns/image:tag dst[1]/ns/image:tag ... dst[n]/ns/image:tag
-func ocImageMirrorArgs(targetImageRef string, externalRegistries []string) []string {
+func ocImageMirrorArgs(buildImageRef, targetImageRef string, externalRegistries []string) []string {
 	destinations := sets.New[string]()
 	for _, externalRegistry := range externalRegistries {
 		// This is a hack to push images to QCI using our naming convention
@@ -76,5 +76,5 @@ func ocImageMirrorArgs(targetImageRef string, externalRegistries []string) []str
 	destinationsList := destinations.UnsortedList()
 	sort.Strings(destinationsList)
 
-	return append([]string{fmt.Sprintf("%s/%s", registryURL, targetImageRef)}, destinationsList...)
+	return append([]string{fmt.Sprintf("%s/%s", registryURL, buildImageRef)}, destinationsList...)
 }

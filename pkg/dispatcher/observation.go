@@ -21,16 +21,16 @@ type OverrideReader interface {
 
 // ObservationServer exposes authenticated, read-only views of the serving policy.
 type ObservationServer struct {
-	manager   *SnapshotManager
-	overrides OverrideReader
-	token     func() []byte
-	now       func() time.Time
+	manager    *SnapshotManager
+	overrides  OverrideReader
+	authorizer ObservationAuthorizer
+	now        func() time.Time
 }
 
-// NewObservationServer creates an observer with its own read token. A nil overrides
+// NewObservationServer creates an observer restricted to an authorized service account. A nil overrides
 // reader supports deployments without runtime controls; state and jobs still work.
-func NewObservationServer(manager *SnapshotManager, overrides OverrideReader, token func() []byte) *ObservationServer {
-	return &ObservationServer{manager: manager, overrides: overrides, token: token, now: time.Now}
+func NewObservationServer(manager *SnapshotManager, overrides OverrideReader, authorizer ObservationAuthorizer) *ObservationServer {
+	return &ObservationServer{manager: manager, overrides: overrides, authorizer: authorizer, now: time.Now}
 }
 
 // observationPolicy identifies the immutable generation used throughout a response.
@@ -114,16 +114,10 @@ func observedMetadata(snapshot *PolicySnapshot, now time.Time) observationMetada
 
 // ServeHTTP authenticates all routes and rejects every method that could mutate state.
 func (s *ObservationServer) ServeHTTP(writer http.ResponseWriter, request *http.Request) {
-	writer.Header().Set("Cache-Control", "no-store")
-	if !bearerTokenAuthorized(request, s.token) {
-		writeControlError(writer, http.StatusUnauthorized, errors.New("unauthorized"))
+	if !authorizeObservation(writer, request, s.authorizer) {
 		return
 	}
-	if request.Method != http.MethodGet {
-		writer.Header().Set("Allow", http.MethodGet)
-		writeControlError(writer, http.StatusMethodNotAllowed, errors.New("only GET is supported"))
-		return
-	}
+
 	snapshot, now := s.manager.servingSnapshot(), s.now().UTC()
 	switch request.URL.Path {
 	case "/observe/v1/state":

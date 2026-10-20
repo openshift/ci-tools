@@ -29,8 +29,16 @@ func (r observationRecords) Overrides(context.Context) ([]dispatcherv1.DispatchO
 // observationNow keeps expiry and JSON timestamps deterministic.
 func observationNow() time.Time { return time.Date(2026, 8, 20, 12, 0, 0, 0, time.UTC) }
 
-// observationToken is deliberately independent of the control server token.
-func observationToken() []byte { return []byte("read-token") }
+// observationAuthorization isolates business responses from Kubernetes authentication tests.
+type observationAuthorization struct{}
+
+// Authorize accepts one fixture credential for read-only handler tests.
+func (observationAuthorization) Authorize(request *http.Request) (int, error) {
+	if request.Header.Get("Authorization") != "Bearer read-token" {
+		return http.StatusUnauthorized, errors.New("unauthorized")
+	}
+	return http.StatusOK, nil
+}
 
 // observationFixture exercises scoped runtime placement and unused inventory.
 func observationFixture(t *testing.T, expired bool) (*SnapshotManager, dispatcherv1.DispatchOverride) {
@@ -100,7 +108,7 @@ func TestObservationHTTPRejections(t *testing.T) {
 		{name: "list failure", method: "GET", path: "/observe/v1/overrides", token: "Bearer read-token", source: observationRecords{err: errors.New("store unavailable")}, want: 503, message: "could not list runtime overrides"},
 	} {
 		t.Run(tc.name, func(t *testing.T) {
-			response := observationRequest(NewObservationServer(nil, tc.source, observationToken), tc.method, tc.path, tc.token)
+			response := observationRequest(NewObservationServer(nil, tc.source, observationAuthorization{}), tc.method, tc.path, tc.token)
 			var body map[string]string
 			if err := json.Unmarshal(response.Body.Bytes(), &body); err != nil {
 				t.Fatal(err)
@@ -138,7 +146,7 @@ func TestObservationJobs(t *testing.T) {
 		t.Run(tc.name, func(t *testing.T) {
 			manager, _ := observationFixture(t, tc.expired)
 			before := manager.Current()
-			server := NewObservationServer(manager, nil, observationToken)
+			server := NewObservationServer(manager, nil, observationAuthorization{})
 			server.now = observationNow
 			response := observationRequest(server, "GET", "/observe/v1/jobs"+tc.query, "Bearer read-token")
 			if response.Code != tc.status {
@@ -199,7 +207,7 @@ func TestObservationStateAndOverrides(t *testing.T) {
 				override.Status.History = []dispatcherv1.DispatchAuditEvent{{Actor: "operator", Message: "approved"}}
 				source.records = []dispatcherv1.DispatchOverride{override}
 			}
-			server := NewObservationServer(manager, source, observationToken)
+			server := NewObservationServer(manager, source, observationAuthorization{})
 			server.now = observationNow
 			response := observationRequest(server, "GET", "/observe/v1/state", "Bearer read-token")
 			var state observationState

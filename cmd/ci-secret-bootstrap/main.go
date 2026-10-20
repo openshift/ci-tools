@@ -734,145 +734,228 @@ type Getter interface {
 	coreclientset.NamespacesGetter
 }
 
-func updateSecrets(getters map[string]Getter, secretsMap map[string][]*coreapi.Secret, force bool, confirm bool, osdGlobalPullSecretGroup, prowDisabledClusters sets.Set[string]) error {
-	var errs []error
+// clusterLogs stores a cluster's buffered log entries.
+type clusterLogs struct {
+	entries []*logrus.Entry
+}
 
+// Levels returns all log levels supported by the buffering hook.
+func (l *clusterLogs) Levels() []logrus.Level {
+	return logrus.AllLevels
+}
+
+// Fire copies the log entry's fields, timestamp, level and message into the buffer.
+func (l *clusterLogs) Fire(entry *logrus.Entry) error {
+	copy := entry.Dup()
+	copy.Level = entry.Level
+	copy.Message = entry.Message
+	l.entries = append(l.entries, copy)
+	return nil
+}
+
+// clusterSyncResult contains a cluster's name, buffered logs and reconciliation errors.
+type clusterSyncResult struct {
+	cluster string
+	logs    clusterLogs
+	errs    []error
+}
+
+// clusterSyncOptions contains the client getters and shared reconciliation settings.
+type clusterSyncOptions struct {
+	getters                  map[string]Getter
+	force                    bool
+	dryRunOptions            []string
+	osdGlobalPullSecretGroup sets.Set[string]
+	prowDisabledClusters     sets.Set[string]
+	level                    logrus.Level
+}
+
+// syncCluster reconciles one cluster's secrets and sends its buffered logs and errors to results channel.
+func syncCluster(cluster string, secrets []*coreapi.Secret, opts clusterSyncOptions, results chan<- clusterSyncResult) {
+	result := clusterSyncResult{cluster: cluster}
+	logger := logrus.New()
+	logger.SetOutput(io.Discard)
+	logger.SetLevel(opts.level)
+	logger.AddHook(&result.logs)
+	entry := logger.WithField("cluster", cluster)
+	start := time.Now()
+	result.errs = updateClusterSecrets(cluster, secrets, opts, entry)
+	entry.WithFields(logrus.Fields{
+		"duration": time.Since(start).String(),
+		"secrets":  len(secrets),
+		"errors":   len(result.errs),
+	}).Info("Finished syncing secrets for cluster")
+	results <- result
+}
+
+// updateSecrets reconciles secrets for clusters concurrently, waits for all results, then emits
+// logs in cluster-name order and returns the aggregated errors.
+func updateSecrets(getters map[string]Getter, secretsMap map[string][]*coreapi.Secret, force bool, confirm bool, osdGlobalPullSecretGroup, prowDisabledClusters sets.Set[string]) error {
 	var dryRunOptions []string
 	if !confirm {
 		logrus.Warn("No secrets will be mutated")
 		dryRunOptions = append(dryRunOptions, "All")
 	}
 
+	results := make(chan clusterSyncResult, len(secretsMap))
+	opts := clusterSyncOptions{
+		getters:                  getters,
+		force:                    force,
+		dryRunOptions:            dryRunOptions,
+		osdGlobalPullSecretGroup: osdGlobalPullSecretGroup,
+		prowDisabledClusters:     prowDisabledClusters,
+		level:                    logrus.GetLevel(),
+	}
 	for cluster, secrets := range secretsMap {
-		logger := logrus.WithField("cluster", cluster)
-		logger.Debug("Syncing secrets for cluster")
-		existingNamespaces := sets.New[string]()
-		for _, secret := range secrets {
-			logger := logger.WithFields(logrus.Fields{"namespace": secret.Namespace, "name": secret.Name, "type": secret.Type})
-			logger.Debug("handling secret")
-			// This should never happen if constructSecrets() is implemented correctly
-			if prowDisabledClusters.Has(cluster) {
-				errs = append(errs, fmt.Errorf("attempted to update a secret %s in namespace %s on a Prow disabled cluster %s", secret.Name, secret.Namespace, cluster))
-				continue
-			}
+		go syncCluster(cluster, secrets, opts, results)
+	}
 
-			clientGetter, ok := getters[cluster]
-			if !ok {
-				errs = append(errs, fmt.Errorf("failed to get client getter for cluster %s", cluster))
-				continue
-			}
+	completed := make([]clusterSyncResult, 0, len(secretsMap))
+	for range secretsMap {
+		completed = append(completed, <-results)
+	}
+	sort.Slice(completed, func(i, j int) bool { return completed[i].cluster < completed[j].cluster })
 
-			if !existingNamespaces.Has(secret.Namespace) {
-				nsClient := clientGetter.Namespaces()
-				if _, err := nsClient.Get(context.TODO(), secret.Namespace, metav1.GetOptions{}); err != nil {
-					if !kerrors.IsNotFound(err) {
-						errs = append(errs, fmt.Errorf("failed to check if namespace %s exists on cluster %s: %w", secret.Namespace, cluster, err))
-						continue
-					}
-					if _, err := nsClient.Create(context.TODO(), &coreapi.Namespace{ObjectMeta: metav1.ObjectMeta{
-						Name:   secret.Namespace,
-						Labels: map[string]string{api.DPTPRequesterLabel: "ci-secret-bootstrap"},
-					}}, metav1.CreateOptions{DryRun: dryRunOptions}); err != nil && !kerrors.IsAlreadyExists(err) {
-						errs = append(errs, fmt.Errorf("failed to create namespace %s: %w", secret.Namespace, err))
-						continue
-					}
-				}
-				existingNamespaces.Insert(secret.Namespace)
-			}
-
-			secretClient := clientGetter.Secrets(secret.Namespace)
-
-			existingSecret, err := secretClient.Get(context.TODO(), secret.Name, metav1.GetOptions{})
-
-			if secret.Namespace == "openshift-config" && secret.Name == "pull-secret" && osdGlobalPullSecretGroup.Has(cluster) {
-				logger.Debug("handling the global pull secret on an OSD cluster")
-				if mutated, err := mutateGlobalPullSecret(existingSecret, secret); err != nil {
-					errs = append(errs, fmt.Errorf("failed to mutate secret %s:%s/%s: %w", cluster, secret.Namespace, secret.Name, err))
-				} else {
-					if mutated {
-						if _, err := secretClient.Update(context.TODO(), existingSecret, metav1.UpdateOptions{DryRun: dryRunOptions}); err != nil {
-							errs = append(errs, fmt.Errorf("error updating global pull secret %s:%s/%s: %w", cluster, existingSecret.Namespace, existingSecret.Name, err))
-						}
-						logger.Debug("global pull secret updated")
-					} else {
-						logger.Debug("global pull secret skipped")
-					}
-				}
-				continue
-			}
-
-			if err != nil && !kerrors.IsNotFound(err) {
-				errs = append(errs, fmt.Errorf("error reading secret %s:%s/%s: %w", cluster, secret.Namespace, secret.Name, err))
-				continue
-			}
-
-			shouldCreate := false
-			if err == nil {
-				if secret.Type != existingSecret.Type {
-					if !force {
-						errs = append(errs, fmt.Errorf("cannot change secret type from %q to %q (immutable field): %s:%s/%s", existingSecret.Type, secret.Type, cluster, secret.Namespace, secret.Name))
-						continue
-					}
-					if err := secretClient.Delete(context.TODO(), secret.Name, metav1.DeleteOptions{DryRun: dryRunOptions}); err != nil {
-						errs = append(errs, fmt.Errorf("error deleting secret: %w", err))
-						continue
-					}
-					shouldCreate = true
-				}
-
-				if len(secret.Data) > 0 {
-					for k := range existingSecret.Data {
-						if _, exists := secret.Data[k]; exists {
-							continue
-						}
-						logger.WithFields(logrus.Fields{"cluster": cluster, "key": k, "namespace": existingSecret.Namespace, "secret": existingSecret.Name}).Warning("Stale key in secret will be deleted")
-					}
-				}
-
-				if !shouldCreate {
-					differentData := !equality.Semantic.DeepEqual(secret.Data, existingSecret.Data)
-					differentLabels := !equality.Semantic.DeepEqual(secret.ObjectMeta.Labels, existingSecret.ObjectMeta.Labels)
-					var addedKeys, changedKeys, removedKeys []string
-					for k, value := range secret.Data {
-						if existingValue, ok := existingSecret.Data[k]; !ok {
-							addedKeys = append(addedKeys, k)
-						} else if !equality.Semantic.DeepEqual(value, existingValue) {
-							changedKeys = append(changedKeys, k)
-						}
-					}
-					for k := range existingSecret.Data {
-						if _, ok := secret.Data[k]; !ok {
-							removedKeys = append(removedKeys, k)
-						}
-					}
-					change := fmt.Sprintf("added: %v, changed: %v, removed: %v", addedKeys, changedKeys, removedKeys)
-					if !force && differentData {
-						logger.Errorf("actual secret data differs the expected")
-						errs = append(errs, fmt.Errorf("secret %s:%s/%s needs updating in place (%s), use --force to do so", cluster, secret.Namespace, secret.Name, change))
-						continue
-					}
-					if existingSecret.Labels == nil || existingSecret.Labels[api.DPTPRequesterLabel] != "ci-secret-bootstrap" || differentData || differentLabels {
-						if _, err := secretClient.Update(context.TODO(), secret, metav1.UpdateOptions{DryRun: dryRunOptions}); err != nil {
-							errs = append(errs, fmt.Errorf("error updating secret %s:%s/%s: %w", cluster, secret.Namespace, secret.Name, err))
-							continue
-						}
-						logger.Debugf("secret updated %s", change)
-					} else {
-						logger.Debug("secret skipped")
-					}
-				}
-			}
-
-			if kerrors.IsNotFound(err) || shouldCreate {
-				if _, err := secretClient.Create(context.TODO(), secret, metav1.CreateOptions{DryRun: dryRunOptions}); err != nil {
-					errs = append(errs, fmt.Errorf("error creating secret %s:%s/%s: %w", cluster, secret.Namespace, secret.Name, err))
-					continue
-				}
-				logger.Debug("secret created")
-			}
+	var errs []error
+	for _, result := range completed {
+		for _, entry := range result.logs.entries {
+			// Replay through the common logger's formatter, censor and hooks.
+			logrus.WithFields(entry.Data).WithTime(entry.Time).Log(entry.Level, entry.Message)
 		}
+		errs = append(errs, result.errs...)
 	}
 	return utilerrors.NewAggregate(errs)
+}
+
+func updateClusterSecrets(cluster string, secrets []*coreapi.Secret, opts clusterSyncOptions, logger *logrus.Entry) []error {
+	var errs []error
+	logger.Debug("Syncing secrets for cluster")
+	existingNamespaces := sets.New[string]()
+	for _, secret := range secrets {
+		logger := logger.WithFields(logrus.Fields{"namespace": secret.Namespace, "name": secret.Name, "type": secret.Type})
+		logger.Debug("handling secret")
+		// This should never happen if constructSecrets() is implemented correctly
+		if opts.prowDisabledClusters.Has(cluster) {
+			errs = append(errs, fmt.Errorf("attempted to update a secret %s in namespace %s on a Prow disabled cluster %s", secret.Name, secret.Namespace, cluster))
+			continue
+		}
+
+		clientGetter, ok := opts.getters[cluster]
+		if !ok {
+			errs = append(errs, fmt.Errorf("failed to get client getter for cluster %s", cluster))
+			continue
+		}
+
+		if !existingNamespaces.Has(secret.Namespace) {
+			nsClient := clientGetter.Namespaces()
+			if _, err := nsClient.Get(context.TODO(), secret.Namespace, metav1.GetOptions{}); err != nil {
+				if !kerrors.IsNotFound(err) {
+					errs = append(errs, fmt.Errorf("failed to check if namespace %s exists on cluster %s: %w", secret.Namespace, cluster, err))
+					continue
+				}
+				if _, err := nsClient.Create(context.TODO(), &coreapi.Namespace{ObjectMeta: metav1.ObjectMeta{
+					Name:   secret.Namespace,
+					Labels: map[string]string{api.DPTPRequesterLabel: "ci-secret-bootstrap"},
+				}}, metav1.CreateOptions{DryRun: opts.dryRunOptions}); err != nil && !kerrors.IsAlreadyExists(err) {
+					errs = append(errs, fmt.Errorf("failed to create namespace %s: %w", secret.Namespace, err))
+					continue
+				}
+			}
+			existingNamespaces.Insert(secret.Namespace)
+		}
+
+		secretClient := clientGetter.Secrets(secret.Namespace)
+
+		existingSecret, err := secretClient.Get(context.TODO(), secret.Name, metav1.GetOptions{})
+
+		if secret.Namespace == "openshift-config" && secret.Name == "pull-secret" && opts.osdGlobalPullSecretGroup.Has(cluster) {
+			logger.Debug("handling the global pull secret on an OSD cluster")
+			if mutated, err := mutateGlobalPullSecret(existingSecret, secret); err != nil {
+				errs = append(errs, fmt.Errorf("failed to mutate secret %s:%s/%s: %w", cluster, secret.Namespace, secret.Name, err))
+			} else {
+				if mutated {
+					if _, err := secretClient.Update(context.TODO(), existingSecret, metav1.UpdateOptions{DryRun: opts.dryRunOptions}); err != nil {
+						errs = append(errs, fmt.Errorf("error updating global pull secret %s:%s/%s: %w", cluster, existingSecret.Namespace, existingSecret.Name, err))
+					}
+					logger.Debug("global pull secret updated")
+				} else {
+					logger.Debug("global pull secret skipped")
+				}
+			}
+			continue
+		}
+
+		if err != nil && !kerrors.IsNotFound(err) {
+			errs = append(errs, fmt.Errorf("error reading secret %s:%s/%s: %w", cluster, secret.Namespace, secret.Name, err))
+			continue
+		}
+
+		shouldCreate := false
+		if err == nil {
+			if secret.Type != existingSecret.Type {
+				if !opts.force {
+					errs = append(errs, fmt.Errorf("cannot change secret type from %q to %q (immutable field): %s:%s/%s", existingSecret.Type, secret.Type, cluster, secret.Namespace, secret.Name))
+					continue
+				}
+				if err := secretClient.Delete(context.TODO(), secret.Name, metav1.DeleteOptions{DryRun: opts.dryRunOptions}); err != nil {
+					errs = append(errs, fmt.Errorf("error deleting secret: %w", err))
+					continue
+				}
+				shouldCreate = true
+			}
+
+			if len(secret.Data) > 0 {
+				for k := range existingSecret.Data {
+					if _, exists := secret.Data[k]; exists {
+						continue
+					}
+					logger.WithFields(logrus.Fields{"cluster": cluster, "key": k, "namespace": existingSecret.Namespace, "secret": existingSecret.Name}).Warning("Stale key in secret will be deleted")
+				}
+			}
+
+			if !shouldCreate {
+				differentData := !equality.Semantic.DeepEqual(secret.Data, existingSecret.Data)
+				differentLabels := !equality.Semantic.DeepEqual(secret.ObjectMeta.Labels, existingSecret.ObjectMeta.Labels)
+				var addedKeys, changedKeys, removedKeys []string
+				for k, value := range secret.Data {
+					if existingValue, ok := existingSecret.Data[k]; !ok {
+						addedKeys = append(addedKeys, k)
+					} else if !equality.Semantic.DeepEqual(value, existingValue) {
+						changedKeys = append(changedKeys, k)
+					}
+				}
+				for k := range existingSecret.Data {
+					if _, ok := secret.Data[k]; !ok {
+						removedKeys = append(removedKeys, k)
+					}
+				}
+				change := fmt.Sprintf("added: %v, changed: %v, removed: %v", addedKeys, changedKeys, removedKeys)
+				if !opts.force && differentData {
+					logger.Errorf("actual secret data differs the expected")
+					errs = append(errs, fmt.Errorf("secret %s:%s/%s needs updating in place (%s), use --force to do so", cluster, secret.Namespace, secret.Name, change))
+					continue
+				}
+				if existingSecret.Labels == nil || existingSecret.Labels[api.DPTPRequesterLabel] != "ci-secret-bootstrap" || differentData || differentLabels {
+					if _, err := secretClient.Update(context.TODO(), secret, metav1.UpdateOptions{DryRun: opts.dryRunOptions}); err != nil {
+						errs = append(errs, fmt.Errorf("error updating secret %s:%s/%s: %w", cluster, secret.Namespace, secret.Name, err))
+						continue
+					}
+					logger.Debugf("secret updated %s", change)
+				} else {
+					logger.Debug("secret skipped")
+				}
+			}
+		}
+
+		if kerrors.IsNotFound(err) || shouldCreate {
+			if _, err := secretClient.Create(context.TODO(), secret, metav1.CreateOptions{DryRun: opts.dryRunOptions}); err != nil {
+				errs = append(errs, fmt.Errorf("error creating secret %s:%s/%s: %w", cluster, secret.Namespace, secret.Name, err))
+				continue
+			}
+			logger.Debug("secret created")
+		}
+	}
+	return errs
 }
 
 // mutateGlobalPullSecret mutates the original secret based on the refreshed value stored in another secret.

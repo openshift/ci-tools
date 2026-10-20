@@ -5,6 +5,7 @@ import (
 	"context"
 	"errors"
 	"fmt"
+	"io"
 	"os"
 	"path/filepath"
 	"reflect"
@@ -19,6 +20,8 @@ import (
 	"github.com/google/go-cmp/cmp/cmpopts"
 	"github.com/googleapis/gax-go/v2"
 	vaultApi "github.com/hashicorp/vault/api"
+	"github.com/sirupsen/logrus"
+	logrustest "github.com/sirupsen/logrus/hooks/test"
 
 	coreapi "k8s.io/api/core/v1"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
@@ -26,7 +29,9 @@ import (
 	utilerrors "k8s.io/apimachinery/pkg/util/errors"
 	"k8s.io/apimachinery/pkg/util/sets"
 	"k8s.io/client-go/kubernetes/fake"
+	coreclientset "k8s.io/client-go/kubernetes/typed/core/v1"
 	"k8s.io/client-go/rest"
+	clienttesting "k8s.io/client-go/testing"
 
 	"github.com/openshift/ci-tools/pkg/api"
 	"github.com/openshift/ci-tools/pkg/api/secretbootstrap"
@@ -1440,7 +1445,108 @@ Code: 404. Errors:
 	}
 }
 
+// loggerState stores the common logger's output, level and hooks.
+type loggerState struct {
+	output io.Writer
+	level  logrus.Level
+	hooks  logrus.LevelHooks
+}
+
+// restore restores the common logger's saved output, level and hooks.
+func (s loggerState) restore() {
+	logrus.SetOutput(s.output)
+	logrus.SetLevel(s.level)
+	logrus.StandardLogger().ReplaceHooks(s.hooks)
+}
+
+// captureClusterLogs installs a recording hook at debug level and registers cleanup
+// to restore the common logger's previous settings.
+func captureClusterLogs(t *testing.T) *logrustest.Hook {
+	t.Helper()
+	s := loggerState{logrus.StandardLogger().Out, logrus.GetLevel(), logrus.StandardLogger().ReplaceHooks(make(logrus.LevelHooks))}
+	t.Cleanup(s.restore)
+	logrus.SetOutput(io.Discard)
+	logrus.SetLevel(logrus.DebugLevel)
+	return logrustest.NewGlobal()
+}
+
+// gatedGetter wraps a Kubernetes client with a barrier on namespace access.
+type gatedGetter struct {
+	coreclientset.CoreV1Interface
+	started chan<- string
+	release <-chan struct{}
+	cluster string
+}
+
+// Namespaces signals the cluster name, waits for release, and returns the namespace client.
+func (g gatedGetter) Namespaces() coreclientset.NamespaceInterface {
+	g.started <- g.cluster
+	<-g.release
+	return g.CoreV1Interface.Namespaces()
+}
+
+// runClusterSync calls updateSecrets and sends its error to done.
+func runClusterSync(getters map[string]Getter, desired map[string][]*coreapi.Secret, force, confirm bool, disabled sets.Set[string], done chan<- error) {
+	done <- updateSecrets(getters, desired, force, confirm, nil, disabled)
+}
+
+// rejectNamespace returns a handled reactor response with a namespace-unavailable error.
+func rejectNamespace(action clienttesting.Action) (bool, runtime.Object, error) {
+	return true, nil, fmt.Errorf("namespace unavailable")
+}
+
+func TestSyncCluster(t *testing.T) {
+	for _, tc := range []struct {
+		name       string
+		force      bool
+		wantErrors int
+	}{
+		{name: "successful update", force: true},
+		{name: "refused update", wantErrors: 1},
+	} {
+		t.Run(tc.name, func(t *testing.T) {
+			hook := captureClusterLogs(t)
+			existing := &coreapi.Secret{ObjectMeta: metav1.ObjectMeta{Namespace: "ci", Name: "secret"}, Data: map[string][]byte{"old": []byte("old value")}}
+			client := fake.NewSimpleClientset(&coreapi.Namespace{ObjectMeta: metav1.ObjectMeta{Name: "ci"}}, existing)
+			desired := existing.DeepCopy()
+			desired.Data = map[string][]byte{"new": []byte("new value")}
+			results := make(chan clusterSyncResult, 1)
+			opts := clusterSyncOptions{
+				getters: map[string]Getter{"a": client.CoreV1()},
+				force:   tc.force,
+				level:   logrus.DebugLevel,
+			}
+			syncCluster("a", []*coreapi.Secret{desired}, opts, results)
+			result := <-results
+			if entries := hook.AllEntries(); len(entries) != 0 {
+				t.Fatalf("completed worker emitted logs instead of buffering them: %v", entries)
+			}
+			if len(result.errs) != tc.wantErrors {
+				t.Errorf("want %d errors, got %v", tc.wantErrors, result.errs)
+			}
+			var warnings int
+			for _, entry := range result.logs.entries {
+				if entry.Level == logrus.WarnLevel {
+					warnings++
+				}
+			}
+			if warnings != 1 {
+				t.Errorf("want one buffered stale-key warning, got %d", warnings)
+			}
+			last := result.logs.entries[len(result.logs.entries)-1]
+			if last.Message != "Finished syncing secrets for cluster" || last.Data["errors"] != tc.wantErrors {
+				t.Errorf("unexpected cluster summary: %+v", last)
+			}
+		})
+	}
+}
+
 func TestUpdateSecrets(t *testing.T) {
+	first := coreapi.Secret{ObjectMeta: metav1.ObjectMeta{Name: "first", Namespace: "ci"}}
+	second := coreapi.Secret{ObjectMeta: metav1.ObjectMeta{Name: "second", Namespace: "ci"}}
+	twoClusters := map[string][]*coreapi.Secret{"default": {&first, &second}, "build01": {&first, &second}}
+	namespace := &coreapi.Namespace{ObjectMeta: metav1.ObjectMeta{Name: "ci"}}
+	sequentialActions := []string{"get namespaces", "get secrets", "create secrets", "get secrets", "create secrets"}
 	testCases := []struct {
 		name                     string
 		existSecretsOnDefault    []runtime.Object
@@ -1450,7 +1556,72 @@ func TestUpdateSecrets(t *testing.T) {
 		expected                 error
 		expectedSecretsOnDefault []coreapi.Secret
 		expectedSecretsOnBuild01 []coreapi.Secret
+		concurrent               bool
+		failNamespace            bool
+		dryRun                   bool
+		disabled                 sets.Set[string]
+		expectedActions          map[string][]string
 	}{
+		{
+			name:                     "clusters run concurrently with sequential secret operations",
+			concurrent:               true,
+			force:                    true,
+			secretsMap:               twoClusters,
+			existSecretsOnDefault:    []runtime.Object{namespace},
+			existSecretsOnBuild01:    []runtime.Object{namespace},
+			expectedSecretsOnDefault: []coreapi.Secret{first, second},
+			expectedSecretsOnBuild01: []coreapi.Secret{first, second},
+			expectedActions:          map[string][]string{"default": sequentialActions, "build01": sequentialActions},
+		},
+		{
+			name:                     "a failed cluster does not cancel other clusters",
+			concurrent:               true,
+			failNamespace:            true,
+			force:                    true,
+			secretsMap:               twoClusters,
+			existSecretsOnDefault:    []runtime.Object{namespace},
+			existSecretsOnBuild01:    []runtime.Object{namespace},
+			expectedSecretsOnDefault: []coreapi.Secret{first, second},
+			expected:                 fmt.Errorf("failed to check if namespace ci exists on cluster build01: namespace unavailable"),
+			expectedActions:          map[string][]string{"default": sequentialActions, "build01": {"get namespaces", "get namespaces"}},
+		},
+		{name: "no clusters"},
+		{name: "empty cluster", secretsMap: map[string][]*coreapi.Secret{"default": nil}},
+		{
+			name:       "missing clients aggregate errors",
+			secretsMap: map[string][]*coreapi.Secret{"a": {&first}, "b": {&first}},
+			expected:   fmt.Errorf("[failed to get client getter for cluster a, failed to get client getter for cluster b]"),
+		},
+		{
+			name:            "disabled cluster is not accessed",
+			secretsMap:      map[string][]*coreapi.Secret{"default": {&first}},
+			disabled:        sets.New("default"),
+			expected:        fmt.Errorf("attempted to update a secret first in namespace ci on a Prow disabled cluster default"),
+			expectedActions: map[string][]string{"default": nil, "build01": nil},
+		},
+		{
+			name:                     "confirmed namespace and secret creation on multiple clusters",
+			force:                    true,
+			secretsMap:               twoClusters,
+			expectedSecretsOnDefault: []coreapi.Secret{first, second},
+			expectedSecretsOnBuild01: []coreapi.Secret{first, second},
+			expectedActions: map[string][]string{
+				"default": {"get namespaces", "create namespaces", "get secrets", "create secrets", "get secrets", "create secrets"},
+				"build01": {"get namespaces", "create namespaces", "get secrets", "create secrets", "get secrets", "create secrets"},
+			},
+		},
+		{
+			name:                     "server dry-run options reach namespace and secret creation on every cluster",
+			force:                    true,
+			dryRun:                   true,
+			secretsMap:               twoClusters,
+			expectedSecretsOnDefault: []coreapi.Secret{first, second},
+			expectedSecretsOnBuild01: []coreapi.Secret{first, second},
+			expectedActions: map[string][]string{
+				"default": {"get namespaces", "create namespaces", "get secrets", "create secrets", "get secrets", "create secrets"},
+				"build01": {"get namespaces", "create namespaces", "get secrets", "create secrets", "get secrets", "create secrets"},
+			},
+		},
 		{
 			name: "namespace is created when it does not exist",
 			secretsMap: map[string][]*coreapi.Secret{
@@ -1800,9 +1971,63 @@ func TestUpdateSecrets(t *testing.T) {
 				"build01": fkcBuild01.CoreV1(),
 			}
 
-			actual := updateSecrets(clients, tc.secretsMap, tc.force, true, nil, nil)
+			if tc.failNamespace {
+				fkcBuild01.PrependReactor("get", "namespaces", rejectNamespace)
+			}
+			var actual error
+			if tc.concurrent {
+				ctx, cancel := context.WithTimeout(t.Context(), 10*time.Second)
+				defer cancel()
+				release, unblock := context.WithCancel(ctx)
+				defer unblock()
+				started := make(chan string, 4)
+				clients["default"] = gatedGetter{fkcDefault.CoreV1(), started, release.Done(), "default"}
+				clients["build01"] = gatedGetter{fkcBuild01.CoreV1(), started, release.Done(), "build01"}
+				done := make(chan error, 1)
+				go runClusterSync(clients, tc.secretsMap, tc.force, !tc.dryRun, tc.disabled, done)
+				seen := sets.New[string]()
+				for range tc.secretsMap {
+					select {
+					case cluster := <-started:
+						seen.Insert(cluster)
+					case <-ctx.Done():
+						t.Fatal("clusters did not start concurrently")
+					}
+				}
+				if diff := cmp.Diff([]string{"build01", "default"}, sets.List(seen)); diff != "" {
+					t.Fatalf("started clusters (-want +got):\n%s", diff)
+				}
+				unblock()
+				select {
+				case actual = <-done:
+				case <-ctx.Done():
+					t.Fatal("cluster sync did not finish")
+				}
+			} else {
+				actual = updateSecrets(clients, tc.secretsMap, tc.force, !tc.dryRun, nil, tc.disabled)
+			}
 			equalError(t, tc.expected, actual)
 
+			var wantDryRun []string
+			if tc.dryRun {
+				wantDryRun = []string{metav1.DryRunAll}
+			}
+			for cluster, client := range map[string]*fake.Clientset{"default": fkcDefault, "build01": fkcBuild01} {
+				var actions []string
+				for _, action := range client.Actions() {
+					actions = append(actions, action.GetVerb()+" "+action.GetResource().Resource)
+					if create, ok := action.(clienttesting.CreateActionImpl); ok {
+						if diff := cmp.Diff(wantDryRun, create.GetCreateOptions().DryRun); diff != "" {
+							t.Errorf("cluster %s dry-run options (-want +got):\n%s", cluster, diff)
+						}
+					}
+				}
+				if want, ok := tc.expectedActions[cluster]; ok {
+					if diff := cmp.Diff(want, actions); diff != "" {
+						t.Errorf("cluster %s actions (-want +got):\n%s", cluster, diff)
+					}
+				}
+			}
 			actualSecretsOnDefault, err := fkcDefault.CoreV1().Secrets("").List(context.TODO(), metav1.ListOptions{})
 			equalError(t, nil, err)
 			equal(t, "secrets in default cluster", tc.expectedSecretsOnDefault, actualSecretsOnDefault.Items)

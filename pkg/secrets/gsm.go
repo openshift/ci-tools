@@ -6,7 +6,6 @@ import (
 
 	secretmanager "cloud.google.com/go/secretmanager/apiv1"
 	"github.com/sirupsen/logrus"
-	"google.golang.org/api/option"
 
 	gsm "github.com/openshift/ci-tools/pkg/gsm-secrets"
 	gsmvalidation "github.com/openshift/ci-tools/pkg/gsm-validation"
@@ -26,9 +25,7 @@ type gsmSyncDecorator struct {
 
 func NewGSMSyncDecorator(wrappedVaultClient Client, gcpProjectConfig gsm.Config, credentialsFile string) (Client, error) {
 	ctx := context.Background()
-	opts := []option.ClientOption{option.WithCredentialsFile(credentialsFile)}
-
-	gsmClient, err := secretmanager.NewClient(ctx, opts...)
+	gsmClient, err := gsm.NewClient(ctx, credentialsFile)
 	if err != nil {
 		return nil, fmt.Errorf("failed to create GSM client: %w", err)
 	}

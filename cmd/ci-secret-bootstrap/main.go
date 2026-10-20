@@ -18,7 +18,6 @@ import (
 
 	secretmanager "cloud.google.com/go/secretmanager/apiv1"
 	"github.com/sirupsen/logrus"
-	"google.golang.org/api/option"
 
 	coreapi "k8s.io/api/core/v1"
 	"k8s.io/apimachinery/pkg/api/equality"
@@ -1198,8 +1197,7 @@ func main() {
 	var gsmClient *secretmanager.Client
 	if o.enableGsm && !o.validateOnly {
 		ctx := context.Background()
-		opts := []option.ClientOption{option.WithCredentialsFile(o.gsmCredentialsFile)}
-		gsmClient, err = secretmanager.NewClient(ctx, opts...)
+		gsmClient, err = gsm.NewClient(ctx, o.gsmCredentialsFile)
 		if err != nil {
 			logrus.WithError(err).Fatal("Failed to create GSM client.")
 		}

@@ -14,7 +14,7 @@ type fileTestResolver struct {
 
 func (r *fileTestResolver) resolve(job string) (api.MetadataWithTest, int, error) {
 	byOrgRepo := r.configAgent.GetAll()
-	for _, org := range []string{"openshift", "openshift-eng"} {
+	for _, org := range []string{"openshift", "openshift-eng", "shiftstack"} {
 		if v, ok := byOrgRepo[org]; ok {
 			for _, configurations := range v {
 				for _, configuration := range configurations {

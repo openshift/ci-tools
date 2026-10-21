@@ -8,6 +8,7 @@ import (
 	"github.com/google/go-cmp/cmp"
 
 	"github.com/openshift/ci-tools/pkg/api"
+	"github.com/openshift/ci-tools/pkg/config"
 	"github.com/openshift/ci-tools/pkg/load/agents"
 	"github.com/openshift/ci-tools/pkg/testhelper"
 )
@@ -17,7 +18,53 @@ func TestFileTestResolver(t *testing.T) {
 		name      string
 		dir       string
 		verifyFun func(testResolver testResolver) error
+		org       string
+		job       string
+		shards    int
+		wantError bool
 	}{
+		{
+			name:   "openshift periodic",
+			org:    "openshift",
+			job:    "periodic-ci-openshift-ci-main-nightly-e2e",
+			shards: 1,
+		},
+		{
+			name:   "openshift-eng periodic",
+			org:    "openshift-eng",
+			job:    "periodic-ci-openshift-eng-ci-main-nightly-e2e",
+			shards: 1,
+		},
+		{
+			name:   "shiftstack periodic",
+			org:    "shiftstack",
+			job:    "periodic-ci-shiftstack-ci-main-nightly-e2e",
+			shards: 1,
+		},
+		{
+			name:   "shiftstack sharded periodic",
+			org:    "shiftstack",
+			job:    "periodic-ci-shiftstack-ci-main-nightly-e2e",
+			shards: 3,
+		},
+		{
+			name:      "unsupported organization with matching periodic",
+			org:       "unrelated",
+			job:       "periodic-ci-unrelated-ci-main-nightly-e2e",
+			wantError: true,
+		},
+		{
+			name:      "shiftstack unknown job",
+			org:       "shiftstack",
+			job:       "periodic-ci-shiftstack-ci-main-nightly-unknown",
+			wantError: true,
+		},
+		{
+			name:      "shiftstack nonperiodic test",
+			org:       "shiftstack",
+			job:       "periodic-ci-shiftstack-ci-main-nightly-presubmit",
+			wantError: true,
+		},
 		{
 			name: "basic case",
 			dir:  filepath.Join("testdata", "config"),
@@ -96,6 +143,31 @@ func TestFileTestResolver(t *testing.T) {
 	}
 	for _, tc := range testCases {
 		t.Run(tc.name, func(t *testing.T) {
+			if tc.org != "" {
+				metadata := api.Metadata{Org: tc.org, Repo: "ci", Branch: "main", Variant: "nightly"}
+				periodic := api.TestStepConfiguration{As: "e2e", Cron: new("0 0 * * *")}
+				if tc.shards > 1 {
+					periodic.ShardCount = new(tc.shards)
+				}
+				configAgent := agents.NewFakeConfigAgent(config.ByOrgRepo{
+					tc.org: {"ci": {{
+						Metadata: metadata,
+						Tests:    []api.TestStepConfiguration{periodic, {As: "presubmit"}},
+					}}},
+				})
+				resolver := &fileTestResolver{configAgent: configAgent}
+				actual, shards, err := resolver.resolve(tc.job)
+				want := api.MetadataWithTest{Metadata: metadata, Test: "e2e"}
+				var wantErr error
+				if tc.wantError {
+					want = api.MetadataWithTest{}
+					wantErr = fmt.Errorf("failed to resolve job %s", tc.job)
+				}
+				testhelper.Diff(t, "resolved test", want, actual)
+				testhelper.Diff(t, "shard count", tc.shards, shards)
+				testhelper.Diff(t, "error", wantErr, err, testhelper.EquateErrorMessage)
+				return
+			}
 			configAgent, err := agents.NewConfigAgent(tc.dir, nil)
 			if err != nil {
 				t.Fatalf("Failed to get config agent: %v", err)

@@ -27,33 +27,69 @@ import (
 )
 
 func TestValidateAlertProxyEndpointURL(t *testing.T) {
-	for _, value := range []string{
-		"http://alert-proxy.ci.svc:8080/interactions",
-		"https://alert-proxy.ci.svc.cluster.local:8080/interactions",
+	const (
+		internal           = "http://alert-proxy.ci.svc:8080"
+		external           = "https://alert-proxy-ci.apps.master.ci.devcluster.openshift.com"
+		invalidDestination = "must target the alert-proxy service in namespace ci or the approved Core CI HTTPS route"
+		invalidExtra       = "must not contain user information, a query, or a fragment"
+	)
+	for _, tc := range []struct {
+		name    string
+		value   string
+		path    string
+		wantErr string
+	}{
+		{name: "internal HTTP interactions", value: internal + "/interactions", path: "/interactions"},
+		{name: "internal HTTP mentions", value: internal + "/mentions", path: "/mentions"},
+		{name: "internal HTTPS", value: "https://alert-proxy.ci.svc:8080/interactions", path: "/interactions"},
+		{name: "internal fully qualified HTTP", value: "http://alert-proxy.ci.svc.cluster.local:8080/interactions", path: "/interactions"},
+		{name: "internal fully qualified HTTPS", value: "https://alert-proxy.ci.svc.cluster.local:8080/interactions", path: "/interactions"},
+		{name: "internal normalized host", value: "http://ALERT-PROXY.CI.SVC.:8080/interactions", path: "/interactions"},
+		{name: "Core CI interactions default port", value: external + "/interactions", path: "/interactions"},
+		{name: "Core CI mentions default port", value: external + "/mentions", path: "/mentions"},
+		{name: "Core CI interactions port 443", value: external + ":443/interactions", path: "/interactions"},
+		{name: "Core CI mentions port 443", value: external + ":443/mentions", path: "/mentions"},
+		{name: "relative", value: "/interactions", path: "/interactions", wantErr: "must be an absolute URL"},
+		{name: "malformed port", value: external + ":invalid/interactions", path: "/interactions", wantErr: "must be an absolute URL"},
+		{name: "FTP", value: "ftp://alert-proxy.ci.svc:8080/interactions", path: "/interactions", wantErr: "scheme must be HTTP or HTTPS"},
+		{name: "other host", value: "https://alert-proxy.example.com:8080/interactions", path: "/interactions", wantErr: invalidDestination},
+		{name: "internal wrong port", value: "http://alert-proxy.ci.svc:8443/interactions", path: "/interactions", wantErr: "must target alert-proxy service port 8080"},
+		{name: "internal no port", value: "http://alert-proxy.ci.svc/interactions", path: "/interactions", wantErr: "must target alert-proxy service port 8080"},
+		{name: "internal wrong path", value: internal + "/mentions", path: "/interactions", wantErr: "path must be /interactions"},
+		{name: "internal query", value: internal + "/interactions?target=x", path: "/interactions", wantErr: invalidExtra},
+		{name: "internal bare query", value: internal + "/interactions?", path: "/interactions", wantErr: invalidExtra},
+		{name: "internal fragment", value: internal + "/interactions#part", path: "/interactions", wantErr: invalidExtra},
+		{name: "internal empty fragment", value: internal + "/interactions#", path: "/interactions", wantErr: invalidExtra},
+		{name: "Core CI HTTP", value: "http://alert-proxy-ci.apps.master.ci.devcluster.openshift.com/interactions", path: "/interactions", wantErr: "Core CI route requires HTTPS"},
+		{name: "Core CI HTTP port 443", value: "http://alert-proxy-ci.apps.master.ci.devcluster.openshift.com:443/interactions", path: "/interactions", wantErr: "Core CI route requires HTTPS"},
+		{name: "Core CI wrong port", value: external + ":8080/interactions", path: "/interactions", wantErr: invalidDestination},
+		{name: "Core CI empty port", value: external + ":/interactions", path: "/interactions", wantErr: invalidDestination},
+		{name: "Core CI suffix host", value: external + ".evil.invalid/interactions", path: "/interactions", wantErr: invalidDestination},
+		{name: "Core CI prefix host", value: "https://evil-alert-proxy-ci.apps.master.ci.devcluster.openshift.com/interactions", path: "/interactions", wantErr: invalidDestination},
+		{name: "Core CI trailing dot", value: external + "./interactions", path: "/interactions", wantErr: invalidDestination},
+		{name: "Core CI uppercase host", value: "https://ALERT-PROXY-CI.apps.master.ci.devcluster.openshift.com/interactions", path: "/interactions", wantErr: invalidDestination},
+		{name: "Core CI wrong path", value: external + "/mentions", path: "/interactions", wantErr: "path must be /interactions"},
+		{name: "Core CI escaped path", value: external + "/%69nteractions", path: "/interactions", wantErr: "path must be /interactions"},
+		{name: "Core CI escaped slash", value: external + "/interactions%2f", path: "/interactions", wantErr: "path must be /interactions"},
+		{name: "Core CI path suffix", value: external + "/interactions/", path: "/interactions", wantErr: "path must be /interactions"},
+		{name: "Core CI user information", value: "https://user:do-not-log@alert-proxy-ci.apps.master.ci.devcluster.openshift.com/interactions", path: "/interactions", wantErr: invalidExtra},
+		{name: "Core CI query", value: external + "/interactions?token=do-not-log", path: "/interactions", wantErr: invalidExtra},
+		{name: "Core CI bare query", value: external + "/interactions?", path: "/interactions", wantErr: invalidExtra},
+		{name: "Core CI fragment", value: external + "/interactions#part", path: "/interactions", wantErr: invalidExtra},
+		{name: "Core CI empty fragment", value: external + "/interactions#", path: "/interactions", wantErr: invalidExtra},
 	} {
-		if err := validateAlertProxyEndpointURL(value, "/interactions"); err != nil {
-			t.Errorf("validateAlertProxyEndpointURL(%q): %v", value, err)
-		}
-	}
-	for _, value := range []string{
-		"/interactions",
-		"ftp://alert-proxy.ci.svc:8080/interactions",
-		"https://alert-proxy.example.com:8080/interactions",
-		"http://alert-proxy.ci.svc:8443/interactions",
-		"http://alert-proxy.ci.svc:8080/mentions",
-		"http://alert-proxy.ci.svc:8080/interactions?target=x",
-	} {
-		if err := validateAlertProxyEndpointURL(value, "/interactions"); err == nil {
-			t.Errorf("validateAlertProxyEndpointURL(%q) succeeded", value)
-		}
-	}
-	const marker = "do-not-log"
-	err := validateAlertProxyEndpointURL("https://user:"+marker+"@example.invalid/interactions?token="+marker, "/interactions")
-	if err == nil {
-		t.Fatal("sensitive endpoint succeeded validation")
-	}
-	if strings.Contains(err.Error(), marker) {
-		t.Fatalf("validation error exposed endpoint data: %v", err)
+		t.Run(tc.name, func(t *testing.T) {
+			err := validateAlertProxyEndpointURL(tc.value, tc.path)
+			if tc.wantErr == "" {
+				if err != nil {
+					t.Fatalf("unexpected validation error: %v", err)
+				}
+				return
+			}
+			if err == nil || err.Error() != tc.wantErr {
+				t.Fatalf("validation error = %v, want %q", err, tc.wantErr)
+			}
+		})
 	}
 }
 

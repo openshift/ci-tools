@@ -38,6 +38,20 @@ func TestDexTokenVerifier(t *testing.T) {
 		{name: "valid", want: &Identity{Username: "test-user", Groups: []string{"example-owner"}}},
 		{name: "single audience in a list", change: func(c map[string]any) { c["aud"] = []string{"gsm-cli"} }, want: &Identity{Username: "test-user", Groups: []string{"example-owner"}}},
 		{name: "empty group list is valid but grants no memberships", change: func(c map[string]any) { c["groups"] = []string{} }, want: &Identity{Username: "test-user", Groups: []string{}}},
+		{name: "just under maximum age", change: func(c map[string]any) { c["iat"] = now.Add(-time.Hour + time.Second).Unix() }, want: &Identity{Username: "test-user", Groups: []string{"example-owner"}}},
+		{name: "maximum age with unexpired Dex token", change: func(c map[string]any) {
+			c["iat"] = now.Add(-time.Hour).Unix()
+			c["exp"] = now.Add(23 * time.Hour).Unix()
+		}},
+		{name: "over maximum age with unexpired Dex token", change: func(c map[string]any) {
+			c["iat"] = now.Add(-2 * time.Hour).Unix()
+			c["exp"] = now.Add(22 * time.Hour).Unix()
+		}},
+		{name: "future issuance within clock skew", change: func(c map[string]any) { c["iat"] = now.Add(time.Minute).Unix() }, want: &Identity{Username: "test-user", Groups: []string{"example-owner"}}},
+		{name: "future issuance beyond clock skew", change: func(c map[string]any) { c["iat"] = now.Add(time.Minute + time.Second).Unix() }},
+		{name: "missing issuance", change: func(c map[string]any) { delete(c, "iat") }},
+		{name: "null issuance", change: func(c map[string]any) { c["iat"] = nil }},
+		{name: "malformed issuance", change: func(c map[string]any) { c["iat"] = "invalid" }},
 		{name: "expired", change: func(c map[string]any) { c["exp"] = now.Add(-time.Second).Unix() }},
 		{name: "expires now", change: func(c map[string]any) { c["exp"] = now.Unix() }},
 		{name: "missing expiration", change: func(c map[string]any) { delete(c, "exp") }},

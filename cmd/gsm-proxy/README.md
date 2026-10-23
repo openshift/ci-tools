@@ -128,8 +128,10 @@ backend certificate, or TLS passthrough with a certificate valid for the public 
 Health probes must use HTTPS when TLS is enabled.
 
 Ownership reload does not revoke group membership in an already-issued token: the proxy
-trusts that signed snapshot until expiry. Define and verify the acceptable membership-revocation
-window, token lifetime/refresh behavior, and emergency revocation mechanism before production use.
+trusts that signed snapshot until token expiry or the one-hour acceptance limit,
+whichever comes first. Re-login does not itself guarantee fresh upstream group membership;
+verify upstream freshness behavior and an emergency revocation mechanism before relying
+on this limit for membership revocation.
 Backend request deadlines and listing resource limits also remain deployment prerequisites.
 
 Run the proxy tests with `go test ./cmd/gsm-proxy ./pkg/gsm-proxy`.

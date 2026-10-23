@@ -15,6 +15,10 @@ import (
 const (
 	dexIssuerURL = "https://idp.ci.openshift.org"
 	dexClientID  = "gsm-cli"
+	// dexTokenMaxAge limits how long the proxy accepts a token after issuance.
+	dexTokenMaxAge = time.Hour
+	// dexClockSkew is how far a token's issuance time may be ahead of the proxy's clock.
+	dexClockSkew = time.Minute
 )
 
 // DexTokenVerifier accepts only ID tokens issued by Dex for gsm-cli.
@@ -61,8 +65,12 @@ func (v *DexTokenVerifier) Verify(ctx context.Context, rawToken string) (Identit
 	}
 
 	// This API deliberately accepts only tokens dedicated to gsm-cli.
-	if token.Issuer != dexIssuerURL || len(token.Audience) != 1 || token.Audience[0] != dexClientID || !token.Expiry.After(v.now()) {
+	now := v.now()
+	if token.Issuer != dexIssuerURL || len(token.Audience) != 1 || token.Audience[0] != dexClientID || !token.Expiry.After(now) {
 		return Identity{}, fmt.Errorf("dex token claims are invalid: %w", ErrUnauthenticated)
+	}
+	if token.IssuedAt.IsZero() || token.IssuedAt.After(now.Add(dexClockSkew)) || !token.IssuedAt.Add(dexTokenMaxAge).After(now) {
+		return Identity{}, fmt.Errorf("dex token issuance time is invalid: %w", ErrUnauthenticated)
 	}
 
 	var claims struct {

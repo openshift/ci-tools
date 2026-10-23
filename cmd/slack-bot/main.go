@@ -114,6 +114,7 @@ const (
 	alertProxyServiceHost               = "alert-proxy.ci.svc"
 	alertProxyServiceFullyQualifiedHost = "alert-proxy.ci.svc.cluster.local"
 	alertProxyServicePort               = "8080"
+	alertProxyCoreCIHost                = "alert-proxy-ci.apps.master.ci.devcluster.openshift.com"
 )
 
 func validateAlertProxyEndpointURL(value, expectedPath string) error {
@@ -121,18 +122,24 @@ func validateAlertProxyEndpointURL(value, expectedPath string) error {
 	if err != nil || !parsed.IsAbs() || parsed.Host == "" {
 		return errors.New("must be an absolute URL")
 	}
-	if parsed.User != nil || parsed.RawQuery != "" || parsed.Fragment != "" {
+	if parsed.User != nil || parsed.RawQuery != "" || parsed.ForceQuery || strings.Contains(value, "#") {
 		return errors.New("must not contain user information, a query, or a fragment")
 	}
 	if parsed.Scheme != "http" && parsed.Scheme != "https" {
 		return errors.New("scheme must be HTTP or HTTPS")
 	}
 	host := strings.ToLower(strings.TrimSuffix(parsed.Hostname(), "."))
-	if host != alertProxyServiceHost && host != alertProxyServiceFullyQualifiedHost {
-		return errors.New("must target the alert-proxy service in namespace ci")
-	}
-	if parsed.Port() != alertProxyServicePort {
-		return fmt.Errorf("must target alert-proxy service port %s", alertProxyServicePort)
+	switch {
+	case host == alertProxyServiceHost || host == alertProxyServiceFullyQualifiedHost:
+		if parsed.Port() != alertProxyServicePort {
+			return fmt.Errorf("must target alert-proxy service port %s", alertProxyServicePort)
+		}
+	case parsed.Host == alertProxyCoreCIHost || parsed.Host == alertProxyCoreCIHost+":443":
+		if parsed.Scheme != "https" {
+			return errors.New("Core CI route requires HTTPS")
+		}
+	default:
+		return errors.New("must target the alert-proxy service in namespace ci or the approved Core CI HTTPS route")
 	}
 	if parsed.EscapedPath() != expectedPath {
 		return fmt.Errorf("path must be %s", expectedPath)
@@ -235,8 +242,8 @@ func gatherOptions(fs *flag.FlagSet, args ...string) options {
 	fs.BoolVar(&o.enableDispatchCapacity, "enable-dispatch-capacity", false, "Enable applying and cancelling whole-cluster capacity overrides after shadow validation.")
 	fs.BoolVar(&o.enableDispatchDrain, "enable-dispatch-drain", false, "Enable whole-cluster drains after capacity operations meet their SLO.")
 	fs.BoolVar(&o.enableDispatchCapabilityScope, "enable-dispatch-capability-scope", false, "Enable capability-scoped controls after metadata coverage is audited.")
-	fs.StringVar(&o.alertProxyInteractionURL, "alert-proxy-interaction-url", "", "Full in-cluster URL for forwarding alert-proxy Slack interactions. Empty disables forwarding.")
-	fs.StringVar(&o.alertProxyMentionURL, "alert-proxy-mention-url", "", "Full in-cluster URL for forwarding @dptp-bot ci-alerts mentions. Empty disables forwarding.")
+	fs.StringVar(&o.alertProxyInteractionURL, "alert-proxy-interaction-url", "", "Full in-cluster or approved Core CI HTTPS route URL for forwarding alert-proxy Slack interactions. Empty disables forwarding.")
+	fs.StringVar(&o.alertProxyMentionURL, "alert-proxy-mention-url", "", "Full in-cluster or approved Core CI HTTPS route URL for forwarding @dptp-bot ci-alerts mentions. Empty disables forwarding.")
 	fs.StringVar(&o.alertProxyForwarderSecretPath, "alert-proxy-forwarder-secret-path", "", "Path to the HMAC secret used only for alert-proxy forwarding.")
 	fs.StringVar(&o.alertProxyChannelID, "alert-proxy-channel-id", "CHY2E1BL4", "Immutable Slack channel ID for #ops-testplatform.")
 

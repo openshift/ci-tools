@@ -528,7 +528,12 @@ func (o *options) Complete() error {
 	o.jobSpec = jobSpec
 	o.jobSpec.Target = target
 
-	info := o.getResolverInfo(jobSpec)
+	injectTest, err := o.getInjectTest()
+	if err != nil {
+		return err
+	}
+
+	info := o.getResolverInfo(jobSpec, injectTest)
 	o.resolverClient = server.NewResolverClient(o.resolverAddress)
 
 	if o.unresolvedConfigPath != "" && o.configSpecPath != "" {
@@ -540,11 +545,6 @@ func (o *options) Complete() error {
 
 	if o.enableSecretsStoreCSIDriver && o.gsmConfigPath == "" {
 		return fmt.Errorf("--gsm-config is required when --enable-secrets-store-csi-driver is enabled")
-	}
-
-	injectTest, err := o.getInjectTest()
-	if err != nil {
-		return err
 	}
 
 	var config *api.ReleaseBuildConfiguration
@@ -1109,7 +1109,12 @@ func (o *options) Run() (errs []error) {
 		return
 	}
 	o.metricsAgent.Record(metrics.NewInsightsEvent(metrics.InsightNamespaceCreated, metrics.Context{"namespace": o.namespace}))
-	info := o.getResolverInfo(o.jobSpec)
+	injectTestForInsight, err := o.getInjectTest()
+	if err != nil {
+		errs = append(errs, err)
+		return
+	}
+	info := o.getResolverInfo(o.jobSpec, injectTestForInsight)
 	o.metricsAgent.RecordConfigurationInsight(o.targets.values, o.promote, info.Org, info.Repo, info.Branch, info.Variant, o.baseNamespace, o.consoleHost, o.nodeName, o.clusterProfiles)
 
 	o.adjustLeaseAcquireTimeout()
@@ -2408,29 +2413,51 @@ func resolveGCSCredentialsSecret(jobSpec *api.JobSpec) string {
 	return api.GCSUploadCredentialsSecret
 }
 
-func (o *options) getResolverInfo(jobSpec *api.JobSpec) *api.Metadata {
-	// address and variant can only be set via options
-	info := &api.Metadata{Variant: o.variant}
-
+// getResolverInfo builds the comma-separated org/repo/branch/variant lists that
+// identify, for every checked-out ref, which ci-operator configuration the resolver
+// should fetch and merge (see server.ResolveAndMergeConfigsAndInjectTest). variantFor
+// decides which variant a given ref's configuration should be fetched under: the
+// primary ref (the subject of the job) uses the globally configured --variant, the
+// injected test's own source ref (if one of the refs is it) uses the injected test's
+// own variant, since it may differ from the job's, and every other ref (e.g. other PRs
+// under test in a multi-PR job) has none.
+func (o *options) getResolverInfo(jobSpec *api.JobSpec, injectTest *api.MetadataWithTest) *api.Metadata {
 	allRefs := jobSpec.ExtraRefs
 	if jobSpec.Refs != nil {
 		allRefs = append([]prowapi.Refs{*jobSpec.Refs}, allRefs...)
 	}
 
-	// identify org, repo, and branch from refs object
+	variantFor := func(i int, ref prowapi.Refs) string {
+		if i == 0 {
+			return o.variant
+		}
+		if injectTest != nil && ref.Org == injectTest.Org && ref.Repo == injectTest.Repo && ref.BaseRef == injectTest.Branch {
+			return injectTest.Variant
+		}
+		return ""
+	}
+
+	info := &api.Metadata{}
+	var orgs, repos, branches, variants []string
+	// identify org, repo, branch, and variant from the refs object
 	for i, ref := range allRefs {
 		if ref.Org != "" && ref.Repo != "" && ref.BaseRef != "" {
-			info.Org += fmt.Sprintf("%s,", ref.Org)
-			info.Repo += fmt.Sprintf("%s,", ref.Repo)
-			info.Branch += fmt.Sprintf("%s,", ref.BaseRef)
-			if info.Variant != "" && i > 0 {
-				info.Variant = fmt.Sprintf("%s,", info.Variant)
-			}
+			orgs = append(orgs, ref.Org)
+			repos = append(repos, ref.Repo)
+			branches = append(branches, ref.BaseRef)
+			variants = append(variants, variantFor(i, ref))
 		}
 	}
-	info.Org = strings.TrimSuffix(info.Org, ",")
-	info.Repo = strings.TrimSuffix(info.Repo, ",")
-	info.Branch = strings.TrimSuffix(info.Branch, ",")
+	info.Org = strings.Join(orgs, ",")
+	info.Repo = strings.Join(repos, ",")
+	info.Branch = strings.Join(branches, ",")
+	if len(orgs) == 0 {
+		// No refs to identify a primary ref from: fall back to the flag directly,
+		// as when ci-operator is run locally against an explicit --org/--repo/--branch.
+		info.Variant = o.variant
+	} else {
+		info.Variant = strings.Join(variants, ",")
+	}
 
 	// if flags set, override previous values
 	if o.org != "" {

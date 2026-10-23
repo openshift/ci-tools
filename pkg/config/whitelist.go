@@ -5,6 +5,7 @@ import (
 	"flag"
 	"fmt"
 	"os"
+	"path/filepath"
 
 	"github.com/ghodss/yaml"
 
@@ -59,4 +60,50 @@ func (o *WhitelistOptions) Validate() error {
 
 func (o *WhitelistOptions) Bind(fs *flag.FlagSet) {
 	fs.StringVar(&o.whitelistFile, "whitelist-file", "", "File of the repository whitelist configuration")
+}
+
+// GetAddedWhitelistRepos returns org/repo pairs that were added to the whitelist
+// file between baseSHA and HEAD in the repository at repoPath. The whitelistFile
+// path is relative to the repository root.
+func GetAddedWhitelistRepos(repoPath, whitelistFile, baseSHA string) ([]string, error) {
+	var oldWL WhitelistConfig
+	oldContent, err := git(repoPath, "show", baseSHA+":"+whitelistFile)
+	if err != nil {
+		oldWL = WhitelistConfig{}
+	} else {
+		if err := yaml.Unmarshal([]byte(oldContent), &oldWL); err != nil {
+			return nil, fmt.Errorf("parsing old whitelist at %s: %w", baseSHA, err)
+		}
+	}
+
+	newContent, err := gzip.ReadFileMaybeGZIP(filepath.Join(repoPath, whitelistFile))
+	if err != nil {
+		return nil, fmt.Errorf("reading whitelist file: %w", err)
+	}
+	var newWL WhitelistConfig
+	if err := yaml.Unmarshal(newContent, &newWL); err != nil {
+		return nil, fmt.Errorf("parsing whitelist file: %w", err)
+	}
+
+	return addedWhitelistRepos(oldWL, newWL), nil
+}
+
+func addedWhitelistRepos(oldWL, newWL WhitelistConfig) []string {
+	oldRepos := reposFromWhitelist(oldWL)
+	newRepos := reposFromWhitelist(newWL)
+	added := newRepos.Difference(oldRepos)
+	if added.Len() == 0 {
+		return nil
+	}
+	return sets.List(added)
+}
+
+func reposFromWhitelist(wc WhitelistConfig) sets.Set[string] {
+	repos := sets.New[string]()
+	for org, repoList := range wc.Whitelist {
+		for _, repo := range repoList {
+			repos.Insert(org + "/" + repo)
+		}
+	}
+	return repos
 }

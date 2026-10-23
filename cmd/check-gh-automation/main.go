@@ -45,6 +45,7 @@ type options struct {
 	onlyOrgs              flagutil.Strings
 	repos                 flagutil.Strings
 	releaseRepoPath       string
+	whitelistFile         string
 	flagutil.GitHubOptions
 	pluginConfig prowpluginconfig.PluginOptions
 }
@@ -87,6 +88,7 @@ func gatherOptions() options {
 	fs.Var(&o.onlyOrgs, "only-org", "Only check repos from these orgs. Can be passed multiple times. If not set, all orgs are checked.")
 	fs.Var(&o.repos, "repo", "Specifically check only an org/repo. Can be passed multiple times.")
 	fs.StringVar(&o.releaseRepoPath, "candidate-path", "", "Path to a openshift/release working copy with a revision to be tested")
+	fs.StringVar(&o.whitelistFile, "whitelist-file", "", "Path to the openshift-priv whitelist file, relative to --candidate-path")
 	o.pluginConfig.AddFlags(fs)
 
 	o.GitHubOptions.AddFlags(fs)
@@ -186,7 +188,7 @@ func determineRepos(o options, prowAgent *prowconfig.Agent, logger *logrus.Entry
 	}
 
 	if o.releaseRepoPath != "" {
-		return filterByOrg(gatherModifiedRepos(o.releaseRepoPath, logger), o.onlyOrgs.StringSet())
+		return filterByOrg(gatherModifiedRepos(o.releaseRepoPath, o.whitelistFile, logger), o.onlyOrgs.StringSet())
 	}
 
 	return filterByOrg(sets.List(prowAgent.Config().AllRepos), o.onlyOrgs.StringSet())
@@ -407,7 +409,7 @@ repoLoop:
 
 const maxRepos = 10
 
-func gatherModifiedRepos(releaseRepoPath string, logger *logrus.Entry) []string {
+func gatherModifiedRepos(releaseRepoPath, whitelistFile string, logger *logrus.Entry) []string {
 	jobSpec, err := downwardapi.ResolveSpecFromEnv()
 	if err != nil {
 		logger.Fatalf("error resolving JobSpec: %v", err)
@@ -441,6 +443,15 @@ func gatherModifiedRepos(releaseRepoPath string, logger *logrus.Entry) []string 
 				repo := matches[prowConfigRegex.SubexpIndex("repo")]
 				orgRepos.Insert(fmt.Sprintf("%s/%s", org, repo))
 			}
+		}
+	}
+
+	if whitelistFile != "" {
+		whitelistRepos, err := config.GetAddedWhitelistRepos(releaseRepoPath, whitelistFile, jobSpec.Refs.BaseSHA)
+		if err != nil {
+			logger.WithError(err).Debug("Could not check for whitelist changes, continuing without them")
+		} else {
+			orgRepos.Insert(whitelistRepos...)
 		}
 	}
 

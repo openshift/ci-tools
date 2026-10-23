@@ -410,6 +410,8 @@ func (a *Actions) RevokeObsoleteServiceAccountKeys(ctx context.Context, client I
 // ListSecretFieldsByCollectionAndGroup lists all field (secret) names in a GSM collection and group.
 // Uses substring filtering on the server side, then validates client-side to match only direct children (non-recursive).
 // Group path separators (/) are converted to __ for the GSM secret name pattern.
+// Each page permits three attempts on Unavailable, within a one-minute budget for all pages.
+// Errors discard partial results and omit server response details from diagnostics.
 //
 // Example:
 //
@@ -419,6 +421,9 @@ func (a *Actions) RevokeObsoleteServiceAccountKeys(ctx context.Context, client I
 //
 //	 Returns field names as saved in GSM (e.g., "aws--u--creds", not "aws_creds")
 func ListSecretFieldsByCollectionAndGroup(ctx context.Context, client SecretManagerClient, config Config, collection, group string) ([]string, error) {
+	ctx, cancel := context.WithTimeout(ctx, listSecretsDiscoveryTimeout)
+	defer cancel()
+
 	groupParts := strings.ReplaceAll(group, "/", gsmvalidation.CollectionSecretDelimiter)
 	base := fmt.Sprintf("%s%s", collection, gsmvalidation.CollectionSecretDelimiter)
 	if groupParts != "" {
@@ -428,7 +433,7 @@ func ListSecretFieldsByCollectionAndGroup(ctx context.Context, client SecretMana
 		Parent: GetProjectResourceIdNumber(config.ProjectIdNumber),
 		// substring filter to narrow down candidates; strict checks are done client-side
 		Filter: fmt.Sprintf("name:%s", base),
-	})
+	}, gax.WithRetry(newListSecretsRetryer))
 
 	var result []string
 	for {
@@ -437,7 +442,7 @@ func ListSecretFieldsByCollectionAndGroup(ctx context.Context, client SecretMana
 			break
 		}
 		if err != nil {
-			return nil, fmt.Errorf("failed to list secrets: %w", err)
+			return nil, &listSecretsDiscoveryError{err: err}
 		}
 
 		secretID := GetSecretID(secret.Name)

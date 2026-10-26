@@ -12,8 +12,8 @@ import (
 	"time"
 
 	"github.com/sirupsen/logrus"
-	utilerrors "k8s.io/apimachinery/pkg/util/errors"
 
+	utilerrors "k8s.io/apimachinery/pkg/util/errors"
 	"sigs.k8s.io/prow/cmd/generic-autobumper/bumper"
 	"sigs.k8s.io/prow/pkg/config/secret"
 	"sigs.k8s.io/prow/pkg/flagutil"

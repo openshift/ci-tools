@@ -90,13 +90,21 @@ func main() {
 	}
 
 	if err := run(o, &http.Client{}); err != nil {
-		var lookupFailures *clusterimageset.LookupFailures
-		if errors.As(err, &lookupFailures) {
-			logrus.WithError(err).Error("Independent cluster image set updates completed with lookup failures")
-			os.Exit(clusterimageset.PartialUpdateExitCode)
-		}
-		logrus.WithError(err).Fatal("Failed to update cluster image sets")
+		logrus.WithError(err).Error("Failed to update cluster image sets")
+		os.Exit(updateExitCode(err))
 	}
+}
+
+// updateExitCode returns the partial status only for a completed lookup-only
+// result. Wrapping or joining that result with other errors remains fatal.
+func updateExitCode(err error) int {
+	if err == nil {
+		return 0
+	}
+	if _, ok := err.(*clusterimageset.LookupFailures); ok {
+		return clusterimageset.PartialUpdateExitCode
+	}
+	return 1
 }
 
 func run(o options, client release.HTTPClient) error {
@@ -235,10 +243,15 @@ func run(o options, client release.HTTPClient) error {
 	desiredRefs := make(map[string]string)
 	plannedPaths := sets.New[string]()
 	reusedImages := sets.New[string]()
+	plannedPullspecs := make(map[string]string)
 	for _, bounds := range boundsOrder {
 		pullspec := boundsToPullspec[bounds]
 		path := clusterImageSetYAMLPath(o.outputDir, pullspec, bounds)
 		name := nameFromPullspec(pullspec, bounds)
+		if previous, ok := plannedPullspecs[name]; ok && previous != pullspec {
+			return fmt.Errorf("conflicting pullspecs for clusterimageset %s: %q and %q", name, previous, pullspec)
+		}
+		plannedPullspecs[name] = pullspec
 		if protectedPaths.Has(filepath.Clean(path)) && existingImages[filepath.Clean(path)].Name != name {
 			return fmt.Errorf("update would overwrite preserved clusterimageset %s", path)
 		}

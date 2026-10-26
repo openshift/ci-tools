@@ -13,10 +13,12 @@ import (
 
 	"github.com/ghodss/yaml"
 	"github.com/google/go-cmp/cmp"
+
+	hivev1 "github.com/openshift/hive/apis/hive/v1"
+
 	"github.com/openshift/ci-tools/pkg/api"
 	"github.com/openshift/ci-tools/pkg/clusterimageset"
 	"github.com/openshift/ci-tools/pkg/testhelper"
-	hivev1 "github.com/openshift/hive/apis/hive/v1"
 )
 
 func TestRun(t *testing.T) {
@@ -42,6 +44,7 @@ func TestRun(t *testing.T) {
 		{name: "successful target is a preserved image set", failures: []string{"a"}, shared: true, protectedTarget: true},
 		{name: "preserved image set at noncanonical path is reused", failures: []string{"a"}, shared: true, protectedTarget: true, noncanonical: true},
 		{name: "conflicting preserved image set is unsafe", failures: []string{"a"}, shared: true, protectedTarget: true, fault: "conflict", wantError: "conflicts with preserved"},
+		{name: "distinct pullspecs with colliding image names are unsafe", failures: []string{"a"}, fault: "resolved-collision", wantError: "conflicting pullspecs"},
 		{name: "invalid pool is unsafe", fault: "pool", wantError: "failed to get list"},
 		{name: "invalid bounds are unsafe", fault: "bounds", wantError: "invalid version bounds"},
 		{name: "duplicate image names are unsafe", failures: []string{"a"}, fault: "duplicate", wantError: "duplicate clusterimageset"},
@@ -54,7 +57,7 @@ func TestRun(t *testing.T) {
 		t.Run(tc.name, func(t *testing.T) {
 			poolDir, imagesetDir := t.TempDir(), t.TempDir()
 			o := options{poolDir: poolDir, outputDir: imagesetDir, releaseControllerURL: "https://release.example/api/v1/releasestream"}
-			client := &lookupClient{failures: tc.failures, invalidPullspec: tc.fault == "pullspec"}
+			client := &lookupClient{failures: tc.failures, invalidPullspec: tc.fault == "pullspec", conflictingPullspecs: tc.fault == "resolved-collision"}
 			before := map[string][]byte{}
 			if tc.golden {
 				copyDir(t, "testdata/run/input/pools", poolDir)
@@ -110,11 +113,22 @@ func TestRun(t *testing.T) {
 			case "cleanup":
 				o.removeImageSet = failRemoval
 			case "missing":
-				if err := os.Remove(filepath.Join(imagesetDir, "old-a_clusterimageset.yaml")); err != nil {
+				missingPath := filepath.Join(imagesetDir, "old-a_clusterimageset.yaml")
+				if err := os.Remove(missingPath); err != nil {
 					t.Fatal(err)
 				}
+				delete(before, missingPath)
 			}
 			err := run(o, client)
+			for path, want := range before {
+				got, readErr := os.ReadFile(path)
+				if readErr != nil {
+					t.Fatal(readErr)
+				}
+				if diff := cmp.Diff(string(want), string(got)); diff != "" {
+					t.Errorf("preserved file %s (-want +got):\n%s", path, diff)
+				}
+			}
 			var partial *clusterimageset.LookupFailures
 			if tc.wantError != "" {
 				if err == nil || !strings.Contains(err.Error(), tc.wantError) || errors.As(err, &partial) {
@@ -139,15 +153,6 @@ func TestRun(t *testing.T) {
 			if !tc.golden {
 				if diff := cmp.Diff([]string{"a", "b", "c"}, client.streams); diff != "" {
 					t.Errorf("lookup order (-want +got):\n%s", diff)
-				}
-			}
-			for path, want := range before {
-				got, err := os.ReadFile(path)
-				if err != nil {
-					t.Fatal(err)
-				}
-				if diff := cmp.Diff(string(want), string(got)); diff != "" {
-					t.Errorf("preserved file %s (-want +got):\n%s", path, diff)
 				}
 			}
 			images := map[string]hivev1.ClusterImageSet{}
@@ -192,9 +197,10 @@ func TestRun(t *testing.T) {
 const testPullspec = "quay.io/openshift-release-dev/ocp-release:4.21.99-multi"
 
 type lookupClient struct {
-	failures        []string
-	streams         []string
-	invalidPullspec bool
+	failures             []string
+	streams              []string
+	invalidPullspec      bool
+	conflictingPullspecs bool
 }
 
 func (client *lookupClient) Do(request *http.Request) (*http.Response, error) {
@@ -204,6 +210,9 @@ func (client *lookupClient) Do(request *http.Request) (*http.Response, error) {
 		return nil, fmt.Errorf("unavailable-%s", stream)
 	}
 	pullspec := testPullspec
+	if client.conflictingPullspecs && stream == "c" {
+		pullspec = strings.ReplaceAll(pullspec, "openshift-release-dev", "other")
+	}
 	if client.invalidPullspec {
 		pullspec = ""
 	}

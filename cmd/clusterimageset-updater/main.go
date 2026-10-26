@@ -18,11 +18,14 @@ import (
 
 	v1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/apimachinery/pkg/runtime/serializer/json"
+	utilerrors "k8s.io/apimachinery/pkg/util/errors"
+	"k8s.io/apimachinery/pkg/util/sets"
 	"k8s.io/client-go/kubernetes/scheme"
 
 	hivev1 "github.com/openshift/hive/apis/hive/v1"
 
 	"github.com/openshift/ci-tools/pkg/api"
+	"github.com/openshift/ci-tools/pkg/clusterimageset"
 	"github.com/openshift/ci-tools/pkg/release"
 	"github.com/openshift/ci-tools/pkg/release/candidate"
 	"github.com/openshift/ci-tools/pkg/release/prerelease"
@@ -38,6 +41,7 @@ type options struct {
 	poolDir              string
 	outputDir            string
 	releaseControllerURL string
+	removeImageSet       func(string) error
 }
 
 func gatherOptions() (options, error) {
@@ -86,27 +90,26 @@ func main() {
 	}
 
 	if err := run(o, &http.Client{}); err != nil {
+		var lookupFailures *clusterimageset.LookupFailures
+		if errors.As(err, &lookupFailures) {
+			logrus.WithError(err).Error("Independent cluster image set updates completed with lookup failures")
+			os.Exit(clusterimageset.PartialUpdateExitCode)
+		}
 		logrus.WithError(err).Fatal("Failed to update cluster image sets")
 	}
 }
 
 func run(o options, client release.HTTPClient) error {
+	if o.removeImageSet == nil {
+		o.removeImageSet = os.Remove
+	}
 	s := json.NewSerializerWithOptions(json.DefaultMetaFactory, scheme.Scheme,
 		scheme.Scheme, json.SerializerOptions{Yaml: true, Pretty: false, Strict: false})
 
-	if err := filepath.WalkDir(o.poolDir, func(path string, info fs.DirEntry, err error) error {
-		if err != nil {
-			return err
-		}
-		if info.IsDir() || !strings.HasSuffix(info.Name(), "_clusterpool.yaml") {
-			return nil
-		}
-		return ensureLabelsOnClusterPool(s, path, path)
-	}); err != nil {
-		return fmt.Errorf("failed to ensure labels on cluster pools: %w", err)
-	}
-
 	poolFilesByBounds := make(map[api.VersionBounds][]string)
+	pools := make(map[string]hivev1.ClusterPool)
+	protectedNames := sets.New[string]()
+	var unboundedPools []string
 	if err := filepath.WalkDir(o.poolDir, func(path string, info fs.DirEntry, err error) error {
 		if err != nil {
 			return err
@@ -128,14 +131,24 @@ func run(o options, client release.HTTPClient) error {
 		}
 		if bounds != nil {
 			poolFilesByBounds[*bounds] = append(poolFilesByBounds[*bounds], path)
+		} else {
+			unboundedPools = append(unboundedPools, path)
+			protectedNames.Insert(pool.Spec.ImageSetRef.Name)
 		}
+		pools[path] = pool
 		return nil
 	}); err != nil {
 		return fmt.Errorf("failed to get list of clusterpools setting version bounds: %w", err)
 	}
 
 	boundsToPullspec := make(map[api.VersionBounds]string)
-	for versionBounds := range poolFilesByBounds {
+	for bounds := range poolFilesByBounds {
+		boundsToPullspec[bounds] = ""
+	}
+	lookupOrder := sortedBounds(boundsToPullspec)
+	failedBounds := sets.New[api.VersionBounds]()
+	var lookupErrors []error
+	for _, versionBounds := range lookupOrder {
 		arch, err := architectureForBounds(versionBounds)
 		if err != nil {
 			return fmt.Errorf("invalid version bounds %s: %w", versionBounds.Query(), err)
@@ -149,7 +162,23 @@ func run(o options, client release.HTTPClient) error {
 		}
 		pullSpec, err := resolvePullSpec(client, rel, o.releaseControllerURL)
 		if err != nil {
-			return fmt.Errorf("failed to get pullspec for version range %q: %w", versionBounds.Query(), err)
+			files := poolFilesByBounds[versionBounds]
+			var identities []string
+			for _, path := range files {
+				pool := pools[path]
+				identities = append(identities, fmt.Sprintf("%s/%s (%s)", pool.Namespace, pool.Name, path))
+			}
+			lookupErrors = append(lookupErrors, fmt.Errorf("pools %v, stream %q, lower %q, upper %q: %w", identities, versionBounds.Stream, versionBounds.Lower, versionBounds.Upper, err))
+			failedBounds.Insert(versionBounds)
+			for _, path := range files {
+				protectedNames.Insert(pools[path].Spec.ImageSetRef.Name)
+			}
+			delete(poolFilesByBounds, versionBounds)
+			delete(boundsToPullspec, versionBounds)
+			continue
+		}
+		if !strings.Contains(pullSpec, "ocp-release") && !strings.Contains(pullSpec, "ocp/release") {
+			return fmt.Errorf("invalid release pullspec %q for version range %q", pullSpec, versionBounds.Query())
 		}
 		boundsToPullspec[versionBounds] = pullSpec
 	}
@@ -157,6 +186,11 @@ func run(o options, client release.HTTPClient) error {
 	poolFilesByBounds, boundsToPullspec = mergeCollidingBounds(poolFilesByBounds, boundsToPullspec)
 
 	var toDelete []string
+	protectedPaths := sets.New[string]()
+	existingImages := make(map[string]hivev1.ClusterImageSet)
+	existingNames := sets.New[string]()
+	preservedImages := make(map[string]hivev1.ClusterImageSet)
+	remainingImages := sets.New[string]()
 	if err := filepath.WalkDir(o.outputDir, func(path string, info fs.DirEntry, err error) error {
 		if err != nil {
 			return err
@@ -172,25 +206,70 @@ func run(o options, client release.HTTPClient) error {
 		if err := yaml.Unmarshal(raw, &imageset); err != nil {
 			return err
 		}
+		if existingNames.Has(imageset.Name) {
+			return fmt.Errorf("duplicate clusterimageset name %q", imageset.Name)
+		}
+		existingNames.Insert(imageset.Name)
+		existingImages[filepath.Clean(path)] = imageset
 		bounds, err := labelsToBounds(imageset.Annotations)
 		if err != nil {
 			return fmt.Errorf("failed to parse version labels for clusterimageset %s: %w", imageset.Name, err)
 		}
+		if protectedNames.Has(imageset.Name) || (bounds != nil && failedBounds.Has(*bounds)) {
+			protectedPaths.Insert(filepath.Clean(path))
+			preservedImages[imageset.Name] = imageset
+			remainingImages.Insert(imageset.Name)
+			return nil
+		}
 		if bounds != nil && !clusterImageSetFileIsCurrent(path, o.outputDir, imageset, bounds, boundsToPullspec) {
 			toDelete = append(toDelete, path)
+			return nil
 		}
+		remainingImages.Insert(imageset.Name)
 		return nil
 	}); err != nil {
 		return fmt.Errorf("failed to scan existing clusterimagesets: %w", err)
 	}
 
-	var errs []error
-
 	boundsOrder := sortedBounds(boundsToPullspec)
+	desiredRefs := make(map[string]string)
+	plannedPaths := sets.New[string]()
+	reusedImages := sets.New[string]()
+	for _, bounds := range boundsOrder {
+		pullspec := boundsToPullspec[bounds]
+		path := clusterImageSetYAMLPath(o.outputDir, pullspec, bounds)
+		name := nameFromPullspec(pullspec, bounds)
+		if protectedPaths.Has(filepath.Clean(path)) && existingImages[filepath.Clean(path)].Name != name {
+			return fmt.Errorf("update would overwrite preserved clusterimageset %s", path)
+		}
+		if preserved, ok := preservedImages[name]; ok {
+			if preserved.Spec.ReleaseImage != pullspec {
+				return fmt.Errorf("update conflicts with preserved clusterimageset %s", name)
+			}
+			reusedImages.Insert(name)
+		}
+		plannedPaths.Insert(filepath.Clean(path))
+		remainingImages.Insert(name)
+		for _, poolPath := range poolFilesByBounds[bounds] {
+			desiredRefs[poolPath] = name
+		}
+	}
+	for path, pool := range pools {
+		name := pool.Spec.ImageSetRef.Name
+		if desired, ok := desiredRefs[path]; ok {
+			name = desired
+		}
+		if !remainingImages.Has(name) {
+			return fmt.Errorf("pool %s/%s references missing clusterimageset %q", pool.Namespace, pool.Name, name)
+		}
+	}
 
 	for _, bounds := range boundsOrder {
 		pullspec := boundsToPullspec[bounds]
 		name := nameFromPullspec(pullspec, bounds)
+		if reusedImages.Has(name) {
+			continue
+		}
 		clusterimageset := hivev1.ClusterImageSet{
 			TypeMeta: v1.TypeMeta{
 				Kind:       "ClusterImageSet",
@@ -212,17 +291,15 @@ func run(o options, client release.HTTPClient) error {
 		}
 		raw, err := yaml.Marshal(clusterimageset)
 		if err != nil {
-			errs = append(errs, fmt.Errorf("could not marshal yaml for clusterimageset %s: %w", name, err))
-			continue
+			return fmt.Errorf("could not marshal yaml for clusterimageset %s: %w", name, err)
 		}
 		if err := os.WriteFile(clusterImageSetYAMLPath(o.outputDir, pullspec, bounds), raw, 0644); err != nil {
-			errs = append(errs, fmt.Errorf("failed to write file for clusterimageset %s: %w", name, err))
+			return fmt.Errorf("failed to write file for clusterimageset %s: %w", name, err)
 		}
 	}
-
-	for _, path := range toDelete {
-		if err := os.Remove(path); err != nil && !os.IsNotExist(err) {
-			errs = append(errs, fmt.Errorf("failed to delete file %s: %w", path, err))
+	for _, path := range unboundedPools {
+		if err := ensureLabelsOnClusterPool(s, path, path); err != nil {
+			return err
 		}
 	}
 
@@ -232,27 +309,36 @@ func run(o options, client release.HTTPClient) error {
 		for _, path := range files {
 			raw, err := os.ReadFile(path)
 			if err != nil {
-				errs = append(errs, fmt.Errorf("failed to read file %s: %w", path, err))
-				continue
+				return fmt.Errorf("failed to read file %s: %w", path, err)
 			}
 			var newClusterPool hivev1.ClusterPool
 			if err := yaml.Unmarshal(raw, &newClusterPool); err != nil {
-				errs = append(errs, fmt.Errorf("failed to unmarshal clusterpool %s: %w", path, err))
-				continue
+				return fmt.Errorf("failed to unmarshal clusterpool %s: %w", path, err)
 			}
+			newClusterPool, _ = ensureLabels(newClusterPool)
 			newClusterPool.Spec.ImageSetRef.Name = imagesetName
 			newRaw, err := yaml.Marshal(newClusterPool)
 			if err != nil {
-				errs = append(errs, fmt.Errorf("failed to remarshal clusterpool %s: %w", path, err))
-				continue
+				return fmt.Errorf("failed to remarshal clusterpool %s: %w", path, err)
 			}
 			if err := os.WriteFile(path, newRaw, 0644); err != nil {
-				errs = append(errs, fmt.Errorf("failed to write updated file %s: %w", path, err))
+				return fmt.Errorf("failed to write updated file %s: %w", path, err)
 			}
 		}
 	}
 
-	return errors.Join(errs...)
+	for _, path := range toDelete {
+		if plannedPaths.Has(filepath.Clean(path)) {
+			continue
+		}
+		if err := o.removeImageSet(path); err != nil && !os.IsNotExist(err) {
+			return fmt.Errorf("failed to delete file %s: %w", path, err)
+		}
+	}
+	if err := utilerrors.NewAggregate(lookupErrors); err != nil {
+		return &clusterimageset.LookupFailures{Err: err}
+	}
+	return nil
 }
 
 func resolvePullSpec(client release.HTTPClient, rel api.Prerelease, baseURL string) (string, error) {

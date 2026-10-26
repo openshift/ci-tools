@@ -30,6 +30,8 @@ func TestUpdateExitCode(t *testing.T) {
 	}{
 		{name: "success"},
 		{name: "completed lookup-only result", err: lookupError, want: clusterimageset.PartialUpdateExitCode},
+		{name: "nil lookup result is unsafe", err: (*clusterimageset.LookupFailures)(nil), want: 1},
+		{name: "empty lookup result is unsafe", err: &clusterimageset.LookupFailures{}, want: 1},
 		{name: "ordinary error", err: unsafeError, want: 1},
 		{name: "unsafe error joined after lookup failure", err: errors.Join(lookupError, unsafeError), want: 1},
 		{name: "unsafe error joined before lookup failure", err: errors.Join(unsafeError, lookupError), want: 1},

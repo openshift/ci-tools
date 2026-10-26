@@ -5,8 +5,12 @@ import (
 	"errors"
 	"os"
 	"os/exec"
+	"path/filepath"
 	"strings"
 	"testing"
+
+	"sigs.k8s.io/prow/pkg/github"
+	"sigs.k8s.io/prow/pkg/github/fakegithub"
 )
 
 func TestRunSteps(t *testing.T) {
@@ -180,6 +184,128 @@ func TestFinishSteps(t *testing.T) {
 			}
 			if tc.lookup == nil && tc.publication == nil && err != nil {
 				t.Fatal(err)
+			}
+		})
+	}
+}
+
+type publicationClient struct {
+	github.Client
+	fake        *fakegithub.FakeClient
+	createError error
+	repoCalled  bool
+	prHead      string
+	prBase      string
+}
+
+func (client *publicationClient) GetRepo(org, repo string) (github.FullRepo, error) {
+	client.repoCalled = true
+	return client.fake.GetRepo(org, repo)
+}
+
+func (client *publicationClient) BotUser() (*github.UserData, error) {
+	return client.fake.BotUser()
+}
+
+func (client *publicationClient) FindIssuesWithOrg(org, query, sort string, asc bool) ([]github.Issue, error) {
+	return client.fake.FindIssuesWithOrg(org, query, sort, asc)
+}
+
+func (client *publicationClient) GetIssue(org, repo string, number int) (*github.Issue, error) {
+	return client.fake.GetIssue(org, repo, number)
+}
+
+func (client *publicationClient) AddLabel(org, repo string, number int, label string) error {
+	return client.fake.AddLabel(org, repo, number, label)
+}
+
+func (client *publicationClient) CreatePullRequest(org, repo, title, body, head, base string, canModify bool) (int, error) {
+	client.prHead, client.prBase = head, base
+	if client.createError != nil {
+		return 0, client.createError
+	}
+	return client.fake.CreatePullRequest(org, repo, title, body, head, base, canModify)
+}
+
+func TestConfigPublicationPublish(t *testing.T) {
+	for _, tc := range []struct {
+		name         string
+		missingToken bool
+		pushExit     string
+		repoError    error
+		createError  error
+		selfApprove  bool
+		wantError    string
+	}{
+		{name: "token registration failure", missingToken: true, wantError: "failed to register token for censoring"},
+		{name: "push failure", pushExit: "1", wantError: "failed to push changes"},
+		{name: "repository lookup failure", repoError: errors.New("repository unavailable"), wantError: "error retrieving repository data: repository unavailable"},
+		{name: "pull request failure", createError: errors.New("creation unavailable"), wantError: "PR creation failed"},
+		{name: "successful publication"},
+		{name: "self-approved publication", selfApprove: true},
+	} {
+		t.Run(tc.name, func(t *testing.T) {
+			dir := t.TempDir()
+			token := filepath.Join(dir, "token")
+			if !tc.missingToken {
+				if err := os.WriteFile(token, []byte("test-placeholder"), 0600); err != nil {
+					t.Fatal(err)
+				}
+			}
+			gitArgs := filepath.Join(dir, "git-args")
+			gitScript := "#!/bin/sh\nprintf '%s\\n' \"$@\" > \"$PUBLICATION_GIT_ARGS\"\nexit \"${PUBLICATION_GIT_EXIT:-0}\"\n"
+			if err := os.WriteFile(filepath.Join(dir, "git"), []byte(gitScript), 0755); err != nil {
+				t.Fatal(err)
+			}
+			t.Setenv("PATH", dir+string(os.PathListSeparator)+os.Getenv("PATH"))
+			t.Setenv("PUBLICATION_GIT_ARGS", gitArgs)
+			t.Setenv("PUBLICATION_GIT_EXIT", tc.pushExit)
+			client := &publicationClient{fake: fakegithub.NewFakeClient(), createError: tc.createError}
+			client.fake.GetRepoError = tc.repoError
+			o := options{githubLogin: "test-bot", selfApprove: tc.selfApprove}
+			o.GitHubOptions.TokenPath = token
+			var output bytes.Buffer
+			publication := &configPublication{options: o, client: client, stdout: &output, stderr: &output}
+			err := publication.Publish()
+			if tc.wantError != "" {
+				if err == nil || !strings.Contains(err.Error(), tc.wantError) {
+					t.Fatalf("want error containing %q, got %v", tc.wantError, err)
+				}
+			} else if err != nil {
+				t.Fatal(err)
+			}
+			args, readErr := os.ReadFile(gitArgs)
+			if tc.missingToken {
+				if !os.IsNotExist(readErr) || client.repoCalled {
+					t.Fatal("publication continued after token registration failure")
+				}
+				return
+			}
+			if readErr != nil {
+				t.Fatal(readErr)
+			}
+			wantArgs := "push\n-f\nhttps://test-bot:test-placeholder@github.com/test-bot/release.git\nHEAD:" + remoteBranch + "\n"
+			if string(args) != wantArgs {
+				t.Errorf("want git arguments %q, got %q", wantArgs, args)
+			}
+			if client.repoCalled != (tc.pushExit == "") {
+				t.Errorf("repository lookup called: %t", client.repoCalled)
+			}
+			if tc.wantError != "" {
+				if len(client.fake.PullRequests) != 0 {
+					t.Error("failed publication created a pull request")
+				}
+				return
+			}
+			if client.prHead != "test-bot:"+remoteBranch || client.prBase != "master" || len(client.fake.PullRequests) != 1 {
+				t.Errorf("unexpected pull request: head %q, base %q, count %d", client.prHead, client.prBase, len(client.fake.PullRequests))
+			}
+			wantLabels := 3
+			if tc.selfApprove {
+				wantLabels = 5
+			}
+			if got := len(client.fake.IssueLabelsAdded); got != wantLabels {
+				t.Errorf("want %d labels, got %d", wantLabels, got)
 			}
 		})
 	}

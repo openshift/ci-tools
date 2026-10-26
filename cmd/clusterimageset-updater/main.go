@@ -101,7 +101,7 @@ func updateExitCode(err error) int {
 	if err == nil {
 		return 0
 	}
-	if _, ok := err.(*clusterimageset.LookupFailures); ok {
+	if failures, ok := err.(*clusterimageset.LookupFailures); ok && failures != nil && failures.Err != nil {
 		return clusterimageset.PartialUpdateExitCode
 	}
 	return 1

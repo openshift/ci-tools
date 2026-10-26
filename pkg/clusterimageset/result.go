@@ -10,12 +10,18 @@ type LookupFailures struct {
 	Err error
 }
 
-// Error returns the lookup diagnostics.
+// Error returns the lookup diagnostics or a fallback for a nil receiver or cause.
 func (failures *LookupFailures) Error() string {
+	if failures == nil || failures.Err == nil {
+		return "release lookup failure without diagnostics"
+	}
 	return failures.Err.Error()
 }
 
-// Unwrap returns the underlying lookup errors.
+// Unwrap returns the underlying lookup errors, or nil for a nil receiver.
 func (failures *LookupFailures) Unwrap() error {
+	if failures == nil {
+		return nil
+	}
 	return failures.Err
 }

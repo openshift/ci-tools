@@ -116,6 +116,30 @@ func TestSnapshotImportSource(t *testing.T) {
 			wantOK:   true,
 			wantFrom: &coreapi.ObjectReference{Kind: "DockerImage", Name: api.QuayImageReference(api.ImageStreamTagReference{Namespace: "ocp", Name: "4.23", Tag: "cli"})},
 		},
+		{
+			name:      "okd scos spec first",
+			namespace: "origin",
+			stream:    "scos-5.1",
+			tag:       "tools",
+			source: &imagev1.ImageStream{
+				ObjectMeta: metav1.ObjectMeta{Namespace: "origin", Name: "scos-5.1"},
+				Spec: imagev1.ImageStreamSpec{Tags: []imagev1.TagReference{{
+					Name: "tools",
+					From: &coreapi.ObjectReference{Kind: "DockerImage", Name: specPull},
+				}}},
+			},
+			wantOK:   true,
+			wantFrom: &coreapi.ObjectReference{Kind: "DockerImage", Name: specPull},
+		},
+		{
+			name:      "okd scos quay fallback",
+			namespace: "origin",
+			stream:    "scos-5.1",
+			tag:       "tools",
+			source:    &imagev1.ImageStream{ObjectMeta: metav1.ObjectMeta{Namespace: "origin", Name: "scos-5.1"}},
+			wantOK:    true,
+			wantFrom:  &coreapi.ObjectReference{Kind: "DockerImage", Name: api.QuayImageReference(api.ImageStreamTagReference{Namespace: "origin", Name: "scos-5.1", Tag: "tools"})},
+		},
 	}
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {

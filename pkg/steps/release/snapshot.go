@@ -141,7 +141,7 @@ func snapshotImportSource(sourceNamespace, sourceName, tag string, source *image
 		}
 		return nil, false
 	}
-	if api.RefersToOfficialImage(sourceNamespace, api.WithoutOKD) {
+	if api.RefersToOfficialImage(sourceNamespace, api.WithOKD) {
 		if source != nil {
 			return utils.OfficialImageTagFrom(source, base), true
 		}

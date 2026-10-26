@@ -73,14 +73,42 @@ func FindSpecTag(is *imagev1.ImageStream, tag string) *coreapi.ObjectReference {
 // OfficialImageTagFrom returns an import source from spec, then status, then quay-proxy.
 func OfficialImageTagFrom(source *imagev1.ImageStream, base api.ImageStreamTagReference) *coreapi.ObjectReference {
 	if source != nil {
-		if ref := FindSpecTag(source, base.Tag); ref != nil && ref.Name != "" && (ref.Kind != "DockerImage" || !strings.HasPrefix(ref.Name, api.ServiceDomainAPPCIRegistry+"/ocp/")) {
-			return ref
+		if ref := FindSpecTag(source, base.Tag); ref != nil && usableOfficialImportRef(ref) {
+			return withSourceNamespace(ref, source.Namespace)
 		}
-		if ref, _ := FindStatusTag(source, base.Tag); ref != nil && ref.Name != "" && (ref.Kind != "DockerImage" || !strings.HasPrefix(ref.Name, api.ServiceDomainAPPCIRegistry+"/ocp/")) {
-			return ref
+		if ref, _ := FindStatusTag(source, base.Tag); ref != nil && usableOfficialImportRef(ref) {
+			return withSourceNamespace(ref, source.Namespace)
 		}
 	}
 	return &coreapi.ObjectReference{Kind: "DockerImage", Name: api.QuayImageReference(base)}
+}
+
+// withSourceNamespace copies ImageStreamTag/ImageStreamImage refs that lack a namespace
+// so imports into a job namespace still resolve against the source stream namespace.
+func withSourceNamespace(ref *coreapi.ObjectReference, sourceNamespace string) *coreapi.ObjectReference {
+	if ref == nil || ref.Namespace != "" {
+		return ref
+	}
+	switch ref.Kind {
+	case "ImageStreamTag", "ImageStreamImage":
+		out := *ref
+		out.Namespace = sourceNamespace
+		return &out
+	default:
+		return ref
+	}
+}
+
+// usableOfficialImportRef skips stale internal app.ci registry DockerImage refs for ocp/origin.
+func usableOfficialImportRef(ref *coreapi.ObjectReference) bool {
+	if ref == nil || ref.Name == "" {
+		return false
+	}
+	if ref.Kind != "DockerImage" {
+		return true
+	}
+	return !strings.HasPrefix(ref.Name, api.ServiceDomainAPPCIRegistry+"/ocp/") &&
+		!strings.HasPrefix(ref.Name, api.ServiceDomainAPPCIRegistry+"/origin/")
 }
 
 // TagImportReferencePolicy returns Source for external DockerImage refs, Local for in-cluster tags.
@@ -126,10 +154,10 @@ func PullSpecForImageStreamTag(registryURL string, source *imagev1.ImageStream, 
 	}
 }
 
-// ResolveOfficialInputFrom resolves official ocp inputs: stable in job ns, then spec/status/quay on source IS.
-// When ok is false, callers use QuayImageReference with Source policy (e.g. 4.23, 5.0).
+// ResolveOfficialInputFrom resolves official ocp/okd inputs: stable in job ns, then spec/status/quay on source IS.
+// When ok is false, callers use QuayImageReference with Source policy (non-official namespaces).
 func ResolveOfficialInputFrom(ctx context.Context, client ctrlruntimeclient.Client, jobNamespace string, base api.ImageStreamTagReference) (*coreapi.ObjectReference, bool, error) {
-	if !api.RefersToOfficialImage(base.Namespace, api.WithoutOKD) {
+	if !api.RefersToOfficialImage(base.Namespace, api.WithOKD) {
 		return nil, false, nil
 	}
 	if base.Name == api.StableImageStream || api.IsReleaseStream(base.Name) {

@@ -41,7 +41,34 @@ func TestResolveOfficialInputFrom(t *testing.T) {
 		wantFrom *coreapi.ObjectReference
 	}{
 		{name: "official ocp 5.0", base: api.ImageStreamTagReference{Namespace: "ocp", Name: "5.0", Tag: "cli"}, wantOK: true, wantFrom: &coreapi.ObjectReference{Kind: "DockerImage", Name: api.QuayImageReference(api.ImageStreamTagReference{Namespace: "ocp", Name: "5.0", Tag: "cli"})}},
+		{name: "okd quay fallback", base: api.ImageStreamTagReference{Namespace: "origin", Name: "scos-5.1", Tag: "tools"}, wantOK: true, wantFrom: &coreapi.ObjectReference{Kind: "DockerImage", Name: api.QuayImageReference(api.ImageStreamTagReference{Namespace: "origin", Name: "scos-5.1", Tag: "tools"})}},
 		{name: "non-official namespace", base: api.ImageStreamTagReference{Namespace: "ci", Name: "5.0", Tag: "cli"}, wantOK: false},
+		{
+			name: "okd scos spec digest",
+			base: api.ImageStreamTagReference{Namespace: "origin", Name: "scos-5.1", Tag: "tools"},
+			objects: []runtime.Object{&imagev1.ImageStream{
+				ObjectMeta: metav1.ObjectMeta{Namespace: "origin", Name: "scos-5.1"},
+				Spec: imagev1.ImageStreamSpec{Tags: []imagev1.TagReference{{
+					Name: "tools",
+					From: &coreapi.ObjectReference{Kind: "DockerImage", Name: specPull},
+				}}},
+			}},
+			wantOK:   true,
+			wantFrom: &coreapi.ObjectReference{Kind: "DockerImage", Name: specPull},
+		},
+		{
+			name: "skip stale registry.ci origin spec",
+			base: api.ImageStreamTagReference{Namespace: "origin", Name: "scos-5.1", Tag: "tools"},
+			objects: []runtime.Object{&imagev1.ImageStream{
+				ObjectMeta: metav1.ObjectMeta{Namespace: "origin", Name: "scos-5.1"},
+				Spec: imagev1.ImageStreamSpec{Tags: []imagev1.TagReference{{
+					Name: "tools",
+					From: &coreapi.ObjectReference{Kind: "DockerImage", Name: "registry.ci.openshift.org/origin/scos-5.1@sha256:dead"},
+				}}},
+			}},
+			wantOK:   true,
+			wantFrom: &coreapi.ObjectReference{Kind: "DockerImage", Name: api.QuayImageReference(api.ImageStreamTagReference{Namespace: "origin", Name: "scos-5.1", Tag: "tools"})},
+		},
 		{
 			name: "ocp builder spec quay-proxy digest",
 			base: api.ImageStreamTagReference{Namespace: "ocp", Name: "builder", Tag: "rhel-9-golang-1.22-openshift-4.17"},
@@ -93,6 +120,19 @@ func TestResolveOfficialInputFrom(t *testing.T) {
 			}},
 			wantOK:   true,
 			wantFrom: &coreapi.ObjectReference{Kind: "ImageStreamImage", Name: "4.22@sha256:deadbeef", Namespace: "ocp"},
+		},
+		{
+			name: "spec image stream image fills empty namespace",
+			base: api.ImageStreamTagReference{Namespace: "origin", Name: "scos-5.1", Tag: "tools"},
+			objects: []runtime.Object{&imagev1.ImageStream{
+				ObjectMeta: metav1.ObjectMeta{Namespace: "origin", Name: "scos-5.1"},
+				Spec: imagev1.ImageStreamSpec{Tags: []imagev1.TagReference{{
+					Name: "tools",
+					From: &coreapi.ObjectReference{Kind: "ImageStreamImage", Name: "scos-5.1@sha256:deadbeef"},
+				}}},
+			}},
+			wantOK:   true,
+			wantFrom: &coreapi.ObjectReference{Kind: "ImageStreamImage", Name: "scos-5.1@sha256:deadbeef", Namespace: "origin"},
 		},
 		{
 			name:     "quay fallback",

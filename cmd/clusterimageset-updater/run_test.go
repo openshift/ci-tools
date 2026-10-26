@@ -46,6 +46,9 @@ func TestRun(t *testing.T) {
 		{name: "conflicting preserved image set is unsafe", failures: []string{"a"}, shared: true, protectedTarget: true, fault: "conflict", wantError: "conflicts with preserved"},
 		{name: "distinct pullspecs with colliding image names are unsafe", failures: []string{"a"}, fault: "resolved-collision", wantError: "conflicting pullspecs"},
 		{name: "invalid pool is unsafe", fault: "pool", wantError: "failed to get list"},
+		{name: "unknown pool kind is unsafe after lookup failure", failures: []string{"a"}, fault: "kind", wantError: "failed to get list"},
+		{name: "registered non-pool kind is unsafe", failures: []string{"a"}, fault: "wrong-kind", wantError: "expected ClusterPool"},
+		{name: "missing pool kind is unsafe", failures: []string{"a"}, fault: "missing-kind", wantError: "failed to get list"},
 		{name: "invalid bounds are unsafe", fault: "bounds", wantError: "invalid version bounds"},
 		{name: "duplicate image names are unsafe", failures: []string{"a"}, fault: "duplicate", wantError: "duplicate clusterimageset"},
 		{name: "invalid image set is unsafe after lookup failure", failures: []string{"a"}, fault: "image", wantError: "failed to scan"},
@@ -75,6 +78,16 @@ func TestRun(t *testing.T) {
 					poolPath := filepath.Join(poolDir, stream+"_clusterpool.yaml")
 					pool := fmt.Sprintf("apiVersion: hive.openshift.io/v1\nkind: ClusterPool\nmetadata:\n  name: pool-%s\n  namespace: pools\n  labels:\n    owner: test\n    version_lower: 4.21.0-0\n    version_upper: 4.22.0-0\n    version_stream: %s\nspec:\n  imageSetRef:\n    name: %s\n", stream, stream, ref)
 					writeTestFile(t, poolPath, []byte(pool))
+					if tc.fault == "kind" && stream == "b" {
+						writeTestFile(t, poolPath, []byte(strings.ReplaceAll(pool, "kind: ClusterPool", "kind: UnknownPool")))
+					}
+					if tc.fault == "wrong-kind" && stream == "b" {
+						wrongKind := strings.ReplaceAll(pool, "apiVersion: hive.openshift.io/v1", "apiVersion: v1")
+						writeTestFile(t, poolPath, []byte(strings.ReplaceAll(wrongKind, "kind: ClusterPool", "kind: ConfigMap")))
+					}
+					if tc.fault == "missing-kind" && stream == "b" {
+						writeTestFile(t, poolPath, []byte(strings.ReplaceAll(pool, "kind: ClusterPool\n", "")))
+					}
 					if tc.fault == "bounds" && stream == "a" {
 						writeTestFile(t, poolPath, []byte(strings.ReplaceAll(pool, "4.21.0-0", "invalid")))
 					}

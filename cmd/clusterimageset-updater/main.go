@@ -129,9 +129,13 @@ func run(o options, client release.HTTPClient) error {
 		if err != nil {
 			return err
 		}
-		pool := hivev1.ClusterPool{}
-		if err := yaml.Unmarshal(raw, &pool); err != nil {
-			return err
+		decoded, _, err := s.Decode(raw, nil, nil)
+		if err != nil {
+			return fmt.Errorf("failed to decode pool %s: %w", path, err)
+		}
+		pool, ok := decoded.(*hivev1.ClusterPool)
+		if !ok {
+			return fmt.Errorf("expected ClusterPool in %s, got %T", path, decoded)
 		}
 		bounds, err := labelsToBounds(pool.Labels)
 		if err != nil {
@@ -143,7 +147,7 @@ func run(o options, client release.HTTPClient) error {
 			unboundedPools = append(unboundedPools, path)
 			protectedNames.Insert(pool.Spec.ImageSetRef.Name)
 		}
-		pools[path] = pool
+		pools[path] = *pool
 		return nil
 	}); err != nil {
 		return fmt.Errorf("failed to get list of clusterpools setting version bounds: %w", err)

@@ -86,6 +86,12 @@ must have only `secretmanager.secrets.list`, with no payload-read or write permi
 GSM metadata can contain sensitive annotations, so responses use only `Secret.Name`;
 Google SDK logging is suppressed and public errors use fixed messages.
 
+Each request to a collection endpoint produces one info-level `audit` log line with the
+`action`, `collection` (only if the name is valid), `user` (the verified `preferred_username`,
+only if the token was accepted), HTTP `status`, and `outcome` (`success`, `bad_request`,
+`unauthenticated`, `forbidden`, `error`, or `other`). Tokens, groups, and response bodies are
+never logged.
+
 ## Running locally
 
 From the repository root, using a proxy service-account key and a release checkout:

@@ -114,7 +114,8 @@ func TestRequireCollectionAccess(t *testing.T) {
 			logger := logrus.New()
 			logger.SetOutput(&logs)
 			logger.SetLevel(logrus.TraceLevel)
-			ctx := t.Context()
+			record := &auditRecord{}
+			ctx := context.WithValue(t.Context(), auditRecordContextKey{}, record)
 			var nextCalled bool
 			next := http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 				nextCalled = true
@@ -183,6 +184,9 @@ func TestRequireCollectionAccess(t *testing.T) {
 			}
 			if nextCalled != tc.wantNext {
 				t.Errorf("next handler called = %t, want %t", nextCalled, tc.wantNext)
+			}
+			if wantUser := tc.wantVerify && tc.verifyErr == nil; (record.username == identity.Username) != wantUser {
+				t.Errorf("recorded audit username = %q, want recorded: %t", record.username, wantUser)
 			}
 		})
 	}

@@ -14,6 +14,7 @@ import (
 // name, verifying the caller's bearer token, and checking access to that collection.
 // If any check fails, it writes an error response without calling next. Otherwise,
 // it passes the request to next with the verified identity in the request context.
+// After verification it records the username for Audit, if the request is wrapped by it.
 // Register the returned handler on a route with a {collection} path parameter.
 func RequireCollectionAccess(verifier TokenVerifier, authorizer Authorizer, logger *logrus.Entry, next http.Handler) http.Handler {
 	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
@@ -37,9 +38,10 @@ func RequireCollectionAccess(verifier TokenVerifier, authorizer Authorizer, logg
 			return
 		}
 
+		recordAuditUsername(r.Context(), identity.Username)
+
 		if err := authorizer.Authorize(identity, collection); err != nil {
 			if errors.Is(err, ErrForbidden) {
-				logger.Info("denied collection access")
 				writeError(w, http.StatusForbidden, MessageForbidden)
 				return
 			}

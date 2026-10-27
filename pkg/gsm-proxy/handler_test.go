@@ -12,7 +12,122 @@ import (
 
 	"github.com/google/go-cmp/cmp"
 	"github.com/sirupsen/logrus"
+	logrustest "github.com/sirupsen/logrus/hooks/test"
 )
+
+func TestNewServeMux(t *testing.T) {
+	const deletePattern = "DELETE /api/v1/collections/{collection}/secrets/{secret}"
+	testCases := []struct {
+		name        string
+		method      string
+		path        string
+		header      string
+		authzErr    error
+		wantStatus  int
+		wantHandler string
+		wantAudit   logrus.Fields
+	}{
+		{
+			name:       "healthz needs no token and is not audited",
+			method:     http.MethodGet,
+			path:       "/healthz",
+			wantStatus: http.StatusOK,
+		},
+		{
+			name:       "route without a token is rejected and audited",
+			method:     http.MethodGet,
+			path:       "/api/v1/collections/acm-qe/secrets",
+			wantStatus: http.StatusUnauthorized,
+			wantAudit:  logrus.Fields{"action": ListSecretsAction, "collection": "acm-qe", "status": http.StatusUnauthorized, "outcome": "unauthenticated"},
+		},
+		{
+			name:       "forbidden caller does not reach the route and is audited",
+			method:     http.MethodGet,
+			path:       "/api/v1/collections/acm-qe/secrets",
+			header:     "Bearer good",
+			authzErr:   ErrForbidden,
+			wantStatus: http.StatusForbidden,
+			wantAudit:  logrus.Fields{"action": ListSecretsAction, "collection": "acm-qe", "user": "test-user", "status": http.StatusForbidden, "outcome": "forbidden"},
+		},
+		{
+			name:        "authorized caller reaches the list route",
+			method:      http.MethodGet,
+			path:        "/api/v1/collections/acm-qe/secrets",
+			header:      "Bearer good",
+			wantStatus:  http.StatusNoContent,
+			wantHandler: "list",
+			wantAudit:   logrus.Fields{"action": ListSecretsAction, "collection": "acm-qe", "user": "test-user", "status": http.StatusNoContent, "outcome": "success"},
+		},
+		{
+			name:        "each route is audited with its own action",
+			method:      http.MethodDelete,
+			path:        "/api/v1/collections/acm-qe/secrets/aws",
+			header:      "Bearer good",
+			wantStatus:  http.StatusNoContent,
+			wantHandler: "delete",
+			wantAudit:   logrus.Fields{"action": "delete-secret", "collection": "acm-qe", "user": "test-user", "status": http.StatusNoContent, "outcome": "success"},
+		},
+		{
+			name:       "unknown path is not audited",
+			method:     http.MethodGet,
+			path:       "/api/v1/unknown",
+			header:     "Bearer good",
+			wantStatus: http.StatusNotFound,
+		},
+		{
+			name:       "unregistered method is not audited",
+			method:     http.MethodPost,
+			path:       "/api/v1/collections/acm-qe/secrets",
+			header:     "Bearer good",
+			wantStatus: http.StatusMethodNotAllowed,
+		},
+	}
+	for _, tc := range testCases {
+		t.Run(tc.name, func(t *testing.T) {
+			logger, hook := logrustest.NewNullLogger()
+			var calledHandler string
+			route := func(name string) http.Handler {
+				return http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
+					calledHandler = name
+					w.WriteHeader(http.StatusNoContent)
+				})
+			}
+			mux := NewServeMux(
+				&fakeVerifier{id: Identity{Username: "test-user", Groups: []string{"team-a"}}},
+				&fakeAuthorizer{err: tc.authzErr},
+				logrus.NewEntry(logger),
+				Route{Pattern: ListSecretsPattern, Action: ListSecretsAction, Handler: route("list")},
+				Route{Pattern: deletePattern, Action: "delete-secret", Handler: route("delete")},
+			)
+			request := httptest.NewRequest(tc.method, tc.path, nil)
+			if tc.header != "" {
+				request.Header.Set("Authorization", tc.header)
+			}
+			recorder := httptest.NewRecorder()
+			mux.ServeHTTP(recorder, request)
+
+			if recorder.Code != tc.wantStatus {
+				t.Errorf("status = %d, want %d", recorder.Code, tc.wantStatus)
+			}
+			if calledHandler != tc.wantHandler {
+				t.Errorf("called handler = %q, want %q", calledHandler, tc.wantHandler)
+			}
+			var audits []logrus.Fields
+			for _, entry := range hook.AllEntries() {
+				if entry.Message == "audit" {
+					audits = append(audits, entry.Data)
+				}
+			}
+			var wantAudits []logrus.Fields
+			if tc.wantAudit != nil {
+				wantAudits = []logrus.Fields{tc.wantAudit}
+			}
+			if diff := cmp.Diff(wantAudits, audits); diff != "" {
+				t.Errorf("audit entries mismatch (-want +got): %s", diff)
+			}
+		})
+	}
+}
 
 func TestListSecretsHandlerServeHTTP(t *testing.T) {
 	const sentinel = "upstream-detail-must-not-leak"

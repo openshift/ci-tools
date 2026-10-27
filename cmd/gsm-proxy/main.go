@@ -147,15 +147,16 @@ func run(o *options) error {
 
 func newServer(o *options, authorizer gsmproxy.Authorizer, lister gsmproxy.SecretLister) *http.Server {
 	log := logrus.NewEntry(logrus.StandardLogger())
-	handler := gsmproxy.RequireCollectionAccess(
-		gsmproxy.NewDexTokenVerifier(),
-		authorizer,
-		log,
-		&gsmproxy.ListSecretsHandler{Lister: lister, Log: log},
+	mux := gsmproxy.NewServeMux(gsmproxy.NewDexTokenVerifier(), authorizer, log,
+		gsmproxy.Route{
+			Pattern: gsmproxy.ListSecretsPattern,
+			Action:  gsmproxy.ListSecretsAction,
+			Handler: &gsmproxy.ListSecretsHandler{Lister: lister, Log: log},
+		},
 	)
 	return &http.Server{
 		Addr:              o.listenAddr,
-		Handler:           gsmproxy.NewServeMux(handler),
+		Handler:           mux,
 		ReadHeaderTimeout: 5 * time.Second,
 		ReadTimeout:       15 * time.Second,
 		WriteTimeout:      30 * time.Second,

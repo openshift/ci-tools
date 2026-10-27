@@ -55,7 +55,6 @@ func (h *ListSecretsHandler) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 	if names == nil {
 		names = []string{}
 	}
-	h.Log.Info("listed secrets")
 	writeJSON(w, http.StatusOK, ListSecretsResponse{Secrets: names})
 }
 

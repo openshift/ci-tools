@@ -58,13 +58,20 @@ func TestNewReloadingCollectionAuthorizer(t *testing.T) {
 			t.Fatal(err)
 		}
 		var nextCalls int
-		handler := NewServeMux(RequireCollectionAccess(
+		// Request logs go elsewhere so they cannot crowd out reload events.
+		requestLog := logrus.NewEntry(logrus.New())
+		requestLog.Logger.SetOutput(io.Discard)
+		handler := NewServeMux(
 			&fakeVerifier{id: Identity{Username: "test-user", Groups: []string{"team-a"}}},
-			authorizer, log, http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
-				nextCalls++
-				w.WriteHeader(http.StatusNoContent)
-			}),
-		))
+			authorizer, requestLog, Route{
+				Pattern: ListSecretsPattern,
+				Action:  ListSecretsAction,
+				Handler: http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
+					nextCalls++
+					w.WriteHeader(http.StatusNoContent)
+				}),
+			},
+		)
 		request := func() int {
 			t.Helper()
 			r := httptest.NewRequest(http.MethodGet, "/api/v1/collections/foo/secrets", nil)

@@ -7,7 +7,18 @@ import (
 	"github.com/sirupsen/logrus"
 )
 
-const ListSecretsPattern = "GET /api/v1/collections/{collection}/secrets"
+const (
+	ListSecretsPattern = "GET /api/v1/collections/{collection}/secrets"
+	ListSecretsAction  = "list-secrets"
+)
+
+// Route is a collection endpoint: a ServeMux pattern containing a {collection} path
+// parameter, the action name used in audit logs, and the handler serving it.
+type Route struct {
+	Pattern string
+	Action  string
+	Handler http.Handler
+}
 
 type ListSecretsResponse struct {
 	Secrets []string `json:"secrets"`
@@ -26,20 +37,20 @@ const (
 )
 
 // ListSecretsHandler serves the secret names of one collection.
-// It must be registered behind RequireCollectionAccess.
+// It must be registered as a Route through NewServeMux.
 type ListSecretsHandler struct {
 	Lister SecretLister
 	Log    *logrus.Entry
 }
 
-// NewServeMux registers healthz and, when supplied, the protected list handler.
-func NewServeMux(handler http.Handler) *http.ServeMux {
+// NewServeMux returns an HTTP handler that passes each request to the matching route's handler.
+func NewServeMux(verifier TokenVerifier, authorizer Authorizer, logger *logrus.Entry, routes ...Route) *http.ServeMux {
 	mux := http.NewServeMux()
 	mux.HandleFunc("GET /healthz", func(w http.ResponseWriter, _ *http.Request) {
 		w.WriteHeader(http.StatusOK)
 	})
-	if handler != nil {
-		mux.Handle(ListSecretsPattern, handler)
+	for _, route := range routes {
+		mux.Handle(route.Pattern, Audit(route.Action, logger, RequireCollectionAccess(verifier, authorizer, logger, route.Handler)))
 	}
 	return mux
 }

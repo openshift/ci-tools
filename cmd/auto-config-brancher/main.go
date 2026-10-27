@@ -228,8 +228,8 @@ func main() {
 		{
 			command: "/usr/bin/clusterimageset-updater",
 			arguments: []string{
-				"--pools", "./clusters/hosted-mgmt/hive/pools",
-				"--imagesets", "./clusters/hosted-mgmt/hive/pools",
+				"--pools", "./clusters/hosted-mgmt",
+				"--imagesets", "./clusters/hosted-mgmt/hive-pools-clusterimagesets",
 			},
 		},
 		{

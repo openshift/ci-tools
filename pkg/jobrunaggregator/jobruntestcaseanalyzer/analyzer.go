@@ -233,6 +233,12 @@ type TestCaseChecker interface {
 	TestSuite() *junit.TestSuite
 }
 
+type incompleteTestCaseChecker interface {
+	TestCaseChecker
+	// AddIncompleteJobRun records a job run whose test result cannot yet or can no longer be read.
+	AddIncompleteJobRun(jobRun jobrunaggregatorapi.JobRunInfo, status incompleteJobRunStatus)
+}
+
 type minimumRequiredPassesTestCaseChecker struct {
 	id testIdentifier
 	// testNameSuffix is a string that will be appended to the test name for the test case to
@@ -267,6 +273,13 @@ const (
 	testFailed
 )
 
+type incompleteJobRunStatus int
+
+const (
+	jobRunUnfinished incompleteJobRunStatus = iota
+	jobRunMissingJUnit
+)
+
 func getTestStatus(id testIdentifier, testSuite *junit.TestSuite) testStatus {
 	if len(id.testSuites) == 0 || id.testSuites[0] != testSuite.Name {
 		return testSkipped
@@ -276,11 +289,13 @@ func getTestStatus(id testIdentifier, testSuite *junit.TestSuite) testStatus {
 		for _, testCase := range testSuite.TestCases {
 			// Exact match will result in either pass or fail
 			if testCase.Name == id.testName {
-				if testCase.FailureOutput == nil {
-					return testPassed
-				} else {
+				if testCase.FailureOutput != nil {
 					return testFailed
 				}
+				if testCase.SkipMessage != nil {
+					return testSkipped
+				}
+				return testPassed
 			}
 		}
 		return testSkipped
@@ -297,6 +312,26 @@ func getTestStatus(id testIdentifier, testSuite *junit.TestSuite) testStatus {
 		}
 	}
 	return testSkipped
+}
+
+func incompleteTestCase(jobRun jobrunaggregatorapi.JobRunInfo) jobrunaggregatorlib.TestCaseIncomplete {
+	return jobrunaggregatorlib.TestCaseIncomplete{
+		JobRunID:       jobRun.GetJobRunID(),
+		HumanURL:       jobRun.GetHumanURL(),
+		GCSArtifactURL: jobRun.GetGCSArtifactURL(),
+	}
+}
+
+// AddIncompleteJobRun records a job run separately from completed test results. Incomplete job
+// runs never count as successful, but they also must not be reported as genuine test skips.
+func (r *minimumRequiredPassesTestCaseChecker) AddIncompleteJobRun(jobRun jobrunaggregatorapi.JobRunInfo, status incompleteJobRunStatus) {
+	switch status {
+	case jobRunUnfinished:
+		r.details.Unfinished = append(r.details.Unfinished, incompleteTestCase(jobRun))
+	case jobRunMissingJUnit:
+		r.details.MissingJUnits = append(r.details.MissingJUnits, incompleteTestCase(jobRun))
+	}
+	r.jobRunCount++
 }
 
 func (r *minimumRequiredPassesTestCaseChecker) addTestResultToDetails(currDetails *jobrunaggregatorlib.TestCaseDetails,
@@ -404,7 +439,8 @@ func (r *minimumRequiredPassesTestCaseChecker) TestSuite() *junit.TestSuite {
 	}
 	bottomSuite.TestCases = append(bottomSuite.TestCases, testCase)
 
-	r.details.Summary = fmt.Sprintf("Total job runs: %d, passes: %d, failures: %d, skips %d", r.jobRunCount, len(r.details.Passes), len(r.details.Failures), len(r.details.Skips))
+	r.details.Summary = fmt.Sprintf("Total job runs: %d, passes: %d, failures: %d, skips: %d, unfinished: %d, missing JUnit: %d",
+		r.jobRunCount, len(r.details.Passes), len(r.details.Failures), len(r.details.Skips), len(r.details.Unfinished), len(r.details.MissingJUnits))
 	detailsYaml, err := yaml.Marshal(r.details)
 	if err != nil {
 		return nil
@@ -432,7 +468,7 @@ type JobRunTestCaseAnalyzerOptions struct {
 	timeout             time.Duration
 	ciDataClient        jobrunaggregatorlib.CIDataClient
 	ciGCSClient         jobrunaggregatorlib.CIGCSClient
-	testCaseCheckers    []TestCaseChecker
+	testCaseCheckers    []incompleteTestCaseChecker
 	testNameSuffix      string
 	payloadInvocationID string
 	jobGCSPrefixes      *[]jobGCSPrefix
@@ -622,12 +658,24 @@ func (o *JobRunTestCaseAnalyzerOptions) runTestCaseCheckers(ctx context.Context,
 		TestCases: []*junit.TestCase{},
 	}
 
-	allJobRuns := append(finishedJobRuns, unfinishedJobRuns...)
-	for i := range allJobRuns {
-		jobRun := allJobRuns[i]
+	for i := range finishedJobRuns {
+		jobRun := finishedJobRuns[i]
 
 		testSuites, err := jobRun.GetCombinedJUnitTestSuites(ctx)
 		if err != nil {
+			logrus.WithError(err).Warnf("finished job run %s/%s has no readable JUnit results", jobRun.GetJobName(), jobRun.GetJobRunID())
+			for _, checker := range o.testCaseCheckers {
+				checker.AddIncompleteJobRun(jobRun, jobRunMissingJUnit)
+			}
+			jobRun.ClearAllContent()
+			continue
+		}
+		if testSuites == nil || len(testSuites.Suites) == 0 {
+			logrus.Warnf("finished job run %s/%s has no readable JUnit results", jobRun.GetJobName(), jobRun.GetJobRunID())
+			for _, checker := range o.testCaseCheckers {
+				checker.AddIncompleteJobRun(jobRun, jobRunMissingJUnit)
+			}
+			jobRun.ClearAllContent()
 			continue
 		}
 		for _, checker := range o.testCaseCheckers {
@@ -637,6 +685,13 @@ func (o *JobRunTestCaseAnalyzerOptions) runTestCaseCheckers(ctx context.Context,
 		// before fetching the next job run instead of holding all of them until the end
 		jobRun.ClearAllContent()
 	}
+	for i := range unfinishedJobRuns {
+		jobRun := unfinishedJobRuns[i]
+		logrus.Warnf("job run %s/%s is unfinished and is not being classified as a test skip", jobRun.GetJobName(), jobRun.GetJobRunID())
+		for _, checker := range o.testCaseCheckers {
+			checker.AddIncompleteJobRun(jobRun, jobRunUnfinished)
+		}
+	}
 	for _, checker := range o.testCaseCheckers {
 		testSuite := checker.TestSuite()
 		topSuite.Children = append(topSuite.Children, testSuite)
@@ -644,6 +699,12 @@ func (o *JobRunTestCaseAnalyzerOptions) runTestCaseCheckers(ctx context.Context,
 		topSuite.NumFailed += testSuite.NumFailed
 	}
 	return topSuite
+}
+
+const resultProcessingReserve = 20 * time.Minute
+
+func resultCollectionDeadline(jobRunStartEstimate time.Time, timeout time.Duration) time.Time {
+	return jobRunStartEstimate.Add(timeout - resultProcessingReserve)
 }
 
 func (o *JobRunTestCaseAnalyzerOptions) Run(ctx context.Context) error {
@@ -663,8 +724,7 @@ func (o *JobRunTestCaseAnalyzerOptions) Run(ctx context.Context) error {
 	// if it hasn't been more than two hours since the jobRuns started, the list isn't complete.
 	readyAt := o.jobRunStartEstimate.Add(10 * time.Minute)
 
-	durationToWait := o.timeout - 20*time.Minute
-	timeToStopWaiting := o.jobRunStartEstimate.Add(durationToWait)
+	timeToStopWaiting := resultCollectionDeadline(o.jobRunStartEstimate, o.timeout)
 
 	fmt.Printf("Analyzing test status for job runs for %q.  now=%v, ReadyAt=%v, timeToStopWaiting=%v.\n", matchID, time.Now(), readyAt, timeToStopWaiting)
 

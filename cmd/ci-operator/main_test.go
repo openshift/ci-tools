@@ -212,10 +212,11 @@ func verifyMetadata(jobSpec *api.JobSpec, namespace string, customMetadata map[s
 
 func TestGetResolverInfo(t *testing.T) {
 	testCases := []struct {
-		name     string
-		opt      *options
-		jobSpec  *api.JobSpec
-		expected *api.Metadata
+		name       string
+		opt        *options
+		jobSpec    *api.JobSpec
+		injectTest *api.MetadataWithTest
+		expected   *api.Metadata
 	}{{
 		name: "Only JobSpec Refs",
 		opt:  &options{},
@@ -269,9 +270,10 @@ func TestGetResolverInfo(t *testing.T) {
 			},
 		},
 		expected: &api.Metadata{
-			Org:    "testOrganization,anotherOrganization",
-			Repo:   "testRepo,anotherRepo",
-			Branch: "testBranch,anotherBranch",
+			Org:     "testOrganization,anotherOrganization",
+			Repo:    "testRepo,anotherRepo",
+			Branch:  "testBranch,anotherBranch",
+			Variant: ",",
 		},
 	}, {
 		name: "Incomplete refs not used",
@@ -413,9 +415,42 @@ func TestGetResolverInfo(t *testing.T) {
 			Branch:  "testBranch,extraBranch,moreBranch",
 			Variant: "v2,,",
 		},
+	}, {
+		// Regression test: an extra ref added to check out the source repository of a test
+		// injected via --with-test-from (see withInjectedSourceRef in
+		// pkg/controller/prpqr_reconciler) must resolve its own configuration using its own
+		// variant, which may differ from the job's. Before this fix, every ref but the first
+		// always resolved with an empty variant, so a source config that only exists under a
+		// non-empty variant could never be found.
+		name: "extra ref is the injected test's own source: resolves under its own variant",
+		opt:  &options{},
+		jobSpec: &api.JobSpec{
+			JobSpec: downwardapi.JobSpec{
+				Refs: &prowapi.Refs{
+					Org:     "org",
+					Repo:    "component",
+					BaseRef: "main",
+				},
+				ExtraRefs: []prowapi.Refs{{
+					Org:     "org",
+					Repo:    "source",
+					BaseRef: "main",
+				}},
+			},
+		},
+		injectTest: &api.MetadataWithTest{
+			Metadata: api.Metadata{Org: "org", Repo: "source", Branch: "main", Variant: "4.21"},
+			Test:     "e2e",
+		},
+		expected: &api.Metadata{
+			Org:     "org,org",
+			Repo:    "component,source",
+			Branch:  "main,main",
+			Variant: ",4.21",
+		},
 	}}
 	for _, testCase := range testCases {
-		actual := testCase.opt.getResolverInfo(testCase.jobSpec)
+		actual := testCase.opt.getResolverInfo(testCase.jobSpec, testCase.injectTest)
 		if !reflect.DeepEqual(actual, testCase.expected) {
 			t.Errorf("%s: Actual does not match expected:\n%s", testCase.name, diff.ObjectReflectDiff(testCase.expected, actual))
 		}

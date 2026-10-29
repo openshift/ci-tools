@@ -63,8 +63,11 @@ type options struct {
 
 	prowconfig configflagutil.ConfigOptions
 
-	slackTokenPath         string
-	slackSigningSecretPath string
+	slackTokenPath          string
+	slackSigningSecretPath  string
+	jiraAutomationTokenPath string
+	jiraLabelChannelID      string
+	jiraLabelChaiBotUserID  string
 
 	keywordsConfigPath      string
 	helpdeskAlias           string
@@ -160,6 +163,11 @@ func (o *options) Validate() error {
 	if o.slackSigningSecretPath == "" {
 		return fmt.Errorf("--slack-signing-secret-path is required")
 	}
+	if o.jiraAutomationTokenPath != "" || o.jiraLabelChannelID != "" || o.jiraLabelChaiBotUserID != "" {
+		if o.jiraAutomationTokenPath == "" || o.jiraLabelChannelID == "" || !slackMemberIDPattern.MatchString(o.jiraLabelChaiBotUserID) {
+			return fmt.Errorf("--jira-automation-token-path, --jira-label-channel-id, and a valid --jira-label-chai-bot-user-id must be set together")
+		}
+	}
 	if o.supportRequestChannelID != "" && o.supportRequestThreshold < 1 {
 		return fmt.Errorf("--support-request-threshold must be >= 1")
 	}
@@ -228,6 +236,9 @@ func gatherOptions(fs *flag.FlagSet, args ...string) options {
 
 	fs.StringVar(&o.slackTokenPath, "slack-token-path", "", "Path to the file containing the Slack token to use.")
 	fs.StringVar(&o.slackSigningSecretPath, "slack-signing-secret-path", "", "Path to the file containing the Slack signing secret to use.")
+	fs.StringVar(&o.jiraAutomationTokenPath, "jira-automation-token-path", "", "Path to the shared secret for Jira Automation web requests. Empty disables the Jira label endpoint.")
+	fs.StringVar(&o.jiraLabelChannelID, "jira-label-channel-id", "", "Immutable Slack channel ID for dptp-ai-ready notifications.")
+	fs.StringVar(&o.jiraLabelChaiBotUserID, "jira-label-chai-bot-user-id", "", "Slack member ID of chai-bot to mention in Jira label notifications.")
 	fs.StringVar(&o.keywordsConfigPath, "keywords-config-path", "", "Path to the slack-bot keywords config file.")
 	fs.StringVar(&o.helpdeskAlias, "helpdesk-alias", "@dptp-helpdesk", "Alias for helpdesk user(s) beginning with '@'")
 	fs.StringVar(&o.forumChannelId, "forum-channel-id", "CBN38N3MW", "Channel ID for #forum-ocp-testplatform")
@@ -316,6 +327,9 @@ func main() {
 	if o.alertProxyForwarderSecretPath != "" {
 		secretPaths = append(secretPaths, o.alertProxyForwarderSecretPath)
 	}
+	if o.jiraAutomationTokenPath != "" {
+		secretPaths = append(secretPaths, o.jiraAutomationTokenPath)
+	}
 	if err := secret.Add(secretPaths...); err != nil {
 		logrus.WithError(err).Fatal("Error starting secrets agent.")
 	}
@@ -389,6 +403,7 @@ func main() {
 			l("interactive-endpoint"),
 			l("events-endpoint"),
 		),
+		l("jira", l("label-endpoint")),
 	))
 	handler := metrics.TraceHandler(simplifier, promMetrics.HTTPRequestDuration, promMetrics.HTTPResponseSize)
 	pprof.Instrument(o.instrumentationOptions)
@@ -397,9 +412,19 @@ func main() {
 
 	mux := http.NewServeMux()
 	// handle the root to allow for a simple uptime probe
-	mux.Handle("/", handler(http.HandlerFunc(func(writer http.ResponseWriter, request *http.Request) { writer.WriteHeader(http.StatusOK) })))
+	mux.Handle("/", handler(http.HandlerFunc(handleRoot)))
 	mux.Handle("/slack/interactive-endpoint", handler(handleInteraction(secret.GetTokenGenerator(o.slackSigningSecretPath), o.alertProxyInteractionURL, alertProxyRelay, slackClient, interactionrouter.ForModals(issueFiler, slackClient))))
 	mux.Handle("/slack/events-endpoint", handler(handleEvent(secret.GetTokenGenerator(o.slackSigningSecretPath), eventRoutes)))
+	if o.jiraAutomationTokenPath != "" {
+		mux.Handle("/jira/label-endpoint", handler(&jiraLabelHandler{
+			token:         secret.GetTokenGenerator(o.jiraAutomationTokenPath),
+			channelID:     o.jiraLabelChannelID,
+			chaiBotUserID: o.jiraLabelChaiBotUserID,
+			poster:        slackClient,
+		}))
+	} else {
+		mux.Handle("/jira/label-endpoint", http.NotFoundHandler())
+	}
 	server := &http.Server{Addr: ":" + strconv.Itoa(o.port), Handler: mux}
 
 	health.ServeReady()
@@ -407,6 +432,14 @@ func main() {
 	logrus.Debug("Server ready.")
 	interrupts.ListenAndServe(server, o.gracePeriod)
 	interrupts.WaitForGracefulShutdown()
+}
+
+func handleRoot(writer http.ResponseWriter, request *http.Request) {
+	if request.URL.Path != "/" {
+		http.NotFound(writer, request)
+		return
+	}
+	writer.WriteHeader(http.StatusOK)
 }
 
 func loadConfig(configPath string, config interface{}) error {

@@ -28,6 +28,34 @@ func signedSlackEvent(body, secret string) *http.Request {
 	return request
 }
 
+func TestRootHandlerDoesNotAcceptUnknownWebhookPaths(t *testing.T) {
+	testCases := []struct {
+		name       string
+		path       string
+		wantStatus int
+	}{
+		{
+			name:       "root health check",
+			path:       "/",
+			wantStatus: http.StatusOK,
+		},
+		{
+			name:       "unknown webhook path",
+			path:       "/jira/label-endpoint/",
+			wantStatus: http.StatusNotFound,
+		},
+	}
+	for _, testCase := range testCases {
+		t.Run(testCase.name, func(t *testing.T) {
+			response := httptest.NewRecorder()
+			handleRoot(response, httptest.NewRequest(http.MethodGet, testCase.path, nil))
+			if response.Code != testCase.wantStatus {
+				t.Fatalf("status = %d, want %d", response.Code, testCase.wantStatus)
+			}
+		})
+	}
+}
+
 func TestEventEndpointVerifiesSignatureAndPreservesEventID(t *testing.T) {
 	const body = `{"type":"event_callback","team_id":"T-team","api_app_id":"A-app","event_id":"Ev-dispatch","event_time":1787263200,"event":{"type":"app_mention","user":"U1","text":"<@B1> tp-dispatch status","ts":"100.1","channel":"C-team","event_ts":"100.1"}}`
 	handled := make(chan *slackevents.EventsAPIEvent, 1)

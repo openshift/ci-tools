@@ -2,6 +2,7 @@ package main
 
 import (
 	"fmt"
+	"sort"
 	"strings"
 	"testing"
 
@@ -609,6 +610,56 @@ func (c *countingMemberClient) GetRepo(_, _ string) (github.FullRepo, error) {
 }
 func (c *countingMemberClient) GetOrg(_ string) (*github.Organization, error) {
 	return &github.Organization{}, nil
+}
+
+func TestParseWhitelistRepos(t *testing.T) {
+	testCases := []struct {
+		name          string
+		path          string
+		expectedRepos []string
+		expectError   bool
+	}{
+		{
+			name:          "valid whitelist with multiple orgs",
+			path:          "testdata/whitelist.yaml",
+			expectedRepos: []string{"openshift/installer", "os-observability/cluster-logging-operator", "os-observability/redhat-opentelemetry-collector"},
+			expectError:   false,
+		},
+		{
+			name:          "empty whitelist",
+			path:          "testdata/whitelist_empty.yaml",
+			expectedRepos: nil,
+			expectError:   false,
+		},
+		{
+			name:        "invalid yaml",
+			path:        "testdata/whitelist_invalid.yaml",
+			expectError: true,
+		},
+		{
+			name:        "nonexistent file",
+			path:        "testdata/nonexistent.yaml",
+			expectError: true,
+		},
+	}
+	for _, tc := range testCases {
+		t.Run(tc.name, func(t *testing.T) {
+			repos, err := parseWhitelistRepos(tc.path)
+			if tc.expectError {
+				if err == nil {
+					t.Fatal("expected error, got nil")
+				}
+				return
+			}
+			if err != nil {
+				t.Fatalf("unexpected error: %v", err)
+			}
+			sort.Strings(repos)
+			if diff := cmp.Diff(tc.expectedRepos, repos); diff != "" {
+				t.Fatalf("repos did not match expected, diff: %s", diff)
+			}
+		})
+	}
 }
 
 func TestGatherModifiedReposProwConfigs(t *testing.T) {

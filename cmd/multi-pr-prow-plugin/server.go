@@ -38,7 +38,7 @@ const (
 )
 
 var (
-	testwithCommand = regexp.MustCompile(fmt.Sprintf(`(?mi)^%s\s+(?P<job>[-\w./]+)\s+(?P<prs>(?:[-\w./#:]+\s*)+)\s*$`, testwithPrefix))
+	testwithCommand = regexp.MustCompile(fmt.Sprintf(`(?mi)^%s[ \t]+(?P<job>[-\w./]+)(?:[ \t]+(?P<prs>[^\r\n]*))?[ \t]*\r?$`, testwithPrefix))
 	abortCommand    = fmt.Sprintf("%s abort", testwithPrefix)
 )
 
@@ -54,9 +54,9 @@ func helpProvider(_ []prowconfig.OrgRepo) (*pluginhelp.PluginHelp, error) {
 	}
 	pluginHelp.AddCommand(pluginhelp.Command{
 		Usage:       "/testwith",
-		Description: "The multi-pr-prow-plugin /testwith command triggers the requested test against source(s) built from the origin PR and the requested additional PRs",
+		Description: "Triggers the requested test with the origin PR, optional additional PRs, and recursive Depends-On dependencies from their descriptions",
 		WhoCanUse:   "Members of the trusted organization for the repo.",
-		Examples:    []string{"/testwith openshift/kubernetes/master/e2e openshift/kubernetes#1234 openshift/installer#999"},
+		Examples:    []string{"/testwith openshift/kubernetes/master/e2e", "/testwith openshift/kubernetes/master/e2e openshift/kubernetes#1234 openshift/installer#999"},
 	})
 	pluginHelp.AddCommand(pluginhelp.Command{
 		Usage:       "/testwith abort",
@@ -249,11 +249,14 @@ type jobRun struct {
 	JobMetadata   api.MetadataWithTest
 	OriginPR      github.PullRequest
 	AdditionalPRs []github.PullRequest
+	// ResolvedPRs includes the origin in dependency-first order.
+	ResolvedPRs []github.PullRequest
 }
 
 func (s *server) determineJobRuns(comment string, originPR github.PullRequest) ([]jobRun, error) {
 	lines := strings.Split(comment, "\n")
 	var jobRuns []jobRun
+	cache := map[prReference]github.PullRequest{}
 	for _, line := range lines {
 		for _, match := range testwithCommand.FindAllStringSubmatch(line, -1) {
 			jobIndex := testwithCommand.SubexpIndex("job")
@@ -270,37 +273,20 @@ func (s *server) determineJobRuns(comment string, originPR github.PullRequest) (
 			if len(rawPRs) >= maxPRs {
 				return nil, fmt.Errorf("%d PRs found which is more than the max of %d, will not process request", len(rawPRs), maxPRs)
 			}
-			for _, rawPR := range rawPRs {
-				if strings.HasPrefix(rawPR, githubURL) {
-					// When users copy/paste the command, GitHub likes to fully resolve the url into the value.
-					// we can catch this and convert it to the proper format.
-					rawPR = strings.Replace(strings.TrimPrefix(rawPR, githubURL), "/pull/", "#", 1)
-				}
-
-				orgSplit := strings.Split(rawPR, "/")
-				if len(orgSplit) != 2 {
-					return nil, fmt.Errorf("invalid format for additional PR: %s", rawPR)
-				}
-				org := orgSplit[0]
-				repoNumberSplit := strings.Split(orgSplit[1], "#")
-				if len(repoNumberSplit) != 2 {
-					return nil, fmt.Errorf("invalid format for additional PR: %s", rawPR)
-				}
-				repo := repoNumberSplit[0]
-				prNumber, err := strconv.Atoi(repoNumberSplit[1])
-				if err != nil {
-					return nil, fmt.Errorf("couldn't convert pr Number from: %s", rawPR)
-				}
-				pr, err := s.ghc.GetPullRequest(org, repo, prNumber)
-				if err != nil {
-					return nil, fmt.Errorf("couldn't get PR from GitHub: %s: %w", rawPR, err)
+			resolvedPRs, err := s.resolvePRs(originPR, rawPRs, cache)
+			if err != nil {
+				return nil, err
+			}
+			for _, pr := range resolvedPRs {
+				if referenceForPR(pr) == referenceForPR(originPR) {
+					continue
 				}
 				// For additional PRs from the same org/repo as the job, set the base branch
 				// to the job's branch. This handles renamed default branches (e.g., "master" → "main").
 				if pr.Base.Repo.Owner.Login == jobMetadata.Org && pr.Base.Repo.Name == jobMetadata.Repo {
 					pr.Base.Ref = jobMetadata.Branch
 				}
-				additionalPRs = append(additionalPRs, *pr)
+				additionalPRs = append(additionalPRs, pr)
 			}
 
 			// When the operand PR is on the job repo, clear Base.Ref: branch comes from
@@ -315,6 +301,7 @@ func (s *server) determineJobRuns(comment string, originPR github.PullRequest) (
 				JobMetadata:   *jobMetadata,
 				OriginPR:      storedOriginPR,
 				AdditionalPRs: additionalPRs,
+				ResolvedPRs:   resolvedPRs,
 			})
 		}
 	}
@@ -418,11 +405,14 @@ func (s *server) generateProwJob(jr jobRun) (*prowv1.ProwJob, error) {
 		}
 		return pr
 	}
-	normalizedPRs := make([]github.PullRequest, 0, len(jr.AdditionalPRs)+1)
-	for _, pr := range jr.AdditionalPRs {
+	orderedPRs := jr.ResolvedPRs
+	if len(orderedPRs) == 0 {
+		orderedPRs = append(append([]github.PullRequest{}, jr.AdditionalPRs...), jr.OriginPR)
+	}
+	normalizedPRs := make([]github.PullRequest, 0, len(orderedPRs))
+	for _, pr := range orderedPRs {
 		normalizedPRs = append(normalizedPRs, normalizePRBranch(pr))
 	}
-	normalizedPRs = append(normalizedPRs, normalizePRBranch(jr.OriginPR))
 	refs, err := createRefsForPullRequests(normalizedPRs, s.ciOpConfigResolver, s.ghc)
 	if err != nil {
 		return nil, fmt.Errorf("create refs for PR: %w", err)

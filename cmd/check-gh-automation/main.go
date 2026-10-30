@@ -4,9 +4,11 @@ import (
 	"flag"
 	"fmt"
 	"os"
+	"path/filepath"
 	"regexp"
 	"strings"
 
+	"github.com/ghodss/yaml"
 	"github.com/sirupsen/logrus"
 
 	"k8s.io/apimachinery/pkg/util/sets"
@@ -45,6 +47,7 @@ type options struct {
 	onlyOrgs              flagutil.Strings
 	repos                 flagutil.Strings
 	releaseRepoPath       string
+	whitelistFile         string
 	flagutil.GitHubOptions
 	pluginConfig prowpluginconfig.PluginOptions
 }
@@ -87,6 +90,7 @@ func gatherOptions() options {
 	fs.Var(&o.onlyOrgs, "only-org", "Only check repos from these orgs. Can be passed multiple times. If not set, all orgs are checked.")
 	fs.Var(&o.repos, "repo", "Specifically check only an org/repo. Can be passed multiple times.")
 	fs.StringVar(&o.releaseRepoPath, "candidate-path", "", "Path to a openshift/release working copy with a revision to be tested")
+	fs.StringVar(&o.whitelistFile, "whitelist-file", "", "Path to the openshift-priv whitelist YAML file, relative to the release repo root. Repos listed in the whitelist are validated when the file is changed (candidate mode) or always (full mode).")
 	o.pluginConfig.AddFlags(fs)
 
 	o.GitHubOptions.AddFlags(fs)
@@ -186,10 +190,19 @@ func determineRepos(o options, prowAgent *prowconfig.Agent, logger *logrus.Entry
 	}
 
 	if o.releaseRepoPath != "" {
-		return filterByOrg(gatherModifiedRepos(o.releaseRepoPath, logger), o.onlyOrgs.StringSet())
+		return filterByOrg(gatherModifiedRepos(o.releaseRepoPath, o.whitelistFile, logger), o.onlyOrgs.StringSet())
 	}
 
-	return filterByOrg(sets.List(prowAgent.Config().AllRepos), o.onlyOrgs.StringSet())
+	allRepos := sets.New[string](sets.List(prowAgent.Config().AllRepos)...)
+	if o.whitelistFile != "" {
+		wlRepos, err := parseWhitelistRepos(o.whitelistFile)
+		if err != nil {
+			logger.WithError(err).Warn("could not parse whitelist file, continuing without whitelist repos")
+		} else {
+			allRepos.Insert(wlRepos...)
+		}
+	}
+	return filterByOrg(sets.List(allRepos), o.onlyOrgs.StringSet())
 }
 
 func filterByOrg(repos []string, onlyOrgs sets.Set[string]) []string {
@@ -407,7 +420,7 @@ repoLoop:
 
 const maxRepos = 10
 
-func gatherModifiedRepos(releaseRepoPath string, logger *logrus.Entry) []string {
+func gatherModifiedRepos(releaseRepoPath, whitelistFile string, logger *logrus.Entry) []string {
 	jobSpec, err := downwardapi.ResolveSpecFromEnv()
 	if err != nil {
 		logger.Fatalf("error resolving JobSpec: %v", err)
@@ -444,10 +457,45 @@ func gatherModifiedRepos(releaseRepoPath string, logger *logrus.Entry) []string 
 		}
 	}
 
+	if whitelistFile != "" {
+		changed, err := config.IsFileChanged(releaseRepoPath, whitelistFile, jobSpec.Refs.BaseSHA)
+		if err != nil {
+			logger.WithError(err).Debug("could not check for whitelist file changes, continuing without them")
+		} else if changed {
+			logger.Infof("whitelist file %s was modified, including whitelist repos", whitelistFile)
+			wlRepos, err := parseWhitelistRepos(filepath.Join(releaseRepoPath, whitelistFile))
+			if err != nil {
+				logger.WithError(err).Warn("could not parse whitelist file")
+			} else {
+				orgRepos.Insert(wlRepos...)
+			}
+		}
+	}
+
 	if orgRepos.Len() > maxRepos {
 		logger.Warnf("Found %d repos, which is more than we will check for a PR. It is likely that this PR is a config update on many repos, and doesn't need to be checked.", orgRepos.Len())
 		return []string{}
 	}
 
 	return sets.List(orgRepos)
+}
+
+// parseWhitelistRepos reads a whitelist YAML file and returns org/repo pairs
+// for all listed repositories.
+func parseWhitelistRepos(path string) ([]string, error) {
+	data, err := os.ReadFile(path)
+	if err != nil {
+		return nil, fmt.Errorf("reading whitelist file %s: %w", path, err)
+	}
+	var wl config.WhitelistConfig
+	if err := yaml.Unmarshal(data, &wl); err != nil {
+		return nil, fmt.Errorf("parsing whitelist file %s: %w", path, err)
+	}
+	var repos []string
+	for org, orgRepos := range wl.Whitelist {
+		for _, repo := range orgRepos {
+			repos = append(repos, fmt.Sprintf("%s/%s", org, repo))
+		}
+	}
+	return repos, nil
 }

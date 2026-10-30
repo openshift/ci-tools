@@ -801,6 +801,11 @@ func (r *reconciler) fetchClusterKubeconfig(
 		"kubeAdminPassword": kubeadminPasswd,
 	}
 
+	htpasswdUsers, ok := kubeconfigSecret.Data["users"]
+	if ok {
+		secretData["users"] = htpasswdUsers
+	}
+
 	if err := r.createCredentialsSecret(ctx, log, ec, secretData); err != nil {
 		log.WithError(err).Error("Failed to create credentials secret")
 		return
@@ -890,6 +895,14 @@ func (r *reconciler) createCredentialsSecret(
 			return fmt.Errorf("credentials secret %s/%s exists but is not owned by ephemeralcluster %s (uid=%s)",
 				ec.Namespace, secretName, ec.Name, ec.UID)
 		}
+		if existing.Data == nil {
+			existing.Data = make(map[string][]byte)
+		}
+		maps.Copy(existing.Data, data)
+		if err := r.masterClient.Update(ctx, &existing); err != nil {
+			return fmt.Errorf("update credentials secret: %w", err)
+		}
+		log.WithField("secret", secretName).Info("Cluster credentials secret updated")
 		return nil
 	}
 

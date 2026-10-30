@@ -813,6 +813,7 @@ func TestReconcile(t *testing.T) {
 						Data: map[string][]byte{
 							"kubeconfig":         []byte("kubeconfig"),
 							"kubeadmin-password": []byte("password"),
+							"users":              []byte("users"),
 						},
 					},
 				}
@@ -829,6 +830,7 @@ func TestReconcile(t *testing.T) {
 				Data: map[string][]byte{
 					"kubeconfig":        []byte("kubeconfig"),
 					"kubeAdminPassword": []byte("password"),
+					"users":             []byte("users"),
 				},
 			},
 			now: new(parseTime(t, "2025-04-02 12:14:12")),

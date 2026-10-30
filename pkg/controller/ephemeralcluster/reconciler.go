@@ -801,6 +801,11 @@ func (r *reconciler) fetchClusterKubeconfig(
 		"kubeAdminPassword": kubeadminPasswd,
 	}
 
+	htpasswdUsers, ok := kubeconfigSecret.Data["credentials"]
+	if ok {
+		secretData["credentials"] = htpasswdUsers
+	}
+
 	if err := r.createCredentialsSecret(ctx, log, ec, secretData); err != nil {
 		log.WithError(err).Error("Failed to create credentials secret")
 		return

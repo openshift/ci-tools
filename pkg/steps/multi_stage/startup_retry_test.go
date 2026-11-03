@@ -451,12 +451,16 @@ func (client *startupRunClient) Get(ctx context.Context, key ctrlruntimeclient.O
 
 func (client *startupRunClient) Watch(ctx context.Context, list ctrlruntimeclient.ObjectList, options ...ctrlruntimeclient.ListOption) (watch.Interface, error) {
 	client.watchRequested.Store(true)
-	if client.scenario == "execution before waiting" {
+	if client.scenario == "execution before waiting" || client.scenario == "malformed bookmark before waiting" {
 		pod := client.CreatedPods[0].DeepCopy()
 		watcher := watch.NewRaceFreeFake()
 		started := pod.DeepCopy()
 		started.Status.ContainerStatuses[0].State.Running = &coreapi.ContainerStateRunning{}
-		watcher.Modify(started)
+		if client.scenario == "malformed bookmark before waiting" {
+			watcher.Action(watch.Bookmark, &metav1.Status{})
+		} else {
+			watcher.Modify(started)
+		}
 		watcher.Modify(pod)
 		return watcher, nil
 	}
@@ -517,6 +521,7 @@ func TestRunPodsStartupRetry(t *testing.T) {
 		{name: "initial watch failure", phase: "post", failures: 1, attempts: 1, wantErr: true, noPreconditions: true},
 		{name: "initial watch error event", phase: "post", failures: 1, attempts: 1, wantErr: true, noPreconditions: true},
 		{name: "execution before waiting", phase: "post", failures: 1, attempts: 1, wantErr: true, noPreconditions: true},
+		{name: "malformed bookmark before waiting", phase: "post", failures: 1, attempts: 1, wantErr: true, noPreconditions: true},
 		{name: "existing pod execution", phase: "post", failures: 1, attempts: 1, wantErr: true, noPreconditions: true},
 		{name: "generic pending", phase: "post", failures: 1, attempts: 1, wantErr: true, noPreconditions: true},
 	} {
@@ -672,7 +677,7 @@ func TestStartupDeletionClientGet(t *testing.T) {
 }
 
 func TestForwardStartupEvents(t *testing.T) {
-	for _, name := range []string{"error event", "cancel", "stop", "upstream closed", "blocked cancel", "blocked stop", "nil pod", "typed nil pod", "invalid pod"} {
+	for _, name := range []string{"error event", "cancel", "stop", "upstream closed", "blocked cancel", "blocked stop", "nil pod", "typed nil pod", "invalid pod", "nil bookmark", "typed nil bookmark", "invalid bookmark", "metadata bookmark"} {
 		t.Run(name, func(t *testing.T) {
 			ctx, cancel := context.WithCancel(context.Background())
 			defer cancel()
@@ -690,13 +695,16 @@ func TestForwardStartupEvents(t *testing.T) {
 				}
 			}
 			switch name {
-			case "nil pod", "typed nil pod", "invalid pod":
+			case "nil pod", "typed nil pod", "invalid pod", "nil bookmark", "typed nil bookmark", "invalid bookmark":
 				event := watch.Event{Type: watch.Added}
-				if name == "typed nil pod" {
+				if strings.HasSuffix(name, "bookmark") {
+					event.Type = watch.Bookmark
+				}
+				if name == "typed nil pod" || name == "typed nil bookmark" {
 					var pod *coreapi.Pod
 					event.Object = pod
 				}
-				if name == "invalid pod" {
+				if name == "invalid pod" || name == "invalid bookmark" {
 					event.Object = &metav1.Status{}
 				}
 				select {
@@ -712,6 +720,21 @@ func TestForwardStartupEvents(t *testing.T) {
 				case <-time.After(time.Second):
 					t.Fatal("malformed pod event blocked shutdown")
 				}
+			case "metadata bookmark":
+				select {
+				case upstreamEvents <- watch.Event{Type: watch.Bookmark, Object: &coreapi.Pod{ObjectMeta: metav1.ObjectMeta{ResourceVersion: "2"}}}:
+				case <-time.After(time.Second):
+					t.Fatal("forwarder did not receive bookmark")
+				}
+				select {
+				case event := <-events:
+					if event.Type != watch.Bookmark || client.apiFailed.Load() || client.executionObserved.Load() {
+						t.Fatal("metadata-only pod bookmark was rejected")
+					}
+				case <-time.After(time.Second):
+					t.Fatal("bookmark forwarding blocked")
+				}
+				proxy.Stop()
 			case "error event":
 				select {
 				case upstreamEvents <- watch.Event{Type: watch.Error, Object: &metav1.Status{Code: 401}}:

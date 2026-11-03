@@ -116,7 +116,7 @@ func forwardStartupEvents(ctx context.Context, upstream watch.Interface, proxy *
 				client.apiFailed.Store(true)
 			}
 			pod, isPod := event.Object.(*coreapi.Pod)
-			if (event.Type == watch.Added || event.Type == watch.Modified || event.Type == watch.Deleted) && (!isPod || pod == nil) {
+			if (event.Type == watch.Added || event.Type == watch.Modified || event.Type == watch.Deleted || event.Type == watch.Bookmark) && (!isPod || pod == nil) {
 				client.apiFailed.Store(true)
 				return
 			}

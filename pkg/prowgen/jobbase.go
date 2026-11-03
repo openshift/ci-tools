@@ -151,6 +151,7 @@ func NewProwJobBaseBuilderForTest(configSpec *cioperatorapi.ReleaseBuildConfigur
 		p.Cluster(test.Cluster)
 		p.WithLabel(cioperatorapi.ClusterLabel, string(test.Cluster))
 	}
+	p.base.JobQueueName = test.JobQueueName
 	p.testName = test.As
 
 	maxCustomDuration := time.Hour * 72

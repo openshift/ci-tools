@@ -662,6 +662,10 @@ const ciOperatorReferenceYaml = "# The list of base images describe\n" +
 	"        # on the last time the test ran. Setting this field will\n" +
 	"        # create a periodic job instead of a presubmit\n" +
 	"        interval: \"\"\n" +
+	"        # JobQueueName assigns the generated jobs for this test to a Prow job queue.\n" +
+	"        # The queue and its capacity are defined by plank.job_queue_capacities.\n" +
+	"        # Jobs that share a queue are limited together by that capacity, in addition to each job's MaxConcurrency.\n" +
+	"        job_queue_name: ' '\n" +
 	"        literal_steps:\n" +
 	"            # AllowBestEffortPostSteps defines if any `post` steps can be ignored when\n" +
 	"            # they fail. The given step must explicitly ask for being ignored by setting\n" +
@@ -1653,6 +1657,10 @@ const ciOperatorReferenceYaml = "# The list of base images describe\n" +
 	"      # on the last time the test ran. Setting this field will\n" +
 	"      # create a periodic job instead of a presubmit\n" +
 	"      interval: \"\"\n" +
+	"      # JobQueueName assigns the generated jobs for this test to a Prow job queue.\n" +
+	"      # The queue and its capacity are defined by plank.job_queue_capacities.\n" +
+	"      # Jobs that share a queue are limited together by that capacity, in addition to each job's MaxConcurrency.\n" +
+	"      job_queue_name: ' '\n" +
 	"      literal_steps:\n" +
 	"        # AllowBestEffortPostSteps defines if any `post` steps can be ignored when\n" +
 	"        # they fail. The given step must explicitly ask for being ignored by setting\n" +

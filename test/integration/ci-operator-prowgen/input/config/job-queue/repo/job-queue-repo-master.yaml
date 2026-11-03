@@ -1,0 +1,33 @@
+build_root:
+  image_stream_tag:
+    name: release
+    namespace: openshift
+    tag: golang-1.10
+resources:
+  '*':
+    limits:
+      cpu: 500Mi
+    requests:
+      cpu: 10Mi
+tests:
+- as: e2e
+  commands: make e2e
+  container:
+    from: src
+  job_queue_name: aws-boskos
+- as: publish
+  commands: make publish
+  container:
+    from: src
+  job_queue_name: aws-boskos
+  postsubmit: true
+- as: nightly
+  commands: make nightly
+  container:
+    from: src
+  cron: '@yearly'
+  job_queue_name: gcp-boskos
+zz_generated_metadata:
+  branch: master
+  org: job-queue
+  repo: repo

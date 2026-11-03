@@ -511,6 +511,16 @@ func TestNewProwJobBaseBuilderForTest(t *testing.T) {
 			info: defaultInfo,
 		},
 		{
+			name: "simple container-based test with job queue name",
+			test: ciop.TestStepConfiguration{
+				As:                         "simple",
+				Commands:                   "make",
+				JobQueueName:               "aws-boskos",
+				ContainerTestConfiguration: &ciop.ContainerTestConfiguration{From: "src"},
+			},
+			info: defaultInfo,
+		},
+		{
 			name: "simple with slack reporter config",
 			test: ciop.TestStepConfiguration{
 				As:                         "unit",

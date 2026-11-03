@@ -2044,28 +2044,42 @@ func inputHash(inputs api.InputDefinition) string {
 // saveNamespaceArtifacts is a best effort attempt to save ci-operator namespace artifacts to disk
 // for review later.
 func (o *options) saveNamespaceArtifacts() {
+	ctx, cancel := context.WithTimeout(context.Background(), startupCleanupTimeout)
+	defer cancel()
+	clusterConfig := rest.CopyConfig(o.clusterConfig)
+	clusterConfig.Timeout = startupRequestTimeout
 	namespaceDir := api.NamespaceDir
-	if kubeClient, err := coreclientset.NewForConfig(o.clusterConfig); err == nil {
-		pods, _ := kubeClient.Pods(o.namespace).List(context.TODO(), metav1.ListOptions{})
+	diagnostics := startupDiagnostics{Status: "unavailable", PodEventsStatus: "unavailable", Journals: "unavailable: no approved sanitized collection path"}
+	if kubeClient, err := coreclientset.NewForConfig(clusterConfig); err == nil {
+		pods, podErr := kubeClient.Pods(o.namespace).List(ctx, metav1.ListOptions{})
 		data, _ := json.MarshalIndent(pods, "", "  ")
 		path := filepath.Join(namespaceDir, "pods.json")
 		_ = api.SaveArtifact(o.censor, path, data)
-		events, _ := kubeClient.Events(o.namespace).List(context.TODO(), metav1.ListOptions{})
+		events, eventErr := kubeClient.Events(o.namespace).List(ctx, metav1.ListOptions{})
 		data, _ = json.MarshalIndent(events, "", "  ")
 		path = filepath.Join(namespaceDir, "events.json")
 		_ = api.SaveArtifact(o.censor, path, data)
+		jobID := ""
+		if o.jobSpec != nil {
+			jobID = steps.LabelsFor(o.jobSpec, nil, "")[steps.LabelJobID]
+		}
+		diagnostics = collectStartupDiagnostics(ctx, kubeClient, o.namespace, jobID, pods, podErr, events, time.Now())
+		diagnostics.PodEventsStatus = startupReadStatus(eventErr)
+	}
+	if err := saveStartupDiagnostics(diagnostics, o.censor); err != nil {
+		logrus.Warn("Unable to save node startup diagnostics.")
 	}
 
-	if buildClient, err := buildclientset.NewForConfig(o.clusterConfig); err == nil {
-		builds, _ := buildClient.Builds(o.namespace).List(context.TODO(), metav1.ListOptions{})
+	if buildClient, err := buildclientset.NewForConfig(clusterConfig); err == nil {
+		builds, _ := buildClient.Builds(o.namespace).List(ctx, metav1.ListOptions{})
 		data, _ := json.MarshalIndent(builds, "", "  ")
 		path := filepath.Join(namespaceDir, "builds.json")
 		_ = api.SaveArtifact(o.censor, path, data)
 	}
 
-	if client, err := ctrlruntimeclient.New(o.clusterConfig, ctrlruntimeclient.Options{}); err == nil {
+	if client, err := ctrlruntimeclient.New(clusterConfig, ctrlruntimeclient.Options{}); err == nil {
 		imagestreams := &imageapi.ImageStreamList{}
-		_ = client.List(context.TODO(), imagestreams, ctrlruntimeclient.InNamespace(o.namespace))
+		_ = client.List(ctx, imagestreams, ctrlruntimeclient.InNamespace(o.namespace))
 		data, _ := json.MarshalIndent(imagestreams, "", "  ")
 		path := filepath.Join(namespaceDir, "imagestreams.json")
 		_ = api.SaveArtifact(o.censor, path, data)

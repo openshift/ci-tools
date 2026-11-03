@@ -85,10 +85,10 @@ func NewClient(owner, url, username string, passwordGetter func() []byte, retrie
 		return nil, err
 	}
 	c.DistinguishNotFoundVsTypeNotFound = true
-	return newClient(c, retries, acquireTimeout, opts...), nil
+	return newClient(c, withRetry(c, defaultRetryConfig()), retries, acquireTimeout, opts...), nil
 }
 
-func newClient(boskos boskosClient, retries int, acquireTimeout time.Duration, opts ...ClientOptions) Client {
+func newClient(direct, retrying boskosClient, retries int, acquireTimeout time.Duration, opts ...ClientOptions) Client {
 	defOpts := &clientOptions{
 		randID: func() string {
 			return strconv.Itoa(rand.Int())
@@ -101,7 +101,8 @@ func newClient(boskos boskosClient, retries int, acquireTimeout time.Duration, o
 
 	return &client{
 		opts:           defOpts,
-		boskos:         boskos,
+		boskos:         retrying,
+		boskosDirect:   direct,
 		retries:        retries,
 		acquireTimeout: acquireTimeout,
 		leases:         make(map[string]*lease),
@@ -110,8 +111,17 @@ func newClient(boskos boskosClient, retries int, acquireTimeout time.Duration, o
 
 type client struct {
 	sync.RWMutex
-	opts           *clientOptions
-	boskos         boskosClient
+	opts *clientOptions
+	// boskos is the retry-wrapped Boskos client, used for operations where
+	// blocking on transient server errors is acceptable (Acquire, Release).
+	boskos boskosClient
+	// boskosDirect is the unwrapped Boskos client, used for operations that
+	// must not block on retries:
+	//   - Heartbeat: holds a lock over all leases; retrying for minutes
+	//     would stall all lease management.  The existing updateFailures/
+	//     retries mechanism already handles transient heartbeat failures.
+	//   - AcquireIfAvailableImmediately: contract is non-blocking.
+	boskosDirect   boskosClient
 	retries        int
 	acquireTimeout time.Duration
 	leases         map[string]*lease
@@ -148,7 +158,9 @@ func (c *client) Acquire(rtype string, n uint, ctx context.Context, cancel conte
 func (c *client) AcquireIfAvailableImmediately(rtype string, n uint, cancel context.CancelFunc) ([]string, error) {
 	var ret []string
 	for i := uint(0); i < n; i++ {
-		r, err := c.boskos.Acquire(rtype, freeState, leasedState)
+		// Use boskosDirect (unwrapped) to preserve the non-blocking contract:
+		// this method must return immediately, not retry for minutes.
+		r, err := c.boskosDirect.Acquire(rtype, freeState, leasedState)
 		if err != nil {
 			return nil, err
 		}
@@ -165,7 +177,13 @@ func (c *client) Heartbeat() error {
 	defer c.Unlock()
 	var errs []error
 	for name, lease := range c.leases {
-		err := c.boskos.UpdateOne(name, leasedState, nil)
+		// Use boskosDirect (unwrapped) because Heartbeat holds the lock
+		// over all leases.  Retrying each UpdateOne for up to 5 minutes
+		// would stall all lease management during an outage.  The existing
+		// updateFailures/c.retries mechanism already tolerates transient
+		// failures by allowing N consecutive heartbeat misses before
+		// canceling a lease.
+		err := c.boskosDirect.UpdateOne(name, leasedState, nil)
 		if err == nil {
 			c.leases[name].updateFailures = 0
 			continue
@@ -185,7 +203,11 @@ func (c *client) Heartbeat() error {
 func (c *client) Release(name string) error {
 	c.Lock()
 	defer c.Unlock()
-	if err := c.boskos.ReleaseOne(name, freeState); err != nil {
+	// Use boskosDirect (unwrapped) because Release holds the lock.
+	// Retrying for minutes would block all other lease operations.
+	// The Boskos Reaper cleans up orphaned leases, so a failed release
+	// is recoverable.
+	if err := c.boskosDirect.ReleaseOne(name, freeState); err != nil {
 		return err
 	}
 	delete(c.leases, name)
@@ -199,7 +221,8 @@ func (c *client) ReleaseAll() ([]string, error) {
 	var errs []error
 	for l := range c.leases {
 		ret = append(ret, l)
-		if err := c.boskos.ReleaseOne(l, freeState); err != nil {
+		// Use boskosDirect for the same reason as Release: the lock is held.
+		if err := c.boskosDirect.ReleaseOne(l, freeState); err != nil {
 			errs = append(errs, err)
 			continue
 		}

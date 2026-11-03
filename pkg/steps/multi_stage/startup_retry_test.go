@@ -170,7 +170,7 @@ func startupEventUID(object ctrlruntimeclient.Object) []string {
 }
 
 func TestStartupRetryPod(t *testing.T) {
-	for _, name := range []string{"eligible", "fresh version", "command error", "cancelled error", "cancelled context", "pinned node", "no event", "wrong uid", "wrong node", "wrong source", "wrong reason", "not timeout", "stale event", "image failure", "workload started since timeout", "replaced uid", "get error", "event error", "wrong name", "wrong namespace", "wrong kind", "not warning", "fresh node mismatch", "fresh ephemeral status"} {
+	for _, name := range []string{"eligible", "fresh version", "command error", "cancelled error", "cancelled context", "pinned node", "no event", "wrong uid", "wrong node", "wrong source", "wrong reason", "not timeout", "stale event", "image failure", "workload started since timeout", "replaced uid", "get error", "event error", "wrong name", "wrong namespace", "wrong kind", "not warning", "fresh node mismatch", "fresh ephemeral status", "nil template", "nil pod"} {
 		t.Run(name, func(t *testing.T) {
 			pod := startupPendingPod()
 			template := pod.DeepCopy()
@@ -182,6 +182,10 @@ func TestStartupRetryPod(t *testing.T) {
 			ctx, cancel := context.WithCancel(context.Background())
 			defer cancel()
 			switch name {
+			case "nil template":
+				template = nil
+			case "nil pod":
+				pod = nil
 			case "command error":
 				runErr = errors.New("command failed")
 			case "cancelled error":
@@ -247,8 +251,14 @@ func TestStartupRetryPod(t *testing.T) {
 }
 
 func TestPodOnDifferentNode(t *testing.T) {
-	for _, name := range []string{"no affinity", "preferred only", "multiple alternatives", "empty selector", "empty term"} {
+	for _, name := range []string{"no affinity", "preferred only", "multiple alternatives", "empty selector", "empty term", "nil template"} {
 		t.Run(name, func(t *testing.T) {
+			if name == "nil template" {
+				if podOnDifferentNode(nil, "failed-node") != nil {
+					t.Fatal("nil template allowed a replacement")
+				}
+				return
+			}
 			pod := startupPendingPod()
 			pod.Spec.NodeName = ""
 			pod.Spec.NodeSelector = map[string]string{"kubernetes.io/arch": "amd64"}
@@ -396,13 +406,25 @@ func (client *startupRunClient) Delete(ctx context.Context, object ctrlruntimecl
 	if client.scenario == "cancel before replacement" {
 		client.cancel()
 	}
-	if client.scenario == "deletion unconfirmed" || client.scenario == "deletion still pending" || client.scenario == "started during deletion" {
+	if client.scenario == "deletion unconfirmed" || client.scenario == "deletion still pending" || client.scenario == "started during deletion" || client.scenario == "terminal during deletion" || client.scenario == "unknown during deletion" {
 		return nil
 	}
 	return client.FakePodClient.Delete(ctx, object, options...)
 }
 
 func (client *startupRunClient) Get(ctx context.Context, key ctrlruntimeclient.ObjectKey, object ctrlruntimeclient.Object, options ...ctrlruntimeclient.GetOption) error {
+	if client.deleteAttempted && (client.scenario == "terminal during deletion" || client.scenario == "unknown during deletion") {
+		if err := client.FakePodClient.Get(ctx, key, object, options...); err != nil {
+			return err
+		}
+		pod := object.(*coreapi.Pod)
+		pod.DeletionTimestamp = &pod.CreationTimestamp
+		pod.Status.ContainerStatuses[0] = coreapi.ContainerStatus{Name: "test", State: coreapi.ContainerState{Terminated: &coreapi.ContainerStateTerminated{Reason: "ContainerStatusUnknown"}}}
+		if client.scenario == "terminal during deletion" {
+			pod.Status.Phase = coreapi.PodFailed
+		}
+		return nil
+	}
 	if client.scenario == "existing pod execution" && len(client.CreatedPods) == 0 {
 		pod := startupPendingPod()
 		pod.Status.ContainerStatuses[0].State.Running = &coreapi.ContainerStateRunning{}
@@ -485,6 +507,8 @@ func TestRunPodsStartupRetry(t *testing.T) {
 		{name: "deletion unconfirmed", phase: "post", failures: 1, attempts: 1, wantErr: true},
 		{name: "deletion still pending", phase: "post", failures: 1, attempts: 1, wantErr: true, finalError: "context canceled"},
 		{name: "started during deletion", phase: "post", failures: 1, attempts: 1, wantErr: true, finalError: "no longer has never-started status"},
+		{name: "terminal during deletion", phase: "post", failures: 1, attempts: 1, wantErr: true, finalError: "no longer has never-started status"},
+		{name: "unknown during deletion", phase: "post", failures: 1, attempts: 1, wantErr: true, finalError: "no longer has never-started status"},
 		{name: "cancel before replacement", phase: "post", failures: 1, attempts: 1, wantErr: true},
 		{name: "replacement create error", phase: "post", failures: 1, attempts: 2, wantErr: true, finalError: "replacement create unauthorized"},
 		{name: "replacement command failure", phase: "post", failures: 1, attempts: 2, wantErr: true, finalError: "failed containers: test"},
@@ -565,10 +589,17 @@ func TestPodExecutionObserved(t *testing.T) {
 		{name: "restarted", status: coreapi.ContainerStatus{RestartCount: 1}, want: true},
 		{name: "ready", status: coreapi.ContainerStatus{Ready: true}, want: true},
 		{name: "started", status: coreapi.ContainerStatus{Started: ptr.To(true)}, want: true},
+		{name: "nil pod", want: true},
 	} {
 		t.Run(testCase.name, func(t *testing.T) {
 			for _, kind := range []string{"regular", "init", "ephemeral"} {
 				pod := &coreapi.Pod{Status: coreapi.PodStatus{Phase: testCase.phase}}
+				if testCase.name == "nil pod" {
+					if !podExecutionObserved(nil) {
+						t.Fatal("nil observation allowed replay")
+					}
+					continue
+				}
 				switch kind {
 				case "regular":
 					pod.Status.ContainerStatuses = []coreapi.ContainerStatus{testCase.status}
@@ -585,8 +616,63 @@ func TestPodExecutionObserved(t *testing.T) {
 	}
 }
 
+func TestStartupAttemptClientGet(t *testing.T) {
+	for _, testCase := range []struct {
+		name   string
+		object ctrlruntimeclient.Object
+	}{
+		{name: "nil object"},
+		{name: "typed nil pod", object: (*coreapi.Pod)(nil)},
+	} {
+		t.Run(testCase.name, func(t *testing.T) {
+			client := &startupAttemptClient{}
+			err := client.Get(context.Background(), ctrlruntimeclient.ObjectKey{}, testCase.object)
+			if err == nil || err.Error() != "pod read requires an object" || !client.apiFailed.Load() {
+				t.Fatalf("nil pod read did not fail closed: %v", err)
+			}
+		})
+	}
+}
+
+func TestStartupAttemptClientList(t *testing.T) {
+	for _, testCase := range []struct {
+		name string
+		list ctrlruntimeclient.ObjectList
+	}{
+		{name: "nil list"},
+		{name: "typed nil pod list", list: (*coreapi.PodList)(nil)},
+	} {
+		t.Run(testCase.name, func(t *testing.T) {
+			client := &startupAttemptClient{}
+			err := client.List(context.Background(), testCase.list)
+			if err == nil || err.Error() != "pod list requires an object" || !client.apiFailed.Load() {
+				t.Fatalf("nil pod list did not fail closed: %v", err)
+			}
+		})
+	}
+}
+
+func TestStartupDeletionClientGet(t *testing.T) {
+	for _, testCase := range []struct {
+		name   string
+		object ctrlruntimeclient.Object
+	}{
+		{name: "nil object"},
+		{name: "typed nil pod", object: (*coreapi.Pod)(nil)},
+		{name: "non pod", object: &coreapi.Node{}},
+	} {
+		t.Run(testCase.name, func(t *testing.T) {
+			client := startupDeletionClient{}
+			err := client.Get(context.Background(), ctrlruntimeclient.ObjectKey{}, testCase.object)
+			if err == nil || err.Error() != "startup retry deletion requires a pod object" {
+				t.Fatalf("invalid deletion observation did not fail closed: %v", err)
+			}
+		})
+	}
+}
+
 func TestForwardStartupEvents(t *testing.T) {
-	for _, name := range []string{"error event", "cancel", "stop", "upstream closed", "blocked cancel", "blocked stop"} {
+	for _, name := range []string{"error event", "cancel", "stop", "upstream closed", "blocked cancel", "blocked stop", "nil pod", "typed nil pod", "invalid pod"} {
 		t.Run(name, func(t *testing.T) {
 			ctx, cancel := context.WithCancel(context.Background())
 			defer cancel()
@@ -604,6 +690,28 @@ func TestForwardStartupEvents(t *testing.T) {
 				}
 			}
 			switch name {
+			case "nil pod", "typed nil pod", "invalid pod":
+				event := watch.Event{Type: watch.Added}
+				if name == "typed nil pod" {
+					var pod *coreapi.Pod
+					event.Object = pod
+				}
+				if name == "invalid pod" {
+					event.Object = &metav1.Status{}
+				}
+				select {
+				case upstreamEvents <- event:
+				case <-time.After(time.Second):
+					t.Fatal("forwarder did not receive malformed event")
+				}
+				select {
+				case _, open := <-events:
+					if open || !client.apiFailed.Load() {
+						t.Fatal("malformed pod event was not rejected")
+					}
+				case <-time.After(time.Second):
+					t.Fatal("malformed pod event blocked shutdown")
+				}
 			case "error event":
 				select {
 				case upstreamEvents <- watch.Event{Type: watch.Error, Object: &metav1.Status{Code: 401}}:

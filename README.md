@@ -26,3 +26,7 @@ failed node while retaining existing scheduling constraints. Attempt manifests,
 startup events in the failure output, and a failed startup-attempt JUnit case
 remain available even when recovery succeeds. This is not general step replay
 or a guarantee of cleanup during an infrastructure outage.
+If deletion changes the pod to a terminal phase or reports
+`ContainerStatusUnknown`, recovery is suppressed even when execution fields are
+empty. Missing runtime history is not proof that a workload never ran. The
+runner requires positive never-started status until the original pod disappears.

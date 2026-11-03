@@ -41,6 +41,11 @@ func (client *startupAttemptClient) Create(ctx context.Context, object ctrlrunti
 
 // Get records failed pod reads during an attempt.
 func (client *startupAttemptClient) Get(ctx context.Context, key ctrlruntimeclient.ObjectKey, object ctrlruntimeclient.Object, options ...ctrlruntimeclient.GetOption) error {
+	pod, isPod := object.(*coreapi.Pod)
+	if object == nil || (isPod && pod == nil) {
+		client.apiFailed.Store(true)
+		return fmt.Errorf("pod read requires an object")
+	}
 	err := client.PodClient.Get(ctx, key, object, options...)
 	if err != nil && !(client.creating && apierrors.IsNotFound(err)) {
 		client.apiFailed.Store(true)
@@ -56,11 +61,16 @@ func (client *startupAttemptClient) Get(ctx context.Context, key ctrlruntimeclie
 
 // List records failed lists during an attempt.
 func (client *startupAttemptClient) List(ctx context.Context, list ctrlruntimeclient.ObjectList, options ...ctrlruntimeclient.ListOption) error {
+	pods, isPods := list.(*coreapi.PodList)
+	if list == nil || (isPods && pods == nil) {
+		client.apiFailed.Store(true)
+		return fmt.Errorf("pod list requires an object")
+	}
 	err := client.PodClient.List(ctx, list, options...)
 	if err != nil {
 		client.apiFailed.Store(true)
 	}
-	if pods, ok := list.(*coreapi.PodList); err == nil && ok {
+	if err == nil && isPods {
 		for index := range pods.Items {
 			if podExecutionObserved(&pods.Items[index]) {
 				client.executionObserved.Store(true)
@@ -105,7 +115,12 @@ func forwardStartupEvents(ctx context.Context, upstream watch.Interface, proxy *
 			if event.Type == watch.Error {
 				client.apiFailed.Store(true)
 			}
-			if pod, ok := event.Object.(*coreapi.Pod); ok && podExecutionObserved(pod) {
+			pod, isPod := event.Object.(*coreapi.Pod)
+			if (event.Type == watch.Added || event.Type == watch.Modified || event.Type == watch.Deleted) && (!isPod || pod == nil) {
+				client.apiFailed.Store(true)
+				return
+			}
+			if isPod && podExecutionObserved(pod) {
 				client.executionObserved.Store(true)
 			}
 			select {
@@ -119,8 +134,11 @@ func forwardStartupEvents(ctx context.Context, upstream watch.Interface, proxy *
 	}
 }
 
-// podExecutionObserved identifies execution evidence that must remain disqualifying across observations.
+// podExecutionObserved treats execution evidence or an absent pod as permanently unsafe for replay.
 func podExecutionObserved(pod *coreapi.Pod) bool {
+	if pod == nil {
+		return true
+	}
 	if pod.Status.Phase == coreapi.PodRunning || pod.Status.Phase == coreapi.PodSucceeded || pod.Status.Phase == coreapi.PodFailed {
 		return true
 	}
@@ -140,13 +158,16 @@ type startupDeletionClient struct {
 	uid types.UID
 }
 
-// Get checks each deletion observation before the standard deletion waiter consumes it.
+// Get requires positive never-started evidence until disappearance; terminal or unknown status fails closed.
 func (client startupDeletionClient) Get(ctx context.Context, key ctrlruntimeclient.ObjectKey, object ctrlruntimeclient.Object, options ...ctrlruntimeclient.GetOption) error {
+	pod, ok := object.(*coreapi.Pod)
+	if !ok || pod == nil {
+		return fmt.Errorf("startup retry deletion requires a pod object")
+	}
 	if err := client.Client.Get(ctx, key, object, options...); err != nil {
 		return err
 	}
-	pod, ok := object.(*coreapi.Pod)
-	if !ok || pod.UID != client.uid {
+	if pod.UID != client.uid {
 		return fmt.Errorf("startup retry pod identity changed during deletion")
 	}
 	observed := pod.DeepCopy()
@@ -159,7 +180,7 @@ func (client startupDeletionClient) Get(ctx context.Context, key ctrlruntimeclie
 
 // startupRetryPod prepares a replacement only for a kubelet sandbox timeout before any container started.
 func startupRetryPod(ctx context.Context, client ctrlruntimeclient.Client, template, pod *coreapi.Pod, runErr error) (*coreapi.Pod, error) {
-	if ctx.Err() != nil || template.Spec.NodeName != "" || !slices.Contains(results.Reasons(runErr), string(api.ReasonPending)) || !neverStartedPod(pod) {
+	if template == nil || ctx.Err() != nil || template.Spec.NodeName != "" || !slices.Contains(results.Reasons(runErr), string(api.ReasonPending)) || !neverStartedPod(pod) {
 		return nil, nil
 	}
 	current := &coreapi.Pod{}
@@ -232,8 +253,11 @@ func neverStartedContainers(containers []coreapi.Container, statuses []coreapi.C
 	return true
 }
 
-// podOnDifferentNode adds a node exclusion to every required affinity alternative without changing other constraints.
+// podOnDifferentNode preserves scheduling constraints and adds a node exclusion, or returns nil for an absent template.
 func podOnDifferentNode(template *coreapi.Pod, node string) *coreapi.Pod {
+	if template == nil {
+		return nil
+	}
 	pod := template.DeepCopy()
 	pod.Name = fmt.Sprintf("%.230s-startup-retry-%s", template.Name, utilrand.String(5))
 	if pod.Spec.Affinity == nil {

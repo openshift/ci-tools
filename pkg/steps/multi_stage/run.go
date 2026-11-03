@@ -241,7 +241,7 @@ func (s *multiStageTestStep) runPod(ctx context.Context, pod *coreapi.Pod, notif
 	s.subTests = append(s.subTests, attemptTests...)
 	s.subLock.Unlock()
 	if replacement != nil && ctx.Err() == nil {
-		logrus.WithError(err).WithField("pod", pod.Name).WithField("replacement", replacement.Name).Warn("Retrying never-started post pod on another node")
+		logrus.WithField("pod", pod.Name).WithField("replacement", replacement.Name).Warn("Retrying never-started post pod on another node")
 		if retryErr := s.runPod(ctx, replacement, base_steps.NewTestCaseNotifier(util.NopNotifier), flags, false); retryErr != nil {
 			return utilerrors.NewAggregate([]error{err, retryErr})
 		}

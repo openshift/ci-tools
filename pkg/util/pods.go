@@ -685,7 +685,7 @@ func ConfigurePodForNestedPodman(pod *corev1.Pod, containerName string, saName s
 
 	pod.Annotations["openshift.io/required-scc"] = api.NestedPodmanSCC
 	pod.Annotations["openshift.io/scc"] = api.NestedPodmanSCC
-	pod.Annotations["io.kubernetes.cri-o.Devices"] = "/dev/fuse,/dev/net/tun"
+	pod.Annotations["devices.crio.io"] = "/dev/fuse,/dev/net/tun"
 
 	pod.Spec.HostUsers = ptr.To(false)
 }

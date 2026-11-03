@@ -1,6 +1,5 @@
 - condition:
-    expression: resource.name.extract("secrets/{s}/versions/") in ["epsilon-secrets__updater-service-account",
-      "epsilon-secrets____index"]
+    expression: resource.name.extract("secrets/{s}/versions/") in ["epsilon-secrets__updater-service-account"]
     title: 'tp-viewer: epsilon-secrets'
   members:
   - serviceAccount:epsilon-secrets-updater@test-project.iam.gserviceaccount.com
@@ -12,23 +11,11 @@
   - serviceAccount:epsilon-secrets-updater@test-project.iam.gserviceaccount.com
   role: projects/test-project/roles/openshift_ci_secrets_updater
 - condition:
-    expression: resource.name.extract("secrets/{s}/versions/") in ["alpha-secrets____index"]
-    title: 'tp-viewer: team-alpha'
-  members:
-  - group:team-alpha@redhat.com
-  role: projects/test-project/roles/openshift_ci_secrets_viewer
-- condition:
     expression: resource.name.extract("secrets/{c}__") in ["alpha-secrets"]
     title: 'tp-updater: team-alpha'
   members:
   - group:team-alpha@redhat.com
   role: projects/test-project/roles/openshift_ci_secrets_updater
-- condition:
-    expression: resource.name.extract("secrets/{s}/versions/") in ["beta-delta-secrets____index"]
-    title: 'tp-viewer: team-beta'
-  members:
-  - group:team-beta@redhat.com
-  role: projects/test-project/roles/openshift_ci_secrets_viewer
 - condition:
     expression: resource.name.extract("secrets/{c}__") in ["beta-delta-secrets"]
     title: 'tp-updater: team-beta'
@@ -36,20 +23,13 @@
   - group:team-beta@redhat.com
   role: projects/test-project/roles/openshift_ci_secrets_updater
 - condition:
-    expression: resource.name.extract("secrets/{s}/versions/") in ["beta-delta-secrets____index"]
-    title: 'tp-viewer: team-delta'
-  members:
-  - group:team-delta@redhat.com
-  role: projects/test-project/roles/openshift_ci_secrets_viewer
-- condition:
     expression: resource.name.extract("secrets/{c}__") in ["beta-delta-secrets"]
     title: 'tp-updater: team-delta'
   members:
   - group:team-delta@redhat.com
   role: projects/test-project/roles/openshift_ci_secrets_updater
 - condition:
-    expression: resource.name.extract("secrets/{s}/versions/") in ["epsilon-secrets__updater-service-account",
-      "epsilon-secrets____index"]
+    expression: resource.name.extract("secrets/{s}/versions/") in ["epsilon-secrets__updater-service-account"]
     title: 'tp-viewer: team-epsilon'
   members:
   - group:team-epsilon@redhat.com

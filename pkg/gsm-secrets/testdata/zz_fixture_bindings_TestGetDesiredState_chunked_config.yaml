@@ -1,25 +1,9 @@
 - condition:
-    expression: resource.name.extract("secrets/{s}/versions/") in ["at-01____index",
-      "bt-01____index"]
-    title: 'tp-viewer: another-team'
-  members:
-  - group:another-team@redhat.com
-  role: projects/test-project/roles/openshift_ci_secrets_viewer
-- condition:
     expression: resource.name.extract("secrets/{c}__") in ["at-01", "bt-01"]
     title: 'tp-updater: another-team'
   members:
   - group:another-team@redhat.com
   role: projects/test-project/roles/openshift_ci_secrets_updater
-- condition:
-    expression: resource.name.extract("secrets/{s}/versions/") in ["bt-01____index",
-      "bt-02____index", "bt-03____index", "bt-04____index", "bt-05____index", "bt-06____index",
-      "bt-07____index", "bt-08____index", "bt-09____index", "bt-10____index", "bt-11____index",
-      "bt-12____index"]
-    title: 'tp-viewer: big-team'
-  members:
-  - group:big-team@redhat.com
-  role: projects/test-project/roles/openshift_ci_secrets_viewer
 - condition:
     expression: resource.name.extract("secrets/{c}__") in ["bt-01", "bt-02", "bt-03",
       "bt-04", "bt-05", "bt-06", "bt-07", "bt-08", "bt-09", "bt-10", "bt-11", "bt-12"]
@@ -27,12 +11,6 @@
   members:
   - group:big-team@redhat.com
   role: projects/test-project/roles/openshift_ci_secrets_updater
-- condition:
-    expression: resource.name.extract("secrets/{s}/versions/") in ["st-01____index"]
-    title: 'tp-viewer: small-team'
-  members:
-  - group:small-team@redhat.com
-  role: projects/test-project/roles/openshift_ci_secrets_viewer
 - condition:
     expression: resource.name.extract("secrets/{c}__") in ["st-01"]
     title: 'tp-updater: small-team'

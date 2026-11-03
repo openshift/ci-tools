@@ -14,16 +14,15 @@ import (
 
 // GetDesiredState parses the configuration file and builds the desired state specifications.
 //
-// Collections owned by a normal ("claimed") group each get an index secret, and their owning
-// group gets one viewer and one updater binding covering all of its collections.
+// Claimed groups get an updater binding covering all their collections and a viewer binding
+// covering only updater service-account secrets for their SA-enabled collections.
 //
 // A collection additionally gets an updater service account, its SA secret, and
 // service-account-scoped viewer/updater bindings only if the group opted into one for it via
 // group.Target.UpdaterServiceAccounts.
 //
-// Collections owned only by an "unclaimed" group (see group.Target.Unclaimed) get an index
-// secret and nothing else: no service account, no SA secret and no bindings, until they are
-// moved under a normal group.
+// Collections owned only by an "unclaimed" group (see group.Target.Unclaimed) remain active
+// but get no service account, secrets, or IAM bindings until claimed.
 //
 // Returns desired service account specs, secret specs, IAM binding specs, and the set of active collections.
 func GetDesiredState(configFile string, config Config) ([]ServiceAccountInfo, map[string]GCPSecret, []*iampb.Binding, map[string]bool, error) {
@@ -57,26 +56,11 @@ func GetDesiredState(configFile string, config Config) ([]ServiceAccountInfo, ma
 	var desiredIAMBindings []*iampb.Binding
 
 	// Keep every referenced collection alive so its migrated data secrets are not deleted.
-	// Unclaimed ones get an index secret too, so that listing them works and so that a later
-	// claim does not start from a missing index.
-	for _, collection := range sets.List(unclaimedCollections) {
-		desiredSecrets[GetIndexSecretName(collection)] = GCPSecret{
-			Name:       GetIndexSecretName(collection),
-			Type:       SecretTypeIndex,
-			Collection: collection,
-		}
-	}
 	for _, collection := range claimedCollections.Union(unclaimedCollections).UnsortedList() {
 		desiredCollections[collection] = true
 	}
 
 	for _, collection := range sets.List(claimedCollections) {
-		desiredSecrets[GetIndexSecretName(collection)] = GCPSecret{
-			Name:       GetIndexSecretName(collection),
-			Type:       SecretTypeIndex,
-			Collection: collection,
-		}
-
 		if !collectionsWithSA.Has(collection) {
 			continue
 		}
@@ -115,8 +99,6 @@ func GetDesiredState(configFile string, config Config) ([]ServiceAccountInfo, ma
 		})
 	}
 
-	// Per claimed group: one viewer and one updater binding covering all of the group's
-	// collections, however many it owns.
 	for _, name := range groupNames {
 		groupCfg := groupConfig.Groups[name]
 		if groupCfg.Unclaimed || len(groupCfg.SecretCollections) == 0 {
@@ -129,14 +111,16 @@ func GetDesiredState(configFile string, config Config) ([]ServiceAccountInfo, ma
 		copy(collections, groupCfg.SecretCollections)
 		sort.Strings(collections)
 
-		desiredIAMBindings = append(desiredIAMBindings, &iampb.Binding{
-			Role:    config.GetSecretAccessorRole(),
-			Members: groupMembers,
-			Condition: &expr.Expr{
-				Expression: BuildSecretAccessorRoleConditionExpressionForCollections(collections, collectionsWithSA),
-				Title:      GetSecretsViewerGroupConditionTitle(name),
-			},
-		})
+		if collectionsWithSA.HasAny(collections...) {
+			desiredIAMBindings = append(desiredIAMBindings, &iampb.Binding{
+				Role:    config.GetSecretAccessorRole(),
+				Members: groupMembers,
+				Condition: &expr.Expr{
+					Expression: BuildSecretAccessorRoleConditionExpressionForCollections(collections, collectionsWithSA),
+					Title:      GetSecretsViewerGroupConditionTitle(name),
+				},
+			})
+		}
 		desiredIAMBindings = append(desiredIAMBindings, &iampb.Binding{
 			Role:    config.GetSecretUpdaterRole(),
 			Members: groupMembers,

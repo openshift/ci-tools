@@ -46,7 +46,7 @@ func (s *multiStageTestStep) runSteps(
 			s.flags |= hasPrevErrs
 		}
 	}()
-	if err := s.runPods(ctx, pods, bestEffortSteps); err != nil {
+	if err := s.runPods(ctx, phase, pods, bestEffortSteps); err != nil {
 		errs = append(errs, err)
 	}
 	select {
@@ -81,10 +81,10 @@ func (s *multiStageTestStep) runSteps(
 	return err
 }
 
-func (s *multiStageTestStep) runPods(ctx context.Context, pods []coreapi.Pod, bestEffortSteps sets.Set[string]) error {
+func (s *multiStageTestStep) runPods(ctx context.Context, phase string, pods []coreapi.Pod, bestEffortSteps sets.Set[string]) error {
 	var errs []error
 	for _, pod := range pods {
-		err := s.runPod(ctx, &pod, base_steps.NewTestCaseNotifier(util.NopNotifier), util.WaitForPodFlag(0))
+		err := s.runPod(ctx, &pod, base_steps.NewTestCaseNotifier(util.NopNotifier), util.WaitForPodFlag(0), phase == "post")
 		if err == nil {
 			continue
 		}
@@ -113,7 +113,7 @@ func (s *multiStageTestStep) runObservers(ctx, textCtx context.Context, pods []c
 			}
 		}(pod)
 		go func(p coreapi.Pod) {
-			err := s.runPod(textCtx, &p, base_steps.NewTestCaseNotifier(util.NopNotifier), util.Interruptible)
+			err := s.runPod(textCtx, &p, base_steps.NewTestCaseNotifier(util.NopNotifier), util.Interruptible, false)
 			if ctx.Err() == nil {
 				// when the observer is cancelled, we get an error here that we need to ignore, as it's not an error
 				// for the Pod to be deleted when it's cancelled, it's just expected
@@ -134,24 +134,45 @@ func (s *multiStageTestStep) runObservers(ctx, textCtx context.Context, pods []c
 	done <- struct{}{}
 }
 
-func (s *multiStageTestStep) runPod(ctx context.Context, pod *coreapi.Pod, notifier *base_steps.TestCaseNotifier, flags util.WaitForPodFlag) error {
+func (s *multiStageTestStep) runPod(ctx context.Context, pod *coreapi.Pod, notifier *base_steps.TestCaseNotifier, flags util.WaitForPodFlag, retryStartup bool) error {
 	junitName, err := s.junitNameForPod(pod)
 	if err != nil {
 		return err
 	}
 
 	start := time.Now()
+	template := pod.DeepCopy()
 	logrus.Infof("Running step %s.", pod.Name)
 	client := s.client.WithNewLoggingClient()
+	attemptClient := &startupAttemptClient{PodClient: client}
 
 	client.MetricsAgent().StoreMachinesSnapshot(pod)
 
-	if _, err := util.CreateOrRestartPod(ctx, client, pod); err != nil {
-		return fmt.Errorf("failed to create or restart %s pod: %w", pod.Name, err)
+	waitClient := client
+	if retryStartup {
+		waitClient = attemptClient
 	}
-	newPod, err := util.WaitForPodCompletion(ctx, client, pod.Namespace, pod.Name, notifier, flags)
-	if newPod != nil {
-		pod = newPod
+	attemptClient.creating = true
+	_, err = util.CreateOrRestartPod(ctx, waitClient, pod)
+	attemptClient.creating = false
+	if err != nil {
+		err = fmt.Errorf("failed to create or restart %s pod: %w", pod.Name, err)
+	} else {
+		var newPod *coreapi.Pod
+		newPod, err = util.WaitForPodCompletion(ctx, waitClient, pod.Namespace, pod.Name, notifier, flags)
+		if newPod != nil {
+			pod = newPod
+		}
+	}
+	var replacement *coreapi.Pod
+	if retryStartup && attemptClient.watchEstablished.Load() && !attemptClient.apiFailed.Load() && !attemptClient.executionObserved.Load() && !attemptClient.existingPodObserved.Load() && err != nil && ctx.Err() == nil {
+		inspectCtx, cancel := context.WithTimeout(ctx, 30*time.Second)
+		var inspectErr error
+		replacement, inspectErr = startupRetryPod(inspectCtx, client, template, pod, err)
+		cancel()
+		if inspectErr != nil {
+			err = utilerrors.NewAggregate([]error{err, inspectErr})
+		}
 	}
 
 	// If we got an error and the Pod is still pending (failed to schedule or failed to start all containers),
@@ -165,8 +186,26 @@ func (s *multiStageTestStep) runPod(ctx context.Context, pod *coreapi.Pod, notif
 		logrus.Infof("Deleting pod %s that failed to start", pod.Name)
 		deleteCtx, cancel := context.WithTimeout(base_steps.CleanupCtx, 30*time.Second)
 		defer cancel()
-		if delErr := client.Delete(deleteCtx, pod); delErr != nil && !kerrors.IsNotFound(delErr) {
-			logrus.WithError(delErr).Warnf("Failed to delete pending pod %s", pod.Name)
+		deleteOptions := []ctrlruntimeclient.DeleteOption{}
+		if replacement != nil {
+			deleteOptions = append(deleteOptions, ctrlruntimeclient.Preconditions{UID: &pod.UID, ResourceVersion: &pod.ResourceVersion})
+		}
+		if delErr := client.Delete(deleteCtx, pod, deleteOptions...); delErr != nil {
+			if !kerrors.IsNotFound(delErr) {
+				logrus.WithError(delErr).Warnf("Failed to delete pending pod %s", pod.Name)
+			}
+			if replacement != nil {
+				err = utilerrors.NewAggregate([]error{err, fmt.Errorf("deleting startup retry pod: %w", delErr)})
+				replacement = nil
+			}
+		} else if replacement != nil {
+			waitCtx, waitCancel := context.WithTimeout(ctx, 30*time.Second)
+			waitErr := util.WaitForPodDeletion(waitCtx, startupDeletionClient{Client: client, uid: pod.UID}, pod.Namespace, pod.Name, pod.UID)
+			waitCancel()
+			if waitErr != nil {
+				err = utilerrors.NewAggregate([]error{err, fmt.Errorf("waiting for startup retry pod deletion: %w", waitErr)})
+				replacement = nil
+			}
 		}
 	}
 
@@ -187,11 +226,30 @@ func (s *multiStageTestStep) runPod(ctx context.Context, pod *coreapi.Pod, notif
 		Failed:      utilpointer.Bool(err != nil),
 		Manifests:   client.Objects(),
 	})
-	s.subTests = append(s.subTests, notifier.SubTestsWithName(junitName)...)
+	attemptTests := notifier.SubTestsWithName(junitName)
+	if len(attemptTests) == 0 && err != nil {
+		attemptName := junitName
+		if replacement != nil {
+			attemptName += " startup attempt 1"
+		}
+		attemptTests = append(attemptTests, &junit.TestCase{
+			Name:          attemptName,
+			Duration:      duration.Seconds(),
+			FailureOutput: &junit.FailureOutput{Output: err.Error()},
+		})
+	}
+	s.subTests = append(s.subTests, attemptTests...)
 	s.subLock.Unlock()
+	if replacement != nil && ctx.Err() == nil {
+		logrus.WithError(err).WithField("pod", pod.Name).WithField("replacement", replacement.Name).Warn("Retrying never-started post pod on another node")
+		if retryErr := s.runPod(ctx, replacement, base_steps.NewTestCaseNotifier(util.NopNotifier), flags, false); retryErr != nil {
+			return utilerrors.NewAggregate([]error{err, retryErr})
+		}
+		return nil
+	}
 	if err != nil {
 		linksText := strings.Builder{}
-		linksText.WriteString(fmt.Sprintf("Link to step on registry info site: https://steps.ci.openshift.org/reference/%s", strings.TrimPrefix(pod.Name, s.name+"-")))
+		linksText.WriteString(fmt.Sprintf("Link to step on registry info site: https://steps.ci.openshift.org/reference/%s", pod.Labels[base_steps.LabelMetadataStep]))
 		linksText.WriteString(fmt.Sprintf("\nLink to job on registry info site: https://steps.ci.openshift.org/job?org=%s&repo=%s&branch=%s&test=%s", s.config.Metadata.Org, s.config.Metadata.Repo, s.config.Metadata.Branch, s.name))
 		if s.config.Metadata.Variant != "" {
 			linksText.WriteString(fmt.Sprintf("&variant=%s", s.config.Metadata.Variant))

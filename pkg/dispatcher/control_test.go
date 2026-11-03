@@ -13,6 +13,7 @@ import (
 	"time"
 
 	apierrors "k8s.io/apimachinery/pkg/api/errors"
+	"k8s.io/apimachinery/pkg/util/sets"
 
 	dispatcherv1 "github.com/openshift/ci-tools/pkg/api/dispatcher/v1"
 )
@@ -619,5 +620,75 @@ func TestControlPlaneExplainHitAndMiss(t *testing.T) {
 	server.ServeHTTP(unreadyResponse, unready)
 	if unreadyResponse.Code != http.StatusBadRequest || !strings.Contains(unreadyResponse.Body.String(), "ready") {
 		t.Fatalf("unready explain HTTP: %d %s", unreadyResponse.Code, unreadyResponse.Body.String())
+	}
+}
+
+func TestControlPlaneDrainTTLBeforeGeneralTTL(t *testing.T) {
+	control, _, _, _ := testControlPlane(t, ControlOptions{
+		EnableCapacity: true, EnableDrain: true,
+		MaxTTL: 48 * time.Hour, MaxDrainTTL: 2 * time.Hour,
+	})
+	request := PlanRequest{
+		Kind: dispatcherv1.OverrideKindDrain, Cluster: "build01",
+		DurationSeconds: int64((12 * time.Hour) / time.Second),
+		Reason:          "INC-789", UserID: "U1", ChannelID: "C-team", IdempotencyKey: "drain-ttl-key",
+	}
+	_, err := control.Plan(context.Background(), request)
+	if err == nil {
+		t.Fatal("drain exceeding MaxDrainTTL was accepted")
+	}
+	if !strings.Contains(err.Error(), "drain TTL") {
+		t.Fatalf("expected drain-specific TTL error, got: %v", err)
+	}
+	if strings.Contains(err.Error(), "48h") {
+		t.Fatalf("drain error mentioned the general TTL limit instead of the drain limit: %v", err)
+	}
+}
+
+func TestControlPlanePlanBlockedClusterError(t *testing.T) {
+	control, _, _, _ := testControlPlane(t, ControlOptions{EnableCapacity: true, EnableDrain: true})
+	control.UpdateBaseline(map[string]ProwJobData{
+		"job-a": {Cluster: "build01", Demand: 10},
+	}, ClusterMap{
+		"build01": {Provider: "aws", Capacity: 100},
+	}, sets.New[string]("build03"))
+	if err := control.Reconcile(context.Background()); err != nil {
+		t.Fatal(err)
+	}
+	request := PlanRequest{
+		Kind: dispatcherv1.OverrideKindDrain, Cluster: "build03",
+		DurationSeconds: 3600, Reason: "INC-blocked", UserID: "U1",
+		ChannelID: "C-team", IdempotencyKey: "blocked-plan",
+	}
+	_, err := control.Plan(context.Background(), request)
+	if err == nil {
+		t.Fatal("plan for blocked cluster was accepted")
+	}
+	if !strings.Contains(err.Error(), "blocked in static configuration") {
+		t.Fatalf("expected blocked-cluster-specific error, got: %v", err)
+	}
+}
+
+func TestControlPlaneStatusBlockedClusterError(t *testing.T) {
+	control, _, _, _ := testControlPlane(t, ControlOptions{})
+	control.UpdateBaseline(map[string]ProwJobData{
+		"job-a": {Cluster: "build01", Demand: 10},
+	}, ClusterMap{
+		"build01": {Provider: "aws", Capacity: 100},
+	}, sets.New[string]("build03"))
+	if err := control.Reconcile(context.Background()); err != nil {
+		t.Fatal(err)
+	}
+	_, err := control.Status(context.Background(), "build03")
+	if err == nil {
+		t.Fatal("status for blocked cluster was accepted")
+	}
+	if !strings.Contains(err.Error(), "blocked in static configuration") {
+		t.Fatalf("expected blocked-cluster-specific error, got: %v", err)
+	}
+	// An unknown cluster that is NOT blocked should get the generic error.
+	_, err = control.Status(context.Background(), "build99")
+	if err == nil || !strings.Contains(err.Error(), "unknown or inactive") {
+		t.Fatalf("expected unknown-cluster error for a non-blocked cluster, got: %v", err)
 	}
 }

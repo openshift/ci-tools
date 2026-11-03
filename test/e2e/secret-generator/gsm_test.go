@@ -30,9 +30,7 @@ func startGSMTestServer(t *testing.T) string {
 		t.Fatal(err)
 	}
 	server := grpc.NewServer()
-	secretmanagerpb.RegisterSecretManagerServiceServer(server, &fakeGSM{secrets: map[string]*secretmanagerpb.SecretPayload{
-		"projects/123456789/secrets/test-platform-infra____index": {},
-	}})
+	secretmanagerpb.RegisterSecretManagerServiceServer(server, &fakeGSM{secrets: map[string]*secretmanagerpb.SecretPayload{}})
 	t.Cleanup(server.Stop)
 	go serveGSM(t, server, listener)
 	return listener.Addr().String()

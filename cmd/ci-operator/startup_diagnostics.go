@@ -4,8 +4,11 @@ import (
 	"context"
 	"encoding/json"
 	"errors"
+	"fmt"
 	"path/filepath"
 	"time"
+
+	"github.com/sirupsen/logrus"
 
 	coreapi "k8s.io/api/core/v1"
 	apierrors "k8s.io/apimachinery/pkg/api/errors"
@@ -13,6 +16,7 @@ import (
 	"k8s.io/apimachinery/pkg/fields"
 	"k8s.io/apimachinery/pkg/util/sets"
 	coreclientset "k8s.io/client-go/kubernetes/typed/core/v1"
+	"k8s.io/client-go/rest"
 	"sigs.k8s.io/prow/pkg/secretutil"
 
 	"github.com/openshift/ci-tools/pkg/api"
@@ -165,7 +169,7 @@ func startupEventTimes(event coreapi.Event) (metav1.Time, metav1.Time, int32) {
 
 // startupRuntimeWarning accepts only warnings explicitly referring to this node.
 func startupRuntimeWarning(event coreapi.Event, node *coreapi.Node, since, now time.Time) bool {
-	if node.UID == "" || event.InvolvedObject.Kind != "Node" || event.InvolvedObject.Namespace != "" || event.InvolvedObject.Name != node.Name || event.InvolvedObject.UID != node.UID || event.Type != coreapi.EventTypeWarning || !recentStartupEvent(event, since, now) {
+	if node == nil || node.UID == "" || event.InvolvedObject.Kind != "Node" || event.InvolvedObject.Namespace != "" || event.InvolvedObject.Name != node.Name || (event.InvolvedObject.UID != "" && event.InvolvedObject.UID != node.UID) || event.Type != coreapi.EventTypeWarning || !recentStartupEvent(event, since, now) {
 		return false
 	}
 	if event.Source.Component != "kubelet" && event.ReportingController != "kubelet" {
@@ -192,7 +196,7 @@ func collectStartupNode(ctx context.Context, client coreclientset.CoreV1Interfac
 	if err != nil {
 		return result
 	}
-	if node.Name != name || node.UID == "" {
+	if node == nil || node.Name != name || node.UID == "" {
 		result.Status = "unavailable"
 		return result
 	}
@@ -209,7 +213,7 @@ func collectStartupNode(ctx context.Context, client coreclientset.CoreV1Interfac
 		seen.Insert(condition.Type)
 		result.Conditions = append(result.Conditions, startupCondition{condition.Type, condition.Status, condition.LastHeartbeatTime, condition.LastTransitionTime})
 	}
-	options := metav1.ListOptions{Limit: startupEventPageSize, FieldSelector: fields.Set{"involvedObject.kind": "Node", "involvedObject.name": name, "involvedObject.uid": string(node.UID), "type": coreapi.EventTypeWarning}.AsSelector().String()}
+	options := metav1.ListOptions{Limit: startupEventPageSize, FieldSelector: fields.Set{"involvedObject.kind": "Node", "involvedObject.name": name, "type": coreapi.EventTypeWarning}.AsSelector().String()}
 	for page := 0; page < startupEventPages; page++ {
 		if err := ctx.Err(); err != nil {
 			result.EventsStatus = startupReadStatus(err)
@@ -220,6 +224,10 @@ func collectStartupNode(ctx context.Context, client coreclientset.CoreV1Interfac
 		cancel()
 		result.EventsStatus = startupReadStatus(err)
 		if err != nil {
+			return result
+		}
+		if events == nil {
+			result.EventsStatus = "unavailable"
 			return result
 		}
 		for index, event := range events.Items {
@@ -306,16 +314,30 @@ func collectStartupDiagnostics(ctx context.Context, client coreclientset.CoreV1I
 	return result
 }
 
-// marshalStartupDiagnostics censors strings before JSON encoding and caps output.
+// startupAlias assigns an artifact-local ordinal without encoding or hashing names.
+func startupAlias(name, prefix string, aliases map[string]string) string {
+	if name == "" {
+		return ""
+	}
+	if alias, exists := aliases[name]; exists {
+		return alias
+	}
+	alias := fmt.Sprintf("%s-%d", prefix, len(aliases)+1)
+	aliases[name] = alias
+	return alias
+}
+
+// marshalStartupDiagnostics replaces names with local aliases, censors, and caps JSON.
 func marshalStartupDiagnostics(result startupDiagnostics, censor secretutil.Censorer) ([]byte, error) {
+	result.Pods = append([]startupPod(nil), result.Pods...)
+	result.Nodes = append([]startupNode(nil), result.Nodes...)
+	podAliases, nodeAliases := map[string]string{}, map[string]string{}
 	for index := range result.Pods {
-		result.Truncated = result.Truncated || len(result.Pods[index].Name) > startupMaxText || len(result.Pods[index].Node) > startupMaxText
-		result.Pods[index].Name = censorStartupText(result.Pods[index].Name, censor)
-		result.Pods[index].Node = censorStartupText(result.Pods[index].Node, censor)
+		result.Pods[index].Name = censorStartupText(startupAlias(result.Pods[index].Name, "pod", podAliases), censor)
+		result.Pods[index].Node = censorStartupText(startupAlias(result.Pods[index].Node, "node", nodeAliases), censor)
 	}
 	for index := range result.Nodes {
-		result.Truncated = result.Truncated || len(result.Nodes[index].Name) > startupMaxText
-		result.Nodes[index].Name = censorStartupText(result.Nodes[index].Name, censor)
+		result.Nodes[index].Name = censorStartupText(startupAlias(result.Nodes[index].Name, "node", nodeAliases), censor)
 	}
 	data, err := json.MarshalIndent(result, "", "  ")
 	if err != nil || len(data) <= startupMaxBytes {
@@ -345,7 +367,32 @@ func censorStartupText(value string, censor secretutil.Censorer) string {
 func saveStartupDiagnostics(result startupDiagnostics, censor secretutil.Censorer) error {
 	data, err := marshalStartupDiagnostics(result, censor)
 	if err != nil {
-		return err
+		return fmt.Errorf("encoding node startup diagnostics: %s", startupReadStatus(err))
 	}
-	return api.SaveArtifact(censor, filepath.Join(api.NamespaceDir, "node-startup.json"), data)
+	if err := api.SaveArtifact(censor, filepath.Join(api.NamespaceDir, "node-startup.json"), data); err != nil {
+		return fmt.Errorf("writing node startup diagnostics: %s", startupReadStatus(err))
+	}
+	return nil
+}
+
+// saveNodeStartupDiagnostics collects bounded node evidence after legacy snapshots finish.
+func (o *options) saveNodeStartupDiagnostics(pods *coreapi.PodList, podErr error, events *coreapi.EventList, eventErr error) {
+	ctx, cancel := context.WithTimeout(context.Background(), startupCleanupTimeout)
+	defer cancel()
+	config := rest.CopyConfig(o.clusterConfig)
+	config.Timeout = startupRequestTimeout
+	diagnostics := startupDiagnostics{Status: "unavailable", PodEventsStatus: "unavailable", Journals: "unavailable: no approved sanitized collection path"}
+	if client, err := coreclientset.NewForConfig(config); err == nil {
+		jobID := ""
+		if o.jobSpec != nil {
+			jobID = steps.LabelsFor(o.jobSpec, nil, "")[steps.LabelJobID]
+		}
+		diagnostics = collectStartupDiagnostics(ctx, client, o.namespace, jobID, pods, podErr, events, time.Now())
+		if eventErr != nil || events != nil {
+			diagnostics.PodEventsStatus = startupReadStatus(eventErr)
+		}
+	}
+	if err := saveStartupDiagnostics(diagnostics, o.censor); err != nil {
+		logrus.WithError(err).Warn("Unable to save node startup diagnostics.")
+	}
 }

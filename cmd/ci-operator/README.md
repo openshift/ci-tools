@@ -7,10 +7,13 @@ It is registered before graph execution, not before configuration resolution or
 namespace initialization. If ci-operator itself cannot start, it cannot collect
 this artifact; those failures require Prow/build-farm diagnostics.
 
-The artifact is best-effort and does not change the execution result. The hook has
-a separate 20-second cleanup deadline, including existing namespace API reads.
-Node/event requests also have two-second deadlines. It reuses the namespace pod
-and event snapshots and never queries other workloads' pods.
+The artifact is best-effort and does not change the execution result. Existing
+pod, event, build and imagestream snapshots finish first, retaining their original
+client configuration and request behavior. Only the new diagnostics have a separate
+20-second cleanup deadline and two-second node/event request deadlines, with a
+copied client configuration. Diagnostics reuse the namespace pod and event
+snapshots and never query other workloads' pods. Legacy snapshot delays can still
+delay the hook; the new diagnostics do not impose a deadline on old collection.
 
 ## Schema and limits
 
@@ -31,7 +34,9 @@ and event snapshots and never queries other workloads' pods.
   transition times, `events_status`, and at most 20 runtime Warning projections.
   Event projections contain only allowlisted `reason`, canonical `source`,
   `count`, `first`, and `last` observation times. Events must refer to the exact
-  node name/UID and have kubelet provenance. Pod events are not emitted.
+  node kind/name, have an empty namespace and kubelet provenance, and carry either
+  no UID (as kubelet node references can) or the current node UID. Mismatched
+  nonempty UIDs are rejected. Pod events are not emitted.
 - Node event reads use object/type selectors, at most two 100-event pages per
   node, and a 15-minute lookback. Events outside the window, including future
   observations, are excluded locally even if the API ignores selectors.
@@ -40,8 +45,12 @@ and event snapshots and never queries other workloads' pods.
 - Read statuses distinguish `available`, `forbidden`, `unauthorized`,
   `unavailable`, `canceled`, and `timeout`, without raw API errors.
 - `truncated` flags incomplete associations, nodes, or events; individual nodes
-  also flag truncated events. Names are censored before encoding and bounded to
-  253 bytes. Output is capped at 64 KiB; node details, then associations, are
+  also flag truncated events. Raw pod/node names are replaced with artifact-local
+  ordinal aliases (`pod-1`, `node-1`, etc.) before censoring and JSON encoding.
+  Aliases preserve association only within this artifact, not correlation across
+  runs or with old namespace artifacts. No raw mapping, hash or reversible name
+  encoding is emitted; aliases are not stable identities or hostname evidence.
+  Output is capped at 64 KiB; node details, then associations, are
   dropped if needed.
 - `journals` explicitly reports `unavailable: no approved sanitized collection
   path`. Kubernetes Events are not kubelet/CRI-O journals and do not establish

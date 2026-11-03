@@ -2,11 +2,14 @@ package main
 
 import (
 	"context"
+	"encoding/base64"
+	"encoding/hex"
 	"encoding/json"
 	"errors"
 	"fmt"
 	"io"
 	"net/http"
+	"net/url"
 	"os"
 	"path/filepath"
 	"strings"
@@ -248,12 +251,13 @@ func TestRecentStartupEvent(t *testing.T) {
 	}
 }
 
+// TestStartupRuntimeWarning checks exact node association, optional UID and provenance.
 func TestStartupRuntimeWarning(t *testing.T) {
 	for _, test := range []struct {
 		name, field, value string
 		want               bool
 	}{
-		{name: "allowed", want: true}, {name: "other node", field: "name", value: "other"}, {name: "other UID", field: "uid", value: "other"},
+		{name: "allowed", want: true}, {name: "kubelet omits UID", field: "uid", want: true}, {name: "other node", field: "name", value: "other"}, {name: "other UID", field: "uid", value: "other"},
 		{name: "pod event", field: "kind", value: "Pod"}, {name: "namespace", field: "namespace", value: "other"},
 		{name: "normal", field: "type", value: coreapi.EventTypeNormal}, {name: "unapproved reason", field: "reason", value: "private"},
 		{name: "unapproved source", field: "source", value: "private"}, {name: "reporting controller", field: "reporter", value: "kubelet", want: true},
@@ -304,7 +308,7 @@ func (reactor *startupReactor) react(action clienttesting.Action) (bool, runtime
 		reactor.pages++
 		selector := action.(clienttesting.ListAction).GetListRestrictions().Fields.String()
 		options := action.(clienttesting.ListActionImpl).ListOptions
-		if action.GetNamespace() != "" || options.Limit != startupEventPageSize || (reactor.pages > 1 && options.Continue != "next") || !strings.Contains(selector, "involvedObject.kind=Node") || !strings.Contains(selector, "involvedObject.name=worker") || !strings.Contains(selector, "involvedObject.uid=node-uid") || !strings.Contains(selector, "type=Warning") {
+		if action.GetNamespace() != "" || options.Limit != startupEventPageSize || (reactor.pages > 1 && options.Continue != "next") || selector != "involvedObject.kind=Node,involvedObject.name=worker,type=Warning" {
 			return true, nil, errors.New("missing strict selector")
 		}
 		list := &coreapi.EventList{Items: reactor.events}
@@ -316,6 +320,7 @@ func (reactor *startupReactor) react(action clienttesting.Action) (bool, runtime
 	return true, nil, errors.New("unexpected API action")
 }
 
+// TestCollectStartupNode exercises bounded selectors, defensive responses and read failures.
 func TestCollectStartupNode(t *testing.T) {
 	for _, test := range []struct {
 		name                   string
@@ -328,11 +333,14 @@ func TestCollectStartupNode(t *testing.T) {
 		timeout                bool
 		eventOnly              bool
 		noise                  bool
+		nilNode, nilEvents     bool
 		wantStatus, wantEvents string
 		wantCount, wantPages   int
 		truncated              bool
 	}{
 		{name: "available sanitized", count: 1, wantStatus: "available", wantEvents: "available", wantCount: 1, wantPages: 1},
+		{name: "nil node response", nilNode: true, wantStatus: "unavailable", wantEvents: "unavailable"},
+		{name: "nil events response", nilEvents: true, wantStatus: "available", wantEvents: "unavailable"},
 		{name: "node forbidden", nodeErr: apierrors.NewForbidden(schema.GroupResource{Resource: "nodes"}, "worker", errors.New("never-emit")), wantStatus: "forbidden", wantEvents: "unavailable"},
 		{name: "event list forbidden", eventErr: apierrors.NewForbidden(schema.GroupResource{Resource: "events"}, "", errors.New("never-emit")), wantStatus: "available", wantEvents: "forbidden", wantPages: 1},
 		{name: "event list unavailable", eventErr: errors.New("never-emit"), wantStatus: "available", wantEvents: "unavailable", wantPages: 1},
@@ -369,6 +377,9 @@ func TestCollectStartupNode(t *testing.T) {
 				defer deadlineCancel()
 			}
 			var reader coreclientset.CoreV1Interface = client.CoreV1()
+			if test.nilNode || test.nilEvents {
+				reader = startupNilCore{CoreV1Interface: reader, nilNode: test.nilNode}
+			}
 			transport := &startupCancelTransport{cancel: cancel, timeout: test.timeout, eventOnly: test.eventOnly}
 			if test.inFlight {
 				var err error
@@ -533,16 +544,43 @@ func TestCensorStartupText(t *testing.T) {
 	}
 }
 
+// TestStartupAlias checks local ordinal reuse without deriving aliases from names.
+func TestStartupAlias(t *testing.T) {
+	for _, test := range []struct{ name string }{{name: "internal-worker.example.invalid"}, {name: ""}} {
+		t.Run(test.name, func(t *testing.T) {
+			aliases := map[string]string{}
+			want := "node-1"
+			if test.name == "" {
+				want = ""
+			}
+			for iteration := 0; iteration < 2; iteration++ {
+				if got := startupAlias(test.name, "node", aliases); got != want {
+					t.Errorf("want %q, got %q", want, got)
+				}
+			}
+		})
+	}
+}
+
+// TestMarshalStartupDiagnostics checks unconfigured-secret privacy, association and caps.
 func TestMarshalStartupDiagnostics(t *testing.T) {
 	for _, test := range []struct {
 		name      string
 		oversized bool
-	}{{name: "censor before encode"}, {name: "bounded output", oversized: true}} {
+		noSecrets bool
+	}{{name: "censor before encode"}, {name: "bounded output", oversized: true}, {name: "private hostnames without secrets", noSecrets: true}} {
 		t.Run(test.name, func(t *testing.T) {
 			secret := "private\n\"quoted\""
 			censor := secrets.NewDynamicCensor()
 			censor.AddSecrets(secret)
+			if test.noSecrets {
+				secret = "internal-worker.private.example.invalid"
+				censor = secrets.NewDynamicCensor()
+			}
 			result := startupDiagnostics{Pods: []startupPod{{Name: secret, Node: secret}}, Nodes: []startupNode{{Name: secret}}}
+			if !test.noSecrets {
+				censor.AddSecrets("node-1", "pod-1")
+			}
 			if test.oversized {
 				result.Nodes[0].Events = make([]startupWarning, startupMaxBytes)
 			}
@@ -559,6 +597,18 @@ func TestMarshalStartupDiagnostics(t *testing.T) {
 			}
 			if decoded.Truncated != test.oversized {
 				t.Errorf("unexpected truncation: %v", decoded.Truncated)
+			}
+			if test.noSecrets {
+				for _, forbidden := range []string{secret, base64.StdEncoding.EncodeToString([]byte(secret)), base64.RawURLEncoding.EncodeToString([]byte(secret)), hex.EncodeToString([]byte(secret)), url.QueryEscape(secret)} {
+					if strings.Contains(string(data), forbidden) {
+						t.Fatal("raw or reversibly encoded hostname escaped")
+					}
+				}
+				if decoded.Pods[0].Name != "pod-1" || decoded.Pods[0].Node != "node-1" || decoded.Nodes[0].Name != decoded.Pods[0].Node || result.Pods[0].Name != secret {
+					t.Fatal("aliases lost association or mutated the source snapshot")
+				}
+			} else if strings.Contains(string(data), "node-1") || strings.Contains(string(data), "pod-1") {
+				t.Fatal("alias bypassed censoring before encoding")
 			}
 		})
 	}
@@ -582,6 +632,9 @@ func TestSaveStartupDiagnostics(t *testing.T) {
 			err := saveStartupDiagnostics(startupDiagnostics{Status: "no_relevant_nodes"}, &censor)
 			if (err != nil) != test.blocked {
 				t.Fatalf("unexpected write error: %v", err)
+			}
+			if err != nil && err.Error() != "writing node startup diagnostics: unavailable" {
+				t.Fatalf("unsafe or missing save context: %v", err)
 			}
 			if !test.blocked {
 				data, err := os.ReadFile(filepath.Join(dir, api.NamespaceDir, "node-startup.json"))
@@ -622,10 +675,16 @@ func (transport *startupCancelTransport) RoundTrip(request *http.Request) (*http
 
 // startupArtifactTransport returns only synthetic public-shaped namespace data.
 type startupArtifactTransport struct {
-	denied       bool
-	bounded      bool
-	eventDenied  bool
-	eventTimeout bool
+	denied              bool
+	bounded             bool
+	eventDenied         bool
+	eventTimeout        bool
+	nodeTimeout         bool
+	artifactDir         string
+	snapshotsBeforeNode bool
+	legacyDeadline      bool
+	legacyTimeout       time.Duration
+	nodeBounded         bool
 }
 
 // startupGraphFailure supplies the original failure without executing a test step.
@@ -636,7 +695,16 @@ func (failure startupGraphFailure) run() []error { return []error{failure.err} }
 
 // RoundTrip supplies deterministic artifact snapshots and refuses other reads.
 func (transport *startupArtifactTransport) RoundTrip(request *http.Request) (*http.Response, error) {
-	_, transport.bounded = request.Context().Deadline()
+	deadline, bounded := request.Context().Deadline()
+	transport.bounded = transport.bounded || bounded
+	switch request.URL.Path {
+	case "/api/v1/namespaces/run/pods", "/api/v1/namespaces/run/events", "/apis/build.openshift.io/v1/namespaces/run/builds", "/apis/image.openshift.io/v1/namespaces/run/imagestreams":
+		if transport.legacyTimeout == 0 {
+			transport.legacyDeadline = transport.legacyDeadline || bounded
+		} else if !bounded || time.Until(deadline) <= startupRequestTimeout || time.Until(deadline) > transport.legacyTimeout {
+			transport.legacyDeadline = true
+		}
+	}
 	if transport.eventTimeout && request.URL.Path == "/api/v1/namespaces/run/events" {
 		return nil, context.DeadlineExceeded
 	}
@@ -646,8 +714,29 @@ func (transport *startupArtifactTransport) RoundTrip(request *http.Request) (*ht
 	case "/api/v1/namespaces/run/pods":
 		object = &coreapi.PodList{Items: []coreapi.Pod{startupTestPod("test", "worker")}}
 	case "/api/v1/nodes/worker":
+		transport.nodeBounded = bounded && time.Until(deadline) <= startupRequestTimeout
+		transport.snapshotsBeforeNode = true
+		for _, name := range []string{"pods.json", "events.json", "builds.json", "imagestreams.json"} {
+			if _, err := os.Stat(filepath.Join(transport.artifactDir, api.NamespaceDir, name)); err != nil {
+				transport.snapshotsBeforeNode = false
+			}
+		}
+		if transport.nodeTimeout {
+			<-request.Context().Done()
+			return nil, request.Context().Err()
+		}
 		object = startupTestNode()
 	case "/api/v1/namespaces/run/events":
+	case "/apis/build.openshift.io/v1/namespaces/run/builds":
+		object = &metav1.List{TypeMeta: metav1.TypeMeta{APIVersion: "build.openshift.io/v1", Kind: "BuildList"}}
+	case "/api":
+		object = &metav1.APIVersions{Versions: []string{"v1"}}
+	case "/apis":
+		object = &metav1.APIGroupList{Groups: []metav1.APIGroup{{Name: "image.openshift.io", Versions: []metav1.GroupVersionForDiscovery{{GroupVersion: "image.openshift.io/v1", Version: "v1"}}, PreferredVersion: metav1.GroupVersionForDiscovery{GroupVersion: "image.openshift.io/v1", Version: "v1"}}}}
+	case "/apis/image.openshift.io/v1":
+		object = &metav1.APIResourceList{GroupVersion: "image.openshift.io/v1", APIResources: []metav1.APIResource{{Name: "imagestreams", Kind: "ImageStream", Namespaced: true}}}
+	case "/apis/image.openshift.io/v1/namespaces/run/imagestreams":
+		object = &metav1.List{TypeMeta: metav1.TypeMeta{APIVersion: "image.openshift.io/v1", Kind: "ImageStreamList"}}
 	case "/api/v1/events":
 		object = &coreapi.EventList{Items: []coreapi.Event{startupTestEvent()}}
 	default:
@@ -665,18 +754,23 @@ func (transport *startupArtifactTransport) RoundTrip(request *http.Request) (*ht
 	return &http.Response{StatusCode: status, Header: http.Header{"Content-Type": []string{"application/json"}}, Body: io.NopCloser(strings.NewReader(string(data)))}, nil
 }
 
+// TestSaveNamespaceArtifacts verifies legacy snapshots precede bounded diagnostics and retain their request configuration and original execution outcome.
 func TestSaveNamespaceArtifacts(t *testing.T) {
 	for _, test := range []struct {
 		name                               string
 		denied                             bool
 		want                               string
 		eventDenied, eventTimeout, blocked bool
+		nodeTimeout                        bool
+		originalTimeout                    time.Duration
 	}{
 		{name: "collects after execution", want: "collected"},
 		{name: "records denied namespace read", denied: true, want: "forbidden"},
 		{name: "namespace events forbidden", eventDenied: true, want: "collected"},
 		{name: "namespace events timeout", eventTimeout: true, want: "collected"},
 		{name: "artifact write failure preserves result", blocked: true},
+		{name: "slow node cannot starve legacy snapshots", nodeTimeout: true, want: "collected"},
+		{name: "retains configured legacy timeout", originalTimeout: 7 * time.Second, want: "collected"},
 	} {
 		t.Run(test.name, func(t *testing.T) {
 			dir := t.TempDir()
@@ -688,8 +782,8 @@ func TestSaveNamespaceArtifacts(t *testing.T) {
 			}
 			t.Setenv("ARTIFACTS", dir)
 			censor := secrets.NewDynamicCensor()
-			transport := &startupArtifactTransport{denied: test.denied, eventDenied: test.eventDenied, eventTimeout: test.eventTimeout}
-			options := options{clusterConfig: &rest.Config{Host: "https://fixture.invalid", Transport: transport}, namespace: "run", censor: &censor, jobSpec: &api.JobSpec{JobSpec: downwardapi.JobSpec{ProwJobID: "run-id"}}}
+			transport := &startupArtifactTransport{denied: test.denied, eventDenied: test.eventDenied, eventTimeout: test.eventTimeout, nodeTimeout: test.nodeTimeout, artifactDir: dir, legacyTimeout: test.originalTimeout}
+			options := options{clusterConfig: &rest.Config{Host: "https://fixture.invalid", Transport: transport, Timeout: test.originalTimeout}, namespace: "run", censor: &censor, jobSpec: &api.JobSpec{JobSpec: downwardapi.JobSpec{ProwJobID: "run-id"}}}
 			original := errors.New("synthetic graph/release-import failure")
 			failure := startupGraphFailure{err: original}
 			returned := interrupt.New(nil, options.saveNamespaceArtifacts).Run(failure.run)
@@ -699,6 +793,12 @@ func TestSaveNamespaceArtifacts(t *testing.T) {
 			if test.blocked {
 				return
 			}
+			if transport.legacyDeadline || options.clusterConfig.Timeout != test.originalTimeout {
+				t.Fatal("changed legacy request deadline or client configuration")
+			}
+			if !test.denied && (!transport.snapshotsBeforeNode || !transport.nodeBounded) {
+				t.Fatal("node collection ran before all legacy snapshots or without its deadline")
+			}
 			data, err := os.ReadFile(filepath.Join(dir, api.NamespaceDir, "node-startup.json"))
 			if err != nil {
 				t.Fatal(err)
@@ -707,8 +807,11 @@ func TestSaveNamespaceArtifacts(t *testing.T) {
 			if err := json.Unmarshal(data, &result); err != nil {
 				t.Fatal(err)
 			}
-			if result.Status != test.want || !transport.bounded || strings.Contains(string(data), "never-emit") {
+			if result.Status != test.want || (!test.denied && !transport.bounded) || strings.Contains(string(data), "never-emit") {
 				t.Errorf("unexpected artifact: %s, bounded=%v", data, transport.bounded)
+			}
+			if test.nodeTimeout && result.Nodes[0].Status != "timeout" {
+				t.Fatal("node timeout was not classified")
 			}
 			if test.eventDenied && result.PodEventsStatus != "forbidden" {
 				t.Errorf("unexpected pod event status: %s", result.PodEventsStatus)
@@ -718,4 +821,37 @@ func TestSaveNamespaceArtifacts(t *testing.T) {
 			}
 		})
 	}
+}
+
+// startupNilCore supplies nil successful node or event responses for defensive checks.
+type startupNilCore struct {
+	coreclientset.CoreV1Interface
+	nilNode bool
+}
+
+// Nodes retains normal node reads unless a nil response is requested.
+func (client startupNilCore) Nodes() coreclientset.NodeInterface {
+	if client.nilNode {
+		return startupNilNodes{}
+	}
+	return client.CoreV1Interface.Nodes()
+}
+
+// Events supplies the nil list response used by the defensive test case.
+func (client startupNilCore) Events(string) coreclientset.EventInterface { return startupNilEvents{} }
+
+// startupNilNodes embeds unused operations and overrides only Get.
+type startupNilNodes struct{ coreclientset.NodeInterface }
+
+// Get returns an unavailable object without an API error.
+func (startupNilNodes) Get(context.Context, string, metav1.GetOptions) (*coreapi.Node, error) {
+	return nil, nil
+}
+
+// startupNilEvents embeds unused operations and overrides only List.
+type startupNilEvents struct{ coreclientset.EventInterface }
+
+// List returns an unavailable snapshot without an API error.
+func (startupNilEvents) List(context.Context, metav1.ListOptions) (*coreapi.EventList, error) {
+	return nil, nil
 }

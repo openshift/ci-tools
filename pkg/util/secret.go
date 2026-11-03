@@ -48,24 +48,36 @@ func SecretFromDir(path string) (*coreapi.Secret, error) {
 // created if it doesn't already exist. Updating an existing secret happens by re-creating it.
 func UpsertImmutableSecret(ctx context.Context, client ctrlruntimeclient.Client, secret *coreapi.Secret) (created bool, err error) {
 	secret.Immutable = utilpointer.Bool(true)
-	err = client.Create(ctx, secret.DeepCopy())
-	if err == nil {
-		return true, nil
-	}
-	if !kerrors.IsAlreadyExists(err) {
-		return false, err
-	}
-	existing := &coreapi.Secret{}
-	if err := client.Get(ctx, ctrlruntimeclient.ObjectKey{Name: secret.Name, Namespace: secret.Namespace}, existing); err != nil {
-		return false, err
-	}
-	if equality.Semantic.DeepEqual(secret.Data, existing.Data) {
-		return false, nil
-	}
-	if err := client.Delete(ctx, existing); err != nil {
-		return false, fmt.Errorf("delete failed: %w", err)
-	}
+	// Retry loop handles the race where Create returns AlreadyExists but a
+	// concurrent cleanup deletes the secret before we can Get it. In that
+	// case the Get returns NotFound and we retry the Create.
+	const maxRetries = 3
+	for attempt := 0; attempt < maxRetries; attempt++ {
+		err = client.Create(ctx, secret.DeepCopy())
+		if err == nil {
+			return true, nil
+		}
+		if !kerrors.IsAlreadyExists(err) {
+			return false, err
+		}
+		existing := &coreapi.Secret{}
+		if err := client.Get(ctx, ctrlruntimeclient.ObjectKey{Name: secret.Name, Namespace: secret.Namespace}, existing); err != nil {
+			if kerrors.IsNotFound(err) {
+				// The secret was deleted between our Create and Get calls
+				// (race with concurrent namespace cleanup). Retry from Create.
+				continue
+			}
+			return false, err
+		}
+		if equality.Semantic.DeepEqual(secret.Data, existing.Data) {
+			return false, nil
+		}
+		if err := client.Delete(ctx, existing); err != nil {
+			return false, fmt.Errorf("delete failed: %w", err)
+		}
 
-	// Recreate counts as "Update"
-	return false, client.Create(ctx, secret)
+		// Recreate counts as "Update"
+		return false, client.Create(ctx, secret)
+	}
+	return false, fmt.Errorf("failed to upsert secret %s/%s after %d attempts due to concurrent modifications", secret.Namespace, secret.Name, maxRetries)
 }

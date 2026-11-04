@@ -21,7 +21,7 @@ import (
 )
 
 type githubClient interface {
-	FindIssues(query, sort string, asc bool) ([]github.Issue, error)
+	FindIssuesWithOrg(org, query, sort string, asc bool) ([]github.Issue, error)
 	CreateIssue(org, repo, title, body string, milestone int, labels, assignees []string) (int, error)
 	EditIssue(org, repo string, number int, issue *github.Issue) (*github.Issue, error)
 	CloseIssue(org, repo string, number int) error
@@ -76,12 +76,7 @@ func main() {
 		logrus.WithError(err).Fatal("Error creating github client.")
 	}
 
-	client := &orgclient.OrgAwareClient{
-		Client:    ghClient,
-		Org:       "openshift",
-		IsAppAuth: o.github.AppID != "",
-	}
-
+	client := &orgclient.OrgAwareClient{Client: ghClient, IsAppAuth: o.github.AppID != ""}
 	botUser, err := client.BotUser()
 	if err != nil {
 		logrus.WithError(err).Fatal("Error getting bot's user.")
@@ -111,7 +106,7 @@ func main() {
 			branches.Insert(futureBranch)
 		}
 
-		if err := manageIssues(client, botUser.Login, repoInfo, branches, logger); err != nil {
+		if err := manageIssues(ghClient, botUser.Login, repoInfo, branches, logger); err != nil {
 			failed = true
 		}
 
@@ -137,7 +132,7 @@ func manageIssues(client githubClient, githubLogin string, repoInfo *config.Info
 	sort := "updated"
 	// We will make sure that the first issue in the list will be with the most recent update.
 	ascending := false
-	issues, err := client.FindIssues(query, sort, ascending)
+	issues, err := client.FindIssuesWithOrg(repoInfo.Org, query, sort, ascending)
 	if err != nil {
 		logger.WithError(err).Error("Failed to search for open issues.")
 		return err

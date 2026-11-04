@@ -15,11 +15,15 @@ import (
 	"github.com/openshift/ci-tools/pkg/config"
 )
 
+// fakeGithubClient records the search organization and returns issues sorted by ID.
 type fakeGithubClient struct {
 	*fakegithub.FakeClient
+	searchOrg string
 }
 
-func (f fakeGithubClient) FindIssues(query, sortVerb string, asc bool) ([]github.Issue, error) {
+// FindIssuesWithOrg records org and returns the fake client's issues sorted by ID.
+func (f *fakeGithubClient) FindIssuesWithOrg(org, query, sortVerb string, asc bool) ([]github.Issue, error) {
+	f.searchOrg = org
 	var issues []github.Issue
 	for _, issue := range f.FakeClient.Issues {
 		issues = append(issues, *issue)
@@ -64,11 +68,11 @@ func TestManageIssues(t *testing.T) {
 			},
 		},
 		{
-			id:       "create case",
+			id:       "create case in another organization",
 			branches: sets.New[string]([]string{"release-4.9"}...),
 			repoInfo: &config.Info{
 				Metadata: cioperatorapi.Metadata{
-					Org:    "testOrg",
+					Org:    "openshift-eng",
 					Repo:   "testRepo",
 					Branch: "testBranch",
 				},
@@ -219,13 +223,16 @@ func TestManageIssues(t *testing.T) {
 
 	for _, tc := range testCases {
 		t.Run(tc.id, func(t *testing.T) {
-			fgh := fakeGithubClient{
+			fgh := &fakeGithubClient{
 				FakeClient: fakegithub.NewFakeClient(),
 			}
 			fgh.FakeClient.Issues = tc.issues
 
 			if err := manageIssues(fgh, "", tc.repoInfo, tc.branches, logrus.WithField("id", tc.id)); err != nil {
 				t.Fatal(err)
+			}
+			if diff := cmp.Diff(tc.repoInfo.Org, fgh.searchOrg); diff != "" {
+				t.Errorf("unexpected search organization (-want +got):\n%s", diff)
 			}
 
 			openedIssues, _ := fgh.ListOpenIssues(tc.repoInfo.Org, tc.repoInfo.Repo)

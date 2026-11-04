@@ -67,7 +67,7 @@ func main() {
 		logrus.WithError(err).Fatal("failed to gather options")
 	}
 
-	c, err := prowconfig.ReadJobConfig(o.infraPeriodicsPath)
+	c, err := prowconfig.ReadJobConfigs([]string{o.infraPeriodicsPath})
 	if err != nil {
 		logrus.WithError(err).Fatal("failed to read job configuration")
 	}

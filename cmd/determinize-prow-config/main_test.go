@@ -361,7 +361,7 @@ func TestShardProwConfig(t *testing.T) {
 			if err := os.WriteFile(filepath.Join(tempDir, "_old_config.yaml"), serializedOriginalConfig, 0644); err != nil {
 				t.Fatalf("failed to write old config: %v", err)
 			}
-			oldConfigDefaulted, err := config.Load(filepath.Join(tempDir, "_old_config.yaml"), "", nil, "")
+			oldConfigDefaulted, err := config.Load(filepath.Join(tempDir, "_old_config.yaml"), nil, nil, "")
 			if err != nil {
 				t.Fatalf("failed to load the old config: %v", err)
 			}

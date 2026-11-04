@@ -17,6 +17,7 @@ import (
 	pjapi "sigs.k8s.io/prow/pkg/apis/prowjobs/v1"
 	"sigs.k8s.io/prow/pkg/config"
 	prowconfig "sigs.k8s.io/prow/pkg/config"
+	"sigs.k8s.io/prow/pkg/flagutil"
 	configflagutil "sigs.k8s.io/prow/pkg/flagutil/config"
 )
 
@@ -173,7 +174,7 @@ func Test_options_validate(t *testing.T) {
 		bundleImageRef          string
 		channel                 string
 		indexImageRef           string
-		jobConfigPath           string
+		jobConfigPaths          []string
 		jobName                 string
 		ocpVersion              string
 		outputPath              string
@@ -189,10 +190,59 @@ func Test_options_validate(t *testing.T) {
 		wantErr bool
 	}{
 		{
+			name: "multiple job config paths",
+			fields: fields{
+				prowConfigPath: "/not/empty",
+				jobConfigPaths: []string{
+					"/also/not/empty",
+					"/not/empty",
+				},
+				jobName:        "some-job",
+				bundleImageRef: "master",
+				indexImageRef:  "latest",
+				ocpVersion:     "4.5",
+				outputPath:     "/output/path",
+				packageName:    "foo",
+				channel:        "bar",
+			},
+		},
+		{
+			name: "missing second job config path",
+			fields: fields{
+				prowConfigPath: "/not/empty",
+				jobConfigPaths: []string{
+					"/also/not/empty",
+					"/invalid/path",
+				},
+				jobName:        "some-job",
+				bundleImageRef: "master",
+				indexImageRef:  "latest",
+				ocpVersion:     "4.5",
+				outputPath:     "/output/path",
+				packageName:    "foo",
+				channel:        "bar",
+			},
+			wantErr: true,
+		},
+		{
+			name: "no job config paths",
+			fields: fields{
+				prowConfigPath: "/not/empty",
+				jobName:        "some-job",
+				bundleImageRef: "master",
+				indexImageRef:  "latest",
+				ocpVersion:     "4.5",
+				outputPath:     "/output/path",
+				packageName:    "foo",
+				channel:        "bar",
+			},
+			wantErr: true,
+		},
+		{
 			name: "valid options",
 			fields: fields{
 				prowConfigPath:          "/not/empty",
-				jobConfigPath:           "/also/not/empty",
+				jobConfigPaths:          []string{"/also/not/empty"},
 				jobName:                 "some-job",
 				bundleImageRef:          "master",
 				indexImageRef:           "latest",
@@ -209,7 +259,7 @@ func Test_options_validate(t *testing.T) {
 		{
 			name: "missing prow config path",
 			fields: fields{
-				jobConfigPath:  "/also/not/empty",
+				jobConfigPaths: []string{"/also/not/empty"},
 				jobName:        "some-job",
 				bundleImageRef: "master",
 				indexImageRef:  "latest",
@@ -225,7 +275,7 @@ func Test_options_validate(t *testing.T) {
 			name: "missing job name",
 			fields: fields{
 				prowConfigPath: "/not/empty",
-				jobConfigPath:  "/also/not/empty",
+				jobConfigPaths: []string{"/also/not/empty"},
 				bundleImageRef: "master",
 				indexImageRef:  "latest",
 				ocpVersion:     "4.5",
@@ -240,7 +290,7 @@ func Test_options_validate(t *testing.T) {
 			name: "missing bundle image ref",
 			fields: fields{
 				prowConfigPath: "/not/empty",
-				jobConfigPath:  "/also/not/empty",
+				jobConfigPaths: []string{"/also/not/empty"},
 				jobName:        "some-job",
 				indexImageRef:  "latest",
 				ocpVersion:     "4.5",
@@ -255,7 +305,7 @@ func Test_options_validate(t *testing.T) {
 			name: "missing index image ref",
 			fields: fields{
 				prowConfigPath: "/not/empty",
-				jobConfigPath:  "/also/not/empty",
+				jobConfigPaths: []string{"/also/not/empty"},
 				jobName:        "some-job",
 				bundleImageRef: "master",
 				ocpVersion:     "4.5",
@@ -270,7 +320,7 @@ func Test_options_validate(t *testing.T) {
 			name: "missing ocp version",
 			fields: fields{
 				prowConfigPath: "/not/empty",
-				jobConfigPath:  "/also/not/empty",
+				jobConfigPaths: []string{"/also/not/empty"},
 				jobName:        "some-job",
 				bundleImageRef: "master",
 				indexImageRef:  "latest",
@@ -285,7 +335,7 @@ func Test_options_validate(t *testing.T) {
 			name: "invalid ocp version",
 			fields: fields{
 				prowConfigPath: "/not/empty",
-				jobConfigPath:  "/also/not/empty",
+				jobConfigPaths: []string{"/also/not/empty"},
 				jobName:        "some-job",
 				bundleImageRef: "master",
 				indexImageRef:  "latest",
@@ -301,7 +351,7 @@ func Test_options_validate(t *testing.T) {
 			name: "missing output path version",
 			fields: fields{
 				prowConfigPath: "/not/empty",
-				jobConfigPath:  "/also/not/empty",
+				jobConfigPaths: []string{"/also/not/empty"},
 				jobName:        "some-job",
 				bundleImageRef: "master",
 				indexImageRef:  "latest",
@@ -316,7 +366,7 @@ func Test_options_validate(t *testing.T) {
 			name: "missing package name",
 			fields: fields{
 				prowConfigPath: "/not/empty",
-				jobConfigPath:  "/also/not/empty",
+				jobConfigPaths: []string{"/also/not/empty"},
 				jobName:        "some-job",
 				bundleImageRef: "master",
 				indexImageRef:  "latest",
@@ -331,7 +381,7 @@ func Test_options_validate(t *testing.T) {
 			name: "missing channel",
 			fields: fields{
 				prowConfigPath: "/not/empty",
-				jobConfigPath:  "/also/not/empty",
+				jobConfigPaths: []string{"/also/not/empty"},
 				jobName:        "some-job",
 				bundleImageRef: "master",
 				indexImageRef:  "latest",
@@ -346,7 +396,7 @@ func Test_options_validate(t *testing.T) {
 			name: "invalid prow config path",
 			fields: fields{
 				prowConfigPath: "/invalid/path",
-				jobConfigPath:  "/also/not/empty",
+				jobConfigPaths: []string{"/also/not/empty"},
 				jobName:        "some-job",
 				bundleImageRef: "master",
 				indexImageRef:  "latest",
@@ -362,7 +412,7 @@ func Test_options_validate(t *testing.T) {
 			name: "invalid job config path",
 			fields: fields{
 				prowConfigPath: "/not/empty",
-				jobConfigPath:  "/invalid/path",
+				jobConfigPaths: []string{"/invalid/path"},
 				jobName:        "some-job",
 				bundleImageRef: "master",
 				indexImageRef:  "latest",
@@ -378,7 +428,7 @@ func Test_options_validate(t *testing.T) {
 			name: "dry run and no output path",
 			fields: fields{
 				prowConfigPath: "/not/empty",
-				jobConfigPath:  "/also/not/empty",
+				jobConfigPaths: []string{"/also/not/empty"},
 				jobName:        "some-job",
 				bundleImageRef: "master",
 				indexImageRef:  "latest",
@@ -393,7 +443,7 @@ func Test_options_validate(t *testing.T) {
 			name: "dry run and invalid output path",
 			fields: fields{
 				prowConfigPath: "/not/empty",
-				jobConfigPath:  "/also/not/empty",
+				jobConfigPaths: []string{"/also/not/empty"},
 				jobName:        "some-job",
 				bundleImageRef: "master",
 				indexImageRef:  "latest",
@@ -413,8 +463,8 @@ func Test_options_validate(t *testing.T) {
 				channel:        tt.fields.channel,
 				indexImageRef:  tt.fields.indexImageRef,
 				prowconfig: configflagutil.ConfigOptions{
-					ConfigPath:    tt.fields.prowConfigPath,
-					JobConfigPath: tt.fields.jobConfigPath,
+					ConfigPath:     tt.fields.prowConfigPath,
+					JobConfigPaths: flagutil.NewStrings(tt.fields.jobConfigPaths...),
 				},
 				jobName:                 tt.fields.jobName,
 				ocpVersion:              tt.fields.ocpVersion,

@@ -142,7 +142,7 @@ func GetAllConfigs(releaseRepoPath string) (*ReleaseRepoConfig, error) {
 
 	prowConfigPath := filepath.Join(releaseRepoPath, ConfigInRepoPath)
 	prowJobConfigPath := filepath.Join(releaseRepoPath, JobConfigInRepoPath)
-	config.Prow, err = prowconfig.Load(prowConfigPath, prowJobConfigPath, nil, "")
+	config.Prow, err = prowconfig.Load(prowConfigPath, []string{prowJobConfigPath}, nil, "")
 	if err != nil {
 		errs = append(errs, fmt.Errorf("failed to load Prow configuration from release repo: %w", err))
 	}
@@ -305,7 +305,7 @@ func getRevChanges(root, path, base string, ignoreModified, useMergeBase bool) (
 // LoadProwConfig loads Prow configuration from the release repo
 func LoadProwConfig(releaseRepo string) (*prowconfig.Config, error) {
 	agent := prowconfig.Agent{}
-	if err := agent.Start(filepath.Join(releaseRepo, ConfigInRepoPath), "", []string{filepath.Dir(filepath.Join(releaseRepo, ConfigInRepoPath))}, SupplementalProwConfigFileName); err != nil {
+	if err := agent.Start(filepath.Join(releaseRepo, ConfigInRepoPath), nil, []string{filepath.Dir(filepath.Join(releaseRepo, ConfigInRepoPath))}, SupplementalProwConfigFileName); err != nil {
 		return nil, fmt.Errorf("could not load Prow configuration: %w", err)
 	}
 	return agent.Config(), nil

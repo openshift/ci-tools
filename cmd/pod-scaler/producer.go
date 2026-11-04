@@ -352,7 +352,7 @@ func (q *querier) executeOverRange(ctx context.Context, c *clusterMetadata, r pr
 	q.lock.RLock()
 	query := q.data.Query
 	q.lock.RUnlock()
-	result, warnings, err := c.client.QueryRange(ctx, query, r)
+	result, warnings, infos, err := c.client.QueryRange(ctx, query, r)
 	logger.Debugf("Queried Prometheus API in %s.", time.Since(queryStart).Round(time.Second))
 	if err != nil {
 		apiError := &prometheusapi.Error{}
@@ -390,6 +390,9 @@ func (q *querier) executeOverRange(ctx context.Context, c *clusterMetadata, r pr
 	}
 	if len(warnings) > 0 {
 		logger.WithField("warnings", warnings).Warn("Got warnings from Prometheus.")
+	}
+	if len(infos) > 0 {
+		logger.WithField("infos", infos).Info("Got information from Prometheus.")
 	}
 
 	matrix, ok := result.(model.Matrix)
@@ -521,12 +524,15 @@ func refreshEscalationIndex(clients map[string]prometheusapi.API, dataCache Cach
 func queryInstantVector(logger *logrus.Entry, client prometheusapi.API, query string, apply func(model.Metric, model.SampleValue)) error {
 	ctx, cancel := context.WithTimeout(context.Background(), 2*time.Minute)
 	defer cancel()
-	value, warnings, err := client.Query(ctx, query, time.Now())
+	value, warnings, infos, err := client.Query(ctx, query, time.Now())
 	if err != nil {
 		return err
 	}
 	if len(warnings) > 0 {
 		logger.WithField("warnings", warnings).Warn("Got warnings from Prometheus.")
+	}
+	if len(infos) > 0 {
+		logger.WithField("infos", infos).Info("Got information from Prometheus.")
 	}
 	vector, ok := value.(model.Vector)
 	if !ok {

@@ -25,11 +25,12 @@ var (
 	supportedQueries = sets.New[string](`sum(increase(prowjob_state_transitions{state="pending"}[7d])) by (job_name)`, "duration", "cpu", "memory")
 )
 
-func (prometheusAPI *prometheusAPIForTest) Query(ctx context.Context, query string, ts time.Time, opts ...prometheusapi.Option) (model.Value, prometheusapi.Warnings, error) {
+func (prometheusAPI *prometheusAPIForTest) Query(ctx context.Context, query string, ts time.Time, opts ...prometheusapi.Option) (model.Value, prometheusapi.Warnings, prometheusapi.Infos, error) {
 	if !supportedQueries.Has(query) {
-		return nil, nil, fmt.Errorf("not supported query: %s", query)
+		return nil, nil, nil, fmt.Errorf("not supported query: %s", query)
 	}
-	return prometheusAPI.queryFunc(ctx, query, ts)
+	value, warnings, err := prometheusAPI.queryFunc(ctx, query, ts)
+	return value, warnings, nil, err
 }
 
 func TestGetWeightedJobDemandFromPrometheus(t *testing.T) {

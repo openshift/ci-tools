@@ -200,8 +200,8 @@ func newOpts() (*options, error) {
 			opts.stepConfigPath = filepath.Join(opts.releaseRepoGitSyncPath, config.RegistryPath)
 		}
 
-		if opts.prowconfig.JobConfigPath == "" {
-			opts.prowconfig.JobConfigPath = filepath.Join(opts.releaseRepoGitSyncPath, config.JobConfigInRepoPath)
+		if len(opts.prowconfig.JobConfigPaths.Strings()) == 0 {
+			opts.prowconfig.JobConfigPaths.Add(filepath.Join(opts.releaseRepoGitSyncPath, config.JobConfigInRepoPath))
 		}
 
 		if opts.prowconfig.ConfigPath == "" {

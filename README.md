@@ -30,3 +30,7 @@ If deletion changes the pod to a terminal phase or reports
 `ContainerStatusUnknown`, recovery is suppressed even when execution fields are
 empty. Missing runtime history is not proof that a workload never ran. The
 runner requires positive never-started status until the original pod disappears.
+If conditional deletion conflicts, replay is suppressed. Cleanup refreshes the
+pod and deletes only the original UID, then waits for its disappearance before
+continuing. A different pod with the same name is not deleted. These API
+observations do not guarantee exactly-once workload execution.

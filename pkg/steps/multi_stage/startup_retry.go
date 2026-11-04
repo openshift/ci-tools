@@ -18,6 +18,7 @@ import (
 	"github.com/openshift/ci-tools/pkg/api"
 	"github.com/openshift/ci-tools/pkg/kubernetes"
 	"github.com/openshift/ci-tools/pkg/results"
+	"github.com/openshift/ci-tools/pkg/util"
 )
 
 // startupAttemptClient remembers API failures that client-go may otherwise retry internally.
@@ -150,6 +151,24 @@ func podExecutionObserved(pod *coreapi.Pod) bool {
 		}
 	}
 	return false
+}
+
+// cleanupConflictedPod refreshes and deletes only the original UID, without authorizing replay.
+func cleanupConflictedPod(ctx context.Context, client ctrlruntimeclient.Client, pod *coreapi.Pod) error {
+	current := &coreapi.Pod{}
+	if err := client.Get(ctx, ctrlruntimeclient.ObjectKeyFromObject(pod), current); err != nil {
+		if apierrors.IsNotFound(err) {
+			return nil
+		}
+		return fmt.Errorf("refreshing original pod: %w", err)
+	}
+	if current.UID != pod.UID {
+		return nil
+	}
+	if err := client.Delete(ctx, current, ctrlruntimeclient.Preconditions{UID: &pod.UID}); err != nil && !apierrors.IsNotFound(err) {
+		return fmt.Errorf("deleting original pod: %w", err)
+	}
+	return util.WaitForPodDeletion(ctx, client, pod.Namespace, pod.Name, pod.UID)
 }
 
 // startupDeletionClient rejects execution evidence observed while waiting for the original pod to disappear.

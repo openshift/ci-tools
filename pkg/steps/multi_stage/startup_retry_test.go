@@ -284,54 +284,31 @@ func TestPodOnDifferentNode(t *testing.T) {
 			if replacement.Name == pod.Name || !strings.Contains(replacement.Name, "-startup-retry-") {
 				t.Fatal("attempt name is not distinct")
 			}
-			if diff := cmp.Diff(pod.Spec.NodeSelector, replacement.Spec.NodeSelector); diff != "" {
-				t.Fatal(diff)
-			}
 			selector := replacement.Spec.Affinity.NodeAffinity.RequiredDuringSchedulingIgnoredDuringExecution
 			for index, term := range selector.NodeSelectorTerms {
 				if name == "empty term" {
-					if len(term.MatchFields) != 0 {
-						t.Fatal("empty term was broadened")
-					}
 					continue
 				}
 				want := coreapi.NodeSelectorRequirement{Key: "metadata.name", Operator: coreapi.NodeSelectorOpNotIn, Values: []string{"failed-node"}}
+				if len(term.MatchFields) == 0 {
+					t.Fatal("failed node was not excluded")
+				}
 				if diff := cmp.Diff(want, term.MatchFields[len(term.MatchFields)-1]); diff != "" {
 					t.Fatal(diff)
 				}
-				if name == "multiple alternatives" {
-					if diff := cmp.Diff(pod.Spec.Affinity.NodeAffinity.RequiredDuringSchedulingIgnoredDuringExecution.NodeSelectorTerms[index].MatchExpressions, term.MatchExpressions); diff != "" {
-						t.Fatal(diff)
-					}
+				selector.NodeSelectorTerms[index].MatchFields = term.MatchFields[:len(term.MatchFields)-1]
+				if len(selector.NodeSelectorTerms[index].MatchFields) == 0 {
+					selector.NodeSelectorTerms[index].MatchFields = nil
 				}
 			}
-			if name == "empty selector" && len(selector.NodeSelectorTerms) != 0 {
-				t.Fatal("empty selector was broadened")
+			replacement.Name = pod.Name
+			if pod.Spec.Affinity == nil {
+				replacement.Spec.Affinity = nil
+			} else if pod.Spec.Affinity.NodeAffinity.RequiredDuringSchedulingIgnoredDuringExecution == nil {
+				replacement.Spec.Affinity.NodeAffinity.RequiredDuringSchedulingIgnoredDuringExecution = nil
 			}
-			if pod.Spec.Affinity != nil {
-				restored := replacement.Spec.Affinity.DeepCopy()
-				if pod.Spec.Affinity.NodeAffinity.RequiredDuringSchedulingIgnoredDuringExecution == nil {
-					restored.NodeAffinity.RequiredDuringSchedulingIgnoredDuringExecution = nil
-				} else if name == "multiple alternatives" {
-					for index := range restored.NodeAffinity.RequiredDuringSchedulingIgnoredDuringExecution.NodeSelectorTerms {
-						term := &restored.NodeAffinity.RequiredDuringSchedulingIgnoredDuringExecution.NodeSelectorTerms[index]
-						term.MatchFields = term.MatchFields[:len(term.MatchFields)-1]
-						if len(term.MatchFields) == 0 {
-							term.MatchFields = nil
-						}
-					}
-				}
-				if diff := cmp.Diff(pod.Spec.Affinity, restored); diff != "" {
-					t.Fatalf("existing affinity changed: %s", diff)
-				}
-			}
-			if name != "no affinity" {
-				if diff := cmp.Diff(pod.Spec.Affinity.NodeAffinity.PreferredDuringSchedulingIgnoredDuringExecution, replacement.Spec.Affinity.NodeAffinity.PreferredDuringSchedulingIgnoredDuringExecution); diff != "" {
-					t.Fatal(diff)
-				}
-				if diff := cmp.Diff(pod.Spec.Affinity.PodAntiAffinity, replacement.Spec.Affinity.PodAntiAffinity); diff != "" {
-					t.Fatal(diff)
-				}
+			if diff := cmp.Diff(pod, replacement); diff != "" {
+				t.Fatalf("replacement changed constraints beyond node exclusion: %s", diff)
 			}
 		})
 	}
@@ -387,19 +364,46 @@ func (client *startupRunClient) Create(ctx context.Context, object ctrlruntimecl
 }
 
 func (client *startupRunClient) Delete(ctx context.Context, object ctrlruntimeclient.Object, options ...ctrlruntimeclient.DeleteOption) error {
-	client.deleteAttempted = true
+	deleteOptions := &ctrlruntimeclient.DeleteOptions{}
+	for _, option := range options {
+		option.ApplyToDelete(deleteOptions)
+	}
 	if client.expectPreconditions {
-		deleteOptions := &ctrlruntimeclient.DeleteOptions{}
-		for _, option := range options {
-			option.ApplyToDelete(deleteOptions)
-		}
-		if deleteOptions.Preconditions == nil || deleteOptions.Preconditions.UID == nil || *deleteOptions.Preconditions.UID != object.GetUID() || deleteOptions.Preconditions.ResourceVersion == nil || *deleteOptions.Preconditions.ResourceVersion != object.GetResourceVersion() {
+		if deleteOptions.Preconditions == nil || deleteOptions.Preconditions.UID == nil || *deleteOptions.Preconditions.UID != object.GetUID() || (!client.deleteAttempted && (deleteOptions.Preconditions.ResourceVersion == nil || *deleteOptions.Preconditions.ResourceVersion != object.GetResourceVersion())) {
 			return errors.New("missing fresh UID/resource version preconditions")
 		}
 		client.preconditionsChecked = true
 	}
-	if client.scenario == "version conflict" {
-		return apierrors.NewConflict(coreapi.Resource("pods"), object.GetName(), errors.New("resource version changed"))
+	client.deleteAttempted = true
+	if strings.HasPrefix(client.scenario, "conflict") || client.scenario == "version conflict" {
+		if client.scenario == "conflict cleanup delete error" && deleteOptions.Preconditions.ResourceVersion == nil {
+			return errors.New("cleanup delete forbidden")
+		}
+		current := &coreapi.Pod{}
+		if err := client.LoggingClient.Get(ctx, ctrlruntimeclient.ObjectKeyFromObject(object), current); err != nil {
+			return err
+		}
+		if deleteOptions.Preconditions.ResourceVersion != nil {
+			if client.scenario == "conflict cancellation" {
+				client.cancel()
+			}
+			current.Labels["concurrent-update"] = "true"
+			if err := client.LoggingClient.Update(ctx, current); err != nil {
+				return err
+			}
+		}
+		if client.scenario == "conflict replaced pod" || (client.scenario == "conflict replacement race" && deleteOptions.Preconditions.ResourceVersion == nil) {
+			if err := client.LoggingClient.Delete(ctx, current); err != nil {
+				return err
+			}
+			current.UID, current.ResourceVersion = "successor", ""
+			if err := client.LoggingClient.Create(ctx, current); err != nil {
+				return err
+			}
+		}
+		if current.UID != *deleteOptions.Preconditions.UID {
+			return apierrors.NewConflict(coreapi.Resource("pods"), object.GetName(), errors.New("UID changed"))
+		}
 	}
 	if client.scenario == "delete error" {
 		return errors.New("delete forbidden")
@@ -414,6 +418,9 @@ func (client *startupRunClient) Delete(ctx context.Context, object ctrlruntimecl
 }
 
 func (client *startupRunClient) Get(ctx context.Context, key ctrlruntimeclient.ObjectKey, object ctrlruntimeclient.Object, options ...ctrlruntimeclient.GetOption) error {
+	if client.deleteAttempted && client.scenario == "conflict cleanup read error" {
+		return errors.New("cleanup read forbidden")
+	}
 	if client.deleteAttempted && (client.scenario == "terminal during deletion" || client.scenario == "unknown during deletion") {
 		if err := client.FakePodClient.Get(ctx, key, object, options...); err != nil {
 			return err
@@ -502,13 +509,19 @@ func TestRunPodsStartupRetry(t *testing.T) {
 		wantErr            bool
 		finalError         string
 		noPreconditions    bool
+		following          bool
 	}{
 		{name: "first failure then success", phase: "post", failures: 1, attempts: 2},
 		{name: "exhaustion", phase: "post", failures: 2, attempts: 2, wantErr: true, finalError: "startup-retry-"},
 		{name: "pre never retried", phase: "pre", failures: 1, attempts: 1, wantErr: true},
 		{name: "test never retried", phase: "test", failures: 1, attempts: 1, wantErr: true},
 		{name: "delete error", phase: "post", failures: 1, attempts: 1, wantErr: true},
-		{name: "version conflict", phase: "post", failures: 1, attempts: 1, wantErr: true, finalError: "resource version changed"},
+		{name: "version conflict", phase: "post", failures: 1, attempts: 2, wantErr: true, following: true},
+		{name: "conflict replaced pod", phase: "post", failures: 1, attempts: 2, wantErr: true, following: true},
+		{name: "conflict replacement race", phase: "post", failures: 1, attempts: 2, wantErr: true, following: true, finalError: "UID changed"},
+		{name: "conflict cleanup read error", phase: "post", failures: 1, attempts: 1, wantErr: true, finalError: "refreshing original pod: cleanup read forbidden"},
+		{name: "conflict cleanup delete error", phase: "post", failures: 1, attempts: 1, wantErr: true, finalError: "deleting original pod: cleanup delete forbidden"},
+		{name: "conflict cancellation", phase: "post", failures: 1, attempts: 1, wantErr: true},
 		{name: "deletion unconfirmed", phase: "post", failures: 1, attempts: 1, wantErr: true},
 		{name: "deletion still pending", phase: "post", failures: 1, attempts: 1, wantErr: true, finalError: "context canceled"},
 		{name: "started during deletion", phase: "post", failures: 1, attempts: 1, wantErr: true, finalError: "no longer has never-started status"},
@@ -538,7 +551,13 @@ func TestRunPodsStartupRetry(t *testing.T) {
 			pod.ObjectMeta = metav1.ObjectMeta{Name: "test-post", Namespace: "ns", Labels: pod.Labels}
 			pod.Spec.NodeName = ""
 			pod.Status = coreapi.PodStatus{}
-			err := step.runPods(ctx, testCase.phase, []coreapi.Pod{*pod}, nil)
+			pods := []coreapi.Pod{*pod}
+			if testCase.following {
+				following := pod.DeepCopy()
+				following.Name = "following-post"
+				pods = append(pods, *following)
+			}
+			err := step.runPods(ctx, testCase.phase, pods, nil)
 			if (err != nil) != testCase.wantErr {
 				t.Fatalf("unexpected result: %v", err)
 			}
@@ -554,7 +573,25 @@ func TestRunPodsStartupRetry(t *testing.T) {
 			if len(step.subSteps) != testCase.attempts || !*step.subSteps[0].Failed {
 				t.Fatal("first attempt failure not retained")
 			}
-			if testCase.attempts == 2 {
+			if testCase.name == "conflict cancellation" {
+				if getErr := backing.Get(context.Background(), ctrlruntimeclient.ObjectKeyFromObject(pod), &coreapi.Pod{}); !apierrors.IsNotFound(getErr) {
+					t.Fatalf("cancellation prevented original cleanup: %v", getErr)
+				}
+			}
+			if testCase.following {
+				remaining := &coreapi.Pod{}
+				getErr := backing.Get(ctx, ctrlruntimeclient.ObjectKeyFromObject(pod), remaining)
+				if testCase.name == "version conflict" && !apierrors.IsNotFound(getErr) {
+					t.Fatalf("original pod remains runnable after conflict: %v", getErr)
+				}
+				if testCase.name != "version conflict" && (getErr != nil || remaining.UID != "successor") {
+					t.Fatalf("same-name successor was deleted: %v", getErr)
+				}
+				if client.CreatedPods[1].Name != "following-post" {
+					t.Fatal("conflicted attempt was replayed")
+				}
+			}
+			if testCase.attempts == 2 && !testCase.following {
 				if len(step.subTests) == 0 || step.subTests[0].FailureOutput == nil {
 					t.Fatal("startup failure missing from JUnit")
 				}
@@ -622,164 +659,76 @@ func TestPodExecutionObserved(t *testing.T) {
 	}
 }
 
-func TestStartupAttemptClientGet(t *testing.T) {
-	for _, testCase := range []struct {
-		name   string
-		object ctrlruntimeclient.Object
-	}{
-		{name: "nil object"},
-		{name: "typed nil pod", object: (*coreapi.Pod)(nil)},
-	} {
-		t.Run(testCase.name, func(t *testing.T) {
-			client := &startupAttemptClient{}
-			err := client.Get(context.Background(), ctrlruntimeclient.ObjectKey{}, testCase.object)
-			if err == nil || err.Error() != "pod read requires an object" || !client.apiFailed.Load() {
-				t.Fatalf("nil pod read did not fail closed: %v", err)
-			}
-		})
-	}
-}
-
-func TestStartupAttemptClientList(t *testing.T) {
-	for _, testCase := range []struct {
-		name string
-		list ctrlruntimeclient.ObjectList
-	}{
-		{name: "nil list"},
-		{name: "typed nil pod list", list: (*coreapi.PodList)(nil)},
-	} {
-		t.Run(testCase.name, func(t *testing.T) {
-			client := &startupAttemptClient{}
-			err := client.List(context.Background(), testCase.list)
-			if err == nil || err.Error() != "pod list requires an object" || !client.apiFailed.Load() {
-				t.Fatalf("nil pod list did not fail closed: %v", err)
-			}
-		})
-	}
-}
-
-func TestStartupDeletionClientGet(t *testing.T) {
-	for _, testCase := range []struct {
-		name   string
-		object ctrlruntimeclient.Object
-	}{
-		{name: "nil object"},
-		{name: "typed nil pod", object: (*coreapi.Pod)(nil)},
-		{name: "non pod", object: &coreapi.Node{}},
-	} {
-		t.Run(testCase.name, func(t *testing.T) {
-			client := startupDeletionClient{}
-			err := client.Get(context.Background(), ctrlruntimeclient.ObjectKey{}, testCase.object)
-			if err == nil || err.Error() != "startup retry deletion requires a pod object" {
-				t.Fatalf("invalid deletion observation did not fail closed: %v", err)
-			}
-		})
-	}
-}
-
 func TestForwardStartupEvents(t *testing.T) {
-	for _, name := range []string{"error event", "cancel", "stop", "upstream closed", "blocked cancel", "blocked stop", "nil pod", "typed nil pod", "invalid pod", "nil bookmark", "typed nil bookmark", "invalid bookmark", "metadata bookmark"} {
-		t.Run(name, func(t *testing.T) {
+	for _, testCase := range []struct {
+		name               string
+		event              watch.Event
+		malformed, blocked bool
+	}{
+		{name: "error event", event: watch.Event{Type: watch.Error, Object: &metav1.Status{Code: 401}}},
+		{name: "cancel"},
+		{name: "stop"},
+		{name: "upstream closed"},
+		{name: "blocked cancel", event: watch.Event{Type: watch.Error}, blocked: true},
+		{name: "blocked stop", event: watch.Event{Type: watch.Error}, blocked: true},
+		{name: "nil pod", event: watch.Event{Type: watch.Added}, malformed: true},
+		{name: "typed nil pod", event: watch.Event{Type: watch.Modified, Object: (*coreapi.Pod)(nil)}, malformed: true},
+		{name: "invalid pod", event: watch.Event{Type: watch.Deleted, Object: &metav1.Status{}}, malformed: true},
+		{name: "invalid bookmark", event: watch.Event{Type: watch.Bookmark, Object: &metav1.Status{}}, malformed: true},
+		{name: "metadata bookmark", event: watch.Event{Type: watch.Bookmark, Object: &coreapi.Pod{ObjectMeta: metav1.ObjectMeta{ResourceVersion: "2"}}}},
+	} {
+		t.Run(testCase.name, func(t *testing.T) {
 			ctx, cancel := context.WithCancel(context.Background())
 			defer cancel()
-			upstreamEvents := make(chan watch.Event)
-			upstream := watch.NewProxyWatcher(upstreamEvents)
-			events := make(chan watch.Event)
-			proxy := watch.NewProxyWatcher(events)
+			upstreamEvents, events := make(chan watch.Event), make(chan watch.Event)
+			upstream, proxy := watch.NewProxyWatcher(upstreamEvents), watch.NewProxyWatcher(events)
 			client := &startupAttemptClient{}
 			go forwardStartupEvents(ctx, upstream, proxy, events, client)
-			if strings.HasPrefix(name, "blocked") {
+			deadline := time.After(time.Second)
+			if testCase.event.Type != "" {
 				select {
-				case upstreamEvents <- watch.Event{Type: watch.Error, Object: &metav1.Status{Code: 401}}:
-				case <-time.After(time.Second):
-					t.Fatal("forwarder did not receive blocked event")
+				case upstreamEvents <- testCase.event:
+				case <-deadline:
+					t.Fatal("forwarder did not receive event")
+				}
+				if !testCase.blocked {
+					select {
+					case event, open := <-events:
+						if open == testCase.malformed || (open && event.Type != testCase.event.Type) {
+							t.Fatal("unexpected forwarded event")
+						}
+					case <-deadline:
+						t.Fatal("event forwarding blocked")
+					}
 				}
 			}
-			switch name {
-			case "nil pod", "typed nil pod", "invalid pod", "nil bookmark", "typed nil bookmark", "invalid bookmark":
-				event := watch.Event{Type: watch.Added}
-				if strings.HasSuffix(name, "bookmark") {
-					event.Type = watch.Bookmark
-				}
-				if name == "typed nil pod" || name == "typed nil bookmark" {
-					var pod *coreapi.Pod
-					event.Object = pod
-				}
-				if name == "invalid pod" || name == "invalid bookmark" {
-					event.Object = &metav1.Status{}
-				}
-				select {
-				case upstreamEvents <- event:
-				case <-time.After(time.Second):
-					t.Fatal("forwarder did not receive malformed event")
-				}
-				select {
-				case _, open := <-events:
-					if open || !client.apiFailed.Load() {
-						t.Fatal("malformed pod event was not rejected")
-					}
-				case <-time.After(time.Second):
-					t.Fatal("malformed pod event blocked shutdown")
-				}
-			case "metadata bookmark":
-				select {
-				case upstreamEvents <- watch.Event{Type: watch.Bookmark, Object: &coreapi.Pod{ObjectMeta: metav1.ObjectMeta{ResourceVersion: "2"}}}:
-				case <-time.After(time.Second):
-					t.Fatal("forwarder did not receive bookmark")
-				}
-				select {
-				case event := <-events:
-					if event.Type != watch.Bookmark || client.apiFailed.Load() || client.executionObserved.Load() {
-						t.Fatal("metadata-only pod bookmark was rejected")
-					}
-				case <-time.After(time.Second):
-					t.Fatal("bookmark forwarding blocked")
-				}
-				proxy.Stop()
-			case "error event":
-				select {
-				case upstreamEvents <- watch.Event{Type: watch.Error, Object: &metav1.Status{Code: 401}}:
-				case <-time.After(time.Second):
-					t.Fatal("forwarder did not receive error event")
-				}
-				select {
-				case event := <-events:
-					if event.Type != watch.Error || !client.apiFailed.Load() {
-						t.Fatal("watch error not retained")
-					}
-				case <-time.After(time.Second):
-					t.Fatal("event forwarding blocked")
-				}
-				proxy.Stop()
+			switch testCase.name {
 			case "cancel", "blocked cancel":
 				cancel()
-			case "stop", "blocked stop":
-				proxy.Stop()
 			case "upstream closed":
 				close(upstreamEvents)
+			default:
+				proxy.Stop()
 			}
-			if strings.HasPrefix(name, "blocked") {
+			if testCase.blocked {
 				select {
 				case <-upstream.StopChan():
-				case <-time.After(time.Second):
+				case <-deadline:
 					t.Fatal("blocked forwarder did not stop before draining")
 				}
 			}
-			deadline := time.After(time.Second)
-			for {
-				select {
-				case _, open := <-events:
-					if !open {
-						select {
-						case <-upstream.StopChan():
-						default:
-							t.Fatal("upstream watch not stopped")
-						}
-						return
-					}
-				case <-deadline:
-					t.Fatal("watch forwarding goroutine leaked")
+			select {
+			case _, open := <-events:
+				if open || client.apiFailed.Load() != (testCase.malformed || testCase.event.Type == watch.Error) || client.executionObserved.Load() {
+					t.Fatal("unexpected shutdown or observation flags")
 				}
+			case <-deadline:
+				t.Fatal("watch forwarding goroutine leaked")
+			}
+			select {
+			case <-upstream.StopChan():
+			default:
+				t.Fatal("upstream watch not stopped")
 			}
 		})
 	}

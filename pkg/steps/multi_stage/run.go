@@ -197,6 +197,11 @@ func (s *multiStageTestStep) runPod(ctx context.Context, pod *coreapi.Pod, notif
 			if replacement != nil {
 				err = utilerrors.NewAggregate([]error{err, fmt.Errorf("deleting startup retry pod: %w", delErr)})
 				replacement = nil
+				if kerrors.IsConflict(delErr) {
+					if cleanupErr := cleanupConflictedPod(deleteCtx, client, pod); cleanupErr != nil {
+						err = utilerrors.NewAggregate([]error{err, fmt.Errorf("cleaning up conflicted pod: %w", cleanupErr)})
+					}
+				}
 			}
 		} else if replacement != nil {
 			waitCtx, waitCancel := context.WithTimeout(ctx, 30*time.Second)

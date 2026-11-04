@@ -153,7 +153,7 @@ func podExecutionObserved(pod *coreapi.Pod) bool {
 	return false
 }
 
-// cleanupConflictedPod refreshes and deletes only the original UID, without authorizing replay.
+// cleanupConflictedPod conditionally deletes a freshly verified never-started original pod, without authorizing replay.
 func cleanupConflictedPod(ctx context.Context, client ctrlruntimeclient.Client, pod *coreapi.Pod) error {
 	current := &coreapi.Pod{}
 	if err := client.Get(ctx, ctrlruntimeclient.ObjectKeyFromObject(pod), current); err != nil {
@@ -162,13 +162,13 @@ func cleanupConflictedPod(ctx context.Context, client ctrlruntimeclient.Client, 
 		}
 		return fmt.Errorf("refreshing original pod: %w", err)
 	}
-	if current.UID != pod.UID {
+	if current.UID != pod.UID || !neverStartedPod(current) {
 		return nil
 	}
-	if err := client.Delete(ctx, current, ctrlruntimeclient.Preconditions{UID: &pod.UID}); err != nil && !apierrors.IsNotFound(err) {
+	if err := client.Delete(ctx, current, ctrlruntimeclient.Preconditions{UID: &current.UID, ResourceVersion: &current.ResourceVersion}); err != nil && !apierrors.IsNotFound(err) {
 		return fmt.Errorf("deleting original pod: %w", err)
 	}
-	return util.WaitForPodDeletion(ctx, client, pod.Namespace, pod.Name, pod.UID)
+	return util.WaitForPodDeletion(ctx, startupDeletionClient{Client: client, uid: pod.UID}, pod.Namespace, pod.Name, pod.UID)
 }
 
 // startupDeletionClient rejects execution evidence observed while waiting for the original pod to disappear.

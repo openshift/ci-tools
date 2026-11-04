@@ -320,6 +320,9 @@ type startupRunClient struct {
 	failures             int
 	scenario             string
 	deleteAttempted      bool
+	deleteCalls          int
+	initialVersion       string
+	preconditionErr      error
 	cancel               context.CancelFunc
 	expectPreconditions  bool
 	preconditionsChecked bool
@@ -364,35 +367,69 @@ func (client *startupRunClient) Create(ctx context.Context, object ctrlruntimecl
 }
 
 func (client *startupRunClient) Delete(ctx context.Context, object ctrlruntimeclient.Object, options ...ctrlruntimeclient.DeleteOption) error {
+	client.deleteCalls++
 	deleteOptions := &ctrlruntimeclient.DeleteOptions{}
 	for _, option := range options {
 		option.ApplyToDelete(deleteOptions)
 	}
-	if client.expectPreconditions {
-		if deleteOptions.Preconditions == nil || deleteOptions.Preconditions.UID == nil || *deleteOptions.Preconditions.UID != object.GetUID() || (!client.deleteAttempted && (deleteOptions.Preconditions.ResourceVersion == nil || *deleteOptions.Preconditions.ResourceVersion != object.GetResourceVersion())) {
-			return errors.New("missing fresh UID/resource version preconditions")
+	if client.expectPreconditions && (client.deleteCalls == 1 || strings.HasPrefix(client.scenario, "conflict") || client.scenario == "version conflict") {
+		if deleteOptions.Preconditions == nil || deleteOptions.Preconditions.UID == nil || *deleteOptions.Preconditions.UID != object.GetUID() || deleteOptions.Preconditions.ResourceVersion == nil || *deleteOptions.Preconditions.ResourceVersion != object.GetResourceVersion() || object.GetResourceVersion() == "" {
+			client.preconditionErr = errors.New("missing fresh UID/resource version preconditions")
+			return client.preconditionErr
+		}
+		if client.deleteCalls == 1 {
+			client.initialVersion = object.GetResourceVersion()
+		}
+		if client.deleteCalls == 2 && (strings.HasPrefix(client.scenario, "conflict") || client.scenario == "version conflict") && object.GetResourceVersion() == client.initialVersion {
+			client.preconditionErr = errors.New("cleanup did not use a refreshed resource version")
+			return client.preconditionErr
 		}
 		client.preconditionsChecked = true
 	}
 	client.deleteAttempted = true
 	if strings.HasPrefix(client.scenario, "conflict") || client.scenario == "version conflict" {
-		if client.scenario == "conflict cleanup delete error" && deleteOptions.Preconditions.ResourceVersion == nil {
+		if client.scenario == "conflict cleanup delete error" && client.deleteCalls == 2 {
 			return errors.New("cleanup delete forbidden")
 		}
 		current := &coreapi.Pod{}
 		if err := client.LoggingClient.Get(ctx, ctrlruntimeclient.ObjectKeyFromObject(object), current); err != nil {
 			return err
 		}
-		if deleteOptions.Preconditions.ResourceVersion != nil {
+		if client.deleteCalls == 1 || client.scenario == "conflict resource version race" {
 			if client.scenario == "conflict cancellation" {
 				client.cancel()
 			}
 			current.Labels["concurrent-update"] = "true"
+			switch client.scenario {
+			case "conflict refreshed running":
+				current.Status.Phase = coreapi.PodRunning
+			case "conflict refreshed started":
+				current.Status.ContainerStatuses[0].Started = ptr.To(true)
+			case "conflict refreshed init":
+				current.Spec.InitContainers = []coreapi.Container{{Name: "init"}}
+				current.Status.InitContainerStatuses = []coreapi.ContainerStatus{{Name: "init", State: coreapi.ContainerState{Running: &coreapi.ContainerStateRunning{}}}}
+			case "conflict refreshed terminal":
+				current.Status.Phase = coreapi.PodFailed
+			case "conflict refreshed missing":
+				current.Status.ContainerStatuses = nil
+			case "conflict refreshed unknown":
+				current.Status.ContainerStatuses[0].State = coreapi.ContainerState{}
+			}
+			if client.deleteCalls == 2 {
+				current.Labels["second-update"] = "true"
+			}
+			status := current.Status
 			if err := client.LoggingClient.Update(ctx, current); err != nil {
 				return err
 			}
+			if strings.HasPrefix(client.scenario, "conflict refreshed") {
+				current.Status = status
+				if err := client.LoggingClient.Status().Update(ctx, current); err != nil {
+					return err
+				}
+			}
 		}
-		if client.scenario == "conflict replaced pod" || (client.scenario == "conflict replacement race" && deleteOptions.Preconditions.ResourceVersion == nil) {
+		if client.scenario == "conflict replaced pod" || (client.scenario == "conflict replacement race" && client.deleteCalls == 2) {
 			if err := client.LoggingClient.Delete(ctx, current); err != nil {
 				return err
 			}
@@ -403,6 +440,10 @@ func (client *startupRunClient) Delete(ctx context.Context, object ctrlruntimecl
 		}
 		if current.UID != *deleteOptions.Preconditions.UID {
 			return apierrors.NewConflict(coreapi.Resource("pods"), object.GetName(), errors.New("UID changed"))
+		}
+		if client.scenario == "conflict cleanup terminal wait" && client.deleteCalls == 2 {
+			current.Status.Phase = coreapi.PodFailed
+			return client.LoggingClient.Status().Update(ctx, current)
 		}
 	}
 	if client.scenario == "delete error" {
@@ -418,6 +459,16 @@ func (client *startupRunClient) Delete(ctx context.Context, object ctrlruntimecl
 }
 
 func (client *startupRunClient) Get(ctx context.Context, key ctrlruntimeclient.ObjectKey, object ctrlruntimeclient.Object, options ...ctrlruntimeclient.GetOption) error {
+	if client.deleteAttempted && client.scenario == "conflict refreshed empty version" {
+		if err := client.FakePodClient.Get(ctx, key, object, options...); err != nil {
+			return err
+		}
+		object.SetResourceVersion("")
+		return nil
+	}
+	if client.deleteAttempted && (strings.HasPrefix(client.scenario, "conflict refreshed") || client.scenario == "conflict cleanup terminal wait") {
+		return client.LoggingClient.Get(ctx, key, object, options...)
+	}
 	if client.deleteAttempted && client.scenario == "conflict cleanup read error" {
 		return errors.New("cleanup read forbidden")
 	}
@@ -522,6 +573,15 @@ func TestRunPodsStartupRetry(t *testing.T) {
 		{name: "conflict cleanup read error", phase: "post", failures: 1, attempts: 1, wantErr: true, finalError: "refreshing original pod: cleanup read forbidden"},
 		{name: "conflict cleanup delete error", phase: "post", failures: 1, attempts: 1, wantErr: true, finalError: "deleting original pod: cleanup delete forbidden"},
 		{name: "conflict cancellation", phase: "post", failures: 1, attempts: 1, wantErr: true},
+		{name: "conflict refreshed running", phase: "post", failures: 1, attempts: 1, wantErr: true},
+		{name: "conflict refreshed started", phase: "post", failures: 1, attempts: 1, wantErr: true},
+		{name: "conflict refreshed init", phase: "post", failures: 1, attempts: 1, wantErr: true},
+		{name: "conflict refreshed terminal", phase: "post", failures: 1, attempts: 1, wantErr: true},
+		{name: "conflict refreshed missing", phase: "post", failures: 1, attempts: 1, wantErr: true},
+		{name: "conflict refreshed unknown", phase: "post", failures: 1, attempts: 1, wantErr: true},
+		{name: "conflict refreshed empty version", phase: "post", failures: 1, attempts: 1, wantErr: true},
+		{name: "conflict resource version race", phase: "post", failures: 1, attempts: 1, wantErr: true, finalError: "deleting original pod"},
+		{name: "conflict cleanup terminal wait", phase: "post", failures: 1, attempts: 1, wantErr: true, finalError: "no longer has never-started status"},
 		{name: "deletion unconfirmed", phase: "post", failures: 1, attempts: 1, wantErr: true},
 		{name: "deletion still pending", phase: "post", failures: 1, attempts: 1, wantErr: true, finalError: "context canceled"},
 		{name: "started during deletion", phase: "post", failures: 1, attempts: 1, wantErr: true, finalError: "no longer has never-started status"},
@@ -558,6 +618,24 @@ func TestRunPodsStartupRetry(t *testing.T) {
 				pods = append(pods, *following)
 			}
 			err := step.runPods(ctx, testCase.phase, pods, nil)
+			if client.preconditionErr != nil {
+				t.Fatal(client.preconditionErr)
+			}
+			if strings.HasPrefix(testCase.name, "conflict refreshed") || testCase.name == "conflict resource version race" || testCase.name == "conflict cleanup terminal wait" {
+				wantDeletes := 1
+				if testCase.name == "conflict resource version race" || testCase.name == "conflict cleanup terminal wait" {
+					wantDeletes = 2
+				}
+				if client.deleteCalls != wantDeletes {
+					t.Fatalf("unsafe cleanup: %d delete calls, want %d", client.deleteCalls, wantDeletes)
+				}
+				if getErr := backing.Get(ctx, ctrlruntimeclient.ObjectKeyFromObject(pod), &coreapi.Pod{}); getErr != nil {
+					t.Fatalf("unsafe cleanup deleted original pod: %v", getErr)
+				}
+			}
+			if strings.HasPrefix(testCase.name, "conflict") && (len(step.subTests) == 0 || step.subTests[0].FailureOutput == nil) {
+				t.Fatal("conflict failure missing from JUnit")
+			}
 			if (err != nil) != testCase.wantErr {
 				t.Fatalf("unexpected result: %v", err)
 			}

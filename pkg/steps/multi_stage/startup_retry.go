@@ -135,16 +135,19 @@ func forwardStartupEvents(ctx context.Context, upstream watch.Interface, proxy *
 	}
 }
 
-// podExecutionObserved treats execution evidence or an absent pod as permanently unsafe for replay.
+// podExecutionObserved treats execution evidence, explicit unknown status, or an absent pod as permanently unsafe for replay.
 func podExecutionObserved(pod *coreapi.Pod) bool {
 	if pod == nil {
 		return true
 	}
-	if pod.Status.Phase == coreapi.PodRunning || pod.Status.Phase == coreapi.PodSucceeded || pod.Status.Phase == coreapi.PodFailed {
+	if pod.Status.Phase == coreapi.PodRunning || pod.Status.Phase == coreapi.PodSucceeded || pod.Status.Phase == coreapi.PodFailed || pod.Status.Phase == coreapi.PodUnknown {
 		return true
 	}
 	for _, statuses := range [][]coreapi.ContainerStatus{pod.Status.ContainerStatuses, pod.Status.InitContainerStatuses, pod.Status.EphemeralContainerStatuses} {
 		for _, status := range statuses {
+			if (status.State.Waiting != nil && status.State.Waiting.Reason == "ContainerStatusUnknown") || (status.LastTerminationState.Waiting != nil && status.LastTerminationState.Waiting.Reason == "ContainerStatusUnknown") {
+				return true
+			}
 			if status.State.Running != nil || status.State.Terminated != nil || status.LastTerminationState.Running != nil || status.LastTerminationState.Terminated != nil || status.ContainerID != "" || status.RestartCount != 0 || status.Ready || (status.Started != nil && *status.Started) {
 				return true
 			}

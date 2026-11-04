@@ -14,8 +14,8 @@ errors, cancellation, and explicitly node-pinned pods do not qualify. Pre/test
 steps and observers are not retried.
 An established pod watch is required; a timeout before watch establishment is
 treated as unknown infrastructure state rather than permission to retry.
-Execution evidence observed earlier in the attempt also prevents replay even if
-later status no longer reports it.
+Execution evidence or explicit unknown status observed earlier in the attempt
+also prevents replay even if later status no longer reports it.
 Pods found already existing during creation do not qualify, even if the creation
 helper subsequently replaces a completed pod; their earlier history is not
 trusted for replay.

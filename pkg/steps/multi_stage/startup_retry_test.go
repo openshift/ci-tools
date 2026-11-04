@@ -387,6 +387,9 @@ func (client *startupRunClient) Delete(ctx context.Context, object ctrlruntimecl
 		client.preconditionsChecked = true
 	}
 	client.deleteAttempted = true
+	if strings.HasSuffix(client.scenario, "before waiting conflict") {
+		return apierrors.NewConflict(coreapi.Resource("pods"), object.GetName(), errors.New("concurrent update"))
+	}
 	if strings.HasPrefix(client.scenario, "conflict") || client.scenario == "version conflict" {
 		if client.scenario == "conflict cleanup delete error" && client.deleteCalls == 2 {
 			return errors.New("cleanup delete forbidden")
@@ -510,11 +513,22 @@ func (client *startupRunClient) Get(ctx context.Context, key ctrlruntimeclient.O
 
 func (client *startupRunClient) Watch(ctx context.Context, list ctrlruntimeclient.ObjectList, options ...ctrlruntimeclient.ListOption) (watch.Interface, error) {
 	client.watchRequested.Store(true)
-	if client.scenario == "execution before waiting" || client.scenario == "malformed bookmark before waiting" {
+	if client.scenario == "execution before waiting" || client.scenario == "malformed bookmark before waiting" || (strings.HasPrefix(client.scenario, "unknown ") && strings.Contains(client.scenario, "before waiting")) {
 		pod := client.CreatedPods[0].DeepCopy()
+		if err := client.LoggingClient.Get(ctx, ctrlruntimeclient.ObjectKeyFromObject(pod), pod); err != nil {
+			return nil, err
+		}
 		watcher := watch.NewRaceFreeFake()
 		started := pod.DeepCopy()
 		started.Status.ContainerStatuses[0].State.Running = &coreapi.ContainerStateRunning{}
+		if strings.HasPrefix(client.scenario, "unknown ") {
+			started = pod.DeepCopy()
+			started.Status.Phase = coreapi.PodUnknown
+			if strings.HasPrefix(client.scenario, "unknown container") {
+				started.Status.Phase = coreapi.PodPending
+				started.Status.ContainerStatuses[0].State.Waiting.Reason = "ContainerStatusUnknown"
+			}
+		}
 		if client.scenario == "malformed bookmark before waiting" {
 			watcher.Action(watch.Bookmark, &metav1.Status{})
 		} else {
@@ -595,6 +609,10 @@ func TestRunPodsStartupRetry(t *testing.T) {
 		{name: "initial watch failure", phase: "post", failures: 1, attempts: 1, wantErr: true, noPreconditions: true},
 		{name: "initial watch error event", phase: "post", failures: 1, attempts: 1, wantErr: true, noPreconditions: true},
 		{name: "execution before waiting", phase: "post", failures: 1, attempts: 1, wantErr: true, noPreconditions: true},
+		{name: "unknown before waiting", phase: "post", failures: 1, attempts: 1, wantErr: true, noPreconditions: true},
+		{name: "unknown container before waiting", phase: "post", failures: 1, attempts: 1, wantErr: true, noPreconditions: true},
+		{name: "unknown before waiting conflict", phase: "post", failures: 1, attempts: 1, wantErr: true, noPreconditions: true},
+		{name: "unknown container before waiting conflict", phase: "post", failures: 1, attempts: 1, wantErr: true, noPreconditions: true},
 		{name: "malformed bookmark before waiting", phase: "post", failures: 1, attempts: 1, wantErr: true, noPreconditions: true},
 		{name: "existing pod execution", phase: "post", failures: 1, attempts: 1, wantErr: true, noPreconditions: true},
 		{name: "generic pending", phase: "post", failures: 1, attempts: 1, wantErr: true, noPreconditions: true},
@@ -620,6 +638,9 @@ func TestRunPodsStartupRetry(t *testing.T) {
 			err := step.runPods(ctx, testCase.phase, pods, nil)
 			if client.preconditionErr != nil {
 				t.Fatal(client.preconditionErr)
+			}
+			if strings.HasPrefix(testCase.name, "unknown ") && client.deleteCalls != 1 {
+				t.Fatalf("earlier uncertainty authorized conflict cleanup: %d delete calls", client.deleteCalls)
 			}
 			if strings.HasPrefix(testCase.name, "conflict refreshed") || testCase.name == "conflict resource version race" || testCase.name == "conflict cleanup terminal wait" {
 				wantDeletes := 1
@@ -699,6 +720,9 @@ func TestPodExecutionObserved(t *testing.T) {
 	}{
 		{name: "waiting", phase: coreapi.PodPending, status: coreapi.ContainerStatus{State: coreapi.ContainerState{Waiting: &coreapi.ContainerStateWaiting{Reason: "ContainerCreating"}}}},
 		{name: "unknown"},
+		{name: "explicit unknown phase", phase: coreapi.PodUnknown, want: true},
+		{name: "explicit unknown container", status: coreapi.ContainerStatus{State: coreapi.ContainerState{Waiting: &coreapi.ContainerStateWaiting{Reason: "ContainerStatusUnknown"}}}, want: true},
+		{name: "previous unknown container", status: coreapi.ContainerStatus{LastTerminationState: coreapi.ContainerState{Waiting: &coreapi.ContainerStateWaiting{Reason: "ContainerStatusUnknown"}}}, want: true},
 		{name: "running phase", phase: coreapi.PodRunning, want: true},
 		{name: "succeeded phase", phase: coreapi.PodSucceeded, want: true},
 		{name: "failed phase", phase: coreapi.PodFailed, want: true},

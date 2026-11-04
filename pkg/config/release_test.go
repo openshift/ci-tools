@@ -196,6 +196,74 @@ git mv renameme/file renamed/file
 	compareChanges(t, CiopConfigInRepoPath, files, cmd, GetAddedConfigs, expected)
 }
 
+func TestIsFileChanged(t *testing.T) {
+	testCases := []struct {
+		name     string
+		cmd      string
+		filePath string
+		expected bool
+	}{
+		{
+			name:     "modified file is detected",
+			cmd:      "> target.yaml",
+			filePath: "target.yaml",
+			expected: true,
+		},
+		{
+			name:     "unmodified file is not detected",
+			cmd:      "> other.yaml\ngit add other.yaml",
+			filePath: "target.yaml",
+			expected: false,
+		},
+		{
+			name:     "new file is detected",
+			cmd:      "> newfile.yaml\ngit add newfile.yaml",
+			filePath: "newfile.yaml",
+			expected: true,
+		},
+	}
+	for _, tc := range testCases {
+		t.Run(tc.name, func(t *testing.T) {
+			tmp, err := os.MkdirTemp("", "")
+			if err != nil {
+				t.Fatal(err)
+			}
+			defer os.RemoveAll(tmp)
+			if err := os.WriteFile(filepath.Join(tmp, "target.yaml"), []byte("initial"), 0664); err != nil {
+				t.Fatal(err)
+			}
+			p := exec.Command("sh", "-ec", fmt.Sprintf(`
+git init --quiet .
+git config user.name test
+git config user.email test
+git config commit.gpgsign false
+git add .
+git commit --quiet -m initial
+%s
+git commit --quiet --all --allow-empty -m changes
+`, tc.cmd))
+			p.Dir = tmp
+			out, err := p.CombinedOutput()
+			if err != nil {
+				t.Fatalf("%q failed, output:\n%s", p.Args, out)
+			}
+			rev := exec.Command("git", "rev-parse", "HEAD^")
+			rev.Dir = tmp
+			parentHash, err := rev.Output()
+			if err != nil {
+				t.Fatalf("git rev-parse HEAD^: %v", err)
+			}
+			changed, err := IsFileChanged(tmp, tc.filePath, strings.TrimSpace(string(parentHash)))
+			if err != nil {
+				t.Fatalf("unexpected error: %v", err)
+			}
+			if changed != tc.expected {
+				t.Fatalf("expected changed=%v, got %v", tc.expected, changed)
+			}
+		})
+	}
+}
+
 func TestConfigMapName(t *testing.T) {
 	path := "path/to/a-file.yaml"
 	dnfError := fmt.Errorf("path not covered by any config-updater pattern: path/to/a-file.yaml")

@@ -1,0 +1,6 @@
+whitelist:
+  os-observability:
+    - redhat-opentelemetry-collector
+    - cluster-logging-operator
+  openshift:
+    - installer

@@ -147,6 +147,7 @@ func (r httpResult) resolveOwnerAliases(cleaner ownersCleaner) interface{} {
 				Approvers:         cleaner(sets.List(r.repoAliases.ExpandAliases(repoowners.NormLogins(r.simpleConfig.Approvers)))),
 				Reviewers:         cleaner(sets.List(r.repoAliases.ExpandAliases(repoowners.NormLogins(r.simpleConfig.Reviewers)))),
 				RequiredReviewers: cleaner(sets.List(r.repoAliases.ExpandAliases(repoowners.NormLogins(r.simpleConfig.RequiredReviewers)))),
+				AdvisoryApprovers: cleaner(sets.List(r.repoAliases.ExpandAliases(repoowners.NormLogins(r.simpleConfig.AdvisoryApprovers)))),
 				Labels:            sets.List(sets.New[string](r.simpleConfig.Labels...)),
 			},
 			Options: r.simpleConfig.Options,
@@ -165,6 +166,7 @@ func (r httpResult) resolveOwnerAliases(cleaner ownersCleaner) interface{} {
 				Approvers:         cleaner(sets.List(r.repoAliases.ExpandAliases(repoowners.NormLogins(v.Approvers)))),
 				Reviewers:         cleaner(sets.List(r.repoAliases.ExpandAliases(repoowners.NormLogins(v.Reviewers)))),
 				RequiredReviewers: cleaner(sets.List(r.repoAliases.ExpandAliases(repoowners.NormLogins(v.RequiredReviewers)))),
+				AdvisoryApprovers: cleaner(sets.List(r.repoAliases.ExpandAliases(repoowners.NormLogins(v.AdvisoryApprovers)))),
 				Labels:            sets.List(sets.New[string](v.Labels...)),
 			}
 			if len(cfg.Reviewers) == 0 {

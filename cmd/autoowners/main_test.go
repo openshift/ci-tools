@@ -63,6 +63,7 @@ func TestResolveAliases(t *testing.T) {
 					Approvers:         []string{"alice", "bob", "carol", "david"},
 					Reviewers:         []string{"adam", "bob", "carol"},
 					RequiredReviewers: []string{},
+					AdvisoryApprovers: []string{},
 					Labels:            []string{},
 				},
 			},
@@ -82,6 +83,7 @@ func TestResolveAliases(t *testing.T) {
 					Approvers:         []string{"alice", "bob", "carol", "david"},
 					Reviewers:         []string{"alice", "bob", "carol", "david"},
 					RequiredReviewers: []string{},
+					AdvisoryApprovers: []string{},
 					Labels:            []string{},
 				},
 			},
@@ -103,6 +105,7 @@ func TestResolveAliases(t *testing.T) {
 					Approvers:         []string{"alice", "bob", "carol", "david"},
 					Reviewers:         []string{"adam", "bob", "carol"},
 					RequiredReviewers: []string{},
+					AdvisoryApprovers: []string{},
 					Labels:            []string{},
 				},
 			},
@@ -122,6 +125,49 @@ func TestResolveAliases(t *testing.T) {
 				Config: repoowners.Config{
 					Approvers:         []string{"alice", "bob", "carol", "david"},
 					Reviewers:         []string{"alice", "bob", "carol", "david"},
+					RequiredReviewers: []string{},
+					AdvisoryApprovers: []string{},
+					Labels:            []string{},
+				},
+			},
+		},
+		{
+			description: "Simple Config case with AdvisoryApprovers",
+			given: httpResult{
+				simpleConfig: SimpleConfig{
+					Config: repoowners.Config{
+						Approvers:         []string{"david"},
+						Reviewers:         []string{"adam"},
+						AdvisoryApprovers: []string{"sig-alIas", "Grace"},
+					},
+				},
+				repoAliases: ra,
+			},
+			expected: SimpleConfig{
+				Config: repoowners.Config{
+					Approvers:         []string{"david"},
+					Reviewers:         []string{"adam"},
+					AdvisoryApprovers: []string{"bob", "carol", "grace"},
+					RequiredReviewers: []string{},
+					Labels:            []string{},
+				},
+			},
+		},
+		{
+			description: "Simple Config with only AdvisoryApprovers is not considered empty",
+			given: httpResult{
+				simpleConfig: SimpleConfig{
+					Config: repoowners.Config{
+						AdvisoryApprovers: []string{"grace"},
+					},
+				},
+				repoAliases: ra,
+			},
+			expected: SimpleConfig{
+				Config: repoowners.Config{
+					Approvers:         []string{},
+					Reviewers:         []string{},
+					AdvisoryApprovers: []string{"grace"},
 					RequiredReviewers: []string{},
 					Labels:            []string{},
 				},
@@ -146,6 +192,33 @@ func TestResolveAliases(t *testing.T) {
 						Approvers:         []string{"alice", "bob", "carol", "david"},
 						Reviewers:         []string{"adam", "bob", "carol"},
 						RequiredReviewers: []string{},
+						AdvisoryApprovers: []string{},
+						Labels:            []string{},
+					},
+				},
+			},
+		},
+		{
+			description: "Full Config case with AdvisoryApprovers",
+			given: httpResult{
+				repoAliases: ra,
+				fullConfig: FullConfig{
+					Filters: map[string]repoowners.Config{
+						"abc": {
+							Approvers:         []string{"david"},
+							Reviewers:         []string{"adam"},
+							AdvisoryApprovers: []string{"sig-alias", "grace"},
+						},
+					},
+				},
+			},
+			expected: FullConfig{
+				Filters: map[string]repoowners.Config{
+					"abc": {
+						Approvers:         []string{"david"},
+						Reviewers:         []string{"adam"},
+						AdvisoryApprovers: []string{"bob", "carol", "grace"},
+						RequiredReviewers: []string{},
 						Labels:            []string{},
 					},
 				},
@@ -169,6 +242,7 @@ func TestResolveAliases(t *testing.T) {
 						Approvers:         []string{"alice", "bob", "carol", "david"},
 						Reviewers:         []string{"alice", "bob", "carol", "david"},
 						RequiredReviewers: []string{},
+						AdvisoryApprovers: []string{},
 						Labels:            []string{},
 					},
 				},
@@ -483,6 +557,18 @@ func TestResolveOwnerAliasesCleans(t *testing.T) {
 				Approvers:         []string{"hans"},
 				Reviewers:         []string{"hans"},
 				RequiredReviewers: []string{"hans"},
+				AdvisoryApprovers: []string{"hans"},
+				Labels:            []string{},
+			}},
+		},
+		{
+			name: "simpleconfig with advisory approvers",
+			in:   httpResult{simpleConfig: SimpleConfig{Config: repoowners.Config{AdvisoryApprovers: []string{"Gretel"}}}},
+			expectedResult: SimpleConfig{Config: repoowners.Config{
+				Approvers:         []string{"hans"},
+				Reviewers:         []string{"hans"},
+				RequiredReviewers: []string{"hans"},
+				AdvisoryApprovers: []string{"hans"},
 				Labels:            []string{},
 			}},
 		},
@@ -494,6 +580,20 @@ func TestResolveOwnerAliasesCleans(t *testing.T) {
 					Approvers:         []string{"hans"},
 					Reviewers:         []string{"hans"},
 					RequiredReviewers: []string{"hans"},
+					AdvisoryApprovers: []string{"hans"},
+					Labels:            []string{},
+				},
+			}},
+		},
+		{
+			name: "fullconfig with advisory approvers",
+			in:   httpResult{fullConfig: FullConfig{Filters: map[string]repoowners.Config{"tld": {AdvisoryApprovers: []string{"Gretel"}}}}},
+			expectedResult: FullConfig{Filters: map[string]repoowners.Config{
+				"tld": {
+					Approvers:         []string{"hans"},
+					Reviewers:         []string{"hans"},
+					RequiredReviewers: []string{"hans"},
+					AdvisoryApprovers: []string{"hans"},
 					Labels:            []string{},
 				},
 			}},

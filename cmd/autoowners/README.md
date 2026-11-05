@@ -75,6 +75,11 @@ Any aliases present in the upstream `OWNERS` file will be resolved to the set of
 `OWNERS_ALIASES` file.  The local `OWNERS` files will therefore not contain any alias names.  This avoids any conflicts between 
 upstream alias names coming from  different repos.
 
+`advisory_approvers` are synced like the other roles: aliases are expanded and logins are filtered to org members.
+They are kept separate from `approvers` and are not used as a fallback for `reviewers`, since prow unions them with
+approvers on load (retaining `/approve` power) while excluding them from reviewer auto-assignment
+(see [kubernetes-sigs/prow#783](https://github.com/kubernetes-sigs/prow/pull/783)).
+
 The utility also iterates through the `{target-subdir}/{type}/{organization}/{repository}` for `{type}` in `config`, `jobs`, and `templates`, writing `OWNERS` to reflect the upstream configuration.
 If the upstream does not have an `OWNERS` file, the utility will ignore syncing it for those paths.
 

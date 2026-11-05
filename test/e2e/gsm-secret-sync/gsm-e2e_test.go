@@ -422,18 +422,20 @@ func TestInitialCreate(t *testing.T) {
 		t.Fatal("initial create test failed")
 	}
 
-	// A group gets exactly one viewer and one updater binding however many collections it
-	// owns; the old operator-limited form split this group across several.
+	// A group without updater service accounts gets one updater binding for all its collections.
 	groupBindings := 0
 	for _, binding := range actualState.IAMBindings {
 		for _, member := range binding.Members {
 			if member == fmt.Sprintf("group:%s@redhat.com", multiCollectionGroup) {
 				groupBindings++
+				if binding.Role != tr.config.GetSecretUpdaterRole() {
+					t.Errorf("unexpected binding role for group %s: %s", multiCollectionGroup, binding.Role)
+				}
 			}
 		}
 	}
-	if groupBindings != 2 {
-		t.Errorf("expected 2 bindings for group %s, got %d", multiCollectionGroup, groupBindings)
+	if groupBindings != 1 {
+		t.Errorf("expected 1 updater binding for group %s, got %d", multiCollectionGroup, groupBindings)
 	}
 
 	// Only collections listed under updater_service_accounts get one. alpha-secrets asked for
@@ -564,14 +566,11 @@ func TestUnclaimedCollectionPreserved(t *testing.T) {
 		}
 	}
 
-	// The unclaimed collection gets an index secret, but no SA secret.
+	// The unclaimed collection gets no managed secrets.
 	for name, s := range state.Secrets {
-		if s.Collection == unclaimedCollection && s.Type == gsm.SecretTypeSA {
-			t.Errorf("unexpected service account secret for unclaimed collection: %s", name)
+		if s.Collection == unclaimedCollection && s.Type != gsm.SecretTypeGeneric {
+			t.Errorf("unexpected managed secret for unclaimed collection: %s", name)
 		}
-	}
-	if _, ok := state.Secrets[gsm.GetIndexSecretName(unclaimedCollection)]; !ok {
-		t.Errorf("no index secret for unclaimed collection %q", unclaimedCollection)
 	}
 
 	// No managed IAM binding may reference the unclaimed collection. The updater lists the
@@ -723,18 +722,6 @@ func (tr *testRunner) compareStates(actualState GCPState, expectedState GCPState
 		if expectedSecret.Type != actualSecret.Type {
 			logrus.Errorf("Secret %s type mismatch: expected %v, got %v", secretName, expectedSecret.Type, actualSecret.Type)
 			return false
-		}
-		if actualSecret.Type == gsm.SecretTypeIndex {
-			payload, err := gsm.GetSecretPayload(tr.ctx, tr.secretsClient, actualSecret.ResourceName)
-			if err != nil {
-				logrus.Errorf("Failed to fetch payload for index secret %s: %v", secretName, err)
-				return false
-			}
-			err = gsm.VerifyIndexSecretContent(payload)
-			if err != nil {
-				logrus.Errorf("Failed to verify index secret content: %v", err)
-				return false
-			}
 		}
 		if expectedSecret.Collection != actualSecret.Collection {
 			logrus.Errorf("Secret %s collection mismatch: expected %s, got %s", secretName, expectedSecret.Collection, actualSecret.Collection)

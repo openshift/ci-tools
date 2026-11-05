@@ -242,6 +242,21 @@ func TestDiffSecrets(t *testing.T) {
 			expectedToDelete: []GCPSecret{},
 		},
 		{
+			name:               "retiring the index preserves existing index and data secrets",
+			desiredCollections: map[string]bool{testCollection: true},
+			desiredSecrets:     map[string]GCPSecret{},
+			actualSecrets: map[string]GCPSecret{
+				indexSecret.Name: indexSecret,
+				"test-collection__group__data": {
+					Name:       "test-collection__group__data",
+					Type:       SecretTypeGeneric,
+					Collection: testCollection,
+				},
+			},
+			expectedToCreate: map[string]GCPSecret{},
+			expectedToDelete: []GCPSecret{},
+		},
+		{
 			name: "one new secret to create",
 			desiredCollections: map[string]bool{
 				"test-collection-new": true,
@@ -563,6 +578,46 @@ func TestDiffIAMBindings(t *testing.T) {
 			expectedBindings: 0,
 		},
 		{
+			name: "retire index access while preserving updater and exception bindings",
+			desiredBindings: []*iampb.Binding{
+				createViewerBinding("alpha", []string{"group:team@example.com"}),
+				createUpdaterBinding("alpha", []string{"group:team@example.com"}),
+			},
+			actualPolicy: &iampb.Policy{
+				Bindings: []*iampb.Binding{
+					{
+						Role:    config.GetSecretAccessorRole(),
+						Members: []string{"group:team@example.com"},
+						Condition: &expr.Expr{
+							Title:      GetSecretsViewerConditionTitle("alpha"),
+							Expression: `resource.name.extract("secrets/{s}/versions/") in ["alpha__updater-service-account", "alpha____index"]`,
+						},
+					},
+					{
+						Role:    config.GetSecretAccessorRole(),
+						Members: []string{"group:other-team@example.com"},
+						Condition: &expr.Expr{
+							Title:      GetSecretsViewerConditionTitle("beta"),
+							Expression: `resource.name.extract("secrets/{s}/versions/") in ["beta____index"]`,
+						},
+					},
+					createUpdaterBinding("alpha", []string{"group:team@example.com"}),
+					{
+						Role:    config.GetSecretAccessorRole(),
+						Members: []string{"group:exception@example.com"},
+						Condition: &expr.Expr{
+							Title:      "EXCEPTION: read secrets for exception",
+							Expression: `resource.name.extract("secrets/{secret}").startsWith("exception__")`,
+						},
+					},
+				},
+				Etag:    []byte("test-etag"),
+				Version: 3,
+			},
+			expectChanges:    true,
+			expectedBindings: 3,
+		},
+		{
 			name: "mixed operations - create, keep, delete",
 			desiredBindings: []*iampb.Binding{
 				createViewerBinding("alpha", []string{"user:test@example.com"}),
@@ -716,6 +771,22 @@ func TestDiffIAMBindings(t *testing.T) {
 
 				if foundDesired != len(expectedBindings) {
 					t.Errorf("Expected %d desired bindings in result, found %d", len(expectedBindings), foundDesired)
+				}
+
+				for _, actual := range tc.actualPolicy.Bindings {
+					if IsManagedBinding(actual) {
+						continue
+					}
+					found := false
+					for _, binding := range result.Bindings {
+						if ToCanonicalIAMBinding(binding) == ToCanonicalIAMBinding(actual) {
+							found = true
+							break
+						}
+					}
+					if !found {
+						t.Errorf("unmanaged binding was not preserved: %v", actual)
+					}
 				}
 
 				// Verify no obsolete managed bindings remain

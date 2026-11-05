@@ -1,11 +1,4 @@
 - condition:
-    expression: resource.name.extract("secrets/{s}/versions/") in ["claimed-a____index",
-      "claimed-b____index"]
-    title: 'tp-viewer: owner-team'
-  members:
-  - group:owner-team@redhat.com
-  role: projects/test-project/roles/openshift_ci_secrets_viewer
-- condition:
     expression: resource.name.extract("secrets/{c}__") in ["claimed-a", "claimed-b"]
     title: 'tp-updater: owner-team'
   members:

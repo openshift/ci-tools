@@ -17,8 +17,8 @@ groups:
   team-noop:
     cluster_groups:
     - dp-managed
-  # Owns several collections, so its two bindings carry multi-element "in" lists and
-  # prove SetIamPolicy accepts a single binding covering a whole group. This must be a
+  # Owns several collections, so its updater binding carries a multi-element "in" list and
+  # proves SetIamPolicy accepts a single binding covering a whole group. This must be a
   # group that actually exists in the directory, otherwise SetIamPolicy rejects its
   # bindings with "Group ... does not exist".
   test-platform-gsm-secrets-owners:

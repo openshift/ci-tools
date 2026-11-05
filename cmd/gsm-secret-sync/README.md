@@ -16,7 +16,7 @@ Secrets in Google Secret Manager are organized into **secret collections** - log
 The tool operates on a declarative configuration file that serves as the **source of truth** for defining groups and their associated secret collections. Based on this configuration, it automatically:
 
 1. **Service Account Management**: Creates updater service accounts with collection-specific naming
-2. **Secret Provisioning**: Creates index secrets and service account key secrets
+2. **Secret Provisioning**: Creates service account key secrets for collections with updater service accounts enabled
 3. **IAM Policy Sync**: Configures conditional IAM bindings for viewer and updater roles
 4. **State Reconciliation**: Compares desired vs actual state and applies necessary changes
 
@@ -66,7 +66,6 @@ The tool follows specific naming conventions:
 
 - **Service Accounts**: `{collection}-sa@{project}.iam.gserviceaccount.com`
 - **Updater Secrets**: `{collection}__updater-service-account`
-- **Index Secrets**: `{collection}____index`
 
 ## Deployment
 

@@ -45,14 +45,13 @@ func BuildSecretUpdaterRoleConditionExpression(collection string) string {
 }
 
 // BuildSecretAccessorRoleConditionExpressionForCollections builds the viewer IAM condition expression:
-// each collection's updater service account secret (if enabled) and its index secret, never its data secrets.
+// only updater service-account secrets for SA-enabled collections, never its data secrets.
 func BuildSecretAccessorRoleConditionExpressionForCollections(collections []string, collectionsWithSA sets.Set[string]) string {
 	var names []string
 	for _, collection := range collections {
 		if collectionsWithSA.Has(collection) {
 			names = append(names, fmt.Sprintf("%s%s", collection, UpdaterSASecretSuffix))
 		}
-		names = append(names, fmt.Sprintf("%s%s", collection, IndexSecretSuffix))
 	}
 	return fmt.Sprintf("%s in [%s]", viewerSecretNameTemplate, quoteJoin(names))
 }

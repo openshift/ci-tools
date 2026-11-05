@@ -102,7 +102,7 @@ func (rt *bearerTokenAuthRoundTripper) RoundTrip(req *http.Request) (*http.Respo
 // PrometheusAPI defines what we expect Prometheus to do in the package
 type PrometheusAPI interface {
 	// Query performs a query for the given time.
-	Query(ctx context.Context, query string, ts time.Time, opts ...prometheusapi.Option) (model.Value, prometheusapi.Warnings, error)
+	Query(ctx context.Context, query string, ts time.Time, opts ...prometheusapi.Option) (model.Value, prometheusapi.Warnings, prometheusapi.Infos, error)
 }
 
 // GetJobVolumesFromPrometheus gets job volumes from a Prometheus server for the given time
@@ -111,12 +111,15 @@ func GetJobVolumesFromPrometheus(ctx context.Context, prometheusAPI PrometheusAP
 }
 
 func queryJobValues(ctx context.Context, prometheusAPI PrometheusAPI, query string, ts time.Time) (map[string]float64, error) {
-	result, warnings, err := prometheusAPI.Query(ctx, query, ts)
+	result, warnings, infos, err := prometheusAPI.Query(ctx, query, ts)
 	if err != nil {
 		return nil, err
 	}
 	if len(warnings) > 0 {
 		logrus.WithField("Warnings", warnings).Warn("Got warnings from Prometheus")
+	}
+	if len(infos) > 0 {
+		logrus.WithField("infos", infos).Info("Got information from Prometheus")
 	}
 
 	vector, ok := result.(model.Vector)

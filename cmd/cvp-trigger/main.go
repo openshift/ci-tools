@@ -141,9 +141,17 @@ func (o options) validateOptions() error {
 		return err
 	}
 
-	exists, _ := afs.Exists(o.prowconfig.JobConfigPath)
-	if !exists {
-		return fmt.Errorf("validating job config path %s failed, does not exist", o.prowconfig.JobConfigPath)
+	if len(o.prowconfig.JobConfigPaths.Strings()) == 0 {
+		return fmt.Errorf("required parameter %s was not provided", jobConfigPathOption)
+	}
+	for _, path := range o.prowconfig.JobConfigPaths.Strings() {
+		exists, err := afs.Exists(path)
+		if err != nil {
+			return fmt.Errorf("validating job config path %s failed: %w", path, err)
+		}
+		if !exists {
+			return fmt.Errorf("validating job config path %s failed, does not exist", path)
+		}
 	}
 
 	if o.jobName == "" {
@@ -161,7 +169,7 @@ func (o options) validateOptions() error {
 		return fmt.Errorf("required parameter %s was not provided", operatorPackageNameOptions)
 	}
 
-	exists, _ = afs.Exists(o.prowconfig.ConfigPath)
+	exists, _ := afs.Exists(o.prowconfig.ConfigPath)
 	if !exists {
 		return fmt.Errorf("validating prow config path %s failed, does not exist", o.prowconfig.ConfigPath)
 	}

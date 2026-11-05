@@ -76,7 +76,7 @@ func updateProwConfig(configDir, shardingBaseDir string) error {
 	if shardingBaseDir != "" {
 		additionalConfigs = append(additionalConfigs, shardingBaseDir)
 	}
-	config, err := prowconfig.LoadStrict(configPath, "", additionalConfigs, "_prowconfig.yaml")
+	config, err := prowconfig.LoadStrict(configPath, nil, additionalConfigs, "_prowconfig.yaml")
 	if err != nil {
 		return fmt.Errorf("failed to load Prow config in strict mode: %w", err)
 	}

@@ -507,7 +507,7 @@ func updateProwConfigs(o *options) error {
 	var additionalConfigs []string
 	additionalConfigs = append(additionalConfigs, o.shardedProwConfigBaseDir)
 
-	config, err := prowconfig.LoadStrict(configPath, "", additionalConfigs, "_prowconfig.yaml")
+	config, err := prowconfig.LoadStrict(configPath, nil, additionalConfigs, "_prowconfig.yaml")
 	if err != nil {
 		return fmt.Errorf("failed to load Prow config in strict mode: %w", err)
 	}

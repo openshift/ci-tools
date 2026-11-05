@@ -46,15 +46,16 @@ import (
 )
 
 const (
-	ControllerName            = "ephemeral_cluster_provisioner"
-	WaitTestStepName          = "wait-test-complete"
-	HiveKubeconfigSecret      = EphemeralClusterTestName + "-" + api.HiveAdminKubeconfigSecret
-	HiveAdminPasswdSecret     = EphemeralClusterTestName + "-" + api.HiveAdminPasswordSecret
-	EphemeralClusterTestName  = "cluster-provisioning"
-	EphemeralClusterLabel     = "ci.openshift.io/ephemeral-cluster"
-	EphemeralClusterNamespace = "ephemeral-cluster"
-	DependentProwJobFinalizer = "ephemeralcluster.ci.openshift.io/dependent-prowjob"
-	UnresolvedConfigVar       = "UNRESOLVED_CONFIG"
+	ControllerName                          = "ephemeral_cluster_provisioner"
+	WaitTestStepName                        = "wait-test-complete"
+	HiveKubeconfigSecret                    = EphemeralClusterTestName + "-" + api.HiveAdminKubeconfigSecret
+	HiveAdminPasswdSecret                   = EphemeralClusterTestName + "-" + api.HiveAdminPasswordSecret
+	EphemeralClusterTestName                = "cluster-provisioning"
+	EphemeralClusterLabel                   = "ci.openshift.io/ephemeral-cluster"
+	EphemeralClusterNamespace               = "ephemeral-cluster"
+	DependentProwJobFinalizer               = "ephemeralcluster.ci.openshift.io/dependent-prowjob"
+	UnresolvedConfigVar                     = "UNRESOLVED_CONFIG"
+	HypershiftHostedClusterHtpasswdWorkflow = "hypershift-hostedcluster-htpasswd"
 
 	ProwJobNamePrefix         = "ephemeralcluster"
 	GitHubGUID                = "X-Github-Delivery"
@@ -704,7 +705,7 @@ func (r *reconciler) fetchSecrets(ctx context.Context, log *logrus.Entry, ec *ep
 	if ec.Spec.CIOperator.Test.ClusterClaim != nil {
 		r.fetchHiveSecrets(ctx, log, ec, buildClient, ns, oldStatus, ecStatus)
 	} else {
-		r.fetchClusterKubeconfig(ctx, log, ec, buildClient, ns, oldStatus, ecStatus)
+		r.fetchClusterSecrets(ctx, log, ec, buildClient, ns, oldStatus, ecStatus)
 	}
 
 	return nil
@@ -770,7 +771,7 @@ func (r *reconciler) fetchHiveSecrets(
 	}
 }
 
-func (r *reconciler) fetchClusterKubeconfig(
+func (r *reconciler) fetchClusterSecrets(
 	ctx context.Context,
 	log *logrus.Entry,
 	ec *ephemeralclusterv1.EphemeralCluster,
@@ -778,9 +779,9 @@ func (r *reconciler) fetchClusterKubeconfig(
 	ns string,
 	oldStatus, ecStatus *ephemeralclusterv1.EphemeralClusterStatus,
 ) {
-	kubeconfigSecret := corev1.Secret{}
+	clusterSecret := corev1.Secret{}
 	// The secret is named after the test name.
-	if err := buildClient.Get(ctx, types.NamespacedName{Name: EphemeralClusterTestName, Namespace: ns}, &kubeconfigSecret); err != nil {
+	if err := buildClient.Get(ctx, types.NamespacedName{Name: EphemeralClusterTestName, Namespace: ns}, &clusterSecret); err != nil {
 		log.WithField("secret", EphemeralClusterTestName).WithError(err).Error("Failed to read secret")
 		if apierrors.IsNotFound(err) {
 			upsertCondition(ecStatus, ephemeralclusterv1.ClusterReady, metav1.ConditionFalse, ec.Generation, r.now(), ephemeralclusterv1.SecretsFetchFailureReason, err.Error())
@@ -788,17 +789,23 @@ func (r *reconciler) fetchClusterKubeconfig(
 		return
 	}
 
-	kubeconfig, ok := kubeconfigSecret.Data["kubeconfig"]
-	if !ok {
-		// The kubeconfig takes time before being stored into the secret, requeuing.
-		upsertCondition(ecStatus, ephemeralclusterv1.ClusterReady, metav1.ConditionFalse, ec.Generation, r.now(), ephemeralclusterv1.SecretsFetchFailureReason, ephemeralclusterv1.KubeconfigNotReadyMsg)
-		return
+	secretData := map[string][]byte{}
+
+	if kubeconfig, ok := clusterSecret.Data["kubeconfig"]; ok {
+		secretData["kubeconfig"] = kubeconfig
 	}
 
-	kubeadminPasswd := kubeconfigSecret.Data["kubeadmin-password"]
-	secretData := map[string][]byte{
-		"kubeconfig":        kubeconfig,
-		"kubeAdminPassword": kubeadminPasswd,
+	if kubeadminPasswd, ok := clusterSecret.Data["kubeadmin-password"]; ok {
+		secretData["kubeAdminPassword"] = kubeadminPasswd
+	}
+
+	if htpasswdUsers, ok := clusterSecret.Data["users"]; ok {
+		secretData["users"] = htpasswdUsers
+	}
+
+	if !allClusterSecretsFetched(ec, secretData) {
+		upsertCondition(ecStatus, ephemeralclusterv1.ClusterReady, metav1.ConditionFalse, ec.Generation, r.now(), ephemeralclusterv1.SecretsFetchFailureReason, ephemeralclusterv1.KubeconfigNotReadyMsg)
+		return
 	}
 
 	if err := r.createCredentialsSecret(ctx, log, ec, secretData); err != nil {
@@ -812,6 +819,19 @@ func (r *reconciler) fetchClusterKubeconfig(
 		log.Info("Kubeconfig fetched, the cluster is ready")
 		r.recorder.Event(ec, corev1.EventTypeNormal, ephemeralclusterv1.EventReasonClusterReady, "Cluster credentials are available")
 	}
+}
+
+func allClusterSecretsFetched(ec *ephemeralclusterv1.EphemeralCluster, secretData map[string][]byte) bool {
+	_, kubeconfigFetched := secretData["kubeconfig"]
+	_, htpasswdUsersFetched := secretData["users"]
+
+	// For the hypershift workflow when need both kubeconfig and htpasswdUsers
+	// in order to consider the cluster "ready"
+	if ec.Spec.CIOperator.Test.Workflow == HypershiftHostedClusterHtpasswdWorkflow {
+		return kubeconfigFetched && htpasswdUsersFetched
+	}
+
+	return kubeconfigFetched
 }
 
 func (r *reconciler) updateEphemeralClusterStatus(ctx context.Context, ec *ephemeralclusterv1.EphemeralCluster, observedStatus *ephemeralclusterv1.EphemeralClusterStatus) error {

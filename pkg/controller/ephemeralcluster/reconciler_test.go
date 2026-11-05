@@ -898,6 +898,230 @@ func TestReconcile(t *testing.T) {
 			}},
 		},
 		{
+			name: "Hosted cluster workflow: cluster ready when kubeconfig and htpasswords exist",
+			ec: &ephemeralclusterv1.EphemeralCluster{
+				ObjectMeta: metav1.ObjectMeta{
+					Annotations: map[string]string{
+						ephemeralclusterv1.KonfluxClusterAnnotation: "kcluster",
+						ephemeralclusterv1.KonfluxTenantAnnotation:  "ktenant",
+					},
+					Name:              "foo",
+					Namespace:         "bar",
+					CreationTimestamp: metav1.NewTime(parseTime(t, "2025-04-02 12:12:12")),
+					UID:               types.UID("test-ec-uid"),
+				},
+				Spec: ephemeralclusterv1.EphemeralClusterSpec{
+					CIOperator: ephemeralclusterv1.CIOperatorSpec{
+						Test: ephemeralclusterv1.TestSpec{Workflow: HypershiftHostedClusterHtpasswdWorkflow, ClusterProfile: "aws"},
+					},
+				},
+				Status: ephemeralclusterv1.EphemeralClusterStatus{
+					ProwJobID: "pj-123",
+				},
+			},
+			objs: []ctrlclient.Object{
+				&prowv1.ProwJob{
+					ObjectMeta: metav1.ObjectMeta{Name: "pj-123", Namespace: prowJobNamespace},
+					Spec:       prowv1.ProwJobSpec{Cluster: "build01"},
+					Status:     prowv1.ProwJobStatus{URL: "https://pj-123.html"},
+				},
+			},
+			buildClients: func() map[string]*ctrlruntimetest.FakeClient {
+				objs := []ctrlclient.Object{
+					&corev1.Namespace{
+						ObjectMeta: metav1.ObjectMeta{
+							Labels: map[string]string{steps.LabelJobID: "pj-123"},
+							Name:   "ci-op-1234",
+						},
+					},
+					&corev1.Secret{
+						ObjectMeta: metav1.ObjectMeta{Name: EphemeralClusterTestName, Namespace: "ci-op-1234"},
+						Data: map[string][]byte{
+							"kubeconfig": []byte("kubeconfig"),
+							"users":      []byte("htpasswd"),
+						},
+					},
+				}
+				c := fake.NewClientBuilder().WithObjects(objs...).WithScheme(scheme).Build()
+				return map[string]*ctrlruntimetest.FakeClient{
+					"build01": ctrlruntimetest.NewFakeClient(c, scheme, ctrlruntimetest.WithInitObjects(objs...)),
+				}
+			},
+			wantSecret: &corev1.Secret{
+				ObjectMeta: metav1.ObjectMeta{
+					Name:      "foo-credentials",
+					Namespace: "bar",
+				},
+				Data: map[string][]byte{
+					"kubeconfig": []byte("kubeconfig"),
+					"users":      []byte("htpasswd"),
+				},
+			},
+			now: new(parseTime(t, "2025-04-02 12:14:12")),
+			wantEC: &ephemeralclusterv1.EphemeralCluster{
+				ObjectMeta: metav1.ObjectMeta{
+					Annotations: map[string]string{
+						ephemeralclusterv1.KonfluxClusterAnnotation: "kcluster",
+						ephemeralclusterv1.KonfluxTenantAnnotation:  "ktenant",
+					},
+					Name:              "foo",
+					Namespace:         "bar",
+					CreationTimestamp: metav1.NewTime(parseTime(t, "2025-04-02 12:12:12")),
+					ResourceVersion:   "1000",
+				},
+				Spec: ephemeralclusterv1.EphemeralClusterSpec{
+					CIOperator: ephemeralclusterv1.CIOperatorSpec{
+						Test: ephemeralclusterv1.TestSpec{Workflow: HypershiftHostedClusterHtpasswdWorkflow, ClusterProfile: "aws"},
+					},
+				},
+				Status: ephemeralclusterv1.EphemeralClusterStatus{
+					Phase:      ephemeralclusterv1.EphemeralClusterReady,
+					ProwJobID:  "pj-123",
+					SecretRef:  "foo-credentials",
+					ProwJobURL: "https://pj-123.html",
+					Conditions: []metav1.Condition{{
+						Type:               ephemeralclusterv1.ProwJobCreated,
+						Status:             metav1.ConditionTrue,
+						Reason:             ephemeralclusterv1.ProwJobProperlyCreatedReason,
+						LastTransitionTime: metav1.NewTime(parseTime(t, "2025-04-02 12:14:12")),
+					}, {
+						Type:               ephemeralclusterv1.ClusterReady,
+						Status:             metav1.ConditionTrue,
+						Reason:             ephemeralclusterv1.CredentialsReadyReason,
+						LastTransitionTime: metav1.NewTime(parseTime(t, "2025-04-02 12:14:12")),
+					}},
+				},
+			},
+			wantRes: reconcile.Result{RequeueAfter: pollingTime},
+			wantEvents: []string{
+				"Normal ClusterReady Cluster credentials are available",
+			},
+			wantProvisioningDurationHistogram: []metric{{
+				Histogram: &histogram{
+					Labels: map[string]string{
+						"konflux_cluster": "kcluster",
+						"konflux_tenant":  "ktenant",
+						"cluster_profile": "aws",
+						"workflow":        HypershiftHostedClusterHtpasswdWorkflow,
+						"phase":           "Ready",
+					},
+					SampleCount: 1,
+					SampleSum:   120,
+					Buckets:     histogramBuckets(provisioningDurationBuckets, 1),
+				},
+			}},
+			wantPhaseTransitionsCounter: []metric{{
+				Counter: &counter{
+					Labels: map[string]string{
+						"konflux_cluster": "kcluster",
+						"konflux_tenant":  "ktenant",
+						"cluster_profile": "aws",
+						"workflow":        HypershiftHostedClusterHtpasswdWorkflow,
+						"phase":           "Ready",
+					},
+					Value: 1,
+				},
+			}},
+		},
+		{
+			name: "Hosted cluster workflow: cluster not ready since htpasswords is missing",
+			ec: &ephemeralclusterv1.EphemeralCluster{
+				ObjectMeta: metav1.ObjectMeta{
+					Annotations: map[string]string{
+						ephemeralclusterv1.KonfluxClusterAnnotation: "kcluster",
+						ephemeralclusterv1.KonfluxTenantAnnotation:  "ktenant",
+					},
+					Name:              "foo",
+					Namespace:         "bar",
+					CreationTimestamp: metav1.NewTime(parseTime(t, "2025-04-02 12:12:12")),
+					UID:               types.UID("test-ec-uid"),
+				},
+				Spec: ephemeralclusterv1.EphemeralClusterSpec{
+					CIOperator: ephemeralclusterv1.CIOperatorSpec{
+						Test: ephemeralclusterv1.TestSpec{Workflow: HypershiftHostedClusterHtpasswdWorkflow, ClusterProfile: "aws"},
+					},
+				},
+				Status: ephemeralclusterv1.EphemeralClusterStatus{
+					ProwJobID: "pj-123",
+				},
+			},
+			objs: []ctrlclient.Object{
+				&prowv1.ProwJob{
+					ObjectMeta: metav1.ObjectMeta{Name: "pj-123", Namespace: prowJobNamespace},
+					Spec:       prowv1.ProwJobSpec{Cluster: "build01"},
+					Status:     prowv1.ProwJobStatus{URL: "https://pj-123.html"},
+				},
+			},
+			buildClients: func() map[string]*ctrlruntimetest.FakeClient {
+				objs := []ctrlclient.Object{
+					&corev1.Namespace{
+						ObjectMeta: metav1.ObjectMeta{
+							Labels: map[string]string{steps.LabelJobID: "pj-123"},
+							Name:   "ci-op-1234",
+						},
+					},
+					&corev1.Secret{
+						ObjectMeta: metav1.ObjectMeta{Name: EphemeralClusterTestName, Namespace: "ci-op-1234"},
+						Data: map[string][]byte{
+							"kubeconfig": []byte("kubeconfig"),
+						},
+					},
+				}
+				c := fake.NewClientBuilder().WithObjects(objs...).WithScheme(scheme).Build()
+				return map[string]*ctrlruntimetest.FakeClient{
+					"build01": ctrlruntimetest.NewFakeClient(c, scheme, ctrlruntimetest.WithInitObjects(objs...)),
+				}
+			},
+			now: new(parseTime(t, "2025-04-02 12:14:12")),
+			wantEC: &ephemeralclusterv1.EphemeralCluster{
+				ObjectMeta: metav1.ObjectMeta{
+					Annotations: map[string]string{
+						ephemeralclusterv1.KonfluxClusterAnnotation: "kcluster",
+						ephemeralclusterv1.KonfluxTenantAnnotation:  "ktenant",
+					},
+					Name:              "foo",
+					Namespace:         "bar",
+					CreationTimestamp: metav1.NewTime(parseTime(t, "2025-04-02 12:12:12")),
+					ResourceVersion:   "1000",
+				},
+				Spec: ephemeralclusterv1.EphemeralClusterSpec{
+					CIOperator: ephemeralclusterv1.CIOperatorSpec{
+						Test: ephemeralclusterv1.TestSpec{Workflow: HypershiftHostedClusterHtpasswdWorkflow, ClusterProfile: "aws"},
+					},
+				},
+				Status: ephemeralclusterv1.EphemeralClusterStatus{
+					Phase:      ephemeralclusterv1.EphemeralClusterProvisioning,
+					ProwJobID:  "pj-123",
+					ProwJobURL: "https://pj-123.html",
+					Conditions: []metav1.Condition{{
+						Type:               ephemeralclusterv1.ProwJobCreated,
+						Status:             metav1.ConditionTrue,
+						Reason:             ephemeralclusterv1.ProwJobProperlyCreatedReason,
+						LastTransitionTime: metav1.NewTime(parseTime(t, "2025-04-02 12:14:12")),
+					}, {
+						Type:               ephemeralclusterv1.ClusterReady,
+						Status:             metav1.ConditionFalse,
+						Reason:             ephemeralclusterv1.SecretsFetchFailureReason,
+						Message:            ephemeralclusterv1.KubeconfigNotReadyMsg,
+						LastTransitionTime: metav1.NewTime(parseTime(t, "2025-04-02 12:14:12")),
+					}},
+				},
+			},
+			wantRes: reconcile.Result{RequeueAfter: pollingTime},
+			wantPhaseTransitionsCounter: []metric{{
+				Counter: &counter{
+					Labels: map[string]string{
+						"konflux_cluster": "kcluster",
+						"konflux_tenant":  "ktenant",
+						"cluster_profile": "aws",
+						"workflow":        HypershiftHostedClusterHtpasswdWorkflow,
+						"phase":           "Provisioning",
+					},
+					Value: 1,
+				},
+			}},
+		},
+		{
 			name: "Only Kubeconfig available: object is ready anyway",
 			ec: &ephemeralclusterv1.EphemeralCluster{
 				ObjectMeta: metav1.ObjectMeta{
@@ -948,8 +1172,7 @@ func TestReconcile(t *testing.T) {
 					Namespace: "bar",
 				},
 				Data: map[string][]byte{
-					"kubeconfig":        []byte("kubeconfig"),
-					"kubeAdminPassword": nil,
+					"kubeconfig": []byte("kubeconfig"),
 				},
 			},
 			now: new(parseTime(t, "2025-04-02 12:14:12")),

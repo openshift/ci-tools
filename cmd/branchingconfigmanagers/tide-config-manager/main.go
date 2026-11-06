@@ -6,6 +6,7 @@ import (
 	"fmt"
 	"os"
 	"path"
+	"reflect"
 	"strings"
 
 	"github.com/sirupsen/logrus"
@@ -261,102 +262,138 @@ func (er *excludedRepos) loadExcludedReposConfig(path string) error {
 	return nil
 }
 
+// generalAvailabilityEvent moves canonical release queries while retaining repository policy.
 type generalAvailabilityEvent struct {
-	repos                         sets.Set[string]
-	excludedAllowList             sets.Set[string]
-	noXYAllowList                 sets.Set[string]
-	openshiftReleaseBranches      sets.Set[string]
-	openshiftReleaseBranchesPlus1 sets.Set[string]
-	releasePast                   string
-	openshiftPast                 string
-	releaseCurrent                string
-	openshiftCurrent              string
-	releaseFuture                 string
-	openshiftFuture               string
-	past                          string
-	current                       string
-	future                        string
+	excludedRepos sets.Set[string]
+	past          string
+	current       string
+	future        string
 }
 
+// newGeneralAvailabilityEvent configures a GA transition and its repository opt-outs.
 func newGeneralAvailabilityEvent(past, current, future string, repos excludedRepos) generalAvailabilityEvent {
-	noXYAllowList := sets.New[string](repos.NoXYAllowList...)
-	excludedAllowList := sets.New[string](repos.ExcludedAllowList...).Union(noXYAllowList)
-
 	return generalAvailabilityEvent{
-		repos:                         sets.New[string](),
-		excludedAllowList:             excludedAllowList,
-		noXYAllowList:                 noXYAllowList,
-		openshiftReleaseBranches:      sets.New[string](release+current, openshift+current),
-		openshiftReleaseBranchesPlus1: sets.New[string](release+future, openshift+future),
-		releasePast:                   release + past,
-		releaseCurrent:                release + current,
-		releaseFuture:                 release + future,
-		openshiftPast:                 openshift + past,
-		openshiftCurrent:              openshift + current,
-		openshiftFuture:               openshift + future,
-		past:                          past,
-		current:                       current,
-		future:                        future,
+		excludedRepos: sets.New[string](repos.ExcludedAllowList...).Insert(repos.NoXYAllowList...),
+		past:          past, current: current, future: future,
 	}
 }
 
-func (gae generalAvailabilityEvent) ModifyQuery(q *prowconfig.TideQuery, repo string) {
-	gae.deleteBackportRiskAssesedLabels(q)
-	gae.ensureStaffEngApprovedLabel(q)
-	gae.overrideExcludedBranches(q)
+// ModifyQuery is empty because GA needs the complete query list before sharding.
+func (gae generalAvailabilityEvent) ModifyQuery(*prowconfig.TideQuery, string) {}
+
+// GetDataFromProwConfig transitions repository queries independently, preserving org queries.
+func (gae generalAvailabilityEvent) GetDataFromProwConfig(pc *prowconfig.ProwConfig) {
+	byRepo := map[string]prowconfig.TideQueries{}
+	var queries prowconfig.TideQueries
+	for _, query := range pc.Tide.Queries {
+		if len(query.Orgs) > 0 || len(query.Repos) == 0 {
+			orgQuery := query
+			orgQuery.Repos = nil
+			queries = append(queries, orgQuery)
+		}
+		for _, repo := range query.Repos {
+			repoQuery := query
+			repoQuery.Orgs = nil
+			repoQuery.Repos = []string{repo}
+			byRepo[repo] = append(byRepo[repo], repoQuery)
+		}
+	}
+	for _, repo := range sets.List(sets.KeySet(byRepo)) {
+		repoQueries := byRepo[repo]
+		if !gae.excludedRepos.Has(repo) {
+			repoQueries = gae.transitionQueries(repoQueries)
+		}
+		queries = append(queries, repoQueries...)
+	}
+	pc.Tide.Queries = queries
 }
 
-func (gae generalAvailabilityEvent) GetDataFromProwConfig(*prowconfig.ProwConfig) {}
-
-func (gae *generalAvailabilityEvent) deleteBackportRiskAssesedLabels(q *prowconfig.TideQuery) {
-	reqLabels := sets.New[string](q.Labels...)
-	branches := sets.New[string](q.IncludedBranches...)
-
-	if branches.Intersection(gae.openshiftReleaseBranches).Len() > 0 {
-		if reqLabels.Has(backportRiskAssessed) && reqLabels.Has(staffEngApproved) {
-			reqLabels.Delete(backportRiskAssessed)
-		}
-	}
-	q.Labels = sets.List(reqLabels)
+// releaseQueryFamily compares all selectors except branches and the two lifecycle labels.
+func releaseQueryFamily(a, b prowconfig.TideQuery) bool {
+	a.IncludedBranches, b.IncludedBranches = nil, nil
+	a.Labels = sets.List(sets.New[string](a.Labels...).Delete(backportRiskAssessed, staffEngApproved))
+	b.Labels = sets.List(sets.New[string](b.Labels...).Delete(backportRiskAssessed, staffEngApproved))
+	return reflect.DeepEqual(a, b)
 }
 
-func (gae *generalAvailabilityEvent) ensureStaffEngApprovedLabel(q *prowconfig.TideQuery) {
-	reqLabels := sets.New[string](q.Labels...)
-	branches := sets.New[string](q.IncludedBranches...)
-
-	if reqLabels.Has(staffEngApproved) {
-		if branches.Has(gae.releaseCurrent) {
-			branches.Delete(gae.releaseCurrent)
-			branches.Insert(gae.releaseFuture)
+// transitionQueries advances only dedicated current-release queries with lifecycle labels.
+func (gae generalAvailabilityEvent) transitionQueries(queries prowconfig.TideQueries) prowconfig.TideQueries {
+	currentBranches := sets.New[string](release+gae.current, openshift+gae.current)
+	pastBranches := sets.New[string](release+gae.past, openshift+gae.past)
+	futureBranches := sets.New[string](release+gae.future, openshift+gae.future)
+	transitioned := sets.New[string]()
+	removed := sets.New[int]()
+	for i := 0; i < len(queries); i++ {
+		source := queries[i]
+		branches := sets.New[string](source.IncludedBranches...)
+		labels := sets.New[string](source.Labels...)
+		if branches.Len() == 0 || !currentBranches.IsSuperset(branches) || len(source.ExcludedBranches) > 0 || (!labels.Has(backportRiskAssessed) && !labels.Has(staffEngApproved)) {
+			continue
 		}
-		if branches.Has(gae.openshiftCurrent) {
-			branches.Delete(gae.openshiftCurrent)
-			branches.Insert(gae.openshiftFuture)
+		future := source
+		future.IncludedBranches = nil
+		for _, branch := range source.IncludedBranches {
+			future.IncludedBranches = append(future.IncludedBranches, strings.TrimSuffix(branch, gae.current)+gae.future)
 		}
-
-		if !(branches.Equal(sets.New[string](gae.releaseFuture)) || branches.Equal(sets.New[string](gae.openshiftFuture)) || branches.Equal(gae.openshiftReleaseBranchesPlus1)) {
-			fmt.Printf("Suspicious staff-eng-approved query: %s\n", q.Repos)
+		future.IncludedBranches = sets.List(sets.New[string](future.IncludedBranches...))
+		future.Labels = sets.List(labels.Clone().Insert(staffEngApproved))
+		pastIndex, futureIndex := -1, -1
+		for j, candidate := range queries {
+			if i == j || removed.Has(j) || !releaseQueryFamily(source, candidate) {
+				continue
+			}
+			candidateBranches := sets.New[string](candidate.IncludedBranches...)
+			if candidateBranches.Intersection(pastBranches).Len() > 0 && !sets.New[string](candidate.Labels...).Has(staffEngApproved) {
+				pastIndex = j
+			}
+			if candidateBranches.Len() > 0 && futureBranches.IsSuperset(candidateBranches) {
+				if futureIndex >= 0 {
+					queries[futureIndex].IncludedBranches = sets.List(sets.New[string](queries[futureIndex].IncludedBranches...).Union(candidateBranches))
+					queries[futureIndex].Labels = sets.List(sets.New[string](queries[futureIndex].Labels...).Insert(candidate.Labels...))
+					removed.Insert(j)
+					continue
+				}
+				futureIndex = j
+			}
 		}
-	}
-	q.IncludedBranches = sets.List(branches)
-}
-
-func (gae *generalAvailabilityEvent) overrideExcludedBranches(q *prowconfig.TideQuery) {
-	branches := sets.New[string](q.ExcludedBranches...)
-	if branches.Has(gae.releasePast) {
-		branches.Insert(gae.releaseCurrent)
-		branches.Insert(gae.releaseFuture)
-	}
-	if branches.Has(gae.openshiftPast) {
-		branches.Insert(gae.openshiftCurrent)
-		branches.Insert(gae.openshiftFuture)
-	}
-	if branches.Len() > 0 {
-		if branches.Intersection(gae.openshiftReleaseBranchesPlus1).Len() == 0 && !gae.excludedAllowList.Has(q.Repos[0]) {
-			fmt.Printf("Suspicious complement query (without %s): %s\n", gae.future, q.Repos)
+		if pastIndex >= 0 {
+			queries[pastIndex].IncludedBranches = sets.List(sets.New[string](queries[pastIndex].IncludedBranches...).Union(branches))
+			removed.Insert(i)
+		} else {
+			// First releases and custom selector families must not lose GA coverage.
+			queries[i].Labels = sets.List(labels.Clone().Delete(staffEngApproved))
 		}
+		if futureIndex >= 0 {
+			queries[futureIndex].IncludedBranches = sets.List(sets.New[string](queries[futureIndex].IncludedBranches...).Insert(future.IncludedBranches...))
+			queries[futureIndex].Labels = sets.List(sets.New[string](queries[futureIndex].Labels...).Insert(future.Labels...))
+			transitioned.Insert(queries[futureIndex].IncludedBranches...)
+		} else if removed.Has(i) {
+			queries[i] = future
+			removed.Delete(i)
+		} else {
+			queries = append(queries, future)
+		}
+		transitioned.Insert(source.IncludedBranches...)
+		transitioned.Insert(future.IncludedBranches...)
 	}
-	q.ExcludedBranches = sets.List(branches)
+	var result prowconfig.TideQueries
+	for i, query := range queries {
+		if removed.Has(i) {
+			continue
+		}
+		excluded := sets.New[string](query.ExcludedBranches...)
+		// Author-filtered queries are explicit exceptions, not ordinary complements.
+		if transitioned.Len() > 0 && len(query.IncludedBranches) == 0 && excluded.Len() > 0 && query.Author == "" {
+			for _, prefix := range []string{release, openshift} {
+				if excluded.Has(prefix + gae.past) {
+					excluded.Insert(prefix+gae.current, prefix+gae.future)
+				}
+			}
+			query.ExcludedBranches = sets.List(excluded.Union(transitioned))
+		}
+		result = append(result, query)
+	}
+	return result
 }
 
 type verifiedEvent struct {

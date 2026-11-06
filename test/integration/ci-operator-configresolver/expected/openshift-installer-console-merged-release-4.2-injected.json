@@ -1,8 +1,9 @@
 {
   "zz_generated_metadata": {
-    "org": "",
-    "repo": "",
-    "branch": ""
+    "org": "openshift",
+    "repo": "release",
+    "branch": "master",
+    "variant": "ci-4.9"
   },
   "base_images": {
     "base-openshift.console": {
@@ -139,6 +140,9 @@
       "requests": {
         "cpu": "110m",
         "memory": "300Mi"
+      },
+      "limits": {
+        "memory": "4Gi"
       }
     }
   }

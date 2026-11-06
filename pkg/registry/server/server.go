@@ -135,35 +135,6 @@ func getInjectTestFromQuery(w http.ResponseWriter, r *http.Request) (*api.Metada
 	return &ret, nil
 }
 
-func injectTest(injectTo api.ReleaseBuildConfiguration, configs Getter, resolverMetrics *metrics.Metrics, w http.ResponseWriter, r *http.Request, logger *logrus.Entry) *api.ReleaseBuildConfiguration {
-	inject, err := getInjectTestFromQuery(w, r)
-	if err != nil {
-		// getInjectTestFromQuery deals with setting status code and writing response
-		// so we need to just log the error here
-		metrics.RecordError("invalid query", resolverMetrics.ErrorRate)
-		logrus.WithError(err).Warning("failed to read query from request")
-		return nil
-	}
-	injectFromConfig, err := configs.GetMatchingConfig(inject.Metadata)
-	if err != nil {
-		metrics.RecordError("config not found", resolverMetrics.ErrorRate)
-		w.WriteHeader(http.StatusNotFound)
-		fmt.Fprintf(w, "failed to get config to inject from: %v", err)
-		logger.WithError(err).Warning("failed to get config")
-		return nil
-	}
-	configWithInjectedTest, err := injectTo.WithPresubmitFrom(&injectFromConfig, inject.Test)
-	if err != nil {
-		metrics.RecordError("test injection failed", resolverMetrics.ErrorRate)
-		w.WriteHeader(http.StatusInternalServerError) // TODO: Can be be 400 in some cases but meh
-		fmt.Fprintf(w, "failed to inject test into config: %v", err)
-		logger.WithError(err).Warning("failed to inject test into config")
-		return nil
-	}
-
-	return configWithInjectedTest
-}
-
 func ResolveConfig(configs Getter, resolver Resolver, resolverMetrics *metrics.Metrics) http.HandlerFunc {
 	return func(w http.ResponseWriter, r *http.Request) {
 		if r.Method != "GET" {
@@ -235,33 +206,32 @@ func ResolveAndMergeConfigsAndInjectTest(configs Getter, resolver Resolver, reso
 		}
 		logger := logrus.WithField("merged", "true")
 
-		// If the requested injected test is from one of the configs to be merged, we will use that entire config as the base to merge into
 		injected, err := getInjectTestFromQuery(w, r)
 		if err != nil {
 			metrics.RecordError("invalid query", resolverMetrics.ErrorRate)
 			logrus.WithError(err).Warning("failed to read inject query from request")
+			return
 		}
 		var metadataToMerge []api.Metadata
-		var mergedConfig *api.ReleaseBuildConfiguration
-		var injectedTestIncluded bool
+		source, err := configs.GetMatchingConfig(injected.Metadata)
+		if err != nil {
+			metrics.RecordError("config not found", resolverMetrics.ErrorRate)
+			w.WriteHeader(http.StatusNotFound)
+			fmt.Fprintf(w, "failed to get config to inject from: %v", err)
+			return
+		}
+		mergedConfig, err := source.WithPresubmitFrom(&source, injected.Test)
+		if err != nil {
+			metrics.RecordError("test injection failed", resolverMetrics.ErrorRate)
+			w.WriteHeader(http.StatusBadRequest)
+			fmt.Fprintf(w, "failed to select injected test: %v", err)
+			return
+		}
+		mergedConfig.Metadata = injected.Metadata
 		for _, metadata := range metadataList {
-			if injected.Metadata == metadata {
-				config, err := configs.GetMatchingConfig(metadata)
-				if err != nil {
-					metrics.RecordError("config not found", resolverMetrics.ErrorRate)
-					w.WriteHeader(http.StatusNotFound)
-					fmt.Fprintf(w, "failed to get config: %v", err)
-					logger.WithError(err).Warning("failed to get config")
-					return
-				}
-				mergedConfig = &config
-				injectedTestIncluded = true
-			} else {
+			if injected.Metadata != metadata {
 				metadataToMerge = append(metadataToMerge, metadata)
 			}
-		}
-		if mergedConfig == nil {
-			mergedConfig = &api.ReleaseBuildConfiguration{}
 		}
 		defaultMissingConfigValues(mergedConfig)
 		for _, metadata := range metadataToMerge {
@@ -411,10 +381,6 @@ func ResolveAndMergeConfigsAndInjectTest(configs Getter, resolver Resolver, reso
 			}
 		}
 
-		// Only inject the test if the config containing it is not already included in the result
-		if !injectedTestIncluded {
-			mergedConfig = injectTest(*mergedConfig, configs, resolverMetrics, w, r, logger)
-		}
 		if mergedConfig != nil {
 			resolveAndRespond(resolver, *mergedConfig, w, logger, resolverMetrics)
 		}

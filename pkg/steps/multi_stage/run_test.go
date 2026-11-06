@@ -729,7 +729,7 @@ func TestJUnitNameForPod(t *testing.T) {
 
 func TestRunPodRequiresStepMetadataLabel(t *testing.T) {
 	step := &multiStageTestStep{name: "e2e-aws"}
-	err := step.runPod(context.Background(), &v1.Pod{ObjectMeta: metav1.ObjectMeta{Name: "generated-step"}}, nil, 0)
+	err := step.runPod(context.Background(), &v1.Pod{ObjectMeta: metav1.ObjectMeta{Name: "generated-step"}}, nil, 0, false)
 	want := `multi-stage test "e2e-aws" pod "generated-step" is missing required label "ci.openshift.io/metadata.step"`
 	if err == nil || err.Error() != want {
 		t.Fatalf("expected %q, got %v", want, err)

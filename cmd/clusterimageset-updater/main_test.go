@@ -1,6 +1,7 @@
 package main
 
 import (
+	"errors"
 	"os"
 	"path/filepath"
 	"sort"
@@ -15,8 +16,33 @@ import (
 	hivev1 "github.com/openshift/hive/apis/hive/v1"
 
 	"github.com/openshift/ci-tools/pkg/api"
+	"github.com/openshift/ci-tools/pkg/clusterimageset"
 	"github.com/openshift/ci-tools/pkg/testhelper"
 )
+
+func TestUpdateExitCode(t *testing.T) {
+	lookupError := &clusterimageset.LookupFailures{Err: errors.New("lookup unavailable")}
+	unsafeError := errors.New("write failed")
+	for _, tc := range []struct {
+		name string
+		err  error
+		want int
+	}{
+		{name: "success"},
+		{name: "completed lookup-only result", err: lookupError, want: clusterimageset.PartialUpdateExitCode},
+		{name: "nil lookup result is unsafe", err: (*clusterimageset.LookupFailures)(nil), want: 1},
+		{name: "empty lookup result is unsafe", err: &clusterimageset.LookupFailures{}, want: 1},
+		{name: "ordinary error", err: unsafeError, want: 1},
+		{name: "unsafe error joined after lookup failure", err: errors.Join(lookupError, unsafeError), want: 1},
+		{name: "unsafe error joined before lookup failure", err: errors.Join(unsafeError, lookupError), want: 1},
+	} {
+		t.Run(tc.name, func(t *testing.T) {
+			if got := updateExitCode(tc.err); got != tc.want {
+				t.Errorf("want exit code %d, got %d", tc.want, got)
+			}
+		})
+	}
+}
 
 func poolFilesWithSortedPaths(m map[api.VersionBounds][]string) map[api.VersionBounds][]string {
 	out := make(map[api.VersionBounds][]string, len(m))

@@ -2045,12 +2045,15 @@ func inputHash(inputs api.InputDefinition) string {
 // for review later.
 func (o *options) saveNamespaceArtifacts() {
 	namespaceDir := api.NamespaceDir
+	var pods *coreapi.PodList
+	var events *coreapi.EventList
+	podErr, eventErr := errors.New("namespace pods unavailable"), errors.New("namespace events unavailable")
 	if kubeClient, err := coreclientset.NewForConfig(o.clusterConfig); err == nil {
-		pods, _ := kubeClient.Pods(o.namespace).List(context.TODO(), metav1.ListOptions{})
+		pods, podErr = kubeClient.Pods(o.namespace).List(context.TODO(), metav1.ListOptions{})
 		data, _ := json.MarshalIndent(pods, "", "  ")
 		path := filepath.Join(namespaceDir, "pods.json")
 		_ = api.SaveArtifact(o.censor, path, data)
-		events, _ := kubeClient.Events(o.namespace).List(context.TODO(), metav1.ListOptions{})
+		events, eventErr = kubeClient.Events(o.namespace).List(context.TODO(), metav1.ListOptions{})
 		data, _ = json.MarshalIndent(events, "", "  ")
 		path = filepath.Join(namespaceDir, "events.json")
 		_ = api.SaveArtifact(o.censor, path, data)
@@ -2071,6 +2074,7 @@ func (o *options) saveNamespaceArtifacts() {
 		_ = api.SaveArtifact(o.censor, path, data)
 	}
 
+	o.saveNodeStartupDiagnostics(pods, podErr, events, eventErr)
 	o.metricsAgent.Record(metrics.NewInsightsEvent(metrics.InsightNamespaceArtifacts, metrics.Context{"namespace": o.namespace}))
 }
 

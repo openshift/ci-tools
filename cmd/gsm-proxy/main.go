@@ -155,6 +155,11 @@ func newServer(o *options, authorizer gsmproxy.Authorizer, client *gsmproxy.GSMC
 			Action:  gsmproxy.ListSecretsAction,
 			Handler: &gsmproxy.ListSecretsHandler{List: client.List, Log: log},
 		},
+		gsmproxy.Route{
+			Pattern: gsmproxy.DescribeSecretPattern,
+			Action:  gsmproxy.DescribeSecretAction,
+			Handler: &gsmproxy.DescribeSecretHandler{Describe: client.Describe, Log: log},
+		},
 	)
 	return &http.Server{
 		Addr:              o.listenAddr,

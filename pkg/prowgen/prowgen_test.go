@@ -1029,6 +1029,21 @@ func TestGenerateJobs(t *testing.T) {
 			},
 		},
 		{
+			id:   "images job with always_run false is not run on every PR",
+			keep: true,
+			config: &ciop.ReleaseBuildConfiguration{
+				Images: ciop.ImageConfiguration{
+					Items:     []ciop.ProjectDirectoryImageBuildStepConfiguration{{To: "out", From: "base"}},
+					AlwaysRun: utilpointer.Bool(false),
+				},
+			},
+			repoInfo: &ciop.Metadata{
+				Org:    "organization",
+				Repo:   "repository",
+				Branch: "branch",
+			},
+		},
+		{
 			id: "postsubmit with max_concurrency from test config",
 			config: &ciop.ReleaseBuildConfiguration{
 				Tests: []ciop.TestStepConfiguration{

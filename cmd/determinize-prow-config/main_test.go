@@ -27,6 +27,7 @@ func TestShardProwConfig(t *testing.T) {
 		name string
 		in   *config.ProwConfig
 
+		existingShardFiles map[string]string
 		expectedConfig     config.ProwConfig
 		expectedShardFiles map[string]string
 	}{
@@ -312,6 +313,35 @@ func TestShardProwConfig(t *testing.T) {
 				}, "\n"),
 			},
 		},
+		{
+			name: "Job queue capacities in a supplemental config stay there",
+			in: &config.ProwConfig{
+				Tide: config.Tide{TideGitHubConfig: config.TideGitHubConfig{Queries: config.TideQueries{
+					{Repos: []string{"shiftstack/ci"}, Labels: []string{"lgtm"}},
+				}}},
+				Plank: config.Plank{JobQueueCapacities: config.JobQueueCapacities{
+					"shiftstack-vexxhost": 2,
+				}},
+			},
+			existingShardFiles: map[string]string{
+				"shiftstack/ci/_prowconfig.yaml": `plank:
+  job_queue_capacities:
+    shiftstack-vexxhost: 2
+`,
+			},
+			expectedShardFiles: map[string]string{
+				"shiftstack/ci/_prowconfig.yaml": `plank:
+  job_queue_capacities:
+    shiftstack-vexxhost: 2
+tide:
+  queries:
+  - labels:
+    - lgtm
+    repos:
+    - shiftstack/ci
+`,
+			},
+		},
 	}
 
 	for _, tc := range testCases {
@@ -319,6 +349,14 @@ func TestShardProwConfig(t *testing.T) {
 		t.Run(tc.name, func(t *testing.T) {
 			t.Parallel()
 			afs := afero.NewMemMapFs()
+			for path, content := range tc.existingShardFiles {
+				if err := afs.MkdirAll(filepath.Dir(path), 0755); err != nil {
+					t.Fatalf("failed to create dir for %s: %v", path, err)
+				}
+				if err := afero.WriteFile(afs, path, []byte(content), 0644); err != nil {
+					t.Fatalf("failed to write existing shard %s: %v", path, err)
+				}
+			}
 			serializedOriginalConfig, err := yaml.Marshal(tc.in)
 			if err != nil {
 				t.Fatalf("failed to serialize the original config: %v", err)

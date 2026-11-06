@@ -3,6 +3,7 @@ package shardprowconfig
 import (
 	"encoding/json"
 	"fmt"
+	"os"
 	"path/filepath"
 	"strings"
 
@@ -11,6 +12,7 @@ import (
 	apiequality "k8s.io/apimachinery/pkg/api/equality"
 	prowconfig "sigs.k8s.io/prow/pkg/config"
 	"sigs.k8s.io/prow/pkg/git/types"
+	"sigs.k8s.io/yaml"
 
 	"github.com/openshift/ci-tools/pkg/config"
 	"github.com/openshift/ci-tools/pkg/prowconfigsharding"
@@ -28,11 +30,17 @@ type ProwConfigWithPointers struct {
 	BranchProtection     *prowconfig.BranchProtection     `json:"branch-protection,omitempty"`
 	Tide                 *TideConfig                      `json:"tide,omitempty"`
 	SlackReporterConfigs *prowconfig.SlackReporterConfigs `json:"slack_reporter_configs,omitempty"`
+	Plank                *PlankConfig                     `json:"plank,omitempty"`
 }
 
 type TideConfig struct {
 	MergeType map[string]types.PullRequestMergeType `json:"merge_method,omitempty"`
 	Queries   prowconfig.TideQueries                `json:"queries,omitempty"`
+}
+
+// PlankConfig is the plank configuration stored in a supplemental prow config.
+type PlankConfig struct {
+	JobQueueCapacities prowconfig.JobQueueCapacities `json:"job_queue_capacities,omitempty"`
 }
 
 func ShardProwConfig(pc *prowconfig.ProwConfig, target afero.Fs, f ShardProwConfigFunctors) (*prowconfig.ProwConfig, error) {
@@ -156,6 +164,10 @@ func ShardProwConfig(pc *prowconfig.ProwConfig, target afero.Fs, f ShardProwConf
 		delete(pc.SlackReporterConfigs, orgOrRepo)
 	}
 
+	if err := keepShardJobQueueCapacities(target, pc, configsByOrgRepo); err != nil {
+		return nil, err
+	}
+
 	for orgOrRepo, cfg := range configsByOrgRepo {
 		if err := prowconfigsharding.MkdirAndWrite(target, filepath.Join(orgOrRepo.Org, orgOrRepo.Repo, config.SupplementalProwConfigFileName), cfg); err != nil {
 			return nil, err
@@ -180,4 +192,57 @@ func deepCopyTideQuery(q *prowconfig.TideQuery) (*prowconfig.TideQuery, error) {
 
 func isPolicySet(p prowconfig.Policy) bool {
 	return !apiequality.Semantic.DeepEqual(p, prowconfig.Policy{})
+}
+
+// keepShardJobQueueCapacities leaves job_queue_capacities in the supplemental files that already declare them and removes those entries from pc so they are not written to the main config.
+func keepShardJobQueueCapacities(fs afero.Fs, pc *prowconfig.ProwConfig, configsByOrgRepo map[prowconfig.OrgRepo]*ProwConfigWithPointers) error {
+	return afero.Walk(fs, "", func(path string, info os.FileInfo, err error) error {
+		if err != nil || info.IsDir() || filepath.Base(path) != config.SupplementalProwConfigFileName {
+			return err
+		}
+		orgRepo, ok := orgRepoFromSupplementalPath(path)
+		if !ok {
+			return nil
+		}
+		data, err := afero.ReadFile(fs, path)
+		if err != nil {
+			return fmt.Errorf("failed to read %s: %w", path, err)
+		}
+		var existing ProwConfigWithPointers
+		if err := yaml.Unmarshal(data, &existing); err != nil {
+			return fmt.Errorf("failed to unmarshal %s: %w", path, err)
+		}
+		if existing.Plank == nil {
+			return nil
+		}
+		if cfg, found := configsByOrgRepo[orgRepo]; found {
+			cfg.Plank = existing.Plank
+		}
+		for name := range existing.Plank.JobQueueCapacities {
+			delete(pc.Plank.JobQueueCapacities, name)
+		}
+		if len(pc.Plank.JobQueueCapacities) == 0 {
+			pc.Plank.JobQueueCapacities = nil
+		}
+		return nil
+	})
+}
+
+func orgRepoFromSupplementalPath(path string) (prowconfig.OrgRepo, bool) {
+	dir := filepath.Dir(path)
+	if dir == "." || dir == string(filepath.Separator) {
+		return prowconfig.OrgRepo{}, false
+	}
+	parts := strings.Split(dir, string(filepath.Separator))
+	switch len(parts) {
+	case 1:
+		if parts[0] == "" {
+			return prowconfig.OrgRepo{}, false
+		}
+		return prowconfig.OrgRepo{Org: parts[0]}, true
+	case 2:
+		return prowconfig.OrgRepo{Org: parts[0], Repo: parts[1]}, true
+	default:
+		return prowconfig.OrgRepo{}, false
+	}
 }

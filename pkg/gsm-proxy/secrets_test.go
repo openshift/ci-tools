@@ -30,11 +30,11 @@ func (s *fakeGSMServer) ListSecrets(ctx context.Context, request *secretmanagerp
 	return s.list(ctx, request)
 }
 
-func newTestGSMSecretLister(t *testing.T, list func(context.Context, *secretmanagerpb.ListSecretsRequest) (*secretmanagerpb.ListSecretsResponse, error), opts ...option.ClientOption) *GSMSecretLister {
+func newTestGSMClient(t *testing.T, fake *fakeGSMServer) *GSMClient {
 	t.Helper()
 	listener := bufconn.Listen(1 << 20)
 	server := grpc.NewServer()
-	secretmanagerpb.RegisterSecretManagerServiceServer(server, &fakeGSMServer{list: list})
+	secretmanagerpb.RegisterSecretManagerServiceServer(server, fake)
 	go func() {
 		if err := server.Serve(listener); err != nil && !errors.Is(err, grpc.ErrServerStopped) {
 			t.Errorf("fake GSM server: %v", err)
@@ -49,21 +49,21 @@ func newTestGSMSecretLister(t *testing.T, list func(context.Context, *secretmana
 		t.Fatal(err)
 	}
 	t.Cleanup(func() { connection.Close() })
-	lister, err := NewGSMSecretLister(context.Background(), gsmsecrets.Config{ProjectIdString: "test-project"},
-		append(opts, option.WithGRPCConn(connection), option.WithoutAuthentication())...,
+	client, err := NewGSMClient(context.Background(), gsmsecrets.Config{ProjectIdString: "test-project"},
+		option.WithGRPCConn(connection), option.WithoutAuthentication(),
 	)
 	if err != nil {
 		t.Fatal(err)
 	}
 	t.Cleanup(func() {
-		if err := lister.Close(); err != nil {
+		if err := client.Close(); err != nil {
 			t.Errorf("close GSM client: %v", err)
 		}
 	})
-	return lister
+	return client
 }
 
-func TestGSMSecretListerList(t *testing.T) {
+func TestGSMClientList(t *testing.T) {
 	type page struct {
 		secretIDs     []string
 		nextPageToken string
@@ -186,7 +186,7 @@ func TestGSMSecretListerList(t *testing.T) {
 	for _, tc := range testCases {
 		t.Run(tc.name, func(t *testing.T) {
 			var requests atomic.Int32
-			lister := newTestGSMSecretLister(t, func(_ context.Context, req *secretmanagerpb.ListSecretsRequest) (*secretmanagerpb.ListSecretsResponse, error) {
+			client := newTestGSMClient(t, &fakeGSMServer{list: func(_ context.Context, req *secretmanagerpb.ListSecretsRequest) (*secretmanagerpb.ListSecretsResponse, error) {
 				requests.Add(1)
 				if req.Parent != "projects/test-project" || req.Filter != fmt.Sprintf("name:%q", tc.collection+"__") {
 					t.Errorf("request parent/filter = %q / %q", req.Parent, req.Filter)
@@ -206,13 +206,13 @@ func TestGSMSecretListerList(t *testing.T) {
 					})
 				}
 				return response, nil
-			})
+			}})
 			ctx, cancel := context.WithCancel(context.Background())
 			defer cancel()
 			if tc.cancelContext {
 				cancel()
 			}
-			got, err := lister.List(ctx, tc.collection)
+			got, err := client.List(ctx, tc.collection)
 			if (err != nil) != tc.wantErr {
 				t.Fatalf("error = %v, want error = %t", err, tc.wantErr)
 			}

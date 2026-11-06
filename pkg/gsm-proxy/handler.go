@@ -1,6 +1,7 @@
 package gsmproxy
 
 import (
+	"context"
 	"encoding/json"
 	"net/http"
 
@@ -39,8 +40,8 @@ const (
 // ListSecretsHandler serves the secret names of one collection.
 // It must be registered as a Route through NewServeMux.
 type ListSecretsHandler struct {
-	Lister SecretLister
-	Log    *logrus.Entry
+	List func(context.Context, string) ([]string, error)
+	Log  *logrus.Entry
 }
 
 // NewServeMux returns an HTTP handler that passes each request to the matching route's handler.
@@ -55,9 +56,10 @@ func NewServeMux(verifier TokenVerifier, authorizer Authorizer, logger *logrus.E
 	return mux
 }
 
+// ServeHTTP writes the secret paths for the collection identified by the request.
 func (h *ListSecretsHandler) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 	collection := r.PathValue("collection")
-	names, err := h.Lister.List(r.Context(), collection)
+	names, err := h.List(r.Context(), collection)
 	if err != nil {
 		h.Log.Error("failed to list secrets")
 		writeError(w, http.StatusInternalServerError, MessageInternal)

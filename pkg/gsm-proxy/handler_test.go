@@ -176,8 +176,8 @@ func TestListSecretsHandlerServeHTTP(t *testing.T) {
 			logger.SetOutput(&logs)
 			logger.SetLevel(logrus.TraceLevel)
 			handler := &ListSecretsHandler{
-				Lister: lister,
-				Log:    logrus.NewEntry(logger),
+				List: lister.List,
+				Log:  logrus.NewEntry(logger),
 			}
 			ctx := context.WithValue(context.Background(), identityContextKey{}, Identity{Username: "test-user"})
 			request := httptest.NewRequest(http.MethodGet, "/api/v1/collections/"+tc.collection+"/secrets", nil).WithContext(ctx)

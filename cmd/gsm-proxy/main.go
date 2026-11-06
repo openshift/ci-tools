@@ -103,6 +103,7 @@ func main() {
 	}
 }
 
+// run starts the proxy with the supplied options and waits for graceful shutdown.
 func run(o *options) error {
 	ctx, cancel := context.WithCancel(interrupts.Context())
 	defer cancel()
@@ -119,18 +120,18 @@ func run(o *options) error {
 		// Credential parsing errors must not expose the contents of the key file.
 		return errors.New("failed to load GSM service account credentials")
 	}
-	lister, err := gsmproxy.NewGSMSecretLister(interrupts.Context(), gsmsecrets.Config{ProjectIdString: o.gsmProjectID},
+	client, err := gsmproxy.NewGSMClient(interrupts.Context(), gsmsecrets.Config{ProjectIdString: o.gsmProjectID},
 		option.WithAuthCredentials(gcpCredentials))
 	if err != nil {
-		return fmt.Errorf("failed to initialize GSM lister: %w", err)
+		return fmt.Errorf("failed to initialize GSM client: %w", err)
 	}
 	defer func() {
-		if err := lister.Close(); err != nil {
+		if err := client.Close(); err != nil {
 			logrus.WithError(err).Error("failed to close GSM client")
 		}
 	}()
 
-	server := newServer(o, authorizer, lister)
+	server := newServer(o, authorizer, client)
 	var listener interrupts.ListenAndServer = server
 	if o.tlsCertFile != "" {
 		tlsServer, err := newTLSServer(server, o.tlsCertFile, o.tlsKeyFile)
@@ -145,13 +146,14 @@ func run(o *options) error {
 	return nil
 }
 
-func newServer(o *options, authorizer gsmproxy.Authorizer, lister gsmproxy.SecretLister) *http.Server {
+// newServer returns an HTTP server for the proxy endpoints.
+func newServer(o *options, authorizer gsmproxy.Authorizer, client *gsmproxy.GSMClient) *http.Server {
 	log := logrus.NewEntry(logrus.StandardLogger())
 	mux := gsmproxy.NewServeMux(gsmproxy.NewDexTokenVerifier(), authorizer, log,
 		gsmproxy.Route{
 			Pattern: gsmproxy.ListSecretsPattern,
 			Action:  gsmproxy.ListSecretsAction,
-			Handler: &gsmproxy.ListSecretsHandler{Lister: lister, Log: log},
+			Handler: &gsmproxy.ListSecretsHandler{List: client.List, Log: log},
 		},
 	)
 	return &http.Server{

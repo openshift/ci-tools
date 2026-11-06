@@ -14,6 +14,7 @@ func TestAudit(t *testing.T) {
 	testCases := []struct {
 		name       string
 		collection string
+		path       string
 		username   string
 		status     int
 		writeBody  bool
@@ -27,6 +28,22 @@ func TestAudit(t *testing.T) {
 			status:     http.StatusOK,
 			wantStatus: http.StatusOK,
 			wantFields: logrus.Fields{"action": "list-secrets", "collection": "acm-qe", "user": "test-user", "status": http.StatusOK, "outcome": "success"},
+		},
+		{
+			name:       "missing secret logs validated path and not-found outcome",
+			collection: "acm-qe",
+			path:       "aws/prod/key",
+			status:     http.StatusNotFound,
+			wantStatus: http.StatusNotFound,
+			wantFields: logrus.Fields{"action": "list-secrets", "collection": "acm-qe", "secret": "aws/prod/key", "status": http.StatusNotFound, "outcome": "not_found"},
+		},
+		{
+			name:       "malformed secret path is not logged",
+			collection: "acm-qe",
+			path:       "aws/invalid\n",
+			status:     http.StatusBadRequest,
+			wantStatus: http.StatusBadRequest,
+			wantFields: logrus.Fields{"action": "list-secrets", "collection": "acm-qe", "status": http.StatusBadRequest, "outcome": "bad_request"},
 		},
 		{
 			name:       "forbidden request logs the verified user",
@@ -91,6 +108,7 @@ func TestAudit(t *testing.T) {
 			})
 			request := httptest.NewRequest(http.MethodGet, "/api/v1/collections/x/secrets", nil)
 			request.SetPathValue("collection", tc.collection)
+			request.SetPathValue("path", tc.path)
 			recorder := httptest.NewRecorder()
 			Audit("list-secrets", logrus.NewEntry(logger), next).ServeHTTP(recorder, request)
 

@@ -7,6 +7,7 @@ import (
 	"log/slog"
 	"sort"
 	"strings"
+	"time"
 
 	secretmanager "cloud.google.com/go/secretmanager/apiv1"
 	"cloud.google.com/go/secretmanager/apiv1/secretmanagerpb"
@@ -16,6 +17,28 @@ import (
 	gsmsecrets "github.com/openshift/ci-tools/pkg/gsm-secrets"
 	gsmvalidation "github.com/openshift/ci-tools/pkg/gsm-validation"
 )
+
+const (
+	jiraProjectLabel               = "jira-project"
+	rotationInstructionsAnnotation = "rotation-instructions"
+	requestInformationAnnotation   = "request-information"
+)
+
+// ErrInvalidSecretPath is returned for a secret path that is malformed or identifies a reserved secret.
+var ErrInvalidSecretPath = errors.New("invalid secret path")
+
+// SecretMetadata contains the supported ownership and rotation metadata of a secret.
+type SecretMetadata struct {
+	JiraProject          string `json:"jira_project"`
+	RotationInstructions string `json:"rotation_instructions"`
+	RequestInformation   string `json:"request_information"`
+}
+
+// SecretDescription is the metadata returned for one secret.
+type SecretDescription struct {
+	CreateTime *time.Time     `json:"create_time,omitempty"`
+	Metadata   SecretMetadata `json:"metadata"`
+}
 
 // GSMClient performs secret operations using one Google client and project.
 type GSMClient struct {
@@ -77,4 +100,33 @@ func (c *GSMClient) List(ctx context.Context, collection string) ([]string, erro
 	}
 	sort.Strings(names)
 	return names, nil
+}
+
+// Describe returns the metadata for the secret defined by collection and path.
+// It returns ErrInvalidSecretPath if path is malformed or identifies a reserved secret.
+func (c *GSMClient) Describe(ctx context.Context, collection, path string) (SecretDescription, error) {
+	group, field, ok := gsmvalidation.ParseSecretPath(collection, path)
+	if !ok {
+		return SecretDescription{}, ErrInvalidSecretPath
+	}
+	name := gsmsecrets.GetGSMSecretName(collection, group, field)
+	if gsmsecrets.ClassifySecret(name) != gsmsecrets.SecretTypeGeneric {
+		return SecretDescription{}, ErrInvalidSecretPath
+	}
+	secret, err := c.client.GetSecret(ctx, &secretmanagerpb.GetSecretRequest{Name: c.parent + "/secrets/" + name})
+	if err != nil {
+		return SecretDescription{}, fmt.Errorf("failed to describe secret: %w", err)
+	}
+	result := SecretDescription{
+		Metadata: SecretMetadata{
+			JiraProject:          secret.Labels[jiraProjectLabel],
+			RotationInstructions: secret.Annotations[rotationInstructionsAnnotation],
+			RequestInformation:   secret.Annotations[requestInformationAnnotation],
+		},
+	}
+	if secret.CreateTime != nil {
+		created := secret.CreateTime.AsTime()
+		result.CreateTime = &created
+	}
+	return result, nil
 }

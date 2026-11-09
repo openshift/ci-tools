@@ -94,14 +94,20 @@ func (s *desiredState) get(key repoKey) (sets.Set[string], bool) {
 	return targets.Clone(), true
 }
 
+// matching returns forwarding keys affected by a push to a source or target branch.
 func (s *desiredState) matching(org, repo, branch string) []repoKey {
 	s.mu.RLock()
 	defer s.mu.RUnlock()
-	key := repoKey{org: org, repo: repo, source: branch}
-	if _, ok := s.targets[key]; ok {
-		return []repoKey{key}
+	var matched []repoKey
+	for key, targets := range s.targets {
+		if key.org != org || key.repo != repo {
+			continue
+		}
+		if key.source == branch || targets.Has(branch) {
+			matched = append(matched, key)
+		}
 	}
-	return nil
+	return matched
 }
 
 // ifTargetConfigured serializes mutations with desired-state replacement for

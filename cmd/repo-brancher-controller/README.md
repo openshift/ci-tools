@@ -4,6 +4,8 @@
 `repo-brancher`. It derives a deduplicated set of source and target branches
 from ci-operator configuration, receives GitHub push webhooks, and updates
 target Git refs through the GitHub API with `force: false`.
+Pushes to either source or target branches trigger reconciliation, so manual
+target repairs can clear failures without waiting for a full resync.
 
 The controller performs an initial reconciliation and a configurable full
 resync as protection against missed webhook deliveries. Configuration is

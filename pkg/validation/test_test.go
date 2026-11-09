@@ -1587,6 +1587,68 @@ func TestValidateCredentials(t *testing.T) {
 			},
 		},
 		{
+			name: "equivalent credential mount paths mean error",
+			input: []api.CredentialReference{
+				{Namespace: "ns", Name: "name1", MountPath: "/foo"},
+				{Namespace: "ns", Name: "name2", MountPath: "/foo//./"},
+			},
+			output: []error{
+				errors.New("root.credentials[0] and credentials[1] mount to the same location (/foo), which would result in a collision"),
+			},
+		},
+		{
+			name: "backsteps in credential mount paths are normalized",
+			input: []api.CredentialReference{
+				{Namespace: "ns", Name: "name1", MountPath: "/bar/../foo"},
+				{Namespace: "ns", Name: "name2", MountPath: "/foo"},
+			},
+			output: []error{
+				errors.New("root.credentials[0] and credentials[1] mount to the same location (/bar/../foo), which would result in a collision"),
+			},
+		},
+		{
+			name: "credential child paths containing dots mean error in either order",
+			input: []api.CredentialReference{
+				{Namespace: "ns", Name: "name1", MountPath: "/images/..contents"},
+				{Namespace: "ns", Name: "name2", MountPath: "/images"},
+				{Namespace: "ns", Name: "name3", MountPath: "/images/a..b"},
+			},
+			output: []error{
+				errors.New("root.credentials[0] mounts at /images/..contents, which is under credentials[1] (/images)"),
+				errors.New("root.credentials[2] mounts at /images/a..b, which is under credentials[1] (/images)"),
+			},
+		},
+		{
+			name: "root credential mount contains other mounts",
+			input: []api.CredentialReference{
+				{Namespace: "ns", Name: "name1", MountPath: "/"},
+				{Namespace: "ns", Name: "name2", MountPath: "/images"},
+			},
+			output: []error{
+				errors.New("root.credentials[1] mounts at /images, which is under credentials[0] (/)"),
+			},
+		},
+		{
+			name: "relative credential mount does not produce overlap errors",
+			input: []api.CredentialReference{
+				{Namespace: "ns", Name: "name1", MountPath: "/images"},
+				{Namespace: "ns", Name: "name2", MountPath: "relative"},
+			},
+			output: []error{
+				errors.New("root.credentials[1].mountPath is not absolute: relative"),
+			},
+		},
+		{
+			name: "missing credential mount does not produce overlap errors",
+			input: []api.CredentialReference{
+				{Namespace: "ns", Name: "name1"},
+				{Namespace: "ns", Name: "name2", MountPath: "/images"},
+			},
+			output: []error{
+				errors.New("root.credentials[0]: `mountPath` is required"),
+			},
+		},
+		{
 			name: "substring cred mount path means no error",
 			input: []api.CredentialReference{
 				{Namespace: "ns", Name: "name1", MountPath: "/foo-bar"},
@@ -2054,6 +2116,70 @@ func TestValidateDependencies(t *testing.T) {
 			output: []error{
 				errors.New("root.dependencies[1] mounts at /var/run/images/installer, which is under dependencies[0] (/var/run/images)"),
 			},
+		},
+		{
+			name: "equivalent mount_paths are invalid",
+			input: []api.StepDependency{
+				{Name: "src", Env: "SOURCE", MountPath: "/images/src"},
+				{Name: "installer", Env: "INSTALLER", MountPath: "/images//src/./"},
+			},
+			output: []error{errors.New("root.dependencies[0] and dependencies[1] mount to the same location (/images/src)")},
+		},
+		{
+			name: "nested path with dots is invalid",
+			input: []api.StepDependency{
+				{Name: "src", Env: "SOURCE", MountPath: "/images"},
+				{Name: "installer", Env: "INSTALLER", MountPath: "/images/a..b"},
+			},
+			output: []error{errors.New("root.dependencies[1] mounts at /images/a..b, which is under dependencies[0] (/images)")},
+		},
+		{
+			name: "child listed before parent is invalid",
+			input: []api.StepDependency{
+				{Name: "src", Env: "SOURCE", MountPath: "/images/src"},
+				{Name: "installer", Env: "INSTALLER", MountPath: "/images"},
+			},
+			output: []error{errors.New("root.dependencies[0] mounts at /images/src, which is under dependencies[1] (/images)")},
+		},
+		{
+			name: "root contains all other paths",
+			input: []api.StepDependency{
+				{Name: "src", Env: "SOURCE", MountPath: "/"},
+				{Name: "installer", Env: "INSTALLER", MountPath: "/images"},
+			},
+			output: []error{errors.New("root.dependencies[1] mounts at /images, which is under dependencies[0] (/)")},
+		},
+		{
+			name: "common prefix and dots in disjoint paths are valid",
+			input: []api.StepDependency{
+				{Name: "src", Env: "SOURCE", MountPath: "/images"},
+				{Name: "installer", Env: "INSTALLER", MountPath: "/images-other/a..b"},
+			},
+		},
+		{
+			name: "relative and absolute paths do not produce spurious overlap errors",
+			input: []api.StepDependency{
+				{Name: "src", Env: "SOURCE", MountPath: "relative"},
+				{Name: "installer", Env: "INSTALLER", MountPath: "/images"},
+			},
+			output: []error{errors.New("root.dependencies[0].mount_path is not absolute: relative")},
+		},
+		{
+			name: "backsteps are normalized when comparing paths",
+			input: []api.StepDependency{
+				{Name: "src", Env: "SOURCE", MountPath: "/images/../src"},
+				{Name: "installer", Env: "INSTALLER", MountPath: "/src"},
+			},
+			output: []error{errors.New("root.dependencies[0] and dependencies[1] mount to the same location (/images/../src)")},
+		},
+		{
+			name:  "colon in an absolute Linux mount path is valid",
+			input: []api.StepDependency{{Name: "src", Env: "SOURCE", MountPath: "/images/src:latest"}},
+		},
+		{
+			name:   "nul in mount path is invalid",
+			input:  []api.StepDependency{{Name: "src", Env: "SOURCE", MountPath: "/images/\x00src"}},
+			output: []error{errors.New(`root.dependencies[0].mount_path contains an invalid character: "/images/\x00src"`)},
 		},
 	}
 

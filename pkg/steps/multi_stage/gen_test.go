@@ -4,6 +4,7 @@ import (
 	"fmt"
 	"reflect"
 	"sort"
+	"strings"
 	"testing"
 	"time"
 
@@ -12,17 +13,24 @@ import (
 	coreapi "k8s.io/api/core/v1"
 	"k8s.io/apimachinery/pkg/api/equality"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
+	"k8s.io/apimachinery/pkg/runtime"
 	"k8s.io/apimachinery/pkg/util/diff"
 	utilerrors "k8s.io/apimachinery/pkg/util/errors"
 	"k8s.io/apimachinery/pkg/util/sets"
+	"k8s.io/apimachinery/pkg/util/validation"
 	"k8s.io/apimachinery/pkg/util/wait"
 	"k8s.io/utils/ptr"
+	fakectrlruntimeclient "sigs.k8s.io/controller-runtime/pkg/client/fake"
 	prowapi "sigs.k8s.io/prow/pkg/apis/prowjobs/v1"
 	prowdapi "sigs.k8s.io/prow/pkg/pod-utils/downwardapi"
 
+	imagev1 "github.com/openshift/api/image/v1"
+
 	"github.com/openshift/ci-tools/pkg/api"
 	"github.com/openshift/ci-tools/pkg/steps/csi_secrets"
+	"github.com/openshift/ci-tools/pkg/steps/loggingclient"
 	"github.com/openshift/ci-tools/pkg/testhelper"
+	testhelper_kube "github.com/openshift/ci-tools/pkg/testhelper/kubernetes"
 )
 
 func TestGeneratePods(t *testing.T) {
@@ -709,21 +717,39 @@ func TestAddCSICredentials(t *testing.T) {
 	}
 }
 
-func TestDependencyVolumeName(t *testing.T) {
-	testCases := []struct {
-		name     string
-		input    string
-		expected string
-	}{
-		{name: "simple tag", input: "installer", expected: "dep-installer"},
-		{name: "stream:tag", input: "stable:installer", expected: "dep-stable-installer"},
-		{name: "dots replaced", input: "release.latest", expected: "dep-release-latest"},
-		{name: "colons and dots", input: "ci.openshift:tests", expected: "dep-ci-openshift-tests"},
-	}
-	for _, tc := range testCases {
-		t.Run(tc.name, func(t *testing.T) {
-			if actual := dependencyVolumeName(tc.input); actual != tc.expected {
-				t.Errorf("expected %q, got %q", tc.expected, actual)
+func TestDependencyVolumeNames(t *testing.T) {
+	for _, names := range [][]string{
+		{"installer", "installer"},
+		{"stable:installer", "stable-installer"},
+		{"My_Image", "release.latest"},
+		{strings.Repeat("a", 100) + "-one", strings.Repeat("a", 100) + "-two"},
+	} {
+		t.Run(strings.Join(names, ","), func(t *testing.T) {
+			s := &multiStageTestStep{}
+			_, volumes, mounts, errs := s.resourcesForDependencies(api.LiteralTestStep{Dependencies: []api.StepDependency{
+				{Name: names[0], Env: "FIRST", PullSpec: "registry.example.com/first:latest", MountPath: "/first"},
+				{Name: names[1], Env: "SECOND", PullSpec: "registry.example.com/second:latest", MountPath: "/second"},
+			}})
+			if len(errs) != 0 {
+				t.Fatal(errs)
+			}
+			pod := &coreapi.Pod{Spec: coreapi.PodSpec{Containers: []coreapi.Container{{Name: containerName}}}}
+			if err := addDependencyVolumes(pod, &pod.Spec.Containers[0], volumes, mounts); err != nil {
+				t.Fatal(err)
+			}
+			if len(pod.Spec.Volumes) != 2 || len(pod.Spec.Containers[0].VolumeMounts) != 2 {
+				t.Fatalf("expected two volumes and mounts, got %+v", pod.Spec)
+			}
+			if pod.Spec.Volumes[0].Name == pod.Spec.Volumes[1].Name {
+				t.Fatal("dependency volumes have duplicate names")
+			}
+			for i, volume := range pod.Spec.Volumes {
+				if errs := validation.IsDNS1123Label(volume.Name); len(errs) != 0 {
+					t.Errorf("invalid volume name %q: %v", volume.Name, errs)
+				}
+				if mount := pod.Spec.Containers[0].VolumeMounts[i]; mount.Name != volume.Name || mount.MountPath != mounts[i].MountPath {
+					t.Errorf("volume %q has incorrect mount %+v", volume.Name, mount)
+				}
 			}
 		})
 	}
@@ -733,22 +759,28 @@ func TestDependencyImageVolumes(t *testing.T) {
 	testCases := []struct {
 		name            string
 		dependencies    []api.StepDependency
+		imageStream     *imagev1.ImageStream
+		credentials     []api.CredentialReference
+		expectedEnv     []coreapi.EnvVar
 		expectedVolumes []coreapi.Volume
 		expectedMounts  []coreapi.VolumeMount
+		expectedError   string
 	}{
 		{
 			name: "no mount_path produces no volumes",
 			dependencies: []api.StepDependency{
 				{Name: "src", Env: "SOURCE", PullSpec: "registry.example.com/src@sha256:abc123"},
 			},
+			expectedEnv: []coreapi.EnvVar{{Name: "SOURCE", Value: "registry.example.com/src@sha256:abc123"}},
 		},
 		{
 			name: "mount_path produces image volume",
 			dependencies: []api.StepDependency{
 				{Name: "installer", Env: "INSTALLER_IMAGE", PullSpec: "registry.example.com/installer@sha256:abc123", MountPath: "/var/run/images/installer"},
 			},
+			expectedEnv: []coreapi.EnvVar{{Name: "INSTALLER_IMAGE", Value: "registry.example.com/installer@sha256:abc123"}},
 			expectedVolumes: []coreapi.Volume{{
-				Name: "dep-installer",
+				Name: "dependency-0",
 				VolumeSource: coreapi.VolumeSource{
 					Image: &coreapi.ImageVolumeSource{
 						Reference:  "registry.example.com/installer@sha256:abc123",
@@ -757,7 +789,7 @@ func TestDependencyImageVolumes(t *testing.T) {
 				},
 			}},
 			expectedMounts: []coreapi.VolumeMount{{
-				Name:      "dep-installer",
+				Name:      "dependency-0",
 				MountPath: "/var/run/images/installer",
 				ReadOnly:  true,
 			}},
@@ -768,8 +800,12 @@ func TestDependencyImageVolumes(t *testing.T) {
 				{Name: "src", Env: "SOURCE", PullSpec: "registry.example.com/src@sha256:abc123"},
 				{Name: "stable:installer", Env: "INSTALLER", PullSpec: "registry.example.com/installer@sha256:def456", MountPath: "/opt/installer"},
 			},
+			expectedEnv: []coreapi.EnvVar{
+				{Name: "SOURCE", Value: "registry.example.com/src@sha256:abc123"},
+				{Name: "INSTALLER", Value: "registry.example.com/installer@sha256:def456"},
+			},
 			expectedVolumes: []coreapi.Volume{{
-				Name: "dep-stable-installer",
+				Name: "dependency-0",
 				VolumeSource: coreapi.VolumeSource{
 					Image: &coreapi.ImageVolumeSource{
 						Reference:  "registry.example.com/installer@sha256:def456",
@@ -778,10 +814,72 @@ func TestDependencyImageVolumes(t *testing.T) {
 				},
 			}},
 			expectedMounts: []coreapi.VolumeMount{{
-				Name:      "dep-stable-installer",
+				Name:      "dependency-0",
 				MountPath: "/opt/installer",
 				ReadOnly:  true,
 			}},
+		},
+		{
+			name:         "image stream dependency resolves the same digest for env and volume",
+			dependencies: []api.StepDependency{{Name: "stable:installer", Env: "INSTALLER", MountPath: "/opt/installer"}},
+			imageStream: &imagev1.ImageStream{
+				ObjectMeta: metav1.ObjectMeta{Namespace: "ns", Name: "stable"},
+				Status: imagev1.ImageStreamStatus{
+					PublicDockerImageRepository: "registry.example.com/stable",
+					Tags:                        []imagev1.NamedTagEventList{{Tag: "installer", Items: []imagev1.TagEvent{{Image: "sha256:def456"}}}},
+				},
+			},
+			expectedEnv: []coreapi.EnvVar{{Name: "INSTALLER", Value: "registry.example.com/stable@sha256:def456"}},
+			expectedVolumes: []coreapi.Volume{{
+				Name: "dependency-0",
+				VolumeSource: coreapi.VolumeSource{Image: &coreapi.ImageVolumeSource{
+					Reference: "registry.example.com/stable@sha256:def456", PullPolicy: coreapi.PullIfNotPresent,
+				}},
+			}},
+			expectedMounts: []coreapi.VolumeMount{{Name: "dependency-0", MountPath: "/opt/installer", ReadOnly: true}},
+		},
+		{
+			name:         "mutable pull spec is refreshed and existing credential volume name is avoided",
+			dependencies: []api.StepDependency{{Name: "installer", Env: "INSTALLER", PullSpec: "registry.example.com/installer:latest", MountPath: "/opt/installer"}},
+			credentials:  []api.CredentialReference{{Namespace: "dependency", Name: "0", MountPath: "/credentials"}},
+			expectedEnv:  []coreapi.EnvVar{{Name: "INSTALLER", Value: "registry.example.com/installer:latest"}},
+			expectedVolumes: []coreapi.Volume{{
+				Name: "dependency-1",
+				VolumeSource: coreapi.VolumeSource{Image: &coreapi.ImageVolumeSource{
+					Reference: "registry.example.com/installer:latest", PullPolicy: coreapi.PullAlways,
+				}},
+			}},
+			expectedMounts: []coreapi.VolumeMount{{Name: "dependency-1", MountPath: "/opt/installer", ReadOnly: true}},
+		},
+		{
+			name:         "existing built-in environment precedence is preserved",
+			dependencies: []api.StepDependency{{Name: "src", Env: SecretMountEnv, PullSpec: "registry.example.com/src:latest"}},
+			expectedEnv: []coreapi.EnvVar{
+				{Name: SecretMountEnv, Value: "registry.example.com/src:latest"},
+				{Name: SecretMountEnv, Value: SecretMountPath},
+			},
+		},
+		{
+			name:          "image resolution error retains the underlying cause",
+			dependencies:  []api.StepDependency{{Name: "stable:installer", Env: "INSTALLER", MountPath: "/opt/installer"}},
+			expectedError: `could not retrieve output imagestream: imagestreams.image.openshift.io "stable" not found`,
+		},
+		{
+			name:          "dependency cannot hide a built-in mount",
+			dependencies:  []api.StepDependency{{Name: "installer", Env: "INSTALLER", PullSpec: "registry.example.com/installer:latest", MountPath: "/alabama/"}},
+			expectedError: `overlaps volume "home" mounted at "/alabama"`,
+		},
+		{
+			name:          "dependency cannot nest under a credential mount",
+			dependencies:  []api.StepDependency{{Name: "installer", Env: "INSTALLER", PullSpec: "registry.example.com/installer:latest", MountPath: "/credentials/a..b"}},
+			credentials:   []api.CredentialReference{{Namespace: "ns", Name: "secret", MountPath: "/credentials"}},
+			expectedError: `overlaps volume "ns-secret" mounted at "/credentials"`,
+		},
+		{
+			name:          "dependency cannot hide a credential mount under its path",
+			dependencies:  []api.StepDependency{{Name: "installer", Env: "INSTALLER", PullSpec: "registry.example.com/installer:latest", MountPath: "/credentials"}},
+			credentials:   []api.CredentialReference{{Namespace: "ns", Name: "secret", MountPath: "/credentials/token"}},
+			expectedError: `overlaps volume "ns-secret" mounted at "/credentials/token"`,
 		},
 	}
 
@@ -789,12 +887,77 @@ func TestDependencyImageVolumes(t *testing.T) {
 		t.Run(tc.name, func(t *testing.T) {
 			step := api.LiteralTestStep{
 				As:           "test",
+				From:         "src",
 				Dependencies: tc.dependencies,
+				Credentials:  tc.credentials,
 			}
-			s := &multiStageTestStep{}
-			_, volumes, mounts, errs := s.envForDependencies(step)
-			if len(errs) != 0 {
-				t.Fatalf("unexpected errors: %v", errs)
+			jobSpec := api.JobSpec{JobSpec: prowdapi.JobSpec{
+				Job: "job", Type: prowapi.PeriodicJob,
+				DecorationConfig: &prowapi.DecorationConfig{
+					UtilityImages: &prowapi.UtilityImages{Entrypoint: "entrypoint", Sidecar: "sidecar"},
+				},
+			}}
+			jobSpec.SetNamespace("ns")
+			scheme := runtime.NewScheme()
+			if err := imagev1.AddToScheme(scheme); err != nil {
+				t.Fatal(err)
+			}
+			clientBuilder := fakectrlruntimeclient.NewClientBuilder().WithScheme(scheme)
+			if tc.imageStream != nil {
+				clientBuilder.WithObjects(tc.imageStream)
+			}
+			client := &testhelper_kube.FakePodClient{FakePodExecutor: &testhelper_kube.FakePodExecutor{
+				LoggingClient: loggingclient.New(clientBuilder.Build(), nil),
+			}}
+			s := &multiStageTestStep{name: "test", config: &api.ReleaseBuildConfiguration{}, jobSpec: &jobSpec, client: client}
+			pods, _, err := s.generatePods([]api.LiteralTestStep{step}, nil, nil, nil, nil)
+			if tc.expectedError != "" {
+				if err == nil || !strings.Contains(err.Error(), tc.expectedError) {
+					t.Fatalf("expected error containing %q, got %v", tc.expectedError, err)
+				}
+				if len(pods) != 0 {
+					t.Fatal("generated a pod for an invalid dependency")
+				}
+				return
+			}
+			if err != nil {
+				t.Fatal(err)
+			}
+			if len(pods) != 1 {
+				t.Fatalf("expected one pod, got %d", len(pods))
+			}
+			pod := &pods[0]
+			var volumes []coreapi.Volume
+			volumeNames := sets.New[string]()
+			for _, volume := range pod.Spec.Volumes {
+				if volumeNames.Has(volume.Name) {
+					t.Errorf("duplicate volume name %q", volume.Name)
+				}
+				volumeNames.Insert(volume.Name)
+				if volume.Image != nil {
+					volumes = append(volumes, volume)
+				}
+			}
+			var mounts []coreapi.VolumeMount
+			for _, mount := range pod.Spec.Containers[0].VolumeMounts {
+				for _, volume := range volumes {
+					if volume.Name == mount.Name {
+						mounts = append(mounts, mount)
+					}
+				}
+			}
+			var env []coreapi.EnvVar
+			expectedEnvNames := sets.New[string]()
+			for _, expected := range tc.expectedEnv {
+				expectedEnvNames.Insert(expected.Name)
+			}
+			for _, actual := range pod.Spec.Containers[0].Env {
+				if expectedEnvNames.Has(actual.Name) {
+					env = append(env, actual)
+				}
+			}
+			if diff := cmp.Diff(tc.expectedEnv, env); diff != "" {
+				t.Errorf("unexpected dependency env (-want +got): %s", diff)
 			}
 			if !equality.Semantic.DeepEqual(volumes, tc.expectedVolumes) {
 				t.Errorf("unexpected volumes: %s", cmp.Diff(tc.expectedVolumes, volumes))

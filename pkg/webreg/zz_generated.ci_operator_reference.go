@@ -792,7 +792,11 @@ const ciOperatorReferenceYaml = "# The list of base images describe\n" +
 	"                  dependencies:\n" +
 	"                    - # Env is the environment variable that the image's pull spec is exposed with\n" +
 	"                      env: ' '\n" +
-	"                      # MountPath is where the dependency image will be mounted as a read-only volume.\n" +
+	"                      # MountPath optionally mounts the dependency image as a read-only image volume\n" +
+	"                      # at this absolute path (for example, /var/run/images/installer). Requires\n" +
+	"                      # ImageVolume support on the build cluster. Image volumes are typically mounted\n" +
+	"                      # noexec; copy binaries to a writable volume before executing them. The image's\n" +
+	"                      # pull spec is still exposed through Env. The path must not overlap other mounts.\n" +
 	"                      mount_path: ' '\n" +
 	"                      # Name is the tag or stream:tag that this dependency references\n" +
 	"                      name: ' '\n" +
@@ -902,7 +906,11 @@ const ciOperatorReferenceYaml = "# The list of base images describe\n" +
 	"                  dependencies:\n" +
 	"                    - # Env is the environment variable that the image's pull spec is exposed with\n" +
 	"                      env: ' '\n" +
-	"                      # MountPath is where the dependency image will be mounted as a read-only volume.\n" +
+	"                      # MountPath optionally mounts the dependency image as a read-only image volume\n" +
+	"                      # at this absolute path (for example, /var/run/images/installer). Requires\n" +
+	"                      # ImageVolume support on the build cluster. Image volumes are typically mounted\n" +
+	"                      # noexec; copy binaries to a writable volume before executing them. The image's\n" +
+	"                      # pull spec is still exposed through Env. The path must not overlap other mounts.\n" +
 	"                      mount_path: ' '\n" +
 	"                      # Name is the tag or stream:tag that this dependency references\n" +
 	"                      name: ' '\n" +
@@ -1012,7 +1020,11 @@ const ciOperatorReferenceYaml = "# The list of base images describe\n" +
 	"                  dependencies:\n" +
 	"                    - # Env is the environment variable that the image's pull spec is exposed with\n" +
 	"                      env: ' '\n" +
-	"                      # MountPath is where the dependency image will be mounted as a read-only volume.\n" +
+	"                      # MountPath optionally mounts the dependency image as a read-only image volume\n" +
+	"                      # at this absolute path (for example, /var/run/images/installer). Requires\n" +
+	"                      # ImageVolume support on the build cluster. Image volumes are typically mounted\n" +
+	"                      # noexec; copy binaries to a writable volume before executing them. The image's\n" +
+	"                      # pull spec is still exposed through Env. The path must not overlap other mounts.\n" +
 	"                      mount_path: ' '\n" +
 	"                      # Name is the tag or stream:tag that this dependency references\n" +
 	"                      name: ' '\n" +
@@ -1796,7 +1808,11 @@ const ciOperatorReferenceYaml = "# The list of base images describe\n" +
 	"              dependencies:\n" +
 	"                - # Env is the environment variable that the image's pull spec is exposed with\n" +
 	"                  env: ' '\n" +
-	"                  # MountPath is where the dependency image will be mounted as a read-only volume.\n" +
+	"                  # MountPath optionally mounts the dependency image as a read-only image volume\n" +
+	"                  # at this absolute path (for example, /var/run/images/installer). Requires\n" +
+	"                  # ImageVolume support on the build cluster. Image volumes are typically mounted\n" +
+	"                  # noexec; copy binaries to a writable volume before executing them. The image's\n" +
+	"                  # pull spec is still exposed through Env. The path must not overlap other mounts.\n" +
 	"                  mount_path: ' '\n" +
 	"                  # Name is the tag or stream:tag that this dependency references\n" +
 	"                  name: ' '\n" +
@@ -1906,7 +1922,11 @@ const ciOperatorReferenceYaml = "# The list of base images describe\n" +
 	"              dependencies:\n" +
 	"                - # Env is the environment variable that the image's pull spec is exposed with\n" +
 	"                  env: ' '\n" +
-	"                  # MountPath is where the dependency image will be mounted as a read-only volume.\n" +
+	"                  # MountPath optionally mounts the dependency image as a read-only image volume\n" +
+	"                  # at this absolute path (for example, /var/run/images/installer). Requires\n" +
+	"                  # ImageVolume support on the build cluster. Image volumes are typically mounted\n" +
+	"                  # noexec; copy binaries to a writable volume before executing them. The image's\n" +
+	"                  # pull spec is still exposed through Env. The path must not overlap other mounts.\n" +
 	"                  mount_path: ' '\n" +
 	"                  # Name is the tag or stream:tag that this dependency references\n" +
 	"                  name: ' '\n" +
@@ -2016,7 +2036,11 @@ const ciOperatorReferenceYaml = "# The list of base images describe\n" +
 	"              dependencies:\n" +
 	"                - # Env is the environment variable that the image's pull spec is exposed with\n" +
 	"                  env: ' '\n" +
-	"                  # MountPath is where the dependency image will be mounted as a read-only volume.\n" +
+	"                  # MountPath optionally mounts the dependency image as a read-only image volume\n" +
+	"                  # at this absolute path (for example, /var/run/images/installer). Requires\n" +
+	"                  # ImageVolume support on the build cluster. Image volumes are typically mounted\n" +
+	"                  # noexec; copy binaries to a writable volume before executing them. The image's\n" +
+	"                  # pull spec is still exposed through Env. The path must not overlap other mounts.\n" +
 	"                  mount_path: ' '\n" +
 	"                  # Name is the tag or stream:tag that this dependency references\n" +
 	"                  name: ' '\n" +

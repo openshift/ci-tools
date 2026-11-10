@@ -264,6 +264,21 @@ func GetAddedProwConfigs(path, baseRev string) ([]string, error) {
 	return getRevChanges(path, "core-services/prow/02_config", baseRev, true, true)
 }
 
+// IsFileChanged returns true if the file at filePath (relative to the repo
+// root) was added or modified since the given base revision.
+func IsFileChanged(repoPath, filePath, baseSHA string) (bool, error) {
+	compareBase := baseSHA
+	mergeBase, err := git(repoPath, "merge-base", baseSHA, "HEAD")
+	if err == nil {
+		compareBase = strings.TrimSpace(mergeBase)
+	}
+	diff, err := git(repoPath, "diff", "--name-only", compareBase, "HEAD", "--", filePath)
+	if err != nil {
+		return false, fmt.Errorf("checking if file %s changed: %w", filePath, err)
+	}
+	return strings.TrimSpace(diff) != "", nil
+}
+
 // getRevChanges returns the name and a hash of the contents of files under
 // `path` that were added/modified since revision `base` in the repository at
 // `root`.  Paths are relative to `root`.

@@ -4,10 +4,14 @@ import (
 	"encoding/json"
 	"net/http"
 	"strconv"
+	"strings"
 	"time"
 
 	"github.com/sirupsen/logrus"
 )
+
+// defaultAggregateTemplate is the release-controller's default aggregator periodic.
+const defaultAggregateTemplate = "release-openshift-release-analysis-aggregator"
 
 type Server struct {
 	pjs       *Prowjobs
@@ -77,11 +81,13 @@ func (s *Server) RequestHandler(w http.ResponseWriter, r *http.Request) {
 			return
 		}
 		response = SchedulingResponse{Cluster: cluster, Source: "ephemeral-cluster"}
-	} else if s.snapshots != nil {
-		decision, found := s.snapshots.Lookup(req.Job, time.Now())
+	} else {
+		decision, found := s.lookup(req.Job, time.Now())
 		if found {
 			cluster = decision.Cluster
-			observeDecision(decision)
+			if s.snapshots != nil {
+				observeDecision(decision)
+			}
 			var validUntil *time.Time
 			if !decision.ValidUntil.IsZero() {
 				deadline := decision.ValidUntil
@@ -92,16 +98,7 @@ func (s *Server) RequestHandler(w http.ResponseWriter, r *http.Request) {
 				PolicyDigest: decision.PolicyDigest, OverrideID: decision.OverrideID,
 				ValidUntil: validUntil, Explanation: decision.Explanation,
 			}
-		} else {
-			cluster = s.pjs.GetCluster(req.Job)
-			if cluster != "" {
-				response = SchedulingResponse{Cluster: cluster, Source: "legacy-gob-fallback"}
-				observeDecision(Decision{Cluster: cluster, Source: response.Source})
-			}
 		}
-	} else {
-		cluster = s.pjs.GetCluster(req.Job)
-		response = SchedulingResponse{Cluster: cluster}
 	}
 
 	if cluster == "" {
@@ -118,6 +115,32 @@ func (s *Server) RequestHandler(w http.ResponseWriter, r *http.Request) {
 	if err := json.NewEncoder(w).Encode(response); err != nil {
 		logrus.WithError(err).WithField("response", response).Error("failed to encode response")
 	}
+}
+
+// lookup tries the original identity in both stores before falling back to the
+// default aggregate template. It reuses policy expiry and override semantics;
+// custom templates and names with an empty verification prefix are not aliases.
+func (s *Server) lookup(job string, now time.Time) (Decision, bool) {
+	names := []string{job}
+	suffix := "-" + defaultAggregateTemplate
+	if strings.HasSuffix(job, suffix) && len(job) > len(suffix) {
+		names = append(names, defaultAggregateTemplate)
+	}
+	for _, name := range names {
+		if s.snapshots != nil {
+			if decision, found := s.snapshots.Lookup(name, now); found {
+				return decision, true
+			}
+		}
+		if cluster := s.pjs.GetCluster(name); cluster != "" {
+			decision := Decision{Cluster: cluster}
+			if s.snapshots != nil {
+				decision.Source = "legacy-gob-fallback"
+			}
+			return decision, true
+		}
+	}
+	return Decision{}, false
 }
 
 // HealthHandler reports process liveness without claiming policy readiness.

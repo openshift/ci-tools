@@ -66,7 +66,6 @@ var blockedClusterRelocationJobExceptions = []*regexp.Regexp{
 
 type options struct {
 	prowJobConfigDir    string
-	releaseConfigDir    string
 	configPath          string
 	clusterConfigPath   string
 	jobsStoragePath     string
@@ -119,7 +118,6 @@ func gatherOptions() options {
 	fs := flag.NewFlagSet(os.Args[0], flag.ExitOnError)
 
 	fs.StringVar(&o.prowJobConfigDir, "prow-jobs-dir", "", "Path to a root of directory structure with Prow job config files (ci-operator/jobs in openshift/release)")
-	fs.StringVar(&o.releaseConfigDir, "release-config", "", "Path to release-controller JSON configurations for aggregate job placement.")
 	fs.StringVar(&o.configPath, "config-path", "", "Path to the config file (core-services/sanitize-prow-jobs/_config.yaml in openshift/release)")
 	fs.StringVar(&o.clusterConfigPath, "cluster-config-path", "core-services/sanitize-prow-jobs/_clusters.yaml", "Path to the config file (core-services/sanitize-prow-jobs/_clusters.yaml in openshift/release)")
 	fs.StringVar(&o.jobsStoragePath, "jobs-storage-path", "", "Path to the file holding only job assignments in Gob format")
@@ -528,7 +526,7 @@ func (cv *clusterVolume) findClusterForJobConfig(cloudProvider string, jc *prowc
 func (cv *clusterVolume) classifyJobsForProjection(jc *prowconfig.JobConfig, path string, config *dispatcher.Config, jobVolumes map[string]float64) ([]projectedJob, error) {
 	var jobsForProjection []projectedJob
 	addProjectedJob := func(jobBase prowconfig.JobBase) error {
-		determinedCluster, canBeRelocated, err := config.DetermineClusterForJob(placementJobBase(jobBase), path, cv.clusterMap)
+		determinedCluster, canBeRelocated, err := config.DetermineClusterForJob(jobBase, path, cv.clusterMap)
 		if err != nil {
 			return fmt.Errorf("failed to determine projected cluster for job %s in path %q: %w", jobBase.Name, path, err)
 		}
@@ -536,7 +534,7 @@ func (cv *clusterVolume) classifyJobsForProjection(jc *prowconfig.JobConfig, pat
 			name:              jobBase.Name,
 			determinedCluster: string(determinedCluster),
 			canBeRelocated:    canBeRelocated,
-			blocked:           blockedClustersForJob(placementJobBase(jobBase).Name, string(determinedCluster), cv.blocked),
+			blocked:           blockedClustersForJob(jobBase.Name, string(determinedCluster), cv.blocked),
 			volume:            demandForJob(jobVolumes, jobBase.Name, cv.minimumJobDemand),
 		})
 		if cv.prechargedJobs.Has(jobBase.Name) {
@@ -655,7 +653,7 @@ func findClusterAssigmentsForJobs(jc *prowconfig.JobConfig, prowJobConfigDir, pa
 	}
 
 	refreshJobAssignment := func(cluster string, jobBase prowconfig.JobBase, pjs map[string]dispatcher.ProwJobData) error {
-		determinedCluster, canBeRelocated, err := config.DetermineClusterForJob(placementJobBase(jobBase), path, cm)
+		determinedCluster, canBeRelocated, err := config.DetermineClusterForJob(jobBase, path, cm)
 		if err != nil {
 			return fmt.Errorf("failed to determine cluster for the job %s in path %q: %w", jobBase.Name, path, err)
 		}
@@ -673,7 +671,7 @@ func findClusterAssigmentsForJobs(jc *prowconfig.JobConfig, prowJobConfigDir, pa
 				}
 			}
 		}
-		blockedForJob := blockedClustersForJob(placementJobBase(jobBase).Name, string(determinedCluster), blocked)
+		blockedForJob := blockedClustersForJob(jobBase.Name, string(determinedCluster), blocked)
 		c := dispatcher.DetermineTargetCluster(cluster, string(determinedCluster), string(config.Default), canBeRelocated, blockedForJob)
 		refreshed := dispatcher.ProwJobData{Cluster: c, Capabilities: extractCapabilities(jobBase.Labels), Demand: demand, Group: group}
 		if reflect.DeepEqual(pjs[jobBase.Name], refreshed) {
@@ -731,13 +729,13 @@ func (cv *clusterVolume) prechargeFixedDemand(jc *prowconfig.JobConfig, path str
 }
 
 func (cv *clusterVolume) addToVolume(cluster string, jobBase prowconfig.JobBase, path string, config *dispatcher.Config, jobVolumes map[string]float64) error {
-	determinedCluster, canBeRelocated, err := config.DetermineClusterForJob(placementJobBase(jobBase), path, cv.clusterMap)
+	determinedCluster, canBeRelocated, err := config.DetermineClusterForJob(jobBase, path, cv.clusterMap)
 
 	if err != nil {
 		return fmt.Errorf("failed to determine cluster for the job %s in path %q: %w", jobBase.Name, path, err)
 	}
 
-	blockedForJob := blockedClustersForJob(placementJobBase(jobBase).Name, string(determinedCluster), cv.blocked)
+	blockedForJob := blockedClustersForJob(jobBase.Name, string(determinedCluster), cv.blocked)
 	c := dispatcher.DetermineTargetCluster(cluster, string(determinedCluster), string(config.Default), canBeRelocated, blockedForJob)
 	group, err := repositoryRelativeTieBreakPath(cv.prowJobConfigDir, path)
 	if err != nil {
@@ -777,10 +775,9 @@ type configResult struct {
 }
 
 type fileSizeInfo struct {
-	path          string
-	info          fs.DirEntry
-	size          int64
-	aggregateJobs map[string]string
+	path string
+	info fs.DirEntry
+	size int64
 }
 
 type clusterConfigReconciler struct {
@@ -1039,7 +1036,7 @@ func dispatchJobs(prowJobConfigDir string, config *dispatcher.Config, jobVolumes
 	return dispatchJobsWithPolicy(prowJobConfigDir, config, jobVolumes, blocked, volumeDistribution, cm, nil, 0, -1, 1)
 }
 
-func dispatchJobsWithPolicy(prowJobConfigDir string, config *dispatcher.Config, jobVolumes map[string]float64, blocked sets.Set[string], volumeDistribution map[string]float64, cm dispatcher.ClusterMap, previous map[string]dispatcher.ProwJobData, hysteresisPercent, movementBudgetPercent, minimumJobDemand float64, releaseConfigDirs ...string) (map[string]dispatcher.ProwJobData, error) {
+func dispatchJobsWithPolicy(prowJobConfigDir string, config *dispatcher.Config, jobVolumes map[string]float64, blocked sets.Set[string], volumeDistribution map[string]float64, cm dispatcher.ClusterMap, previous map[string]dispatcher.ProwJobData, hysteresisPercent, movementBudgetPercent, minimumJobDemand float64) (map[string]dispatcher.ProwJobData, error) {
 	if config == nil {
 		return nil, fmt.Errorf("config is nil")
 	}
@@ -1091,7 +1088,7 @@ func dispatchJobsWithPolicy(prowJobConfigDir string, config *dispatcher.Config, 
 			results[cr.cluster] = append(results[cr.cluster], cr.filename)
 		}
 	}
-	fileList, err := composeFileInfoList(prowJobConfigDir, releaseConfigDirs...)
+	fileList, err := composeFileInfoList(prowJobConfigDir)
 	if err != nil {
 		return nil, fmt.Errorf("failed to dispatch all Prow jobs: %w", err)
 	}
@@ -1143,14 +1140,14 @@ func dispatchJobsWithPolicy(prowJobConfigDir string, config *dispatcher.Config, 
 	return cv.pjs, utilerrors.NewAggregate(errs)
 }
 
-func dispatchDeltaJobs(prowJobConfigDir string, config *dispatcher.Config, blocked sets.Set[string], pjs map[string]dispatcher.ProwJobData, cm dispatcher.ClusterMap, minimumJobDemand float64, releaseConfigDirs ...string) error {
+func dispatchDeltaJobs(prowJobConfigDir string, config *dispatcher.Config, blocked sets.Set[string], pjs map[string]dispatcher.ProwJobData, cm dispatcher.ClusterMap, minimumJobDemand float64) error {
 	var errs []error
 	dispatch := func(jobConfig *prowconfig.JobConfig, path string, info fs.DirEntry) {
 		if err := findClusterAssigmentsForJobs(jobConfig, prowJobConfigDir, path, config, pjs, blocked, cm, minimumJobDemand); err != nil {
 			errs = append(errs, err)
 		}
 	}
-	fileList, err := composeFileInfoList(prowJobConfigDir, releaseConfigDirs...)
+	fileList, err := composeFileInfoList(prowJobConfigDir)
 	if err != nil {
 		return fmt.Errorf("failed to dispatch all Prow jobs: %w", err)
 	}
@@ -1191,7 +1188,6 @@ func dispatchEveryFile(fileList []fileSizeInfo, dispatch func(jobConfig *prowcon
 				errs = append(errs, fmt.Errorf("failed to unmarshal file %q: %w", path, err))
 				return
 			}
-			expandAggregateJobs(jobConfig, file.aggregateJobs)
 			dispatch(jobConfig, path, info)
 		}(file.path, file.info)
 	}
@@ -1232,20 +1228,7 @@ func movementBudgetForConfiguredJobs(jobNames sets.Set[string], jobVolumes map[s
 	return totalDemand * movementBudgetPercent / 100
 }
 
-func composeFileInfoList(prowJobConfigDir string, releaseConfigDirs ...string) ([]fileSizeInfo, error) {
-	aggregateJobs := map[string]string{}
-	for _, directory := range releaseConfigDirs {
-		aliases, err := loadAggregateJobs(directory)
-		if err != nil {
-			return nil, err
-		}
-		for name, template := range aliases {
-			if previous, found := aggregateJobs[name]; found && previous != template {
-				return nil, fmt.Errorf("aggregate job %q references multiple templates", name)
-			}
-			aggregateJobs[name] = template
-		}
-	}
+func composeFileInfoList(prowJobConfigDir string) ([]fileSizeInfo, error) {
 	fileList := make([]fileSizeInfo, 0)
 	var errs []error
 	if err := filepath.WalkDir(prowJobConfigDir, func(path string, info fs.DirEntry, err error) error {
@@ -1264,16 +1247,12 @@ func composeFileInfoList(prowJobConfigDir string, releaseConfigDirs ...string) (
 		}
 
 		fileList = append(fileList, fileSizeInfo{
-			path:          path,
-			info:          info,
-			size:          fileInfo.Size(),
-			aggregateJobs: aggregateJobs,
+			path: path,
+			info: info,
+			size: fileInfo.Size(),
 		})
 		return nil
 	}); err != nil {
-		errs = append(errs, err)
-	}
-	if err := validateAggregateJobNames(fileList, aggregateJobs); err != nil {
 		errs = append(errs, err)
 	}
 	return fileList, utilerrors.NewAggregate(errs)
@@ -1499,7 +1478,7 @@ func main() {
 
 			pjs := prowjobs.GetDataCopy()
 
-			if err := dispatchDeltaJobs(o.prowJobConfigDir, config, blocked, pjs, cm, o.MinimumJobDemand, o.releaseConfigDir); err != nil {
+			if err := dispatchDeltaJobs(o.prowJobConfigDir, config, blocked, pjs, cm, o.MinimumJobDemand); err != nil {
 				return fmt.Errorf("failed to dispatch delta jobs: %w", err)
 			}
 			if err := dispatcher.WriteGob(o.jobsStoragePath, pjs); err != nil {
@@ -1516,11 +1495,91 @@ func main() {
 			return publishSnapshot(pjs, cm, blocked)
 		}
 
-		runner := fullDispatchRunner{options: o, jobs: prowjobs, volumes: &promVolumes, ephemeral: ecd, publishSnapshot: publishSnapshot, slack: slackClient}
 		dispatch := func(forceDispatch bool) error {
 			mu.Lock()
 			defer mu.Unlock()
-			return runner.dispatch(forceDispatch)
+
+			config, err := dispatcher.LoadConfig(o.configPath)
+			if err != nil {
+				return fmt.Errorf("failed to load config from %q: %w", o.configPath, err)
+			}
+
+			configClusterMap, blocked, err := dispatcher.LoadClusterConfig(o.clusterConfigPath)
+			if err != nil {
+				return fmt.Errorf("failed to load cluster config: %w", err)
+			}
+			inventoryDigest, err := clusterInventoryDigest(configClusterMap, blocked)
+			if err != nil {
+				return fmt.Errorf("failed to calculate cluster inventory digest: %w", err)
+			}
+			clustersFromConfig := clustersMapToSet(configClusterMap)
+			inventoryChanged, err := config.SynchronizeBuildFarm(configClusterMap)
+			if err != nil {
+				return fmt.Errorf("failed to synchronize build farm: %w", err)
+			}
+
+			newBlockedClusters := prowjobs.HasAnyOfClusters(blocked)
+			currentAssignments := prowjobs.GetDataCopy()
+			missingAssignments := len(currentAssignments) == 0
+			metadataMigrationRequired := assignmentsRequireMetadataMigration(currentAssignments)
+
+			if !forceDispatch && !inventoryChanged && !newBlockedClusters && !missingAssignments && !metadataMigrationRequired {
+				// The ephemeral scheduler is not persisted in the Gob cache, so it still
+				// needs initialization after a restart when no generation is necessary.
+				ecd.Reset(sets.List(clustersFromConfig))
+				return publishSnapshot(currentAssignments, configClusterMap, blocked)
+			}
+
+			jobVolumes, err := promVolumes.GetJobVolumes()
+			if err != nil {
+				return fmt.Errorf("failed to get job volumes: %w", err)
+			}
+
+			pjs, err := dispatchJobsWithPolicy(
+				o.prowJobConfigDir, config, jobVolumes, blocked, promVolumes.CalculateVolumeDistribution(configClusterMap), configClusterMap,
+				currentAssignments, o.rebalanceHysteresisPercent, o.movementBudgetPercent, o.MinimumJobDemand,
+			)
+			if err != nil {
+				return fmt.Errorf("failed to dispatch jobs: %w", err)
+			}
+
+			markerPath := fallbackPublicationMarkerPath(o.jobsStoragePath)
+			if o.createPR {
+				if err := markFallbackPublicationPending(markerPath); err != nil {
+					return err
+				}
+			}
+
+			var committedWriteErr error
+			if err := writeFullDispatchAssignments(o.jobsStoragePath, pjs, dispatcher.WriteGob); err != nil {
+				if !dispatcher.IsGobWriteCommitted(err) {
+					return fmt.Errorf("failed to persist job assignments: %w", err)
+				}
+				committedWriteErr = fmt.Errorf("job assignments were replaced but their directory sync failed: %w", err)
+			}
+			prowjobs.Regenerate(pjs)
+			ecd.Reset(sets.List(clustersFromConfig))
+			if err := publishSnapshot(pjs, configClusterMap, blocked); err != nil {
+				return utilerrors.NewAggregate([]error{committedWriteErr, fmt.Errorf("failed to publish policy snapshot: %w", err)})
+			}
+			if committedWriteErr == nil {
+				if err := writePublishedInventoryDigest(publishedInventoryDigestPath(o.jobsStoragePath), inventoryDigest); err != nil {
+					return fmt.Errorf("failed to publish cluster inventory digest: %w", err)
+				}
+			}
+
+			if o.createPR {
+				if err := createPR(o, config, pjs, configClusterMap); err != nil {
+					return utilerrors.NewAggregate([]error{committedWriteErr, err})
+				}
+				if err := clearFallbackPublicationPending(markerPath); err != nil {
+					return utilerrors.NewAggregate([]error{committedWriteErr, err})
+				}
+				if err := sendSlackMessage(slackClient, o.opsChannelId); err != nil {
+					logrus.WithError(err).Error("Failed to post message in ops channel")
+				}
+			}
+			return committedWriteErr
 		}
 
 		fallbackPending := false

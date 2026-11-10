@@ -1240,6 +1240,9 @@ func composeFileInfoList(prowJobConfigDir string, releaseConfigDirs ...string) (
 			return nil, err
 		}
 		for name, template := range aliases {
+			if previous, found := aggregateJobs[name]; found && previous != template {
+				return nil, fmt.Errorf("aggregate job %q references multiple templates", name)
+			}
 			aggregateJobs[name] = template
 		}
 	}
@@ -1268,6 +1271,9 @@ func composeFileInfoList(prowJobConfigDir string, releaseConfigDirs ...string) (
 		})
 		return nil
 	}); err != nil {
+		errs = append(errs, err)
+	}
+	if err := validateAggregateJobNames(fileList, aggregateJobs); err != nil {
 		errs = append(errs, err)
 	}
 	return fileList, utilerrors.NewAggregate(errs)

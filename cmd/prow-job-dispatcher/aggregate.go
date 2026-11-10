@@ -10,8 +10,10 @@ import (
 
 	"k8s.io/apimachinery/pkg/util/sets"
 	prowconfig "sigs.k8s.io/prow/pkg/config"
+	"sigs.k8s.io/yaml"
 
 	releaseconfig "github.com/openshift/ci-tools/pkg/release/config"
+	"github.com/openshift/ci-tools/pkg/util/gzip"
 )
 
 // aggregateTemplateAnnotation identifies the placement template of a synthesized job.
@@ -59,6 +61,31 @@ func loadAggregateJobs(directory string) (map[string]string, error) {
 		return nil, fmt.Errorf("load aggregate jobs: %w", err)
 	}
 	return aliases, nil
+}
+
+// validateAggregateJobNames rejects identities shared by generated and configured jobs.
+func validateAggregateJobNames(files []fileSizeInfo, aliases map[string]string) error {
+	if len(aliases) == 0 {
+		return nil
+	}
+	for _, file := range files {
+		data, err := gzip.ReadFileMaybeGZIP(file.path)
+		if err != nil {
+			return fmt.Errorf("read job configuration %q: %w", file.path, err)
+		}
+		var config prowconfig.JobConfig
+		if err := yaml.Unmarshal(data, &config); err != nil {
+			return fmt.Errorf("read job configuration %q: %w", file.path, err)
+		}
+		names := sets.New[string]()
+		addConfiguredJobNames(&config, names)
+		for _, name := range sets.List(names) {
+			if _, found := aliases[name]; found {
+				return fmt.Errorf("aggregate job %q collides with configured job in %q", name, file.path)
+			}
+		}
+	}
+	return nil
 }
 
 // expandAggregateJobs adds controller jobs to their template's configuration group.

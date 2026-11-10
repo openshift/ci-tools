@@ -90,6 +90,120 @@ func TestExpandAggregateJobs(t *testing.T) {
 	}
 }
 
+func TestAggregateJobNameCollisions(t *testing.T) {
+	for _, tc := range []struct {
+		name     string
+		jobs     string
+		sameFile bool
+	}{
+		{name: "periodic", jobs: "periodics:\n- name: verify-controller\n"},
+		{name: "presubmit", jobs: "presubmits:\n  org/repo:\n  - name: verify-controller\n"},
+		{name: "postsubmit", jobs: "postsubmits:\n  org/repo:\n  - name: verify-controller\n"},
+		{name: "same file", jobs: "periodics:\n- name: verify-controller\n- name: controller\n", sameFile: true},
+	} {
+		t.Run(tc.name, func(t *testing.T) {
+			jobDir, releaseDir := t.TempDir(), t.TempDir()
+			template := "periodics:\n- name: controller\n"
+			if tc.sameFile {
+				template = "periodics: []\n"
+			}
+			for path, content := range map[string]string{
+				filepath.Join(jobDir, "template.yaml"):    template,
+				filepath.Join(jobDir, "ordinary.yaml"):    tc.jobs,
+				filepath.Join(releaseDir, "release.json"): `{"verify":{"verify":{"aggregatedProwJob":{"analysisJobCount":1,"prowJob":{"name":"controller"}}}}}`,
+			} {
+				if err := os.WriteFile(path, []byte(content), 0600); err != nil {
+					t.Fatal(err)
+				}
+			}
+			_, err := composeFileInfoList(jobDir, releaseDir)
+			if err == nil || !strings.Contains(err.Error(), `aggregate job "verify-controller" collides with configured job`) {
+				t.Fatalf("expected ambiguous ordinary/aggregate identity to fail closed, got %v", err)
+			}
+			if _, err := composeFileInfoList(jobDir); err != nil {
+				t.Fatalf("ordinary-only configuration changed: %v", err)
+			}
+			config := &dispatcher.Config{Default: "build01", BuildFarm: map[api.Cloud]map[api.Cluster]*dispatcher.BuildFarmConfig{api.CloudAWS: {"build01": {}}}}
+			inventory := dispatcher.ClusterMap{"build01": {Provider: "aws", Capacity: 100}}
+			if _, err := dispatchJobsWithPolicy(jobDir, config, nil, sets.New[string](), nil, inventory, nil, 0, -1, 1, releaseDir); err == nil {
+				t.Fatal("full dispatch accepted ambiguous identity")
+			}
+			assignments := map[string]dispatcher.ProwJobData{"verify-controller": {Cluster: "build01", Demand: 37, Group: "ordinary.yaml"}}
+			if err := dispatchDeltaJobs(jobDir, config, sets.New[string](), assignments, inventory, 1, releaseDir); err == nil {
+				t.Fatal("delta dispatch accepted ambiguous identity")
+			}
+			if len(assignments) != 1 || assignments["verify-controller"].Demand != 37 {
+				t.Fatalf("failed refresh modified assignments: %#v", assignments)
+			}
+		})
+	}
+}
+
+func TestAggregateAliasesAcrossDirectories(t *testing.T) {
+	for _, tc := range []struct {
+		name      string
+		second    string
+		wantError bool
+	}{
+		{name: "shared identity deduplicated", second: `{"verify":{"x":{"aggregatedProwJob":{"analysisJobCount":2,"prowJob":{"name":"a-b"}}}}}`},
+		{name: "conflicting templates rejected", second: `{"verify":{"x-a":{"aggregatedProwJob":{"analysisJobCount":2,"prowJob":{"name":"b"}}}}}`, wantError: true},
+	} {
+		t.Run(tc.name, func(t *testing.T) {
+			first, second := t.TempDir(), t.TempDir()
+			for path, content := range map[string]string{
+				filepath.Join(first, "first.json"):   `{"verify":{"x":{"aggregatedProwJob":{"analysisJobCount":1,"prowJob":{"name":"a-b"}}}}}`,
+				filepath.Join(second, "second.json"): tc.second,
+			} {
+				if err := os.WriteFile(path, []byte(content), 0600); err != nil {
+					t.Fatal(err)
+				}
+			}
+			_, err := composeFileInfoList(t.TempDir(), first, second)
+			if (err != nil) != tc.wantError {
+				t.Fatalf("composeFileInfoList() error = %v", err)
+			}
+		})
+	}
+}
+
+func TestAggregateDeltaDiscovery(t *testing.T) {
+	jobDir, releaseDir := t.TempDir(), t.TempDir()
+	if err := os.WriteFile(filepath.Join(jobDir, "infra.yaml"), []byte("periodics:\n- name: controller\n  cluster: build01\n"), 0600); err != nil {
+		t.Fatal(err)
+	}
+	releasePath := filepath.Join(releaseDir, "release.json")
+	if err := os.WriteFile(releasePath, []byte(`{"verify":{"new":{"aggregatedProwJob":{"analysisJobCount":7,"prowJob":{"name":"controller"}}}}}`), 0600); err != nil {
+		t.Fatal(err)
+	}
+	config := &dispatcher.Config{Default: "build01", BuildFarm: map[api.Cloud]map[api.Cluster]*dispatcher.BuildFarmConfig{api.CloudAWS: {"build01": {}}}, BuildFarmCloud: map[api.Cloud][]string{api.CloudAWS: {"build01"}}}
+	inventory := dispatcher.ClusterMap{"build01": {Provider: "aws", Capacity: 100}}
+	assignments := map[string]dispatcher.ProwJobData{"controller": {Cluster: "build01", Demand: 2, Group: "infra.yaml"}}
+	if err := dispatchDeltaJobs(jobDir, config, sets.New[string](), assignments, inventory, 1, releaseDir); err != nil {
+		t.Fatal(err)
+	}
+	if assignments["controller"].Demand != 2 || assignments["new-controller"].Demand != 1 || len(assignments) != 2 {
+		t.Fatalf("delta discovery lost ordinary demand or aggregate minimum: %#v", assignments)
+	}
+	volumes := map[string]float64{"controller": 2, "new-controller": 37}
+	assignments, err := dispatchJobsWithPolicy(jobDir, config, volumes, sets.New[string](), nil, inventory, assignments, 0, -1, 1, releaseDir)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if assignments["controller"].Demand != 2 || assignments["new-controller"].Demand != 37 || len(assignments) != 2 {
+		t.Fatalf("full refresh lost separate measured demand: %#v", assignments)
+	}
+	if err := os.WriteFile(releasePath, []byte(`{"verify":{}}`), 0600); err != nil {
+		t.Fatal(err)
+	}
+	assignments, err = dispatchJobsWithPolicy(jobDir, config, volumes, sets.New[string](), nil, inventory, assignments, 0, -1, 1, releaseDir)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if len(assignments) != 1 || assignments["controller"].Demand != 2 {
+		t.Fatalf("full refresh retained obsolete aggregate: %#v", assignments)
+	}
+}
+
 func TestDispatchJobsWithPolicy(t *testing.T) {
 	const templateName = "release-openshift-release-analysis-aggregator"
 	const aliasName = "aggregated-vsphere-ovn-upgrade-5.1-micro-" + templateName
@@ -217,6 +331,13 @@ func TestDispatchJobsWithPolicy(t *testing.T) {
 			}
 			if response.Code != http.StatusOK || decision.Source != "baseline" || decision.Cluster != tc.wantCluster {
 				t.Fatalf("aggregate snapshot lookup = %#v", decision)
+			}
+			httpServer := httptest.NewServer(http.HandlerFunc(server.RequestHandler))
+			defer httpServer.Close()
+			scheduler := strategy.NewExternal(prowconfig.ExternalScheduling{URL: httpServer.URL, Cache: prowconfig.ExternalSchedulingCache{CleanupInterval: &metav1.Duration{Duration: time.Minute}, EntryTimeoutInterval: &metav1.Duration{Duration: time.Minute}}}, logrus.NewEntry(logrus.New()))
+			result, err := scheduler.Schedule(t.Context(), &prowjobv1.ProwJob{Spec: prowjobv1.ProwJobSpec{Job: aliasName, Cluster: "fallback-only"}})
+			if err != nil || result.Cluster != tc.wantCluster {
+				t.Fatalf("external scheduler failed aggregate lookup: result=%#v error=%v", result, err)
 			}
 		})
 	}

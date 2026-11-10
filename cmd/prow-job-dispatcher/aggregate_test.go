@@ -3,6 +3,7 @@ package main
 import (
 	"bytes"
 	"encoding/json"
+	"errors"
 	"net/http"
 	"net/http/httptest"
 	"os"
@@ -14,6 +15,7 @@ import (
 	"github.com/google/go-cmp/cmp"
 	"github.com/google/go-cmp/cmp/cmpopts"
 	"github.com/sirupsen/logrus"
+
 	corev1 "k8s.io/api/core/v1"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/apimachinery/pkg/util/sets"
@@ -28,23 +30,49 @@ import (
 
 func TestLoadAggregateJobs(t *testing.T) {
 	for _, tc := range []struct {
-		name      string
-		content   string
-		want      map[string]string
-		wantError string
+		name             string
+		content          string
+		want             map[string]string
+		wantError        string
+		missingDirectory bool
+		brokenLink       bool
+		wantSyntaxError  bool
 	}{
 		{name: "default and custom templates", content: `{"verify":{"aggregated-aws-ovn-upgrade-5.1-micro-fips":{"prowJob":{"name":"periodic-ci-openshift-release-main-nightly-5.1-e2e-aws-ovn-upgrade-fips"},"aggregatedProwJob":{"analysisJobCount":7}},"custom":{"aggregatedProwJob":{"analysisJobCount":2,"prowJob":{"name":"custom-controller"}}},"ordinary":{"prowJob":{"name":"ordinary"}},"disabled":{"aggregatedProwJob":{"analysisJobCount":0}}}}`, want: map[string]string{"aggregated-aws-ovn-upgrade-5.1-micro-fips-release-openshift-release-analysis-aggregator": "release-openshift-release-analysis-aggregator", "custom-custom-controller": "custom-controller"}},
-		{name: "invalid JSON", content: `{`, wantError: "unexpected end of JSON input"},
+		{name: "invalid JSON", content: `{`, wantError: "unexpected end of JSON input", wantSyntaxError: true},
+		{name: "missing directory", missingDirectory: true, wantError: "load aggregate jobs"},
+		{name: "unreadable release file", brokenLink: true, wantError: "read release configuration"},
 		{name: "conflicting templates fail closed", content: `{"verify":{"x":{"aggregatedProwJob":{"analysisJobCount":1,"prowJob":{"name":"a-b"}}},"x-a":{"aggregatedProwJob":{"analysisJobCount":1,"prowJob":{"name":"b"}}}}}`, wantError: `aggregate job "x-a-b" references multiple templates`},
 	} {
 		t.Run(tc.name, func(t *testing.T) {
 			directory := t.TempDir()
-			if err := os.WriteFile(filepath.Join(directory, "release.json"), []byte(tc.content), 0600); err != nil {
-				t.Fatal(err)
+			path := filepath.Join(directory, "release.json")
+			if tc.missingDirectory {
+				directory = filepath.Join(directory, "missing")
+			}
+			if tc.brokenLink {
+				if err := os.Symlink(filepath.Join(directory, "missing.json"), path); err != nil {
+					t.Fatal(err)
+				}
+			}
+			if !tc.missingDirectory && !tc.brokenLink {
+				if err := os.WriteFile(path, []byte(tc.content), 0600); err != nil {
+					t.Fatal(err)
+				}
 			}
 			got, err := loadAggregateJobs(directory)
 			if (err != nil) != (tc.wantError != "") || err != nil && !strings.Contains(err.Error(), tc.wantError) {
 				t.Fatalf("loadAggregateJobs() error = %v", err)
+			}
+			if err != nil && (!strings.Contains(err.Error(), directory) || !tc.missingDirectory && !strings.Contains(err.Error(), path)) {
+				t.Errorf("source path missing from error: %v", err)
+			}
+			var syntaxError *json.SyntaxError
+			if tc.wantSyntaxError && !errors.As(err, &syntaxError) {
+				t.Errorf("JSON error not wrapped: %v", err)
+			}
+			if (tc.missingDirectory || tc.brokenLink) && !errors.Is(err, os.ErrNotExist) {
+				t.Errorf("filesystem error not wrapped: %v", err)
 			}
 			if diff := cmp.Diff(tc.want, got); diff != "" {
 				t.Fatalf("unexpected aliases (-want +got):\n%s", diff)

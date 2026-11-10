@@ -1516,100 +1516,11 @@ func main() {
 			return publishSnapshot(pjs, cm, blocked)
 		}
 
+		runner := fullDispatchRunner{options: o, jobs: prowjobs, volumes: &promVolumes, ephemeral: ecd, publishSnapshot: publishSnapshot, slack: slackClient}
 		dispatch := func(forceDispatch bool) error {
 			mu.Lock()
 			defer mu.Unlock()
-
-			config, err := dispatcher.LoadConfig(o.configPath)
-			if err != nil {
-				return fmt.Errorf("failed to load config from %q: %w", o.configPath, err)
-			}
-
-			configClusterMap, blocked, err := dispatcher.LoadClusterConfig(o.clusterConfigPath)
-			if err != nil {
-				return fmt.Errorf("failed to load cluster config: %w", err)
-			}
-			inventoryDigest, err := clusterInventoryDigest(configClusterMap, blocked)
-			if err != nil {
-				return fmt.Errorf("failed to calculate cluster inventory digest: %w", err)
-			}
-			clustersFromConfig := clustersMapToSet(configClusterMap)
-			inventoryChanged, err := config.SynchronizeBuildFarm(configClusterMap)
-			if err != nil {
-				return fmt.Errorf("failed to synchronize build farm: %w", err)
-			}
-
-			newBlockedClusters := prowjobs.HasAnyOfClusters(blocked)
-			currentAssignments := prowjobs.GetDataCopy()
-			missingAssignments := len(currentAssignments) == 0
-			aggregateJobs, err := loadAggregateJobs(o.releaseConfigDir)
-			if err != nil {
-				return err
-			}
-			for name := range aggregateJobs {
-				if _, found := currentAssignments[name]; !found {
-					missingAssignments = true
-				}
-			}
-			metadataMigrationRequired := assignmentsRequireMetadataMigration(currentAssignments)
-
-			if !forceDispatch && !inventoryChanged && !newBlockedClusters && !missingAssignments && !metadataMigrationRequired {
-				// The ephemeral scheduler is not persisted in the Gob cache, so it still
-				// needs initialization after a restart when no generation is necessary.
-				ecd.Reset(sets.List(clustersFromConfig))
-				return publishSnapshot(currentAssignments, configClusterMap, blocked)
-			}
-
-			jobVolumes, err := promVolumes.GetJobVolumes()
-			if err != nil {
-				return fmt.Errorf("failed to get job volumes: %w", err)
-			}
-
-			pjs, err := dispatchJobsWithPolicy(
-				o.prowJobConfigDir, config, jobVolumes, blocked, promVolumes.CalculateVolumeDistribution(configClusterMap), configClusterMap,
-				currentAssignments, o.rebalanceHysteresisPercent, o.movementBudgetPercent, o.MinimumJobDemand, o.releaseConfigDir,
-			)
-			if err != nil {
-				return fmt.Errorf("failed to dispatch jobs: %w", err)
-			}
-
-			markerPath := fallbackPublicationMarkerPath(o.jobsStoragePath)
-			if o.createPR {
-				if err := markFallbackPublicationPending(markerPath); err != nil {
-					return err
-				}
-			}
-
-			var committedWriteErr error
-			if err := writeFullDispatchAssignments(o.jobsStoragePath, pjs, dispatcher.WriteGob); err != nil {
-				if !dispatcher.IsGobWriteCommitted(err) {
-					return fmt.Errorf("failed to persist job assignments: %w", err)
-				}
-				committedWriteErr = fmt.Errorf("job assignments were replaced but their directory sync failed: %w", err)
-			}
-			prowjobs.Regenerate(pjs)
-			ecd.Reset(sets.List(clustersFromConfig))
-			if err := publishSnapshot(pjs, configClusterMap, blocked); err != nil {
-				return utilerrors.NewAggregate([]error{committedWriteErr, fmt.Errorf("failed to publish policy snapshot: %w", err)})
-			}
-			if committedWriteErr == nil {
-				if err := writePublishedInventoryDigest(publishedInventoryDigestPath(o.jobsStoragePath), inventoryDigest); err != nil {
-					return fmt.Errorf("failed to publish cluster inventory digest: %w", err)
-				}
-			}
-
-			if o.createPR {
-				if err := createPR(o, config, pjs, configClusterMap); err != nil {
-					return utilerrors.NewAggregate([]error{committedWriteErr, err})
-				}
-				if err := clearFallbackPublicationPending(markerPath); err != nil {
-					return utilerrors.NewAggregate([]error{committedWriteErr, err})
-				}
-				if err := sendSlackMessage(slackClient, o.opsChannelId); err != nil {
-					logrus.WithError(err).Error("Failed to post message in ops channel")
-				}
-			}
-			return committedWriteErr
+			return runner.dispatch(forceDispatch)
 		}
 
 		fallbackPending := false

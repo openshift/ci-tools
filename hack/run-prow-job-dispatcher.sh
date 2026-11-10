@@ -21,6 +21,7 @@ go build  -v -o /tmp/prow-job-dispatcher ./cmd/prow-job-dispatcher
   --prometheus-bearer-token-path=${prom_token_file} \
   --config-path="${RELEASE}/core-services/sanitize-prow-jobs/_config.yaml" \
   --prow-jobs-dir="${RELEASE}/ci-operator/jobs" \
+  --release-config="${RELEASE}/core-services/release-controller/_releases" \
   --target-dir="${RELEASE}" \
   --github-token-path=${gh_token_file} \
   --github-login=openshift-bot \

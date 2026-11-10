@@ -4,6 +4,7 @@ As designed in [[DPTP-1152] Choose a cluster for prow jobs](https://docs.google.
 
 * It starts off by figuring out how many runs of each Prow jobs we had in the last seven days by querying the Prometheus instance in Prow-monitoring stack.
 * It groups all jobs from a Prow job file together and will always try to put all of them on the same cluster.
+* With `--release-config` pointing to the release-controller JSON configuration directory, it also schedules generated aggregate controller jobs. Each `<verification>-<aggregator-template>` job uses its aggregator template's eligibility and configuration group, but retains its own historical demand and assignment. Analysis workload jobs keep their original names and placement; aggregate controllers are not assigned using those workloads' cloud or capabilities.
 * If a job has config stating it must be on a specific cluster, that will always be respected. This could lead to a job with tests on different clusters. We should not have many of those cases.
 * If all e2e jobs in a group run on the same cloud provider, it will only consider clusters on that cloud provider, if any. Otherwise, all build clusters are considered.
 * It will then choose the cluster with the least number of jobs, based on the Prometheus metrics and the already dispatched jobs.
@@ -26,6 +27,10 @@ buildFarm:
 The tool `sanitize-prow-jobs` will then use the stored information to generate the `cluster` field of the Prow jobs.
 
 We can use [run-prow-job-dispatcher.sh](../../hack/run-prow-job-dispatcher.sh) to build and run the tool locally.
+
+`--prometheus-days-before=0` (the default) evaluates the seven-day demand query
+at the current time. A nonzero value shifts the end of that window into the past.
+Nonempty demand results are cached for up to 24 hours.
 
 ## Observation API
 

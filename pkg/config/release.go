@@ -128,6 +128,7 @@ func NewLocalJobSpec(path string) (*pjdwapi.JobSpec, error) {
 }
 
 // GetAllConfigs loads all configuration from the working copy of the release repo (usually openshift/release).
+// Prow configuration includes supplemental files named SupplementalProwConfigFileName under the Prow config directory.
 // When an error occurs during some config loading, the error will be propagated, however the returned struct field will
 // also have a nil value in the appropriate field.
 func GetAllConfigs(releaseRepoPath string) (*ReleaseRepoConfig, error) {
@@ -142,7 +143,7 @@ func GetAllConfigs(releaseRepoPath string) (*ReleaseRepoConfig, error) {
 
 	prowConfigPath := filepath.Join(releaseRepoPath, ConfigInRepoPath)
 	prowJobConfigPath := filepath.Join(releaseRepoPath, JobConfigInRepoPath)
-	config.Prow, err = prowconfig.Load(prowConfigPath, []string{prowJobConfigPath}, nil, "")
+	config.Prow, err = prowconfig.Load(prowConfigPath, []string{prowJobConfigPath}, []string{filepath.Dir(prowConfigPath)}, SupplementalProwConfigFileName)
 	if err != nil {
 		errs = append(errs, fmt.Errorf("failed to load Prow configuration from release repo: %w", err))
 	}

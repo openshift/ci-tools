@@ -56,6 +56,10 @@ func TestResolve(t *testing.T) {
 		expectedErr           error
 		expectedValidationErr error
 	}{{
+		name:        "explicit AWS STS without a profile",
+		config:      api.MultiStageTestConfiguration{AWSSTS: &api.AWSSTSConfig{HomeRoleARN: "arn:aws:iam::000000000000:role/home", HubRoleARN: "arn:aws:iam::111111111111:role/hub", TargetRoleARN: "arn:aws:iam::222222222222:role/target"}},
+		expectedRes: api.MultiStageTestConfigurationLiteral{AWSSTS: &api.AWSSTSConfig{HomeRoleARN: "arn:aws:iam::000000000000:role/home", HubRoleARN: "arn:aws:iam::111111111111:role/hub", TargetRoleARN: "arn:aws:iam::222222222222:role/target"}},
+	}, {
 		// This is a full config that should not change (other than struct) when passed to the Resolver
 		name: "Full AWS IPI",
 		config: api.MultiStageTestConfiguration{

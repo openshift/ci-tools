@@ -76,6 +76,7 @@ func TestGeneratePods(t *testing.T) {
 		stsHomeRoleARN            string
 		stsHubRoleARN             string
 		stsTargetRoleARN          string
+		wantErr                   bool
 	}{
 		{
 			name: "generate pods",
@@ -206,6 +207,69 @@ func TestGeneratePods(t *testing.T) {
 			stsHubRoleARN:    "arn:aws:iam::111111111111:role/ci-step-runner-hub",
 			stsTargetRoleARN: "arn:aws:iam::222222222222:role/ci-step-runner-target",
 		},
+		{
+			name: "STS volumes without profile",
+			config: &api.ReleaseBuildConfiguration{
+				Tests: []api.TestStepConfiguration{{
+					As: "e2e-aws",
+					MultiStageTestConfigurationLiteral: &api.MultiStageTestConfigurationLiteral{
+						AWSSTS: &api.AWSSTSConfig{HomeRoleARN: "arn:aws:iam::000000000000:role/ci-step-runner", HubRoleARN: "arn:aws:iam::111111111111:role/ci-step-runner-hub", TargetRoleARN: "arn:aws:iam::222222222222:role/ci-step-runner-target"},
+						Test: []api.LiteralTestStep{{
+							As: "step0", From: "src", Commands: "command0",
+							Timeout:     &prowapi.Duration{Duration: time.Hour},
+							GracePeriod: &prowapi.Duration{Duration: 20 * time.Second},
+						}},
+					}},
+				},
+			},
+			env: []coreapi.EnvVar{
+				{Name: "RELEASE_IMAGE_INITIAL", Value: "release:initial"},
+				{Name: "RELEASE_IMAGE_LATEST", Value: "release:latest"},
+				{Name: "LEASED_RESOURCE", Value: "uuid"},
+			},
+			paramsFunc: func() api.Parameters {
+				params := api.NewDeferredParameters(nil)
+				params.Add(api.ClusterProfileParam, func() (any, error) {
+					return &api.ClusterProfile{Secret: "cluster-secrets-aws-5"}, nil
+				})
+				return params
+			},
+			stsHomeRoleARN:   "arn:aws:iam::000000000000:role/ci-step-runner",
+			stsHubRoleARN:    "arn:aws:iam::111111111111:role/ci-step-runner-hub",
+			stsTargetRoleARN: "arn:aws:iam::222222222222:role/ci-step-runner-target",
+		},
+		{
+			name:    "STS without profile rejects no_kubeconfig",
+			wantErr: true,
+			config: &api.ReleaseBuildConfiguration{
+				Tests: []api.TestStepConfiguration{{
+					As: "e2e-aws",
+					MultiStageTestConfigurationLiteral: &api.MultiStageTestConfigurationLiteral{
+						AWSSTS: &api.AWSSTSConfig{HomeRoleARN: "arn:aws:iam::000000000000:role/ci-step-runner", HubRoleARN: "arn:aws:iam::111111111111:role/ci-step-runner-hub", TargetRoleARN: "arn:aws:iam::222222222222:role/ci-step-runner-target"},
+						Test: []api.LiteralTestStep{{
+							As: "step0", From: "src", Commands: "command0", NoKubeconfig: ptr.To(true),
+							Timeout:     &prowapi.Duration{Duration: time.Hour},
+							GracePeriod: &prowapi.Duration{Duration: 20 * time.Second},
+						}},
+					}},
+				},
+			},
+			env: []coreapi.EnvVar{
+				{Name: "RELEASE_IMAGE_INITIAL", Value: "release:initial"},
+				{Name: "RELEASE_IMAGE_LATEST", Value: "release:latest"},
+				{Name: "LEASED_RESOURCE", Value: "uuid"},
+			},
+			paramsFunc: func() api.Parameters {
+				params := api.NewDeferredParameters(nil)
+				params.Add(api.ClusterProfileParam, func() (any, error) {
+					return &api.ClusterProfile{Secret: "cluster-secrets-aws-5"}, nil
+				})
+				return params
+			},
+			stsHomeRoleARN:   "arn:aws:iam::000000000000:role/ci-step-runner",
+			stsHubRoleARN:    "arn:aws:iam::111111111111:role/ci-step-runner-hub",
+			stsTargetRoleARN: "arn:aws:iam::222222222222:role/ci-step-runner-target",
+		},
 	} {
 		t.Run(tc.name, func(t *testing.T) {
 			t.Parallel()
@@ -220,9 +284,20 @@ func TestGeneratePods(t *testing.T) {
 			step.stsHomeRoleARN = tc.stsHomeRoleARN
 			step.stsHubRoleARN = tc.stsHubRoleARN
 			step.stsTargetRoleARN = tc.stsTargetRoleARN
+			if step.awsSTS != nil {
+				if err := step.retrieveSTSRoleARNParams(); err != nil {
+					t.Fatal(err)
+				}
+			}
 			step.test[0].Resources = resourceRequirements
 
 			ret, _, err := step.generatePods(tc.config.Tests[0].MultiStageTestConfigurationLiteral.Test, tc.env, tc.secretVolumes, tc.secretVolumeMounts, nil)
+			if tc.wantErr {
+				if err == nil {
+					t.Fatal("expected no_kubeconfig to fail with explicit STS")
+				}
+				return
+			}
 			if err != nil {
 				t.Fatal(err)
 			}

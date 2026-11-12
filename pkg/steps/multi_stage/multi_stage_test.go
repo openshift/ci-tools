@@ -439,3 +439,36 @@ func TestProfileSecretName(t *testing.T) {
 		t.Fatalf("result does not match expected, diff: %s", diff)
 	}
 }
+
+func TestRetrieveSTSRoleARNParams(t *testing.T) {
+	for _, tc := range []struct {
+		name    string
+		config  *api.AWSSTSConfig
+		profile *api.ClusterProfileLiteral
+		claim   *api.ClusterClaim
+		wantErr string
+	}{
+		{name: "disabled"},
+		{name: "explicit roles", config: &api.AWSSTSConfig{HomeRoleARN: "home", HubRoleARN: "hub", TargetRoleARN: "target"}},
+		{name: "incomplete roles", config: &api.AWSSTSConfig{HomeRoleARN: "home"}, wantErr: "aws_sts requires home, hub and target role ARNs"},
+		{name: "profile conflict", config: &api.AWSSTSConfig{}, profile: &api.ClusterProfileLiteral{}, wantErr: "aws_sts cannot be combined with a cluster profile or claim"},
+		{name: "claim conflict", config: &api.AWSSTSConfig{}, claim: &api.ClusterClaim{}, wantErr: "aws_sts cannot be combined with a cluster profile or claim"},
+	} {
+		t.Run(tc.name, func(t *testing.T) {
+			s := &multiStageTestStep{awsSTS: tc.config, profile: tc.profile, clusterClaim: tc.claim}
+			err := s.retrieveSTSRoleARNParams()
+			if tc.wantErr != "" {
+				if err == nil || err.Error() != tc.wantErr {
+					t.Fatalf("want error %q, got %v", tc.wantErr, err)
+				}
+				return
+			}
+			if err != nil {
+				t.Fatal(err)
+			}
+			if tc.config != nil && (s.stsHomeRoleARN != tc.config.HomeRoleARN || s.stsHubRoleARN != tc.config.HubRoleARN || s.stsTargetRoleARN != tc.config.TargetRoleARN) {
+				t.Fatal("explicit role chain was not propagated")
+			}
+		})
+	}
+}

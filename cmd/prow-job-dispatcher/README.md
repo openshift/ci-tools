@@ -4,6 +4,8 @@ As designed in [[DPTP-1152] Choose a cluster for prow jobs](https://docs.google.
 
 * It starts off by figuring out how many runs of each Prow jobs we had in the last seven days by querying the Prometheus instance in Prow-monitoring stack.
 * It groups all jobs from a Prow job file together and will always try to put all of them on the same cluster.
+* HTTP scheduling looks up the exact requested job name first, in the snapshot and then the legacy Gob assignments. On an exact miss, names with a nonempty prefix followed by `-release-openshift-release-analysis-aggregator` reuse that default aggregator template's existing assignment (including runtime overrides and expiry). Custom aggregator templates are not supported by this fallback; unknown jobs or a missing template assignment retain the normal HTTP 404 and Prow configured-cluster fallback.
+* This lookup does not create aggregate assignments or account for generated identities' demand separately. Analysis workload jobs and normal placement calculations are unchanged. An existing exact assignment, including a previously persisted generated identity, takes precedence over the template fallback.
 * If a job has config stating it must be on a specific cluster, that will always be respected. This could lead to a job with tests on different clusters. We should not have many of those cases.
 * If all e2e jobs in a group run on the same cloud provider, it will only consider clusters on that cloud provider, if any. Otherwise, all build clusters are considered.
 * It will then choose the cluster with the least number of jobs, based on the Prometheus metrics and the already dispatched jobs.
@@ -26,6 +28,10 @@ buildFarm:
 The tool `sanitize-prow-jobs` will then use the stored information to generate the `cluster` field of the Prow jobs.
 
 We can use [run-prow-job-dispatcher.sh](../../hack/run-prow-job-dispatcher.sh) to build and run the tool locally.
+
+`--prometheus-days-before=0` (the default) evaluates the seven-day demand query
+at the current time. A nonzero value shifts the end of that window into the past.
+Nonempty demand results are cached for up to 24 hours.
 
 ## Observation API
 

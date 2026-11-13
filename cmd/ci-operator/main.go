@@ -2416,17 +2416,40 @@ func (o *options) getResolverInfo(jobSpec *api.JobSpec) *api.Metadata {
 	if jobSpec.Refs != nil {
 		allRefs = append([]prowapi.Refs{*jobSpec.Refs}, allRefs...)
 	}
+	injected, _ := o.getInjectTest()
+	if injected != nil {
+		var configRefs []prowapi.Refs
+		for _, ref := range allRefs {
+			if ref.Org == injected.Org && ref.Repo == injected.Repo && ref.BaseRef == injected.Branch && len(ref.Pulls) == 0 {
+				continue
+			}
+			configRefs = append(configRefs, ref)
+		}
+		if len(configRefs) == 0 {
+			info.Variant = injected.Variant
+		} else {
+			allRefs = configRefs
+		}
+	}
 
 	// identify org, repo, and branch from refs object
+	var variants []string
+	var hasVariant bool
 	for i, ref := range allRefs {
 		if ref.Org != "" && ref.Repo != "" && ref.BaseRef != "" {
 			info.Org += fmt.Sprintf("%s,", ref.Org)
 			info.Repo += fmt.Sprintf("%s,", ref.Repo)
 			info.Branch += fmt.Sprintf("%s,", ref.BaseRef)
-			if info.Variant != "" && i > 0 {
-				info.Variant = fmt.Sprintf("%s,", info.Variant)
+			variant := ""
+			if i == 0 {
+				variant = info.Variant
 			}
+			variants = append(variants, variant)
+			hasVariant = hasVariant || variant != ""
 		}
+	}
+	if hasVariant {
+		info.Variant = strings.Join(variants, ",")
 	}
 	info.Org = strings.TrimSuffix(info.Org, ",")
 	info.Repo = strings.TrimSuffix(info.Repo, ",")

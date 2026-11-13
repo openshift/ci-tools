@@ -748,13 +748,9 @@ func (r *reconciler) generateProwjob(ciopConfig *api.ReleaseBuildConfiguration,
 		refs = append(refs, ref)
 	}
 
-	// If there are no refs, we are not testing against PR content, and can determine them from the injected test
-	if len(refs) == 0 {
-		refs = append(refs, prowv1.Refs{
-			Org:     baseCiop.Org,
-			Repo:    baseCiop.Repo,
-			BaseRef: baseCiop.Branch,
-		})
+	refs, err := refsWithTestSource(refs, inject.Metadata, ciopConfig.DeterminePathAlias(inject.Org, inject.Repo))
+	if err != nil {
+		return nil, err
 	}
 	periodic.ExtraRefs = refs
 
@@ -766,6 +762,18 @@ func (r *reconciler) generateProwjob(ciopConfig *api.ReleaseBuildConfiguration,
 	pj.Namespace = prpqrNamespace
 
 	return &pj, nil
+}
+
+func refsWithTestSource(refs []prowv1.Refs, source api.Metadata, pathAlias string) ([]prowv1.Refs, error) {
+	for _, ref := range refs {
+		if ref.Org == source.Org && ref.Repo == source.Repo {
+			if ref.BaseRef != source.Branch {
+				return nil, fmt.Errorf("test source %s/%s@%s conflicts with PR branch %s", source.Org, source.Repo, source.Branch, ref.BaseRef)
+			}
+			return refs, nil
+		}
+	}
+	return append(refs, prowv1.Refs{Org: source.Org, Repo: source.Repo, BaseRef: source.Branch, PathAlias: pathAlias}), nil
 }
 
 func (r *reconciler) clusterForJob(jobName string) (string, error) {

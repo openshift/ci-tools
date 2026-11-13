@@ -1236,6 +1236,12 @@ type StepDependency struct {
 	Env string `json:"env"`
 	// PullSpec allows the ci-operator user to pass in an external pull-spec that should be used when resolving the dependency
 	PullSpec string `json:"-"`
+	// MountPath optionally mounts the dependency image as a read-only image volume
+	// at this absolute path (for example, /var/run/images/installer). Requires
+	// ImageVolume support on the build cluster. Image volumes are typically mounted
+	// noexec; copy binaries to a writable volume before executing them. The image's
+	// pull spec is still exposed through Env. The path must not overlap other mounts.
+	MountPath string `json:"mount_path,omitempty"`
 }
 
 // StepDNSConfig defines a resource that needs to be acquired prior to execution.

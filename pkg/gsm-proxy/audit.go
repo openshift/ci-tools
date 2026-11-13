@@ -46,8 +46,9 @@ func (r *statusRecorder) Write(body []byte) (int, error) {
 
 // Audit wraps a collection endpoint and writes one info-level log line per request with the
 // action, the collection (only if its name is valid), the verified username (only if the token
-// was accepted), the HTTP status, and an outcome derived from it. It never logs tokens, groups,
-// or response bodies. Register it outside RequireCollectionAccess so it sees every outcome.
+// was accepted), the secret path (only if it is valid), the HTTP status, and an outcome derived
+// from it. It never logs tokens, groups, or response bodies. Register it outside
+// RequireCollectionAccess so it sees every outcome.
 func Audit(action string, logger *logrus.Entry, next http.Handler) http.Handler {
 	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		record := &auditRecord{}
@@ -65,6 +66,9 @@ func Audit(action string, logger *logrus.Entry, next http.Handler) http.Handler 
 		}
 		if collection := r.PathValue("collection"); gsmvalidation.ValidateCollectionName(collection) {
 			fields["collection"] = collection
+		}
+		if _, _, ok := gsmvalidation.ParseSecretPath(r.PathValue("collection"), r.PathValue("path")); ok {
+			fields["secret"] = r.PathValue("path")
 		}
 		if record.username != "" {
 			fields["user"] = record.username
@@ -84,6 +88,8 @@ func auditOutcome(status int) string {
 		return "unauthenticated"
 	case status == http.StatusForbidden:
 		return "forbidden"
+	case status == http.StatusNotFound:
+		return "not_found"
 	case status >= 500:
 		return "error"
 	default:

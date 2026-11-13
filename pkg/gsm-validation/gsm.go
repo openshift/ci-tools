@@ -104,6 +104,27 @@ func ValidateSecretName(secretName string) bool {
 	return secretNameRegexp.MatchString(secretName)
 }
 
+// ParseSecretPath returns the group and field of a group/field path in collection.
+// ok is false if the collection, group, or field is invalid, or if the resulting GSM secret
+// name exceeds GcpMaxNameLength.
+// For example, collection="team" and path="aws/prod/password" return group="aws/prod" and
+// field="password", which identify the GSM secret "team__aws__prod__password".
+func ParseSecretPath(collection, path string) (group, field string, ok bool) {
+	separator := strings.LastIndexByte(path, '/')
+	if separator < 0 || !ValidateCollectionName(collection) {
+		return "", "", false
+	}
+	group, field = path[:separator], path[separator+1:]
+	if !ValidateGroupName(group) || !ValidateSecretName(field) {
+		return "", "", false
+	}
+	nameLength := len(collection) + len(CollectionSecretDelimiter) + len(strings.ReplaceAll(path, "/", CollectionSecretDelimiter))
+	if nameLength > GcpMaxNameLength {
+		return "", "", false
+	}
+	return group, field, true
+}
+
 // NormalizeName replaces forbidden characters in names with safe replacements.
 // This is used when migrating from Vault to GSM to handle special characters.
 // Rules (applied in order):

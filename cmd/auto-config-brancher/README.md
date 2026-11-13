@@ -53,6 +53,18 @@ commit, the new series of commits is pushed into a new or existing PR using
 the [`bumper` package from test-infra](https://github.com/kubernetes/test-infra/blob/master/prow/cmd/generic-autobumper/bumper/bumper.go)
 .
 
+Release lookup failures in `clusterimageset-updater` are isolated to the affected
+pools. Their manifests and required image sets remain unchanged, while independent
+updates can complete. Exit code 10 explicitly reports this lookup-only partial
+result after successful reconciliation and cleanup. Only this updater step accepts
+that status for committing changes. Other updater errors and failures in any other
+step prevent publication.
+
+After a lookup-only partial result, eligible changes (including earlier step
+commits) are published normally, but the job still exits nonzero with lookup
+diagnostics. It also exits nonzero if there is no overall diff to publish. A later
+ordinary step failure prevents publication of the entire run.
+
 ## How is it deployed
 
 The periodic

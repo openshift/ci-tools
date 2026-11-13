@@ -68,6 +68,96 @@ type importReleaseStep struct {
 	originalPullSpec string
 }
 
+const (
+	// Bound transient registry retries to two sleeps totaling 15 seconds.
+	releaseExtractAttempts              = 3
+	releaseExtractInitialBackoffSeconds = 5
+)
+
+func releaseExtractCommand(pullSpec, target string, attempts, initialBackoffSeconds int) string {
+	return fmt.Sprintf(`
+function release_extract_error_is_retryable() {
+	local error_file="$1"
+	local auth_text
+	local error_line
+
+	# Explicitly permanent failures take precedence over transport-looking text
+	# that may be included elsewhere in a wrapped error.
+	# Remove the requested pullspec and URLs before matching authentication
+	# markers so repository path segments such as /forbidden/ cannot turn
+	# transport failures permanent.
+	auth_text="$(
+		while IFS= read -r error_line || [[ -n "${error_line}" ]]; do
+			printf '%%s\n' "${error_line//"${release_extract_pullspec}"/PULLSPEC}"
+		done < "${error_file}" | sed -E 's#https?://[^[:space:]"]+#URL#g'
+	)"
+	if grep -Eiq -- '(^|[^[:alnum:]_])(unauthorized|forbidden|insufficient_scope)([^[:alnum:]_]|$)|authentication required|authorization failed|not authorized|permission denied|access denied|requested access .* denied|((HTTP )?status|status code)[^0-9]*(401|403)([^0-9]|$)' <<< "${auth_text}"; then
+		return 1
+	fi
+	if grep -Eiq -- 'digest mismatch|invalid digest|digest invalid|manifest unknown|manifest invalid|unsupported manifest|no matching manifest|blob unknown|name unknown|is not a release image|invalid image-references|malformed (release|payload)' "${error_file}"; then
+		return 1
+	fi
+
+	# Docker Distribution reports transient server responses as JSON parsing
+	# errors when a registry or proxy returns an HTML error page. Recognize the
+	# bounded eligible statuses before rejecting malformed response payloads.
+	if grep -Eiq -- 'error parsing HTTP (500|502|503|504) response body' "${error_file}"; then
+		return 0
+	fi
+	if grep -Eiq -- 'unexpected end of JSON input|invalid character .*looking for beginning of value' "${error_file}"; then
+		return 1
+	fi
+
+	# Retry only narrow transport signatures and registry responses that are
+	# normally safe to repeat. Other failures are permanent by default.
+	if grep -Eiq -- 'http2: server sent GOAWAY and closed the connection;.*ErrCode=NO_ERROR|connection reset by peer|TLS handshake timeout|(dial|read|write) tcp .*i/o timeout|net/http: request canceled while waiting for connection' "${error_file}"; then
+		return 0
+	fi
+	if grep -Eiq -- '((unexpected|received|returned)[^[:cntrl:]]*(HTTP )?status|status code)[^0-9]*(500|502|503|504)([^0-9]|$)' "${error_file}"; then
+		return 0
+	fi
+	return 1
+}
+
+release_extract_pullspec=%q
+release_extract_output=${ARTIFACT_DIR}/%q
+release_extract_temporary="$(mktemp "${release_extract_output}.tmp.XXXXXX")"
+release_extract_error="$(mktemp "/tmp/release-extract.stderr.XXXXXX")"
+function release_extract_cleanup() {
+	rm -f -- "${release_extract_temporary}" "${release_extract_error}"
+}
+trap release_extract_cleanup EXIT
+
+release_extract_backoff=%d
+for ((release_extract_attempt=1; release_extract_attempt<=%d; release_extract_attempt++)); do
+	echo "Release extraction attempt ${release_extract_attempt}/%d." >&2
+	if oc adm release extract --from="${release_extract_pullspec}" --file=image-references > "${release_extract_temporary}" 2> "${release_extract_error}"; then
+		mv -f -- "${release_extract_temporary}" "${release_extract_output}"
+		rm -f -- "${release_extract_error}"
+		trap - EXIT
+		echo "Release extraction succeeded on attempt ${release_extract_attempt}/%d." >&2
+		break
+	else
+		release_extract_status="$?"
+	fi
+
+	echo "Release extraction failed on attempt ${release_extract_attempt}/%d with exit code ${release_extract_status}." >&2
+	if ! release_extract_error_is_retryable "${release_extract_error}"; then
+		echo "Release extraction error is not retryable; failing immediately." >&2
+		exit "${release_extract_status}"
+	fi
+	if (( release_extract_attempt == %d )); then
+		echo "Release extraction error is retryable, but all %d attempts are exhausted; returning exit code ${release_extract_status}." >&2
+		exit "${release_extract_status}"
+	fi
+
+	echo "Release extraction error is retryable; retrying in ${release_extract_backoff}s." >&2
+	sleep "${release_extract_backoff}"
+	release_extract_backoff=$((release_extract_backoff * 2))
+done
+`, pullSpec, target, initialBackoffSeconds, attempts, attempts, attempts, attempts, attempts, attempts)
+}
+
 func (s *importReleaseStep) Inputs() (api.InputDefinition, error) {
 	input, err := s.source.Input(context.Background())
 	return api.InputDefinition{input}, err
@@ -149,7 +239,7 @@ if [[ -d /pull ]]; then
 	cp /pull/.dockerconfigjson $HOME/.docker/config.json
 fi
 oc registry login --to $HOME/.docker/config.json
-oc adm release extract --from=%q --file=image-references > ${ARTIFACT_DIR}/%s
+%s
 # while release creation may happen more than once in the lifetime of a test
 # namespace, only one release creation Pod will ever run at once. Therefore,
 # while actions editing the output ConfigMap may race if done from ci-operator
@@ -160,7 +250,7 @@ if oc get configmap release-%s; then
 	oc delete configmap release-%s
 fi
 oc create configmap release-%s --from-file=%s.yaml=${ARTIFACT_DIR}/%s
-`, pullSpec, target, target, target, target, target, target)
+`, releaseExtractCommand(pullSpec, target, releaseExtractAttempts, releaseExtractInitialBackoffSeconds), target, target, target, target, target)
 
 	// run adm release extract and grab the raw image-references from the payload
 	podConfig := steps.PodStepConfiguration{

@@ -675,6 +675,11 @@ const ciOperatorReferenceYaml = "# The list of base images describe\n" +
 	"            # all previous `pre` and `test` steps were successful. The given step must explicitly\n" +
 	"            # ask for being skipped by setting the OptionalOnSuccess flag to true.\n" +
 	"            allow_skip_on_success: false\n" +
+	"            # AWSSTS enables AWS web identity authentication without a cluster profile.\n" +
+	"            aws_sts:\n" +
+	"                home_role_arn: ' '\n" +
+	"                hub_role_arn: ' '\n" +
+	"                target_role_arn: ' '\n" +
 	"            # ClusterProfileLiteral defines the profile/cloud provider for end-to-end test steps.\n" +
 	"            cluster_profile_literal:\n" +
 	"                cluster_type: ' '\n" +
@@ -1215,6 +1220,11 @@ const ciOperatorReferenceYaml = "# The list of base images describe\n" +
 	"            # all previous `pre` and `test` steps were successful. The given step must explicitly\n" +
 	"            # ask for being skipped by setting the OptionalOnSuccess flag to true.\n" +
 	"            allow_skip_on_success: false\n" +
+	"            # AWSSTS enables AWS web identity authentication without a cluster profile.\n" +
+	"            aws_sts:\n" +
+	"                home_role_arn: ' '\n" +
+	"                hub_role_arn: ' '\n" +
+	"                target_role_arn: ' '\n" +
 	"            # ClusterProfile defines the profile/cloud provider for end-to-end test steps.\n" +
 	"            cluster_profile: ' '\n" +
 	"            # Dependencies holds override values for dependency parameters.\n" +
@@ -1670,6 +1680,11 @@ const ciOperatorReferenceYaml = "# The list of base images describe\n" +
 	"        # all previous `pre` and `test` steps were successful. The given step must explicitly\n" +
 	"        # ask for being skipped by setting the OptionalOnSuccess flag to true.\n" +
 	"        allow_skip_on_success: false\n" +
+	"        # AWSSTS enables AWS web identity authentication without a cluster profile.\n" +
+	"        aws_sts:\n" +
+	"            home_role_arn: ' '\n" +
+	"            hub_role_arn: ' '\n" +
+	"            target_role_arn: ' '\n" +
 	"        # ClusterProfileLiteral defines the profile/cloud provider for end-to-end test steps.\n" +
 	"        cluster_profile_literal:\n" +
 	"            cluster_type: ' '\n" +
@@ -2210,6 +2225,11 @@ const ciOperatorReferenceYaml = "# The list of base images describe\n" +
 	"        # all previous `pre` and `test` steps were successful. The given step must explicitly\n" +
 	"        # ask for being skipped by setting the OptionalOnSuccess flag to true.\n" +
 	"        allow_skip_on_success: false\n" +
+	"        # AWSSTS enables AWS web identity authentication without a cluster profile.\n" +
+	"        aws_sts:\n" +
+	"            home_role_arn: ' '\n" +
+	"            hub_role_arn: ' '\n" +
+	"            target_role_arn: ' '\n" +
 	"        # ClusterProfile defines the profile/cloud provider for end-to-end test steps.\n" +
 	"        cluster_profile: ' '\n" +
 	"        # Dependencies holds override values for dependency parameters.\n" +

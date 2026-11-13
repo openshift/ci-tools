@@ -2935,3 +2935,25 @@ func TestValidateClusterProfiles(t *testing.T) {
 		})
 	}
 }
+
+func TestValidateAWSSTS(t *testing.T) {
+	for _, tc := range []struct {
+		name       string
+		config     *api.AWSSTSConfig
+		hasCluster bool
+		errors     int
+	}{
+		{name: "disabled"},
+		{name: "explicit role chain", config: &api.AWSSTSConfig{HomeRoleARN: "arn:aws:iam::000000000000:role/home", HubRoleARN: "arn:aws:iam::111111111111:role/hub", TargetRoleARN: "arn:aws:iam::222222222222:role/target"}},
+		{name: "conflicting cluster", config: &api.AWSSTSConfig{HomeRoleARN: "arn:aws:iam::000000000000:role/home", HubRoleARN: "arn:aws:iam::111111111111:role/hub", TargetRoleARN: "arn:aws:iam::222222222222:role/target"}, hasCluster: true, errors: 1},
+		{name: "missing roles", config: &api.AWSSTSConfig{}, errors: 3},
+		{name: "config injection", config: &api.AWSSTSConfig{HomeRoleARN: "arn:aws:iam::000000000000:role/home\ncredential_process=bad", HubRoleARN: "arn:aws:iam::111111111111:role/hub", TargetRoleARN: "arn:aws:iam::222222222222:role/target"}, errors: 1},
+	} {
+		t.Run(tc.name, func(t *testing.T) {
+			errs := validateAWSSTS("test", tc.config, tc.hasCluster)
+			if len(errs) != tc.errors {
+				t.Fatalf("expected %d validation errors, got %v", tc.errors, errs)
+			}
+		})
+	}
+}

@@ -16,6 +16,9 @@ func TestLeasesForTest(t *testing.T) {
 		name:  "no configuration or cluster profile, no lease",
 		tests: TestStepConfiguration{MultiStageTestConfigurationLiteral: &MultiStageTestConfigurationLiteral{}},
 	}, {
+		name:  "explicit AWS authentication without a cluster profile needs no lease",
+		tests: TestStepConfiguration{MultiStageTestConfigurationLiteral: &MultiStageTestConfigurationLiteral{AWSSTS: &AWSSTSConfig{HomeRoleARN: "home", HubRoleARN: "hub", TargetRoleARN: "target"}}},
+	}, {
 		name: "cluster profile, lease",
 		tests: TestStepConfiguration{
 			MultiStageTestConfigurationLiteral: &MultiStageTestConfigurationLiteral{

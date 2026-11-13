@@ -684,6 +684,7 @@ func (v *Validator) validateTestConfigurationType(
 			clusterCount++
 			validationErrors = append(validationErrors, v.validateClusterProfile(fieldRoot, testConfig.ClusterProfile, test.As, metadata)...)
 		}
+		validationErrors = append(validationErrors, validateAWSSTS(fieldRoot, testConfig.AWSSTS, testConfig.ClusterProfile != "" || test.ClusterClaim != nil)...)
 		context := newContext(fieldPath(fieldRoot), testConfig.Environment, releases, inputImagesSeen)
 		validationErrors = append(validationErrors, validateLeases(context.addField("leases"), testConfig.Leases)...)
 		if testConfig.NodeArchitecture != nil {
@@ -695,6 +696,7 @@ func (v *Validator) validateTestConfigurationType(
 	}
 	if testConfig := test.MultiStageTestConfigurationLiteral; testConfig != nil {
 		typeCount++
+		validationErrors = append(validationErrors, validateAWSSTS(fieldRoot, testConfig.AWSSTS, testConfig.ClusterProfileLiteral != nil || test.ClusterClaim != nil)...)
 		context := newContext(fieldPath(fieldRoot).addField("steps"), testConfig.Environment, releases, inputImagesSeen)
 		if testConfig.ClusterProfileLiteral != nil {
 			clusterCount++
@@ -1067,4 +1069,22 @@ func validateNodeArchitectureOverrides(fieldRoot string, nodeArchitectureOverrid
 		}
 	}
 	return nil
+}
+
+// validateAWSSTS checks explicit role chains and prevents mixing authentication sources.
+func validateAWSSTS(field string, config *api.AWSSTSConfig, hasCluster bool) []error {
+	if config == nil {
+		return nil
+	}
+	var errs []error
+	if hasCluster {
+		errs = append(errs, fmt.Errorf("%s.aws_sts cannot be combined with a cluster profile or claim", field))
+	}
+	roleARN := regexp.MustCompile(`^arn:aws(-us-gov|-cn)?:iam::[0-9]{12}:role/[A-Za-z0-9_+=,.@/-]+$`)
+	for _, role := range []struct{ name, value string }{{"home_role_arn", config.HomeRoleARN}, {"hub_role_arn", config.HubRoleARN}, {"target_role_arn", config.TargetRoleARN}} {
+		if !roleARN.MatchString(role.value) {
+			errs = append(errs, fmt.Errorf("%s.aws_sts.%s must be an IAM role ARN", field, role.name))
+		}
+	}
+	return errs
 }

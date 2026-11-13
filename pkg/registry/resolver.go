@@ -118,6 +118,9 @@ func (r *registry) mergeWorkflow(config *api.MultiStageTestConfiguration) ([][]a
 	} else {
 		config.Leases = l
 	}
+	if config.AWSSTS == nil {
+		config.AWSSTS = workflow.AWSSTS
+	}
 	if config.AllowSkipOnSuccess == nil {
 		config.AllowSkipOnSuccess = workflow.AllowSkipOnSuccess
 	}
@@ -134,6 +137,7 @@ func (r *registry) resolveTest(
 ) (api.MultiStageTestConfigurationLiteral, error) {
 	var resolveErrors []error
 	expandedFlow := api.MultiStageTestConfigurationLiteral{
+		AWSSTS:                   config.AWSSTS,
 		AllowSkipOnSuccess:       config.AllowSkipOnSuccess,
 		AllowBestEffortPostSteps: config.AllowBestEffortPostSteps,
 		Leases:                   config.Leases,

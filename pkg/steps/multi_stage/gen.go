@@ -237,13 +237,15 @@ func (s *multiStageTestStep) generatePods(
 		if !shmSize.IsZero() {
 			addDshmVolume(shmSize, pod, container)
 		}
+		stsEnabled := s.stsHomeRoleARN != "" && s.stsHubRoleARN != "" && s.stsTargetRoleARN != ""
+		if !needsKubeConfig && stsEnabled {
+			errs = append(errs, fmt.Errorf("step %s sets no_kubeconfig but the test has STS enabled (home_role_arn=%s, hub_role_arn=%s, target_role_arn=%s); STS requires kubeconfig", step.As, s.stsHomeRoleARN, s.stsHubRoleARN, s.stsTargetRoleARN))
+			continue
+		}
 		if s.profile != nil {
-			stsEnabled := s.stsHomeRoleARN != "" && s.stsHubRoleARN != "" && s.stsTargetRoleARN != ""
-			if !needsKubeConfig && stsEnabled {
-				errs = append(errs, fmt.Errorf("step %s sets no_kubeconfig but the test has STS enabled (home_role_arn=%s, hub_role_arn=%s, target_role_arn=%s); STS requires kubeconfig", step.As, s.stsHomeRoleARN, s.stsHubRoleARN, s.stsTargetRoleARN))
-				continue
-			}
 			addProfile(s.profileSecretName(), *s.profile, stsEnabled, pod)
+		} else if stsEnabled {
+			addSTSVolumes(pod)
 		}
 		if step.Cli != "" {
 			dependency := api.StepDependency{Name: fmt.Sprintf("%s:cli", api.ReleaseStreamFor(step.Cli))}

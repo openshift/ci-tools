@@ -1281,9 +1281,19 @@ type TestStep struct {
 	Chain *string `json:"chain,omitempty"`
 }
 
+// AWSSTSConfig defines the home, hub and target role chain for a profile-free test.
+// It projects a short-lived service-account token without acquiring a cloud lease.
+type AWSSTSConfig struct {
+	HomeRoleARN   string `json:"home_role_arn"`
+	HubRoleARN    string `json:"hub_role_arn"`
+	TargetRoleARN string `json:"target_role_arn"`
+}
+
 // MultiStageTestConfiguration is a flexible configuration mode that allows tighter control over
 // the multiple stages of end to end tests.
 type MultiStageTestConfiguration struct {
+	// AWSSTS enables AWS web identity authentication without a cluster profile.
+	AWSSTS *AWSSTSConfig `json:"aws_sts,omitempty"`
 	// ClusterProfile defines the profile/cloud provider for end-to-end test steps.
 	ClusterProfile string `json:"cluster_profile,omitempty"`
 	// Pre is the array of test steps run to set up the environment for the test.
@@ -1333,6 +1343,8 @@ type DependencyOverrides map[string]string
 // references. It is the type that MultiStageTestConfigurations are converted to when parsed by the
 // ci-operator-configresolver.
 type MultiStageTestConfigurationLiteral struct {
+	// AWSSTS enables AWS web identity authentication without a cluster profile.
+	AWSSTS *AWSSTSConfig `json:"aws_sts,omitempty"`
 	// ClusterProfileLiteral defines the profile/cloud provider for end-to-end test steps.
 	ClusterProfileLiteral *ClusterProfileLiteral `json:"cluster_profile_literal,omitempty"`
 	// Pre is the array of test steps run to set up the environment for the test.

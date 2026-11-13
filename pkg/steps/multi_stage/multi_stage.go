@@ -97,6 +97,7 @@ type multiStageTestStep struct {
 	additionalSuffix string
 	nodeName         string
 	profile          *api.ClusterProfileLiteral
+	awsSTS           *api.AWSSTSConfig
 	config           *api.ReleaseBuildConfiguration
 	// params exposes getters for variables created by other steps
 	params                           api.Parameters
@@ -171,6 +172,7 @@ func newMultiStageTestStep(
 		additionalSuffix:                 targetAdditionalSuffix,
 		nodeName:                         nodeName,
 		profile:                          ms.ClusterProfileLiteral,
+		awsSTS:                           ms.AWSSTS,
 		config:                           config,
 		params:                           params,
 		env:                              ms.Environment,
@@ -204,6 +206,18 @@ func (s *multiStageTestStep) profileSecretName() string {
 }
 
 func (s *multiStageTestStep) retrieveSTSRoleARNParams() error {
+	if s.awsSTS != nil {
+		if s.profile != nil || s.clusterClaim != nil {
+			return fmt.Errorf("aws_sts cannot be combined with a cluster profile or claim")
+		}
+		if s.awsSTS.HomeRoleARN == "" || s.awsSTS.HubRoleARN == "" || s.awsSTS.TargetRoleARN == "" {
+			return fmt.Errorf("aws_sts requires home, hub and target role ARNs")
+		}
+		s.stsHomeRoleARN = s.awsSTS.HomeRoleARN
+		s.stsHubRoleARN = s.awsSTS.HubRoleARN
+		s.stsTargetRoleARN = s.awsSTS.TargetRoleARN
+		return nil
+	}
 	if s.params == nil {
 		return nil
 	}

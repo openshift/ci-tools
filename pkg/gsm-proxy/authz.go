@@ -4,6 +4,7 @@ import (
 	"errors"
 	"fmt"
 	"slices"
+	"strings"
 	"sync/atomic"
 
 	"github.com/openshift/ci-tools/pkg/group"
@@ -43,12 +44,15 @@ func NewCollectionAuthorizer(config *group.Config) *CollectionAuthorizer {
 func (a *CollectionAuthorizer) Authorize(id Identity, collection string) error {
 	if config := a.config.Load(); config != nil {
 		for _, name := range id.Groups {
-			owner, found := config.Groups[name]
-			if !found || owner.Unclaimed {
-				continue
-			}
-			if slices.Contains(owner.SecretCollections, collection) {
-				return nil
+			for configuredName, owner := range config.Groups {
+				// Dex and the ownership configuration can spell the same Rover
+				// group with different casing. Collection names remain exact.
+				if owner.Unclaimed || !strings.EqualFold(name, configuredName) {
+					continue
+				}
+				if slices.Contains(owner.SecretCollections, collection) {
+					return nil
+				}
 			}
 		}
 	}

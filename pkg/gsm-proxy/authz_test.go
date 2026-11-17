@@ -13,6 +13,8 @@ func TestCollectionAuthorizer(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
+	// Dex can emit a different casing than the Rover ownership configuration.
+	config.Groups["OCP-SPLAT-team"] = config.Groups["team-a"]
 	authorizer := NewCollectionAuthorizer(config)
 	testCases := []struct {
 		name       string
@@ -39,7 +41,12 @@ func TestCollectionAuthorizer(t *testing.T) {
 		{name: "empty collection", groups: []string{"team-a"}},
 		{name: "group prefix", groups: []string{"team"}, collection: "foo"},
 		{name: "group suffix", groups: []string{"team-a-suffix"}, collection: "foo"},
-		{name: "group case mismatch", groups: []string{"Team-a"}, collection: "foo"},
+		{name: "group case mismatch", groups: []string{"Team-a"}, collection: "foo", wantAllow: true},
+		{name: "lowercase Dex group matches mixed-case owner", groups: []string{"ocp-splat-team"}, collection: "foo", wantAllow: true},
+		{name: "uppercase Dex group matches mixed-case owner", groups: []string{"OCP-SPLAT-TEAM"}, collection: "foo", wantAllow: true},
+		{name: "case-insensitive group cannot access another collection", groups: []string{"ocp-splat-team"}, collection: "bar"},
+		{name: "case-insensitive group still requires exact collection", groups: []string{"ocp-splat-team"}, collection: "Foo"},
+		{name: "case-insensitive unclaimed group denied", groups: []string{"UNCLAIMED-SECRETS"}, collection: "orphaned"},
 		{name: "group email is not the Rover group name", groups: []string{"team-a@redhat.com"}, collection: "foo"},
 		{name: "Kubernetes rename does not grant ownership", groups: []string{"kubernetes-team-a"}, collection: "foo"},
 		{name: "unclaimed owner", groups: []string{"unclaimed-secrets"}, collection: "orphaned"},

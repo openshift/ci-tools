@@ -1,10 +1,10 @@
 package onboard
 
 import (
+	"context"
 	"path"
 
 	"github.com/sirupsen/logrus"
-	"golang.org/x/net/context"
 
 	"github.com/openshift/ci-tools/pkg/clusterinit/clusterinstall"
 	cinitmanifest "github.com/openshift/ci-tools/pkg/clusterinit/manifest"

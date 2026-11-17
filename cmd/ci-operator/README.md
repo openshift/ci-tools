@@ -1,7 +1,8 @@
 # Secret collection blocking
 
-The source of truth is `openshift/release/core-services/sync-rover-groups/_config.yaml`.
-An optional top-level map blocks job consumption without changing collection
+The source of truth is
+`openshift/release/core-services/ci-secret-bootstrap/gsm-config.yaml`.
+Its optional top-level map blocks job consumption without changing collection
 ownership, GSM contents, IAM reconciliation, or secret synchronization:
 
 ```yaml
@@ -11,30 +12,24 @@ blocked_collections:
   needs-investigation: {}
 ```
 
-An absent, null, or empty map disables blocking. Map entries with a null value,
-empty object, omitted reason, or empty reason use the default message:
+An absent, null, or empty map disables blocking. Entries with a null value,
+empty object, omitted reason, or empty/null reason use the default message:
 `The secret collection #name is blocked. Contact <#CBN38N3MW> to get more details.`
 `#name` is replaced with the collection name, without a leading `#`.
 Custom reasons are printed verbatim, prefixed by the selected test and collection
 names, and should describe the problem and the next action. Removing an entry
 unblocks it.
 
-ci-operator reads this file from `/etc/gsm-config/ownership.yaml` by default.
-The missing default file is allowed for backward compatibility, including when
-that same default path is explicitly passed to `--secret-collection-policy`.
-A different path supplied to this flag must exist and parse correctly.
-An empty flag disables loading. A malformed existing file fails closed.
-When the policy contains blocked collections, bundle metadata must also be
-readable, even with CSI disabled: `--gsm-config` selects its path, defaulting to
-`/etc/gsm-config/gsm-config.yaml`. Missing metadata fails closed so named synced
-Secrets and profiles cannot bypass blocking. An absent, null, or empty blocking
-policy does not introduce this requirement for legacy jobs.
-Generated GSM job volumes project the existing `gsm-config` ConfigMap together
-with the optional `ownership.yaml` key from `gsm-proxy-ownership`. Jobs generated
-before this volume change need regeneration to receive policy metadata. No job
-fetches configuration from GitHub.
+ci-operator reads this metadata and bundle definitions together through
+`api.GSMConfig`, using the existing `--gsm-config=/etc/gsm-config/gsm-config.yaml`
+and `gsm-config` ConfigMap mount. A supplied path is loaded even when CSI is
+disabled; missing, unreadable, or malformed supplied configuration fails before
+execution rather than silently bypassing blocking. Legacy jobs with CSI disabled
+and no `--gsm-config` remain unchanged and do not load a policy. CSI-enabled jobs
+still require the existing GSM and project configurations. There is no separate
+policy flag, ownership-file generation, additional ConfigMap, or projection.
 
-The pure metadata preflight runs after selecting and sorting the execution
+The metadata-only preflight runs after selecting and sorting the execution
 graph, before namespace initialization or running any build/test steps.
 Only test targets in that graph are checked, including their pre/test/post
 credentials, direct fields, collection/group discovery references, and bundles.
@@ -47,22 +42,12 @@ Legacy Kubernetes Secret references and literal cluster profiles are checked
 when their namespace/name matches a synced bundle target (`ci` for profiles).
 Arbitrary Kubernetes Secrets, dynamic profile overrides from runtime parameters,
 templates, and non-test infrastructure credentials cannot be attributed to GSM
-collections by this metadata check. Jobs without the ConfigMap mount retain
-their previous behavior; for opted-out legacy jobs, mount the same ConfigMap
-and supply the policy path together with bundle metadata. The policy does not
-inspect secret values.
+collections by this metadata check. The policy does not inspect secret values.
 
-## Rollout order
+## Rollout
 
-1. Roll out ci-tools consumers that parse the ownership file, including
-   sync-rover-groups and GSM ownership/IAM reconcilers, with the new optional
-   schema before adding any nonempty `blocked_collections` map.
-2. Roll out ci-operator and prowgen with this change, then distribute `_config.yaml`
-   as `ownership.yaml` in the existing `gsm-proxy-ownership` ConfigMap throughout
-   `build_farm_ci` using config-updater. Bootstrap/resync the expanded mapping;
-   do not assume changing the mapping alone populates every new target. The
-   existing `core-ci/ci` target remains included. Regenerate jobs with `make jobs` in release
-   to pick up the optional projection alongside their existing GSM configuration.
-3. Verify the ConfigMap key and the consumer image versions, then add an entry
-   with a descriptive reason. Verify a dependent selected target is rejected
-   before namespace creation, and an unrelated target still runs.
+Roll out the updated shared GSM-config schema to its consumers (ci-operator,
+ci-secret-bootstrap, and ci-secret-generator) before adding blocking metadata.
+Use the existing GSM configuration distribution; no ownership ConfigMap rollout
+or job-volume regeneration is needed. Verify a dependent selected target is
+rejected before namespace creation, and an unrelated target still runs.

@@ -963,6 +963,8 @@ func TestLoadGSMConfigFromFile(t *testing.T) {
 		configFile := filepath.Join(tmpDir, "test-config.yaml")
 
 		yamlContent := `
+blocked_collections:
+  secrets: {reason: maintenance}
 cluster_groups:
   test-group: [cluster1]
 bundles:
@@ -990,6 +992,20 @@ bundles:
 
 		if config.Bundles[0].Targets[0].Cluster != "cluster1" {
 			t.Errorf("expected cluster 'cluster1', got %q", config.Bundles[0].Targets[0].Cluster)
+		}
+		encoded, err := yaml.Marshal(config)
+		if err != nil {
+			t.Fatal(err)
+		}
+		var roundTrip GSMConfig
+		if err := yaml.UnmarshalStrict(encoded, &roundTrip); err != nil {
+			t.Fatal(err)
+		}
+		if diff := cmp.Diff(config, roundTrip); diff != "" {
+			t.Errorf("GSM config changed after round trip (-want +got):\n%s", diff)
+		}
+		if diff := cmp.Diff(map[string]BlockedCollection{"secrets": {Reason: "maintenance"}}, config.BlockedCollections); diff != "" {
+			t.Errorf("unexpected blocked collections (-want +got):\n%s", diff)
 		}
 	})
 }

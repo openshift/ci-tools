@@ -1,16 +1,13 @@
 package main
 
 import (
-	"errors"
 	"os"
 	"path/filepath"
-	"strings"
 	"testing"
 
 	"github.com/google/go-cmp/cmp"
 
 	"github.com/openshift/ci-tools/pkg/api"
-	"github.com/openshift/ci-tools/pkg/group"
 )
 
 // policyTestStep exposes only the metadata preflight may inspect.
@@ -47,9 +44,8 @@ func TestCheckBlockedCollections(t *testing.T) {
 	} {
 		t.Run(tc.name, func(t *testing.T) {
 			o := options{
-				configSpec:             &api.ReleaseBuildConfiguration{Tests: []api.TestStepConfiguration{{As: "selected", Secrets: []*api.Secret{tc.secret}, MultiStageTestConfigurationLiteral: tc.literal}}},
-				secretCollectionPolicy: group.Config{BlockedCollections: map[string]group.BlockedCollection{"blocked": {Reason: tc.reason}}},
-				gsmConfig: api.GSMConfig{DPTPCollection: "blocked", Bundles: []api.GSMBundle{
+				configSpec: &api.ReleaseBuildConfiguration{Tests: []api.TestStepConfiguration{{As: "selected", Secrets: []*api.Secret{tc.secret}, MultiStageTestConfigurationLiteral: tc.literal}}},
+				gsmConfig: api.GSMConfig{BlockedCollections: map[string]api.BlockedCollection{"blocked": {Reason: tc.reason}}, DPTPCollection: "blocked", Bundles: []api.GSMBundle{
 					{Name: "bundle", GSMSecrets: []api.GSMSecretRef{{Collection: "blocked"}}},
 					{Name: "synced", SyncToCluster: true, Targets: []api.TargetSpec{{Namespace: "ci"}}, GSMSecrets: []api.GSMSecretRef{{Collection: "blocked"}}},
 					{Name: "docker", DockerConfig: &api.DockerConfigSpec{}},
@@ -71,52 +67,36 @@ func TestCheckBlockedCollections(t *testing.T) {
 	}
 }
 
-// TestLoadSecretCollectionPolicy distinguishes optional policy from required active-policy bundle metadata.
-func TestLoadSecretCollectionPolicy(t *testing.T) {
+// TestLoadGSMConfig covers legacy omission and explicit single-source loading without CSI.
+func TestLoadGSMConfig(t *testing.T) {
 	for _, tc := range []struct {
-		name, data, metadata, wantError        string
-		defaultPolicy, defaultBundle, disabled bool
-		want                                   map[string]group.BlockedCollection
+		name, data             string
+		noPath, csi, wantError bool
+		want                   map[string]api.BlockedCollection
 	}{
-		{name: "disabled", disabled: true},
-		{name: "absent", data: "groups: {}"},
-		{name: "null", data: "blocked_collections: null"},
-		{name: "empty", data: "blocked_collections: {}", want: map[string]group.BlockedCollection{}},
-		{name: "reason forms", data: "blocked_collections: {omitted: {}, null-entry: null, empty: {reason: ''}, null-reason: {reason: null}, custom: {reason: maintenance}}", metadata: "{}", want: map[string]group.BlockedCollection{"omitted": {}, "null-entry": {}, "empty": {}, "null-reason": {}, "custom": {Reason: "maintenance"}}},
-		{name: "missing default bundle metadata", data: "blocked_collections: {blocked: {}}", defaultBundle: true, wantError: "load bundle metadata for secret collection policy:"},
-		{name: "missing explicit bundle metadata", data: "blocked_collections: {blocked: {}}", wantError: "load bundle metadata for secret collection policy:"},
-		{name: "unknown field", data: "blocked_collections: {blocked: {typo: reason}}", wantError: "parse secret collection policy:"},
-		{name: "explicit missing policy", wantError: "read secret collection policy:"},
-		{name: "missing default policy", defaultPolicy: true},
+		{name: "legacy no path", noPath: true},
+		{name: "CSI requires config", noPath: true, csi: true, wantError: true},
+		{name: "explicit missing source", wantError: true},
+		{name: "malformed source", data: "bundles: [", wantError: true},
+		{name: "absent policy", data: "{}"},
+		{name: "null policy", data: "blocked_collections: null"},
+		{name: "empty policy", data: "blocked_collections: {}", want: map[string]api.BlockedCollection{}},
+		{name: "reason forms", data: "blocked_collections: {omitted: {}, null-entry: null, empty: {reason: ''}, null-reason: {reason: null}, custom: {reason: maintenance}}", want: map[string]api.BlockedCollection{"omitted": {}, "null-entry": {}, "empty": {}, "null-reason": {}, "custom": {Reason: "maintenance"}}},
 	} {
 		t.Run(tc.name, func(t *testing.T) {
-			o := options{secretCollectionPolicyPath: filepath.Join(t.TempDir(), "ownership.yaml"), gsmConfigPath: filepath.Join(t.TempDir(), "gsm-config.yaml")}
-			if tc.defaultPolicy {
-				o.secretCollectionPolicyPath = api.GSMConfigMountPath + "/ownership.yaml"
-			}
-			if tc.disabled {
-				o.secretCollectionPolicyPath = ""
-			}
-			if tc.defaultBundle {
+			o := options{gsmConfigPath: filepath.Join(t.TempDir(), "gsm-config.yaml"), enableSecretsStoreCSIDriver: tc.csi}
+			if tc.noPath {
 				o.gsmConfigPath = ""
 			}
-			for path, data := range map[string]string{o.secretCollectionPolicyPath: tc.data, o.gsmConfigPath: tc.metadata} {
-				if data != "" {
-					if err := os.WriteFile(path, []byte(data), 0600); err != nil {
-						t.Fatal(err)
-					}
+			if tc.data != "" {
+				if err := os.WriteFile(o.gsmConfigPath, []byte(tc.data), 0600); err != nil {
+					t.Fatal(err)
 				}
 			}
-			if err := o.loadSecretCollectionPolicy(); err != nil {
-				if tc.wantError == "" || !strings.HasPrefix(err.Error(), tc.wantError) || (tc.defaultBundle && !errors.Is(err, os.ErrNotExist)) {
-					t.Fatalf("unexpected error: %v", err)
-				}
-				return
+			if err := o.loadGSMConfig(); (err != nil) != tc.wantError {
+				t.Fatalf("loadGSMConfig() = %v, wantError %v", err, tc.wantError)
 			}
-			if tc.wantError != "" {
-				t.Fatalf("expected error starting with %q", tc.wantError)
-			}
-			if diff := cmp.Diff(tc.want, o.secretCollectionPolicy.BlockedCollections); diff != "" {
+			if diff := cmp.Diff(tc.want, o.gsmConfig.BlockedCollections); diff != "" {
 				t.Errorf("unexpected policy (-want +got):\n%s", diff)
 			}
 			if len(tc.want) == 0 {

@@ -21,10 +21,16 @@ const (
 
 // GSMConfig is the top-level configuration for GSM-based secrets
 type GSMConfig struct {
-	ClusterGroups  map[string][]string       `json:"cluster_groups,omitempty"`
-	DPTPCollection string                    `json:"dptp_collection,omitempty"`
-	Components     map[string][]GSMSecretRef `json:"components,omitempty"`
-	Bundles        []GSMBundle               `json:"bundles,omitempty"`
+	BlockedCollections map[string]BlockedCollection `json:"blocked_collections,omitempty"`
+	ClusterGroups      map[string][]string          `json:"cluster_groups,omitempty"`
+	DPTPCollection     string                       `json:"dptp_collection,omitempty"`
+	Components         map[string][]GSMSecretRef    `json:"components,omitempty"`
+	Bundles            []GSMBundle                  `json:"bundles,omitempty"`
+}
+
+// BlockedCollection describes why ci-operator must not consume a collection.
+type BlockedCollection struct {
+	Reason string `json:"reason,omitempty"`
 }
 
 // GSMBundle defines a logical group of GSM secrets

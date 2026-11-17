@@ -69,17 +69,9 @@ spec:
   - name: github-credentials-openshift-ci-robot-private-git-cloner
     secret:
       secretName: github-credentials-openshift-ci-robot-private-git-cloner
-  - name: gsm-config
-    projected:
-      sources:
-      - configMap:
-          name: gsm-config
-      - configMap:
-          items:
-          - key: ownership.yaml
-            path: ownership.yaml
-          name: gsm-proxy-ownership
-          optional: true
+  - configMap:
+      name: gsm-config
+    name: gsm-config
   - csi:
       driver: secrets-store.csi.k8s.io
       readOnly: true

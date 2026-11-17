@@ -10,7 +10,6 @@ import (
 	corev1 "k8s.io/api/core/v1"
 	"k8s.io/apimachinery/pkg/api/resource"
 	kerrors "k8s.io/apimachinery/pkg/util/errors"
-	"k8s.io/utils/ptr"
 
 	"github.com/openshift/ci-tools/pkg/api"
 	cioperatorapi "github.com/openshift/ci-tools/pkg/api"
@@ -526,10 +525,9 @@ var (
 	gsmConfigVolume = corev1.Volume{
 		Name: cioperatorapi.GSMConfigConfigMap,
 		VolumeSource: corev1.VolumeSource{
-			Projected: &corev1.ProjectedVolumeSource{
-				Sources: []corev1.VolumeProjection{
-					{ConfigMap: &corev1.ConfigMapProjection{LocalObjectReference: corev1.LocalObjectReference{Name: cioperatorapi.GSMConfigConfigMap}}},
-					{ConfigMap: &corev1.ConfigMapProjection{LocalObjectReference: corev1.LocalObjectReference{Name: "gsm-proxy-ownership"}, Optional: ptr.To(true), Items: []corev1.KeyToPath{{Key: "ownership.yaml", Path: "ownership.yaml"}}}},
+			ConfigMap: &corev1.ConfigMapVolumeSource{
+				LocalObjectReference: corev1.LocalObjectReference{
+					Name: cioperatorapi.GSMConfigConfigMap,
 				},
 			},
 		},

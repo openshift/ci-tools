@@ -1,7 +1,3 @@
-blocked_collections:
-  collection-alpha:
-    reason: Consumption disabled during credential rotation
-  shared-collection: {}
 cluster_groups:
   build-farm:
   - app.ci

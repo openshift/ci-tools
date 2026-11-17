@@ -21,11 +21,10 @@ func TestLoadConfig(t *testing.T) {
 			name: "base case: resolved",
 			file: filepath.Join("testdata", "TestLoadConfig", "base_case.yaml"),
 			expected: &Config{
-				BlockedCollections: map[string]BlockedCollection{"blocked": {}},
-				ClusterGroups:      map[string][]string{"dp-managed": {"build01", "build02"}},
+				ClusterGroups: map[string][]string{"dp-managed": {"build01", "build02"}},
 				Groups: map[string]Target{
 					"old-group-name": {RenameTo: "new-group-name", Clusters: []string{"arm01"}, ClusterGroups: []string{"dp-managed"}},
-					"some-group":     {SecretCollections: []string{"blocked"}},
+					"some-group":     {},
 				},
 			},
 		},

@@ -82,7 +82,6 @@ import (
 	"github.com/openshift/ci-tools/pkg/api/configresolver"
 	"github.com/openshift/ci-tools/pkg/api/nsttl"
 	"github.com/openshift/ci-tools/pkg/defaults"
-	"github.com/openshift/ci-tools/pkg/group"
 	gsm "github.com/openshift/ci-tools/pkg/gsm-secrets"
 	"github.com/openshift/ci-tools/pkg/interrupt"
 	"github.com/openshift/ci-tools/pkg/junit"
@@ -410,8 +409,6 @@ type options struct {
 	restrictNetworkAccess       bool
 	enableSecretsStoreCSIDriver bool
 	gsmConfigPath               string
-	secretCollectionPolicyPath  string
-	secretCollectionPolicy      group.Config
 	gsmConfig                   api.GSMConfig
 	gsmProjectConfigPath        string
 	gsmProjectConfig            gsm.Config
@@ -473,7 +470,6 @@ func bindOptions(flag *flag.FlagSet) *options {
 
 	// Google Secret Manager flags
 	flag.StringVar(&opt.gsmConfigPath, "gsm-config", "", "Path to the gsm secrets config file.")
-	flag.StringVar(&opt.secretCollectionPolicyPath, "secret-collection-policy", api.GSMConfigMountPath+"/ownership.yaml", "Optional ownership configuration containing blocked_collections. A missing default file disables blocking.")
 	flag.StringVar(&opt.gsmProjectConfigPath, "gsm-project-config", "", "Path to the GSM project config file.")
 	flag.StringVar(&opt.gsmCredentialsFile, "gsm-credentials-file", "", "Path to GCP service account credentials.")
 
@@ -709,13 +705,10 @@ func (o *options) Complete() error {
 	handleTargetAdditionalSuffix(o)
 	setDisablePodScalerFromTarget(o)
 
-	if err := o.loadSecretCollectionPolicy(); err != nil {
+	if err := o.loadGSMConfig(); err != nil {
 		return err
 	}
 	if o.enableSecretsStoreCSIDriver {
-		if err := api.LoadGSMConfigFromFile(o.gsmConfigPath, &o.gsmConfig); err != nil {
-			return err
-		}
 		if err = api.LoadGSMProjectConfigFromFile(o.gsmProjectConfigPath, &o.gsmProjectConfig); err != nil {
 			return err
 		}

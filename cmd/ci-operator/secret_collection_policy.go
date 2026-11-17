@@ -3,45 +3,23 @@ package main
 import (
 	"errors"
 	"fmt"
-	"os"
 
 	"k8s.io/apimachinery/pkg/util/sets"
-	"sigs.k8s.io/yaml"
 
 	"github.com/openshift/ci-tools/pkg/api"
 )
 
-// loadSecretCollectionPolicy reads optional ownership metadata without contacting GSM.
-func (o *options) loadSecretCollectionPolicy() error {
-	if o.secretCollectionPolicyPath == "" {
+// loadGSMConfig loads the supplied source even without CSI, leaving legacy jobs without a path unchanged.
+func (o *options) loadGSMConfig() error {
+	if o.gsmConfigPath == "" && !o.enableSecretsStoreCSIDriver {
 		return nil
 	}
-	data, err := os.ReadFile(o.secretCollectionPolicyPath)
-	if errors.Is(err, os.ErrNotExist) && o.secretCollectionPolicyPath == api.GSMConfigMountPath+"/ownership.yaml" {
-		return nil
-	}
-	if err != nil {
-		return fmt.Errorf("read secret collection policy: %w", err)
-	}
-	if err := yaml.UnmarshalStrict(data, &o.secretCollectionPolicy); err != nil {
-		return fmt.Errorf("parse secret collection policy: %w", err)
-	}
-	if len(o.secretCollectionPolicy.BlockedCollections) == 0 || o.enableSecretsStoreCSIDriver {
-		return nil
-	}
-	configPath := o.gsmConfigPath
-	if configPath == "" {
-		configPath = api.GSMConfigMountPath + "/gsm-config.yaml"
-	}
-	if err := api.LoadGSMConfigFromFile(configPath, &o.gsmConfig); err != nil {
-		return fmt.Errorf("load bundle metadata for secret collection policy: %w", err)
-	}
-	return nil
+	return api.LoadGSMConfigFromFile(o.gsmConfigPath, &o.gsmConfig)
 }
 
 // checkBlockedCollections checks only tests present in the selected execution graph.
 func (o *options) checkBlockedCollections(steps api.OrderedStepList) error {
-	if len(o.secretCollectionPolicy.BlockedCollections) == 0 {
+	if len(o.gsmConfig.BlockedCollections) == 0 {
 		return nil
 	}
 	selected := sets.New[string]()
@@ -101,7 +79,7 @@ func (o *options) checkCredentialCollections(credential api.CredentialReference)
 		}
 	}
 	for _, collection := range sets.List(collections) {
-		if block, found := o.secretCollectionPolicy.BlockedCollections[collection]; found {
+		if block, found := o.gsmConfig.BlockedCollections[collection]; found {
 			reason := block.Reason
 			if reason == "" {
 				reason = fmt.Sprintf("The secret collection %s is blocked. Contact <#CBN38N3MW> to get more details.", collection)

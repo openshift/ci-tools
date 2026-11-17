@@ -734,8 +734,9 @@ func (o *options) checkBlockedCollections(steps api.OrderedStepList) error {
 	for _, step := range steps {
 		selected.Insert(step.Step.Name())
 	}
-	for _, test := range o.configSpec.Tests {
-		if !selected.Has(test.As) {
+	for _, step := range o.graphConfig.Steps {
+		test := step.TestStepConfiguration
+		if test == nil || !selected.Has(test.As) {
 			continue
 		}
 		var credentials []api.CredentialReference

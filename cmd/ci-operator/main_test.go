@@ -29,12 +29,14 @@ import (
 	imagev1 "github.com/openshift/api/image/v1"
 
 	"github.com/openshift/ci-tools/pkg/api"
+	"github.com/openshift/ci-tools/pkg/defaults"
 	"github.com/openshift/ci-tools/pkg/results"
 	"github.com/openshift/ci-tools/pkg/secrets"
 	"github.com/openshift/ci-tools/pkg/steps"
 	"github.com/openshift/ci-tools/pkg/steps/loggingclient"
 	"github.com/openshift/ci-tools/pkg/testhelper"
 	utilgzip "github.com/openshift/ci-tools/pkg/util/gzip"
+	"github.com/openshift/ci-tools/pkg/validation"
 )
 
 func init() {
@@ -87,10 +89,13 @@ func TestCheckBlockedCollections(t *testing.T) {
 		name       string
 		test       api.TestStepConfiguration
 		unselected bool
+		raw        bool
 		want       error
 	}{
 		{name: "unselected", test: api.TestStepConfiguration{Secret: &api.Secret{Collection: "blocked"}}, unselected: true},
 		{name: "selected secret", test: api.TestStepConfiguration{Secret: &api.Secret{Collection: "blocked"}}, want: want},
+		{name: "selected raw test", test: api.TestStepConfiguration{Secret: &api.Secret{Collection: "blocked"}}, raw: true, want: want},
+		{name: "unselected raw test", test: api.TestStepConfiguration{Secret: &api.Secret{Collection: "blocked"}}, raw: true, unselected: true},
 		{name: "selected secrets", test: api.TestStepConfiguration{Secret: &api.Secret{Collection: "allowed"}, Secrets: []*api.Secret{{Collection: "blocked"}}}, want: want},
 		{name: "pre", test: api.TestStepConfiguration{MultiStageTestConfigurationLiteral: &api.MultiStageTestConfigurationLiteral{Pre: []api.LiteralTestStep{{Credentials: []api.CredentialReference{{Collection: "blocked"}}}}}}, want: want},
 		{name: "test", test: api.TestStepConfiguration{MultiStageTestConfigurationLiteral: &api.MultiStageTestConfigurationLiteral{Test: []api.LiteralTestStep{{Credentials: []api.CredentialReference{{Collection: "blocked"}}}}}}, want: want},
@@ -99,15 +104,28 @@ func TestCheckBlockedCollections(t *testing.T) {
 	} {
 		t.Run(tc.name, func(t *testing.T) {
 			tc.test.As = "selected"
+			if tc.test.MultiStageTestConfigurationLiteral == nil {
+				tc.test.ContainerTestConfiguration = &api.ContainerTestConfiguration{From: "src"}
+			}
 			o := options{
 				configSpec: &api.ReleaseBuildConfiguration{Tests: []api.TestStepConfiguration{tc.test}},
 				gsmConfig: api.GSMConfig{BlockedCollections: map[string]api.BlockedCollection{"blocked": {}}, Bundles: []api.GSMBundle{
 					{Name: "synced", SyncToCluster: true, Targets: []api.TargetSpec{{Namespace: "ci"}}, GSMSecrets: []api.GSMSecretRef{{Collection: "blocked"}}},
 				}},
 			}
+			if tc.raw {
+				o.configSpec.RawSteps = []api.StepConfiguration{{TestStepConfiguration: &tc.test}}
+				o.configSpec.Tests = []api.TestStepConfiguration{{As: "ordinary", Secret: &api.Secret{Collection: "allowed"}, ContainerTestConfiguration: &api.ContainerTestConfiguration{From: "src"}}}
+			}
+			o.graphConfig = defaults.FromConfigStatic(o.configSpec)
+			if tc.raw {
+				if err := validation.IsValidGraphConfiguration(o.graphConfig.Steps); err != nil {
+					t.Fatal(err)
+				}
+			}
 			selected := "selected"
 			if tc.unselected {
-				selected = "other"
+				selected = "ordinary"
 			}
 			err := o.checkBlockedCollections(api.OrderedStepList{{Step: &fakeValidationStep{name: selected}}})
 			testhelper.Diff(t, "error", tc.want, err, testhelper.EquateErrorMessage)

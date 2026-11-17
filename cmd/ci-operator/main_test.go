@@ -9,6 +9,7 @@ import (
 	"os"
 	"path/filepath"
 	"reflect"
+	"strings"
 	"testing"
 	"time"
 
@@ -39,6 +40,111 @@ import (
 func init() {
 	if err := imagev1.AddToScheme(scheme.Scheme); err != nil {
 		panic(fmt.Sprintf("failed to add imagev1 to scheme: %v", err))
+	}
+}
+
+// TestLoadGSMConfig covers source loading independently of CSI.
+func TestLoadGSMConfig(t *testing.T) {
+	for _, tc := range []struct {
+		name, data, wantError string
+		noPath, csi           bool
+		want                  map[string]api.BlockedCollection
+	}{
+		{name: "legacy no path", noPath: true},
+		{name: "CSI requires config", noPath: true, csi: true, wantError: "couldn't read GSM config file:"},
+		{name: "explicit missing source", wantError: "couldn't read GSM config file:"},
+		{name: "invalid source", data: "bundles: [", wantError: "error converting YAML to JSON:"},
+		{name: "policy with CSI disabled", data: "blocked_collections: {blocked: {}}", want: map[string]api.BlockedCollection{"blocked": {}}},
+	} {
+		t.Run(tc.name, func(t *testing.T) {
+			o := options{gsmConfigPath: filepath.Join(t.TempDir(), "gsm-config.yaml"), enableSecretsStoreCSIDriver: tc.csi}
+			if tc.noPath {
+				o.gsmConfigPath = ""
+			}
+			if tc.data != "" {
+				if err := os.WriteFile(o.gsmConfigPath, []byte(tc.data), 0600); err != nil {
+					t.Fatal(err)
+				}
+			}
+			if err := o.loadGSMConfig(); err != nil {
+				if tc.wantError == "" || !strings.HasPrefix(err.Error(), tc.wantError) {
+					t.Fatalf("unexpected error: %v", err)
+				}
+				return
+			}
+			if tc.wantError != "" {
+				t.Fatalf("expected error starting with %q", tc.wantError)
+			}
+			testhelper.Diff(t, "blocked collections", tc.want, o.gsmConfig.BlockedCollections)
+		})
+	}
+}
+
+// TestCheckBlockedCollections covers selected targets and credential extraction.
+func TestCheckBlockedCollections(t *testing.T) {
+	want := errors.New("test selected: The secret collection blocked is blocked. Contact <#CBN38N3MW> to get more details.")
+	for _, tc := range []struct {
+		name       string
+		test       api.TestStepConfiguration
+		unselected bool
+		want       error
+	}{
+		{name: "unselected", test: api.TestStepConfiguration{Secret: &api.Secret{Collection: "blocked"}}, unselected: true},
+		{name: "selected secret", test: api.TestStepConfiguration{Secret: &api.Secret{Collection: "blocked"}}, want: want},
+		{name: "selected secrets", test: api.TestStepConfiguration{Secret: &api.Secret{Collection: "allowed"}, Secrets: []*api.Secret{{Collection: "blocked"}}}, want: want},
+		{name: "pre", test: api.TestStepConfiguration{MultiStageTestConfigurationLiteral: &api.MultiStageTestConfigurationLiteral{Pre: []api.LiteralTestStep{{Credentials: []api.CredentialReference{{Collection: "blocked"}}}}}}, want: want},
+		{name: "test", test: api.TestStepConfiguration{MultiStageTestConfigurationLiteral: &api.MultiStageTestConfigurationLiteral{Test: []api.LiteralTestStep{{Credentials: []api.CredentialReference{{Collection: "blocked"}}}}}}, want: want},
+		{name: "post", test: api.TestStepConfiguration{MultiStageTestConfigurationLiteral: &api.MultiStageTestConfigurationLiteral{Post: []api.LiteralTestStep{{Credentials: []api.CredentialReference{{Collection: "blocked"}}}}}}, want: want},
+		{name: "profile", test: api.TestStepConfiguration{MultiStageTestConfigurationLiteral: &api.MultiStageTestConfigurationLiteral{ClusterProfileLiteral: &api.ClusterProfileLiteral{Secret: "synced"}}}, want: want},
+	} {
+		t.Run(tc.name, func(t *testing.T) {
+			tc.test.As = "selected"
+			o := options{
+				configSpec: &api.ReleaseBuildConfiguration{Tests: []api.TestStepConfiguration{tc.test}},
+				gsmConfig: api.GSMConfig{BlockedCollections: map[string]api.BlockedCollection{"blocked": {}}, Bundles: []api.GSMBundle{
+					{Name: "synced", SyncToCluster: true, Targets: []api.TargetSpec{{Namespace: "ci"}}, GSMSecrets: []api.GSMSecretRef{{Collection: "blocked"}}},
+				}},
+			}
+			selected := "selected"
+			if tc.unselected {
+				selected = "other"
+			}
+			err := o.checkBlockedCollections(api.OrderedStepList{{Step: &fakeValidationStep{name: selected}}})
+			testhelper.Diff(t, "error", tc.want, err, testhelper.EquateErrorMessage)
+		})
+	}
+}
+
+// TestCheckCredentialCollections covers direct and underlying bundle sources.
+func TestCheckCredentialCollections(t *testing.T) {
+	fallback := errors.New("The secret collection blocked is blocked. Contact <#CBN38N3MW> to get more details.")
+	for _, tc := range []struct {
+		name, reason string
+		credential   api.CredentialReference
+		want         error
+	}{
+		{name: "explicit field", credential: api.CredentialReference{Collection: "blocked", Group: "group", Field: "field"}, want: fallback},
+		{name: "auto discovery with reason", credential: api.CredentialReference{Collection: "blocked", Group: "group"}, reason: "maintenance", want: errors.New("secret collection blocked is blocked: maintenance")},
+		{name: "allowed direct", credential: api.CredentialReference{Collection: "allowed"}},
+		{name: "bundle", credential: api.CredentialReference{Bundle: "bundle"}, want: fallback},
+		{name: "synced bundle", credential: api.CredentialReference{Bundle: "synced"}, want: fallback},
+		{name: "legacy synced secret", credential: api.CredentialReference{Name: "synced", Namespace: "ci"}, want: fallback},
+		{name: "other namespace", credential: api.CredentialReference{Name: "synced", Namespace: "other"}},
+		{name: "dockerconfig", credential: api.CredentialReference{Bundle: "docker"}, want: fallback},
+		{name: "allowed bundle", credential: api.CredentialReference{Bundle: "allowed"}},
+	} {
+		t.Run(tc.name, func(t *testing.T) {
+			o := options{gsmConfig: api.GSMConfig{
+				BlockedCollections: map[string]api.BlockedCollection{"blocked": {Reason: tc.reason}}, DPTPCollection: "blocked",
+				Bundles: []api.GSMBundle{
+					{Name: "bundle", GSMSecrets: []api.GSMSecretRef{{Collection: "allowed"}, {Collection: "blocked"}}},
+					{Name: "synced", SyncToCluster: true, Targets: []api.TargetSpec{{Namespace: "ci"}}, GSMSecrets: []api.GSMSecretRef{{Collection: "blocked"}}},
+					{Name: "docker", DockerConfig: &api.DockerConfigSpec{}},
+					{Name: "allowed", GSMSecrets: []api.GSMSecretRef{{Collection: "allowed"}}},
+				},
+			}}
+			testhelper.Diff(t, "error", tc.want, o.checkCredentialCollections(tc.credential), testhelper.EquateErrorMessage)
+		})
 	}
 }
 

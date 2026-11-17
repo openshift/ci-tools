@@ -39,7 +39,7 @@ func TestCheckBlockedCollections(t *testing.T) {
 	}{
 		{name: "explicit field", credential: api.CredentialReference{Collection: "blocked", Group: "group", Field: "field"}, want: fallback},
 		{name: "auto discovery", credential: api.CredentialReference{Collection: "blocked", Group: "group"}, want: fallback},
-		{name: "custom reason", credential: api.CredentialReference{Collection: "blocked"}, reason: "collection is under investigation", want: "test selected: collection is under investigation"},
+		{name: "custom reason", credential: api.CredentialReference{Collection: "blocked"}, reason: "collection is under investigation", want: "test selected: secret collection blocked is blocked: collection is under investigation"},
 		{name: "unblocked", credential: api.CredentialReference{Collection: "allowed"}},
 		{name: "unblocked explicit field", credential: api.CredentialReference{Collection: "allowed", Group: "group", Field: "field"}},
 		{name: "unblocked auto discovery", credential: api.CredentialReference{Collection: "allowed", Group: "group"}},
@@ -121,6 +121,7 @@ func TestLoadSecretCollectionPolicy(t *testing.T) {
 		{name: "empty metadata", data: "blocked_collections: {blocked: {}}", wantBlocked: true},
 		{name: "null metadata", data: "blocked_collections: {blocked: null}", wantBlocked: true},
 		{name: "empty reason", data: "blocked_collections: {blocked: {reason: ''}}", wantBlocked: true},
+		{name: "null reason", data: "blocked_collections: {blocked: {reason: null}}", wantBlocked: true},
 		{name: "reason", data: "blocked_collections: {blocked: {reason: maintenance}}", wantBlocked: true},
 		{name: "invalid", data: "blocked_collections: [blocked]", wantError: true},
 		{name: "unknown field", data: "blocked_collections: {blocked: {typo: reason}}", wantError: true},

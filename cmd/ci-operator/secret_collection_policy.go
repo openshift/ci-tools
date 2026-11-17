@@ -108,8 +108,9 @@ func (o *options) checkCredentialCollections(credential api.CredentialReference)
 			reason := block.Reason
 			if reason == "" {
 				reason = fmt.Sprintf("The secret collection %s is blocked. Contact <#CBN38N3MW> to get more details.", collection)
+				return errors.New(reason)
 			}
-			return errors.New(reason)
+			return fmt.Errorf("secret collection %s is blocked: %s", collection, reason)
 		}
 	}
 	return nil

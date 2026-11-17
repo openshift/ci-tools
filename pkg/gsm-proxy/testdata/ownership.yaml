@@ -1,3 +1,6 @@
+blocked_collections:
+  foo:
+    reason: Job consumption is temporarily disabled, ownership stays unchanged
 cluster_groups:
   build-farm:
     - build01

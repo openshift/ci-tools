@@ -1,6 +1,7 @@
 package util
 
 import (
+	"cmp"
 	"sort"
 
 	"golang.org/x/exp/constraints"
@@ -37,7 +38,7 @@ func DefSlice[T any](slice []T, def []T) []T {
 }
 
 // SortSlice is a generic version of sort.Slice
-func SortSlice[T constraints.Ordered](s []T) {
+func SortSlice[T cmp.Ordered](s []T) {
 	sort.Slice(s, func(i, j int) bool { return s[i] < s[j] })
 }
 
@@ -51,7 +52,7 @@ func Keys[K comparable, V any](m map[K]V) (ret []K) {
 }
 
 // SortedKeys returns a slice with the keys in `m` in sorted order
-func SortedKeys[K constraints.Ordered, V any](m map[K]V) (ret []K) {
+func SortedKeys[K cmp.Ordered, V any](m map[K]V) (ret []K) {
 	ret = Keys(m)
 	SortSlice(ret)
 	return

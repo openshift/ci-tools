@@ -769,7 +769,8 @@ func (o *options) checkCredentialCollections(credential api.CredentialReference)
 	collections := sets.New[string](credential.Collection)
 	for _, bundle := range o.gsmConfig.Bundles {
 		matches := credential.Bundle != "" && credential.Bundle == bundle.Name
-		if credential.Name != "" && credential.Name == bundle.Name && bundle.SyncToCluster {
+		if bundle.SyncToCluster && (matches || credential.Name != "" && credential.Name == bundle.Name) {
+			matches = false
 			for _, target := range bundle.Targets {
 				if target.Namespace == credential.Namespace {
 					matches = true

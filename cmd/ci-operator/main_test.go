@@ -118,20 +118,33 @@ func TestCheckBlockedCollections(t *testing.T) {
 // TestCheckCredentialCollections covers direct and underlying bundle sources.
 func TestCheckCredentialCollections(t *testing.T) {
 	fallback := errors.New("The secret collection blocked is blocked. Contact <#CBN38N3MW> to get more details.")
+	sharedConfig := `blocked_collections: {blocked: {}}
+bundles:
+- name: shared
+  sync_to_cluster: true
+  targets: [{cluster: build01, namespace: a}]
+  gsm_secrets: [{collection: allowed, group: group}]
+- name: shared
+  sync_to_cluster: true
+  targets: [{cluster: build01, namespace: b}]
+  gsm_secrets: [{collection: blocked, group: group}]
+`
 	for _, tc := range []struct {
-		name, reason string
-		credential   api.CredentialReference
-		want         error
+		name, reason, config string
+		credential           api.CredentialReference
+		want                 error
 	}{
 		{name: "explicit field", credential: api.CredentialReference{Collection: "blocked", Group: "group", Field: "field"}, want: fallback},
 		{name: "auto discovery with reason", credential: api.CredentialReference{Collection: "blocked", Group: "group"}, reason: "maintenance", want: errors.New("secret collection blocked is blocked: maintenance")},
 		{name: "allowed direct", credential: api.CredentialReference{Collection: "allowed"}},
 		{name: "bundle", credential: api.CredentialReference{Bundle: "bundle"}, want: fallback},
-		{name: "synced bundle", credential: api.CredentialReference{Bundle: "synced"}, want: fallback},
+		{name: "synced bundle", credential: api.CredentialReference{Bundle: "synced", Namespace: "ci"}, want: fallback},
 		{name: "legacy synced secret", credential: api.CredentialReference{Name: "synced", Namespace: "ci"}, want: fallback},
 		{name: "other namespace", credential: api.CredentialReference{Name: "synced", Namespace: "other"}},
 		{name: "dockerconfig", credential: api.CredentialReference{Bundle: "docker"}, want: fallback},
 		{name: "allowed bundle", credential: api.CredentialReference{Bundle: "allowed"}},
+		{name: "same-named synced bundle allowed namespace", config: sharedConfig, credential: api.CredentialReference{Bundle: "shared", Namespace: "a"}},
+		{name: "same-named synced bundle blocked namespace", config: sharedConfig, credential: api.CredentialReference{Bundle: "shared", Namespace: "b"}, want: fallback},
 	} {
 		t.Run(tc.name, func(t *testing.T) {
 			o := options{gsmConfig: api.GSMConfig{
@@ -143,6 +156,19 @@ func TestCheckCredentialCollections(t *testing.T) {
 					{Name: "allowed", GSMSecrets: []api.GSMSecretRef{{Collection: "allowed"}}},
 				},
 			}}
+			if tc.config != "" {
+				configFile := filepath.Join(t.TempDir(), "gsm-config.yaml")
+				if err := os.WriteFile(configFile, []byte(tc.config), 0600); err != nil {
+					t.Fatal(err)
+				}
+				o.gsmConfig = api.GSMConfig{}
+				if err := api.LoadGSMConfigFromFile(configFile, &o.gsmConfig); err != nil {
+					t.Fatal(err)
+				}
+				if err := o.gsmConfig.Validate(); err != nil {
+					t.Fatal(err)
+				}
+			}
 			testhelper.Diff(t, "error", tc.want, o.checkCredentialCollections(tc.credential), testhelper.EquateErrorMessage)
 		})
 	}

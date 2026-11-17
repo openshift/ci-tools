@@ -1,0 +1,8 @@
+blocked_collections:
+  blocked: {}
+  maintenance:
+    reason: Credential rotation in progress
+groups:
+  owners:
+    secret_collections:
+    - blocked

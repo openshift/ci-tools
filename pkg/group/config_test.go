@@ -18,6 +18,14 @@ func TestLoadConfig(t *testing.T) {
 		expectedErr error
 	}{
 		{
+			name: "blocked collections do not affect ownership validation",
+			file: filepath.Join("testdata", "TestLoadConfig", "blocked_collections.yaml"),
+			expected: &Config{
+				BlockedCollections: map[string]BlockedCollection{"blocked": {}, "maintenance": {Reason: "Credential rotation in progress"}},
+				Groups:             map[string]Target{"owners": {SecretCollections: []string{"blocked"}}},
+			},
+		},
+		{
 			name: "base case: resolved",
 			file: filepath.Join("testdata", "TestLoadConfig", "base_case.yaml"),
 			expected: &Config{

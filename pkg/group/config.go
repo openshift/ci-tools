@@ -17,10 +17,17 @@ const (
 
 // Config represents the configuration file for the groups
 type Config struct {
+	// BlockedCollections prevents ci-operator consumers from using these collections.
+	BlockedCollections map[string]BlockedCollection `json:"blocked_collections,omitempty" yaml:"blocked_collections,omitempty"`
 	// ClusterGroups holds the mapping from cluster group name to the clusters in the group
 	ClusterGroups map[string][]string `json:"cluster_groups,omitempty" yaml:"cluster_groups,omitempty"`
 	// Groups holds the mapping from group name to its target
 	Groups map[string]Target `json:"groups,omitempty" yaml:"groups,omitempty"`
+}
+
+// BlockedCollection describes why a collection must not be used by jobs.
+type BlockedCollection struct {
+	Reason string `json:"reason,omitempty" yaml:"reason,omitempty"`
 }
 
 // Target represents the distribution of a group

@@ -1,9 +1,13 @@
+blocked_collections:
+  blocked: {}
 cluster_groups:
   dp-managed:
     - build01
     - build02
 groups:
-  some-group: {}
+  some-group:
+    secret_collections:
+    - blocked
   old-group-name:
     rename_to: new-group-name
     cluster_groups:

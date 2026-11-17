@@ -24,6 +24,11 @@ The missing default file is allowed for backward compatibility, including when
 that same default path is explicitly passed to `--secret-collection-policy`.
 A different path supplied to this flag must exist and parse correctly.
 An empty flag disables loading. A malformed existing file fails closed.
+When the policy contains blocked collections, bundle metadata must also be
+readable, even with CSI disabled: `--gsm-config` selects its path, defaulting to
+`/etc/gsm-config/gsm-config.yaml`. Missing metadata fails closed so named synced
+Secrets and profiles cannot bypass blocking. An absent, null, or empty blocking
+policy does not introduce this requirement for legacy jobs.
 Generated GSM job volumes project the existing `gsm-config` ConfigMap together
 with the optional `ownership.yaml` key from `gsm-proxy-ownership`. Jobs generated
 before this volume change need regeneration to receive policy metadata. No job
@@ -44,8 +49,8 @@ Arbitrary Kubernetes Secrets, dynamic profile overrides from runtime parameters,
 templates, and non-test infrastructure credentials cannot be attributed to GSM
 collections by this metadata check. Jobs without the ConfigMap mount retain
 their previous behavior; for opted-out legacy jobs, mount the same ConfigMap
-and supply the policy path (bundle metadata must also be mounted to attribute
-Kubernetes Secrets). The policy does not inspect secret values.
+and supply the policy path together with bundle metadata. The policy does not
+inspect secret values.
 
 ## Rollout order
 

@@ -34,9 +34,6 @@ func (o *options) loadSecretCollectionPolicy() error {
 		configPath = api.GSMConfigMountPath + "/gsm-config.yaml"
 	}
 	if err := api.LoadGSMConfigFromFile(configPath, &o.gsmConfig); err != nil {
-		if errors.Is(err, os.ErrNotExist) && o.gsmConfigPath == "" {
-			return nil
-		}
 		return fmt.Errorf("load bundle metadata for secret collection policy: %w", err)
 	}
 	return nil

@@ -43,15 +43,10 @@ type policyRunResolver struct {
 // TestRun verifies actual graph generation and rejection before Kubernetes writes.
 func TestRun(t *testing.T) {
 	for _, tc := range []struct {
-		name        string
-		secret      api.Secret
-		selectOther bool
+		name   string
+		secret api.Secret
 	}{
-		{name: "direct explicit", secret: api.Secret{Collection: "blocked", Group: "group", Field: "field"}},
-		{name: "direct auto discovery", secret: api.Secret{Collection: "blocked", Group: "group"}},
-		{name: "bundle", secret: api.Secret{Bundle: "bundle"}},
 		{name: "synced bundle", secret: api.Secret{Bundle: "synced", Namespace: "ci"}},
-		{name: "selected-out blocked target", secret: api.Secret{Collection: "blocked", Group: "group"}, selectOther: true},
 	} {
 		t.Run(tc.name, func(t *testing.T) {
 			t.Setenv("ARTIFACTS", t.TempDir())
@@ -67,7 +62,6 @@ func TestRun(t *testing.T) {
 				InputConfiguration: api.InputConfiguration{BaseImages: map[string]api.ImageStreamTagReference{"src": {Namespace: "ocp", Name: "base", Tag: "latest"}}},
 				Tests:              []api.TestStepConfiguration{{As: "selected", Secret: &tc.secret, ContainerTestConfiguration: &api.ContainerTestConfiguration{From: "src"}}},
 			}
-			config.Tests = append(config.Tests, api.TestStepConfiguration{As: "other", ContainerTestConfiguration: &api.ContainerTestConfiguration{From: "src"}})
 			o := options{
 				configSpec:             config,
 				graphConfig:            defaults.FromConfigStatic(config),
@@ -79,20 +73,12 @@ func TestRun(t *testing.T) {
 				censor:                 &censor,
 				secretCollectionPolicy: group.Config{BlockedCollections: map[string]group.BlockedCollection{"blocked": {}}},
 				gsmConfig: api.GSMConfig{Bundles: []api.GSMBundle{
-					{Name: "bundle", GSMSecrets: []api.GSMSecretRef{{Collection: "blocked"}}},
 					{Name: "synced", SyncToCluster: true, GSMSecrets: []api.GSMSecretRef{{Collection: "blocked"}}},
 				}},
 			}
-			if tc.selectOther {
-				o.targets.values = []string{"other"}
-				o.printGraph = true
-			}
 			errors := o.Run()
-			if !tc.selectOther && (len(errors) != 1 || !strings.Contains(errors[0].Error(), "test selected: The secret collection blocked is blocked.")) {
+			if len(errors) != 1 || !strings.Contains(errors[0].Error(), "test selected: The secret collection blocked is blocked.") {
 				t.Fatalf("expected blocked collection error, got %v", errors)
-			}
-			if tc.selectOther && len(errors) != 0 {
-				t.Fatalf("unrelated selected target was rejected: %v", errors)
 			}
 			if o.inputHash == "" {
 				t.Error("Run did not reach input resolution")

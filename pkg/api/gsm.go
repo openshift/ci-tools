@@ -117,10 +117,15 @@ func LoadGSMConfigFromFile(file string, config *GSMConfig) error {
 	if err := goyaml.Unmarshal(bytes, &document); err != nil {
 		return fmt.Errorf("error converting YAML to JSON: %w", err)
 	}
+	seenBlockedCollections := false
 	for name, value := range document {
 		if !strings.EqualFold(name, "blocked_collections") {
 			continue
 		}
+		if seenBlockedCollections {
+			return fmt.Errorf("duplicate blocked_collections declaration")
+		}
+		seenBlockedCollections = true
 		collections, isMap := value.(map[interface{}]interface{})
 		if !isMap {
 			continue
@@ -314,6 +319,12 @@ type bundleKey struct {
 // Expects a resolved config (resolve() is called automatically during unmarshaling).
 func (c *GSMConfig) Validate() error {
 	var errs []error
+
+	for collection := range c.BlockedCollections {
+		if !gsmvalidation.ValidateCollectionName(collection) {
+			errs = append(errs, fmt.Errorf("blocked_collections has invalid collection name: %q", collection))
+		}
+	}
 
 	// Validate that dptp_collection is set if any bundle uses dockerconfig
 	hasDockerConfig := false

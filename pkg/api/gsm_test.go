@@ -968,6 +968,8 @@ func TestLoadGSMConfigFromFile(t *testing.T) {
 		{name: "absent policy", data: "{}"},
 		{name: "null policy", data: "blocked_collections: null"},
 		{name: "empty policy", data: "blocked_collections: {}", want: map[string]BlockedCollection{}},
+		{name: "single differently cased policy", data: "BLOCKED_COLLECTIONS: {secrets: {}}", want: map[string]BlockedCollection{"secrets": {}}},
+		{name: "duplicate case-insensitive policy declarations", data: "BLOCKED_COLLECTIONS: {secrets: {}}\nblocked_collections: null", wantError: "duplicate blocked_collections declaration"},
 		{name: "quoted boolean-like keys", data: `blocked_collections: {"yes": {}, "no": {}}`, want: map[string]BlockedCollection{"yes": {}, "no": {}}},
 		{name: "unquoted boolean-like key", data: "blocked_collections: {yes: {}}", wantError: "quote collection keys"},
 		{name: "case-insensitive policy key", data: "BLOCKED_COLLECTIONS: {yes: {}}", wantError: "quote collection keys"},
@@ -1012,7 +1014,10 @@ bundles: [{name: test-bundle, components: [credentials], sync_to_cluster: true, 
 				t.Fatal(err)
 			}
 			var roundTrip GSMConfig
-			if err := yaml.UnmarshalStrict(encoded, &roundTrip); err != nil {
+			if err := os.WriteFile(configFile, encoded, 0600); err != nil {
+				t.Fatal(err)
+			}
+			if err := LoadGSMConfigFromFile(configFile, &roundTrip); err != nil {
 				t.Fatal(err)
 			}
 			if diff := cmp.Diff(config, roundTrip, cmpopts.EquateEmpty()); diff != "" {
@@ -1061,6 +1066,7 @@ func TestGSMConfigValidate(t *testing.T) {
 		{
 			name: "valid config with all fields",
 			config: GSMConfig{
+				BlockedCollections: map[string]BlockedCollection{"test-secrets": {}},
 				ClusterGroups: map[string][]string{
 					"build-clusters": {"build01"},
 				},
@@ -1083,6 +1089,18 @@ func TestGSMConfigValidate(t *testing.T) {
 				},
 			},
 			expectError: false,
+		},
+		{
+			name:          "error: empty blocked collection name",
+			config:        GSMConfig{BlockedCollections: map[string]BlockedCollection{"": {}}},
+			expectError:   true,
+			errorContains: `blocked_collections has invalid collection name: ""`,
+		},
+		{
+			name:          "error: malformed blocked collection name",
+			config:        GSMConfig{BlockedCollections: map[string]BlockedCollection{"invalid/name": {}}},
+			expectError:   true,
+			errorContains: `blocked_collections has invalid collection name: "invalid/name"`,
 		},
 		{
 			name: "valid config - auto discovery (no fields)",

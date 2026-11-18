@@ -8,6 +8,7 @@ import (
 	"testing"
 
 	"github.com/google/go-cmp/cmp"
+	"github.com/google/go-cmp/cmp/cmpopts"
 
 	corev1 "k8s.io/api/core/v1"
 	"sigs.k8s.io/yaml"
@@ -956,42 +957,55 @@ bundles:
 	})
 }
 
+// TestLoadGSMConfigFromFile covers optional metadata, resolution and serialization.
 func TestLoadGSMConfigFromFile(t *testing.T) {
-	t.Run("loads and resolves config from YAML file", func(t *testing.T) {
-		// Create a temporary YAML file
-		tmpDir := t.TempDir()
-		configFile := filepath.Join(tmpDir, "test-config.yaml")
-
-		yamlContent := `
-cluster_groups:
-  test-group: [cluster1]
-bundles:
-  - name: test-bundle
-    gsm_secrets:
-      - collection: secrets
-        group: group1
-    targets:
-      - cluster_groups: [test-group]
-        namespace: default
-`
-		if err := os.WriteFile(configFile, []byte(yamlContent), 0644); err != nil {
-			t.Fatalf("failed to write test file: %v", err)
-		}
-
-		var config GSMConfig
-		if err := LoadGSMConfigFromFile(configFile, &config); err != nil {
-			t.Fatalf("unexpected error: %v", err)
-		}
-
-		// Verify cluster_groups were expanded
-		if len(config.Bundles[0].Targets) != 1 {
-			t.Fatalf("expected 1 target, got %d", len(config.Bundles[0].Targets))
-		}
-
-		if config.Bundles[0].Targets[0].Cluster != "cluster1" {
-			t.Errorf("expected cluster 'cluster1', got %q", config.Bundles[0].Targets[0].Cluster)
-		}
-	})
+	for _, tc := range []struct {
+		name, data  string
+		want        map[string]BlockedCollection
+		wantBundles []GSMBundle
+	}{
+		{name: "absent policy", data: "{}"},
+		{name: "null policy", data: "blocked_collections: null"},
+		{name: "empty policy", data: "blocked_collections: {}", want: map[string]BlockedCollection{}},
+		{
+			name: "reason forms with resolved synced bundle",
+			data: `blocked_collections: {omitted: {}, null-entry: null, empty: {reason: ''}, null-reason: {reason: null}, secrets: {reason: maintenance}}
+cluster_groups: {test-group: [cluster1]}
+components: {credentials: [{collection: secrets, group: group1}]}
+bundles: [{name: test-bundle, components: [credentials], sync_to_cluster: true, targets: [{cluster_groups: [test-group], namespace: default}]}]
+`,
+			want:        map[string]BlockedCollection{"omitted": {}, "null-entry": {}, "empty": {}, "null-reason": {}, "secrets": {Reason: "maintenance"}},
+			wantBundles: []GSMBundle{{Name: "test-bundle", SyncToCluster: true, GSMSecrets: []GSMSecretRef{{Collection: "secrets", Group: "group1"}}, Targets: []TargetSpec{{Cluster: "cluster1", Namespace: "default", Type: corev1.SecretTypeOpaque}}}},
+		},
+	} {
+		t.Run(tc.name, func(t *testing.T) {
+			configFile := filepath.Join(t.TempDir(), "gsm-config.yaml")
+			if err := os.WriteFile(configFile, []byte(tc.data), 0600); err != nil {
+				t.Fatal(err)
+			}
+			var config GSMConfig
+			if err := LoadGSMConfigFromFile(configFile, &config); err != nil {
+				t.Fatal(err)
+			}
+			if diff := cmp.Diff(tc.want, config.BlockedCollections); diff != "" {
+				t.Errorf("unexpected blocked collections (-want +got):\n%s", diff)
+			}
+			if diff := cmp.Diff(tc.wantBundles, config.Bundles); diff != "" {
+				t.Errorf("unexpected bundles (-want +got):\n%s", diff)
+			}
+			encoded, err := yaml.Marshal(config)
+			if err != nil {
+				t.Fatal(err)
+			}
+			var roundTrip GSMConfig
+			if err := yaml.UnmarshalStrict(encoded, &roundTrip); err != nil {
+				t.Fatal(err)
+			}
+			if diff := cmp.Diff(config, roundTrip, cmpopts.EquateEmpty()); diff != "" {
+				t.Errorf("config changed after round trip (-want +got):\n%s", diff)
+			}
+		})
+	}
 }
 
 func TestGSMConfigValidate(t *testing.T) {

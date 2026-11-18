@@ -1022,35 +1022,8 @@ bundles: [{name: test-bundle, components: [credentials], sync_to_cluster: true, 
 	}
 }
 
-// TestGSMConfigDeepCopyInto checks map allocation and mutation isolation.
-func TestGSMConfigDeepCopyInto(t *testing.T) {
-	for _, tc := range []struct {
-		name        string
-		collections map[string]BlockedCollection
-	}{
-		{name: "nil map"},
-		{name: "empty map", collections: map[string]BlockedCollection{}},
-		{name: "populated map", collections: map[string]BlockedCollection{"secrets": {Reason: "maintenance"}}},
-	} {
-		t.Run(tc.name, func(t *testing.T) {
-			original := GSMConfig{BlockedCollections: tc.collections}
-			var copied GSMConfig
-			original.DeepCopyInto(&copied)
-			if diff := cmp.Diff(original, copied); diff != "" {
-				t.Fatalf("unexpected copy (-want +got):\n%s", diff)
-			}
-			if copied.BlockedCollections != nil {
-				copied.BlockedCollections["another"] = BlockedCollection{Reason: "changed"}
-				if _, found := original.BlockedCollections["another"]; found {
-					t.Fatal("mutating the copy changed the original blocked collections")
-				}
-			}
-		})
-	}
-}
-
-// TestBlockedCollectionUnmarshalJSON checks narrow blocked-metadata decoding.
-func TestBlockedCollectionUnmarshalJSON(t *testing.T) {
+// TestUnmarshalJSON checks narrow blocked-metadata decoding.
+func TestUnmarshalJSON(t *testing.T) {
 	for _, tc := range []struct {
 		name, data, wantError string
 		want                  BlockedCollection

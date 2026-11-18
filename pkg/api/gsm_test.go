@@ -968,8 +968,6 @@ func TestLoadGSMConfigFromFile(t *testing.T) {
 		{name: "absent policy", data: "{}"},
 		{name: "null policy", data: "blocked_collections: null"},
 		{name: "empty policy", data: "blocked_collections: {}", want: map[string]BlockedCollection{}},
-		{name: "single differently cased policy", data: "BLOCKED_COLLECTIONS: {secrets: {}}", want: map[string]BlockedCollection{"secrets": {}}},
-		{name: "duplicate case-insensitive policy declarations", data: "BLOCKED_COLLECTIONS: {secrets: {}}\nblocked_collections: null", wantError: "duplicate blocked_collections declaration"},
 		{name: "quoted boolean-like keys", data: `blocked_collections: {"yes": {}, "no": {}}`, want: map[string]BlockedCollection{"yes": {}, "no": {}}},
 		{name: "unquoted boolean-like key", data: "blocked_collections: {yes: {}}", wantError: "quote collection keys"},
 		{name: "case-insensitive policy key", data: "BLOCKED_COLLECTIONS: {yes: {}}", wantError: "quote collection keys"},

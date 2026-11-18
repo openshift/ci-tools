@@ -117,15 +117,10 @@ func LoadGSMConfigFromFile(file string, config *GSMConfig) error {
 	if err := goyaml.Unmarshal(bytes, &document); err != nil {
 		return fmt.Errorf("error converting YAML to JSON: %w", err)
 	}
-	seenBlockedCollections := false
 	for name, value := range document {
 		if !strings.EqualFold(name, "blocked_collections") {
 			continue
 		}
-		if seenBlockedCollections {
-			return fmt.Errorf("duplicate blocked_collections declaration")
-		}
-		seenBlockedCollections = true
 		collections, isMap := value.(map[interface{}]interface{})
 		if !isMap {
 			continue

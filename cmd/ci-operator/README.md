@@ -40,14 +40,28 @@ client initialization for CSI-enabled jobs still precede it.
 
 Legacy Kubernetes Secret references and literal cluster profiles are checked
 when their namespace/name matches a synced bundle target (`ci` for profiles).
+Matching is conservative across clusters: if bundles share a name and target
+namespace, any matching blocked collection rejects the reference. This can
+reject a job whose executing cluster would use an allowed collection. Preflight
+does not infer the executing cluster, and a blocked candidate is never ignored
+because another matching candidate is allowed. Different namespaces remain
+separate.
 Arbitrary Kubernetes Secrets, dynamic profile overrides from runtime parameters,
 templates, and non-test infrastructure credentials cannot be attributed to GSM
 collections by this metadata check. The policy does not inspect secret values.
 
 ## Rollout
 
-Roll out the updated shared GSM-config schema to its consumers (ci-operator,
-ci-secret-bootstrap, and ci-secret-generator) before adding blocking metadata.
-Use the existing GSM configuration distribution; no ownership ConfigMap rollout
-or job-volume regeneration is needed. Verify a dependent selected target is
-rejected before namespace creation, and an unrelated target still runs.
+Deliver the shared `api.GSMConfig` schema separately first, without ci-operator
+enforcement or blocking entries. After it merges, roll out the schema to
+ci-operator, ci-secret-bootstrap, and ci-secret-generator. Check startup and
+configuration reload errors, bundle resolution, and normal secret reconciliation
+before proceeding. Observation and approval are explicit rollout gates, not a
+fixed waiting period or an automatic merge.
+
+Deliver ci-operator enforcement only after the schema rollout is accepted. Use
+the existing GSM configuration distribution; no ownership ConfigMap rollout or
+job-volume regeneration is needed. Before activating entries, verify a dependent
+selected target is rejected before namespace creation and an unrelated target
+still runs. Account for conservative cross-cluster rejection when choosing
+entries.

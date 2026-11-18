@@ -147,6 +147,17 @@ bundles:
   targets: [{cluster: build01, namespace: b}]
   gsm_secrets: [{collection: blocked, group: group}]
 `
+	crossClusterConfig := `blocked_collections: {blocked: {}}
+bundles:
+- name: shared
+  sync_to_cluster: true
+  targets: [{cluster: build01, namespace: ci}]
+  gsm_secrets: [{collection: allowed, group: group}]
+- name: shared
+  sync_to_cluster: true
+  targets: [{cluster: build02, namespace: ci}]
+  gsm_secrets: [{collection: blocked, group: group}]
+`
 	for _, tc := range []struct {
 		name, reason, config string
 		credential           api.CredentialReference
@@ -163,6 +174,7 @@ bundles:
 		{name: "allowed bundle", credential: api.CredentialReference{Bundle: "allowed"}},
 		{name: "same-named synced bundle allowed namespace", config: sharedConfig, credential: api.CredentialReference{Bundle: "shared", Namespace: "a"}},
 		{name: "same-named synced bundle blocked namespace", config: sharedConfig, credential: api.CredentialReference{Bundle: "shared", Namespace: "b"}, want: fallback},
+		{name: "ambiguous cross-cluster synced bundle rejects any blocked candidate", config: crossClusterConfig, credential: api.CredentialReference{Bundle: "shared", Namespace: "ci"}, want: fallback},
 	} {
 		t.Run(tc.name, func(t *testing.T) {
 			o := options{gsmConfig: api.GSMConfig{

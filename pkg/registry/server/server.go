@@ -277,7 +277,9 @@ func ResolveAndMergeConfigsAndInjectTest(configs Getter, resolver Resolver, reso
 			}
 			ref := fmt.Sprintf("%s.%s", metadata.Org, metadata.Repo)
 
-			mergedConfig.BuildRootImages[ref] = *config.BuildRootImage
+			if config.BuildRootImage != nil {
+				mergedConfig.BuildRootImages[ref] = *config.BuildRootImage
+			}
 
 			for key, image := range config.BaseImages {
 				imageRef := fmt.Sprintf("%s-%s", key, ref)

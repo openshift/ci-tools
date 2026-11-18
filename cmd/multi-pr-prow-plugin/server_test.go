@@ -1,6 +1,7 @@
 package main
 
 import (
+	"context"
 	"errors"
 	"fmt"
 	"strconv"
@@ -28,6 +29,8 @@ import (
 
 type fakeGithubClient struct {
 	prs map[string]*github.PullRequest
+	// refErrors maps "org/repo:ref" to the error GetRef returns for it.
+	refErrors map[string]error
 }
 
 func (c fakeGithubClient) GetPullRequest(org, repo string, number int) (*github.PullRequest, error) {
@@ -40,7 +43,10 @@ func (c fakeGithubClient) CreateComment(owner, repo string, number int, comment 
 	return nil
 }
 
-func (c fakeGithubClient) GetRef(_, _, ref string) (string, error) {
+func (c fakeGithubClient) GetRef(org, repo, ref string) (string, error) {
+	if err, ok := c.refErrors[fmt.Sprintf("%s/%s:%s", org, repo, ref)]; ok {
+		return "", err
+	}
 	return ref, nil
 }
 
@@ -79,9 +85,11 @@ func TestHandle(t *testing.T) {
 		kubeClient   ctrlruntimeclient.Client
 		expected     []prowv1.ProwJob
 		expectedErr  error
+		abortComment string
 	}{
 		{
-			name: "trigger a single multi-pr job run with additional PR from the same repo",
+			name:         "trigger a single multi-pr job run with additional PR from the same repo",
+			abortComment: abortCommand,
 			issueComment: github.IssueCommentEvent{
 				GUID: "guid",
 				Repo: github.Repo{Owner: github.User{Login: "openshift"}, Name: "ci-tools"},
@@ -213,6 +221,127 @@ func TestHandle(t *testing.T) {
 			},
 			kubeClient:  fakectrlruntimeclient.NewFakeClient(),
 			expectedErr: errors.New("the user: not-trusted is not trusted to trigger tests"),
+		},
+		{
+			name:         "trigger a PR-free multi-pr job run for a test in the origin repo",
+			abortComment: "/testwith  abort",
+			issueComment: github.IssueCommentEvent{
+				GUID: "guid",
+				Repo: github.Repo{Owner: github.User{Login: "openshift"}, Name: "ci-tools"},
+				Issue: github.Issue{
+					Number:      999,
+					PullRequest: &struct{}{},
+				},
+				Comment: github.IssueComment{
+					Body: "/testwith openshift/ci-tools/main/unit",
+					User: github.User{Login: "developer"},
+				},
+			},
+			originPR: github.PullRequest{
+				Number: 999,
+				Base: github.PullRequestBranch{
+					Repo: github.Repo{
+						Owner: github.User{Login: "openshift"},
+						Name:  "ci-tools",
+					},
+					Ref: "main",
+				},
+			},
+			kubeClient: fakectrlruntimeclient.NewFakeClient(),
+		},
+		{
+			name:         "trigger a PR-free multi-pr job run for a test in a different repo",
+			abortComment: "/testwith\tabort \r\n",
+			issueComment: github.IssueCommentEvent{
+				GUID: "guid",
+				Repo: github.Repo{Owner: github.User{Login: "openshift"}, Name: "ci-tools"},
+				Issue: github.Issue{
+					Number:      999,
+					PullRequest: &struct{}{},
+				},
+				Comment: github.IssueComment{
+					Body: "/testwith openshift/release/main/integration",
+					User: github.User{Login: "developer"},
+				},
+			},
+			originPR: github.PullRequest{
+				Number: 999,
+				Base: github.PullRequestBranch{
+					Repo: github.Repo{
+						Owner: github.User{Login: "openshift"},
+						Name:  "ci-tools",
+					},
+					Ref: "main",
+				},
+			},
+			kubeClient: fakectrlruntimeclient.NewFakeClient(),
+		},
+		{
+			name: "abort followed by other content is rejected",
+			issueComment: github.IssueCommentEvent{
+				Repo: github.Repo{Owner: github.User{Login: "openshift"}, Name: "ci-tools"},
+				Issue: github.Issue{
+					Number:      999,
+					PullRequest: &struct{}{},
+				},
+				Comment: github.IssueComment{
+					Body: "/testwith  abort\nthanks",
+					User: github.User{Login: "developer"},
+				},
+			},
+			originPR: github.PullRequest{
+				Number: 999,
+				Base: github.PullRequestBranch{
+					Repo: github.Repo{Owner: github.User{Login: "openshift"}, Name: "ci-tools"},
+					Ref:  "main",
+				},
+			},
+			kubeClient:  fakectrlruntimeclient.NewFakeClient(),
+			expectedErr: errors.New("could not determine job runs: /testwith abort must be the only content of the comment"),
+		},
+		{
+			name: "abort with trailing whitespace is not parsed as a test request",
+			issueComment: github.IssueCommentEvent{
+				GUID: "guid",
+				Repo: github.Repo{Owner: github.User{Login: "openshift"}, Name: "ci-tools"},
+				Issue: github.Issue{
+					Number:      999,
+					PullRequest: &struct{}{},
+				},
+				Comment: github.IssueComment{
+					Body: "/testwith abort \r\n",
+					User: github.User{Login: "developer"},
+				},
+			},
+			originPR: github.PullRequest{
+				Number: 999,
+				Base: github.PullRequestBranch{
+					Repo: github.Repo{
+						Owner: github.User{Login: "openshift"},
+						Name:  "ci-tools",
+					},
+					Ref: "main",
+				},
+			},
+			kubeClient: fakectrlruntimeclient.NewClientBuilder().WithRuntimeObjects(
+				&prowv1.ProwJob{
+					ObjectMeta: metav1.ObjectMeta{
+						Name:      "multi-pr-job-1",
+						Namespace: "ci",
+						Labels: map[string]string{
+							kube.OrgLabel:         "openshift",
+							kube.RepoLabel:        "ci-tools",
+							kube.PullLabel:        strconv.Itoa(999),
+							kube.ProwJobTypeLabel: string(prowv1.PresubmitJob),
+							testwithLabel:         "openshift.ci-tools.999",
+						},
+					},
+					Spec: prowv1.ProwJobSpec{
+						Job: "multi-pr-job-1",
+					},
+					Status: prowv1.ProwJobStatus{State: prowv1.PendingState},
+				},
+			).Build(),
 		},
 		{
 			name: "abort multi-pr jobs",
@@ -355,7 +484,13 @@ func TestHandle(t *testing.T) {
 								},
 							},
 						},
-						{Org: "openshift", Repo: "release", Branch: "main"}: {},
+						{Org: "openshift", Repo: "release", Branch: "main"}: {
+							Tests: []api.TestStepConfiguration{
+								{
+									As: "integration",
+								},
+							},
+						},
 					},
 				},
 				prowConfigGetter: &fakeProwConfigGetter{
@@ -386,6 +521,30 @@ func TestHandle(t *testing.T) {
 					t.Fatalf("Unexpected error (-want, +got): %v", diff)
 				}
 			} else {
+				if tc.abortComment != "" {
+					if len(prowJobs) != 1 {
+						t.Fatalf("expected one created job, got %d", len(prowJobs))
+					}
+					abortComment := tc.issueComment
+					abortComment.Comment.Body = tc.abortComment
+					abortedJobs, err := s.handle(logrus.NewEntry(logrus.StandardLogger()), abortComment)
+					if err != nil {
+						t.Fatalf("aborting created job: %v", err)
+					}
+					if len(abortedJobs) != 1 {
+						t.Fatalf("expected one aborted job, got %d", len(abortedJobs))
+					}
+					if abortedJobs[0].Name != prowJobs[0].Name {
+						t.Errorf("expected aborted job %q, got %q", prowJobs[0].Name, abortedJobs[0].Name)
+					}
+					var storedJob prowv1.ProwJob
+					if err := s.kubeClient.Get(context.Background(), ctrlruntimeclient.ObjectKeyFromObject(prowJobs[0]), &storedJob); err != nil {
+						t.Fatalf("getting created job: %v", err)
+					}
+					if storedJob.Status.State != prowv1.AbortedState {
+						t.Errorf("expected job state %q, got %q", prowv1.AbortedState, storedJob.Status.State)
+					}
+				}
 				for _, prowJob := range prowJobs {
 					defaultProwJobFields(prowJob)
 				}
@@ -706,6 +865,157 @@ func TestDetermineJobRuns(t *testing.T) {
 			}},
 		},
 		{
+			name:    "PR-free command for a test in the origin repo",
+			comment: "/testwith openshift/ci-tools/main/unit",
+			originPR: github.PullRequest{
+				Base: github.PullRequestBranch{
+					Repo: github.Repo{
+						Owner: github.User{Login: "openshift"},
+						Name:  "ci-tools",
+					},
+					Ref: "main",
+				},
+				Number: 999,
+			},
+			expected: []jobRun{{
+				JobMetadata: api.MetadataWithTest{
+					Metadata: api.Metadata{
+						Org:    "openshift",
+						Repo:   "ci-tools",
+						Branch: "main",
+					},
+					Test: "unit",
+				},
+				OriginPR: github.PullRequest{
+					Base: github.PullRequestBranch{
+						Repo: github.Repo{
+							Owner: github.User{Login: "openshift"},
+							Name:  "ci-tools",
+						},
+					},
+					Number: 999,
+				},
+			}},
+		},
+		{
+			name:    "PR-free command for a test in a different repo preserves origin base ref",
+			comment: "/testwith openshift/cluster-version-operator/main/e2e",
+			originPR: github.PullRequest{
+				Base: github.PullRequestBranch{
+					Repo: github.Repo{
+						Owner: github.User{Login: "openshift"},
+						Name:  "oc",
+					},
+					Ref: "main",
+				},
+				Number: 2170,
+			},
+			expected: []jobRun{{
+				JobMetadata: api.MetadataWithTest{
+					Metadata: api.Metadata{
+						Org:    "openshift",
+						Repo:   "cluster-version-operator",
+						Branch: "main",
+					},
+					Test: "e2e",
+				},
+				OriginPR: github.PullRequest{
+					Base: github.PullRequestBranch{
+						Repo: github.Repo{
+							Owner: github.User{Login: "openshift"},
+							Name:  "oc",
+						},
+						Ref: "main",
+					},
+					Number: 2170,
+				},
+			}},
+		},
+		{
+			name:    "PR-free command with a variant mixed with a command including a PR, with CRLF line endings",
+			comment: "/testwith openshift/cluster-version-operator/main/okd/e2e \r\n/testwith openshift/cluster-version-operator/main/e2e openshift/cluster-version-operator#1\r\n",
+			originPR: github.PullRequest{
+				Base: github.PullRequestBranch{
+					Repo: github.Repo{
+						Owner: github.User{Login: "openshift"},
+						Name:  "oc",
+					},
+					Ref: "main",
+				},
+				Number: 2170,
+			},
+			expected: []jobRun{
+				{
+					JobMetadata: api.MetadataWithTest{
+						Metadata: api.Metadata{
+							Org:     "openshift",
+							Repo:    "cluster-version-operator",
+							Branch:  "main",
+							Variant: "okd",
+						},
+						Test: "e2e",
+					},
+					OriginPR: github.PullRequest{
+						Base: github.PullRequestBranch{
+							Repo: github.Repo{
+								Owner: github.User{Login: "openshift"},
+								Name:  "oc",
+							},
+							Ref: "main",
+						},
+						Number: 2170,
+					},
+				},
+				{
+					JobMetadata: api.MetadataWithTest{
+						Metadata: api.Metadata{
+							Org:    "openshift",
+							Repo:   "cluster-version-operator",
+							Branch: "main",
+						},
+						Test: "e2e",
+					},
+					OriginPR: github.PullRequest{
+						Base: github.PullRequestBranch{
+							Repo: github.Repo{
+								Owner: github.User{Login: "openshift"},
+								Name:  "oc",
+							},
+							Ref: "main",
+						},
+						Number: 2170,
+					},
+					AdditionalPRs: []github.PullRequest{
+						{
+							Base: github.PullRequestBranch{
+								Repo: github.Repo{
+									Owner: github.User{Login: "openshift"},
+									Name:  "cluster-version-operator",
+								},
+								Ref: "main",
+							},
+							Number: 1,
+						},
+					},
+				},
+			},
+		},
+		{
+			name:    "abort command followed by other content",
+			comment: "/testwith abort\nthanks",
+			originPR: github.PullRequest{
+				Base: github.PullRequestBranch{
+					Repo: github.Repo{
+						Owner: github.User{Login: "openshift"},
+						Name:  "ci-tools",
+					},
+					Ref: "main",
+				},
+				Number: 999,
+			},
+			expectedError: errors.New("/testwith abort must be the only content of the comment"),
+		},
+		{
 			name:    "invalid format for additional PR",
 			comment: "/testwith openshift/ci-tools/main/unit openshift/ci-tools/123",
 			originPR: github.PullRequest{
@@ -883,10 +1193,12 @@ func (f *fakeDispatcherClient) ClusterForJob(jobName string) (string, error) {
 
 func TestGenerateProwJob(t *testing.T) {
 	testCases := []struct {
-		name          string
-		jobRun        jobRun
-		shardCount    *int
-		expectedError error
+		name                  string
+		jobRun                jobRun
+		shardCount            *int
+		canonicalGoRepository *string
+		refErrors             map[string]error
+		expectedError         error
 	}{
 		{
 			name: "additional PR from the same repo",
@@ -1059,7 +1371,7 @@ func TestGenerateProwJob(t *testing.T) {
 			expectedError: errors.New("could not determine cluster for job pull-ci-openshift-ci-tools-main-missing: job: pull-ci-openshift-ci-tools-main-missing not found"),
 		},
 		{
-			name: "no ref for requested test included",
+			name: "no PR for the repo containing the test runs it against the branch",
 			jobRun: jobRun{
 				JobMetadata: api.MetadataWithTest{
 					Metadata: api.Metadata{
@@ -1096,7 +1408,112 @@ func TestGenerateProwJob(t *testing.T) {
 					},
 				},
 			},
-			expectedError: errors.New("no ref for requested test included in command. The org, repo, and branch containing the requested test need to be targeted by at least one of the included PRs"),
+		},
+		{
+			name: "PR-free request for a test in the origin repo",
+			jobRun: jobRun{
+				JobMetadata: api.MetadataWithTest{
+					Metadata: api.Metadata{
+						Org:    "openshift",
+						Repo:   "ci-tools",
+						Branch: "main",
+					},
+					Test: "unit",
+				},
+				OriginPR: github.PullRequest{
+					Base: github.PullRequestBranch{
+						Repo: github.Repo{
+							Owner: github.User{Login: "openshift"},
+							Name:  "ci-tools",
+						},
+					},
+					Number: 999,
+					User:   github.User{Login: "developer"},
+					Head:   github.PullRequestBranch{SHA: "A_SHA"},
+				},
+			},
+		},
+		{
+			name: "PR-free request for a test in a different repo runs it against the branch",
+			jobRun: jobRun{
+				JobMetadata: api.MetadataWithTest{
+					Metadata: api.Metadata{
+						Org:    "openshift",
+						Repo:   "cluster-version-operator",
+						Branch: "main",
+					},
+					Test: "e2e",
+				},
+				OriginPR: github.PullRequest{
+					Base: github.PullRequestBranch{
+						Repo: github.Repo{
+							Owner: github.User{Login: "openshift"},
+							Name:  "oc",
+						},
+						Ref: "main",
+					},
+					Number: 2170,
+					User:   github.User{Login: "developer"},
+					Head:   github.PullRequestBranch{SHA: "A_SHA"},
+				},
+			},
+			canonicalGoRepository: ptr.To("github.com/openshift/cluster-version-operator-alias"),
+		},
+		{
+			name: "PR-free request for a variant test in a different repo takes the path alias from the variant config",
+			jobRun: jobRun{
+				JobMetadata: api.MetadataWithTest{
+					Metadata: api.Metadata{
+						Org:     "openshift",
+						Repo:    "cluster-version-operator",
+						Branch:  "main",
+						Variant: "okd",
+					},
+					Test: "e2e",
+				},
+				OriginPR: github.PullRequest{
+					Base: github.PullRequestBranch{
+						Repo: github.Repo{
+							Owner: github.User{Login: "openshift"},
+							Name:  "oc",
+						},
+						Ref: "main",
+					},
+					Number: 2170,
+					User:   github.User{Login: "developer"},
+					Head:   github.PullRequestBranch{SHA: "A_SHA"},
+				},
+			},
+			canonicalGoRepository: ptr.To("github.com/openshift/cluster-version-operator-okd-alias"),
+		},
+		{
+			name: "PR-free request for a test in a branch that cannot be resolved",
+			jobRun: jobRun{
+				JobMetadata: api.MetadataWithTest{
+					Metadata: api.Metadata{
+						Org:    "openshift",
+						Repo:   "cluster-version-operator",
+						Branch: "missing",
+					},
+					Test: "e2e",
+				},
+				OriginPR: github.PullRequest{
+					Base: github.PullRequestBranch{
+						Repo: github.Repo{
+							Owner: github.User{Login: "openshift"},
+							Name:  "oc",
+						},
+						Ref: "main",
+					},
+					Number: 2170,
+					User:   github.User{Login: "developer"},
+					Head:   github.PullRequestBranch{SHA: "A_SHA"},
+				},
+			},
+			refErrors: map[string]error{
+				"openshift/cluster-version-operator:heads/missing": errors.New("not found"),
+			},
+			expectedError: errors.New("failed to get baseSHA of openshift/cluster-version-operator@missing, the branch containing the requested test: not found"),
 		},
 	}
 	for _, tc := range testCases {
@@ -1107,12 +1524,14 @@ func TestGenerateProwJob(t *testing.T) {
 			}
 			ciopConfigs := map[api.Metadata]*api.ReleaseBuildConfiguration{
 				tc.jobRun.JobMetadata.Metadata: {
-					Tests: []api.TestStepConfiguration{testConfig},
+					Tests:                 []api.TestStepConfiguration{testConfig},
+					CanonicalGoRepository: tc.canonicalGoRepository,
 				},
 			}
 			addCIOpConfigsFromPRs(ciopConfigs, tc.jobRun.AdditionalPRs)
+			addCIOpConfigsFromPRs(ciopConfigs, []github.PullRequest{tc.jobRun.OriginPR})
 			s := server{
-				ghc:                &fakeGithubClient{},
+				ghc:                &fakeGithubClient{refErrors: tc.refErrors},
 				ciOpConfigResolver: &fakeCIOpConfigResolver{configs: ciopConfigs},
 				prowConfigGetter: &fakeProwConfigGetter{
 					cfg: &prowconfig.Config{
@@ -1138,6 +1557,77 @@ func TestGenerateProwJob(t *testing.T) {
 			if err == nil {
 				defaultProwJobFields(prowJob)
 				testhelper.CompareWithFixture(t, prowJob)
+			}
+		})
+	}
+}
+
+func TestDetermineProwJobName(t *testing.T) {
+	ciTools := github.Repo{Owner: github.User{Login: "openshift"}, Name: "ci-tools"}
+	oc := github.Repo{Owner: github.User{Login: "openshift"}, Name: "oc"}
+	cvo := github.Repo{Owner: github.User{Login: "openshift"}, Name: "cluster-version-operator"}
+	installer := github.Repo{Owner: github.User{Login: "openshift"}, Name: "installer"}
+	testCases := []struct {
+		name     string
+		jobRun   jobRun
+		expected string
+	}{
+		{
+			name: "additional PR from the repo containing the test",
+			jobRun: jobRun{
+				JobMetadata:   api.MetadataWithTest{Metadata: api.Metadata{Org: "openshift", Repo: "ci-tools", Branch: "main"}, Test: "unit"},
+				OriginPR:      github.PullRequest{Base: github.PullRequestBranch{Repo: ciTools}, Number: 999},
+				AdditionalPRs: []github.PullRequest{{Base: github.PullRequestBranch{Repo: ciTools, Ref: "main"}, Number: 123}},
+			},
+			expected: "multi-pr-openshift-ci-tools-999-openshift-ci-tools-123-unit",
+		},
+		{
+			name: "PR-free request for a test in the origin repo",
+			jobRun: jobRun{
+				JobMetadata: api.MetadataWithTest{Metadata: api.Metadata{Org: "openshift", Repo: "ci-tools", Branch: "main", Variant: "variant"}, Test: "unit"},
+				OriginPR:    github.PullRequest{Base: github.PullRequestBranch{Repo: ciTools}, Number: 999},
+			},
+			expected: "multi-pr-openshift-ci-tools-999-unit",
+		},
+		{
+			name: "only an additional PR is from the repo containing the test",
+			jobRun: jobRun{
+				JobMetadata:   api.MetadataWithTest{Metadata: api.Metadata{Org: "openshift", Repo: "cluster-version-operator", Branch: "main"}, Test: "e2e"},
+				OriginPR:      github.PullRequest{Base: github.PullRequestBranch{Repo: oc, Ref: "main"}, Number: 2170},
+				AdditionalPRs: []github.PullRequest{{Base: github.PullRequestBranch{Repo: cvo, Ref: "main"}, Number: 1}},
+			},
+			expected: "multi-pr-openshift-oc-2170-openshift-cluster-version-operator-1-e2e",
+		},
+		{
+			name: "PR-free request for a test in a different repo includes the target",
+			jobRun: jobRun{
+				JobMetadata: api.MetadataWithTest{Metadata: api.Metadata{Org: "openshift", Repo: "cluster-version-operator", Branch: "main"}, Test: "e2e"},
+				OriginPR:    github.PullRequest{Base: github.PullRequestBranch{Repo: oc, Ref: "main"}, Number: 2170},
+			},
+			expected: "multi-pr-openshift-oc-2170-openshift-cluster-version-operator-main-e2e",
+		},
+		{
+			name: "PR-free request for a variant test in a different repo includes the variant",
+			jobRun: jobRun{
+				JobMetadata: api.MetadataWithTest{Metadata: api.Metadata{Org: "openshift", Repo: "cluster-version-operator", Branch: "main", Variant: "okd"}, Test: "e2e"},
+				OriginPR:    github.PullRequest{Base: github.PullRequestBranch{Repo: oc, Ref: "main"}, Number: 2170},
+			},
+			expected: "multi-pr-openshift-oc-2170-openshift-cluster-version-operator-main-okd-e2e",
+		},
+		{
+			name: "no PR from the repo containing the test includes the target after the additional PRs",
+			jobRun: jobRun{
+				JobMetadata:   api.MetadataWithTest{Metadata: api.Metadata{Org: "openshift", Repo: "cluster-version-operator", Branch: "main"}, Test: "e2e"},
+				OriginPR:      github.PullRequest{Base: github.PullRequestBranch{Repo: oc, Ref: "main"}, Number: 2170},
+				AdditionalPRs: []github.PullRequest{{Base: github.PullRequestBranch{Repo: installer, Ref: "main"}, Number: 5}},
+			},
+			expected: "multi-pr-openshift-oc-2170-openshift-installer-5-openshift-cluster-version-operator-main-e2e",
+		},
+	}
+	for _, tc := range testCases {
+		t.Run(tc.name, func(t *testing.T) {
+			if diff := cmp.Diff(tc.expected, determineProwJobName(tc.jobRun)); diff != "" {
+				t.Errorf("unexpected job name (-want +got):\n%s", diff)
 			}
 		})
 	}

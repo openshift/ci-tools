@@ -539,25 +539,6 @@ func getCommonPlugins(privateRepoPlugins map[string][]string) sets.Set[string] {
 	return ret
 }
 
-func getAllConfigs(releaseRepoPath string) (*config.ReleaseRepoConfig, error) {
-	c := &config.ReleaseRepoConfig{}
-	var err error
-	ciopConfigPath := filepath.Join(releaseRepoPath, config.CiopConfigInRepoPath)
-	c.CiOperator, err = config.LoadDataByFilename(ciopConfigPath)
-	if err != nil {
-		return nil, fmt.Errorf("failed to load ci-operator configuration from release repo: %w", err)
-	}
-
-	prowConfigPath := filepath.Join(releaseRepoPath, config.ConfigInRepoPath)
-	prowJobConfigPath := filepath.Join(releaseRepoPath, config.JobConfigInRepoPath)
-	c.Prow, err = prowconfig.Load(prowConfigPath, []string{prowJobConfigPath}, nil, "")
-	if err != nil {
-		return nil, fmt.Errorf("failed to load Prow configuration from release repo: %w", err)
-	}
-
-	return c, nil
-}
-
 func main() {
 	logrus.SetReportCaller(true)
 	logrus.SetFormatter(&logrus.TextFormatter{
@@ -579,11 +560,16 @@ func main() {
 		os.Exit(1)
 	}()
 
-	configs, err := getAllConfigs(o.releaseRepoPath)
-	if err != nil {
+	// Validate with supplemental _prowconfig.yaml shards so job_queue_capacities are visible.
+	if _, err := config.GetAllConfigs(o.releaseRepoPath); err != nil {
 		logrus.WithError(err).Fatal("couldn't get the prow and ci-operator configs")
 	}
-	prowConfig := configs.Prow
+	// Mutate/write the main config only; leave supplemental shards untouched.
+	prowConfigPath := filepath.Join(o.releaseRepoPath, config.ConfigInRepoPath)
+	prowConfig, err := prowconfig.Load(prowConfigPath, nil, nil, "")
+	if err != nil {
+		logrus.WithError(err).Fatal("couldn't load the main prow config")
+	}
 	prowConfig.PresubmitsStatic = nil
 	prowConfig.PostsubmitsStatic = nil
 	prowConfig.Periodics = nil
@@ -630,7 +616,7 @@ func main() {
 	injectPrivateBugzillaPlugin(pluginsConfig.Bugzilla, orgRepos)
 	injectPrivateTriggers(&pluginsConfig.Triggers, orgRepos)
 
-	if err := updateProwConfig(filepath.Join(o.releaseRepoPath, config.ConfigInRepoPath), prowConfig); err != nil {
+	if err := updateProwConfig(prowConfigPath, prowConfig); err != nil {
 		logrus.WithError(err).Fatal("couldn't update prow config file")
 	}
 

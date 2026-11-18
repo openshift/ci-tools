@@ -407,6 +407,13 @@ type jobRoot struct {
 	readOnly bool
 }
 
+func (r jobRoot) kind() string {
+	if r.readOnly {
+		return "efs"
+	}
+	return "git"
+}
+
 func (o options) jobRoots() []jobRoot {
 	roots := []jobRoot{{path: o.prowJobConfigDir}}
 	for _, p := range o.readOnlyProwJobConfigDirs.Strings() {
@@ -803,7 +810,7 @@ func findClusterAssigmentsForJobs(jc *prowconfig.JobConfig, root jobRoot, path s
 				c = target
 			}
 		}
-		refreshed := dispatcher.ProwJobData{Cluster: c, Capabilities: extractCapabilities(jobBase.Labels), Demand: demand, Group: group}
+		refreshed := dispatcher.ProwJobData{Cluster: c, Capabilities: extractCapabilities(jobBase.Labels), Demand: demand, Group: group, Root: root.kind()}
 		if reflect.DeepEqual(pjs[jobBase.Name], refreshed) {
 			return nil
 		}
@@ -876,7 +883,7 @@ func (cv *clusterVolume) addToVolume(cluster string, jobBase prowconfig.JobBase,
 		return err
 	}
 	demand := demandForJob(jobVolumes, jobBase.Name, cv.minimumJobDemand)
-	cv.pjs[jobBase.Name] = dispatcher.ProwJobData{Cluster: c, Capabilities: extractCapabilities(jobBase.Labels), Demand: demand, Group: group}
+	cv.pjs[jobBase.Name] = dispatcher.ProwJobData{Cluster: c, Capabilities: extractCapabilities(jobBase.Labels), Demand: demand, Group: group, Root: root.kind()}
 	if cv.prechargedJobs.Has(jobBase.Name) {
 		return nil
 	}
@@ -1873,7 +1880,14 @@ func main() {
 	}(o.clusterConfigPath)
 
 	dispatchServer := dispatcher.NewSnapshotServer(prowjobs, ecd, dispatchWrapper, snapshots)
-	mux := newSchedulingMux(dispatchServer, o.legacyEventEndpoint)
+	// The bulk placement view is operator data, so it is gated behind the same
+	// bearer token as the control API. Without a configured control API there is
+	// no token to check against and the endpoint is not served at all.
+	var controlToken func() []byte
+	if o.controlAPITokenPath != "" {
+		controlToken = secret.GetTokenGenerator(o.controlAPITokenPath)
+	}
+	mux := newSchedulingMux(dispatchServer, o.legacyEventEndpoint, controlToken)
 	if o.observationAPI.listenAddress != "" {
 		var overrides dispatcher.OverrideReader
 		if controlPlane != nil {
@@ -1886,8 +1900,11 @@ func main() {
 		go serveObservation(observationServer)
 	}
 	if controlPlane != nil {
-		token := secret.GetTokenGenerator(o.controlAPITokenPath)
-		mux.Handle("/control/v1/", dispatcher.NewControlServer(controlPlane, token))
+		mux.Handle("/control/v1/rescan", dispatcher.NewRescanHandler(func() error {
+			dispatchDeltaWrapper()
+			return nil
+		}, controlToken))
+		mux.Handle("/control/v1/", dispatcher.NewControlServer(controlPlane, controlToken))
 	}
 	httpServer := &http.Server{
 		Addr:              ":8080",
@@ -1901,9 +1918,18 @@ func main() {
 }
 
 // newSchedulingMux preserves the scheduling API while retiring observation from its plaintext listener.
-func newSchedulingMux(server *dispatcher.Server, legacyEventEndpoint bool) *http.ServeMux {
+func newSchedulingMux(server *dispatcher.Server, legacyEventEndpoint bool, token func() []byte) *http.ServeMux {
 	mux := http.NewServeMux()
 	mux.HandleFunc("/", server.RequestHandler)
+	// The bulk placement view is operator data. It is only served when a control
+	// token is configured; without one the route stays absent rather than open.
+	if token != nil {
+		mux.Handle("/assignments", dispatcher.RequireBearerToken(token, http.HandlerFunc(server.AssignmentsHandler)))
+	} else {
+		mux.HandleFunc("/assignments", func(w http.ResponseWriter, _ *http.Request) {
+			http.Error(w, "assignments require a configured control API token", http.StatusForbidden)
+		})
+	}
 	mux.HandleFunc("/healthz", server.HealthHandler)
 	mux.HandleFunc("/readyz", server.ReadyHandler)
 	mux.Handle("/metrics", promhttp.Handler())

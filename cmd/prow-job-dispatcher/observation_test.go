@@ -110,9 +110,10 @@ func TestSchedulingListenerRetiresObservation(t *testing.T) {
 		{name: "observation POST", path: "/observe/v1/state", method: "POST", want: 404},
 		{name: "health", path: "/healthz", method: "GET", want: 200},
 		{name: "metrics", path: "/metrics", method: "GET", want: 200},
+		{name: "assignments without a control token", path: "/assignments", method: "GET", want: 403},
 	} {
 		t.Run(tc.name, func(t *testing.T) {
-			mux := newSchedulingMux(dispatcher.NewSnapshotServer(nil, nil, nil, dispatcher.NewSnapshotManager("")), false)
+			mux := newSchedulingMux(dispatcher.NewSnapshotServer(nil, nil, nil, dispatcher.NewSnapshotManager("")), false, nil)
 			response := httptest.NewRecorder()
 			mux.ServeHTTP(response, httptest.NewRequest(tc.method, tc.path, nil))
 			if response.Code != tc.want {
@@ -195,6 +196,32 @@ func TestObservationCertificateReload(t *testing.T) {
 			}
 			if parsed.SerialNumber.Int64() != tc.wantSerial {
 				t.Errorf("got serial %d want %d", parsed.SerialNumber.Int64(), tc.wantSerial)
+			}
+		})
+	}
+}
+
+func TestAssignmentsRequiresControlToken(t *testing.T) {
+	token := func() []byte { return []byte("secret") }
+	mux := newSchedulingMux(dispatcher.NewSnapshotServer(nil, nil, nil, dispatcher.NewSnapshotManager("")), false, token)
+	for _, tc := range []struct {
+		name   string
+		header string
+		want   int
+	}{
+		{name: "no credentials", want: 401},
+		{name: "wrong token", header: "Bearer other", want: 401},
+		{name: "valid token", header: "Bearer secret", want: 503},
+	} {
+		t.Run(tc.name, func(t *testing.T) {
+			request := httptest.NewRequest("GET", "/assignments?root=efs", nil)
+			if tc.header != "" {
+				request.Header.Set("Authorization", tc.header)
+			}
+			response := httptest.NewRecorder()
+			mux.ServeHTTP(response, request)
+			if response.Code != tc.want {
+				t.Errorf("got %d want %d: %s", response.Code, tc.want, response.Body.String())
 			}
 		})
 	}

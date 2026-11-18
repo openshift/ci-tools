@@ -257,7 +257,7 @@ func (s *ciSecretBootstrapStep) generateDockerConfigJsonSecretConfigTo(name stri
 func (s *ciSecretBootstrapStep) updatePodScalerSecret(c *secretbootstrap.Config) error {
 	if *s.clusterInstall.Onboard.UseTokenFileInKubeconfig {
 		key := ServiceAccountTokenFile(PodScaler, s.clusterInstall.ClusterName)
-		if err := s.updateSecretItemContext(c, PodScaler, string(api.ClusterAPPCI),
+		if err := s.updateSecretItemContext(c, PodScaler,
 			key, secretbootstrap.ItemContext{
 				Field: key,
 				Item:  PodScaler,
@@ -266,7 +266,7 @@ func (s *ciSecretBootstrapStep) updatePodScalerSecret(c *secretbootstrap.Config)
 		}
 	}
 	key := fmt.Sprintf("%s.%s", s.clusterInstall.ClusterName, config)
-	return s.updateSecretItemContext(c, PodScaler, string(api.ClusterAPPCI), key, secretbootstrap.ItemContext{
+	return s.updateSecretItemContext(c, PodScaler, key, secretbootstrap.ItemContext{
 		Field: ServiceAccountKubeconfigPath(PodScaler, s.clusterInstall.ClusterName),
 		Item:  PodScaler,
 	})
@@ -276,7 +276,7 @@ func (s *ciSecretBootstrapStep) updateDPTPControllerManagerSecret(c *secretboots
 	const DPTPControllerManager = "dptp-controller-manager"
 	if *s.clusterInstall.Onboard.UseTokenFileInKubeconfig {
 		keyAndFieldToken := ServiceAccountTokenFile(DPTPControllerManager, s.clusterInstall.ClusterName)
-		if err := s.updateSecretItemContext(c, DPTPControllerManager, string(api.ClusterAPPCI), keyAndFieldToken, secretbootstrap.ItemContext{
+		if err := s.updateSecretItemContext(c, DPTPControllerManager, keyAndFieldToken, secretbootstrap.ItemContext{
 			Field: keyAndFieldToken,
 			Item:  BuildUFarm,
 		}); err != nil {
@@ -284,7 +284,7 @@ func (s *ciSecretBootstrapStep) updateDPTPControllerManagerSecret(c *secretboots
 		}
 	}
 	keyAndField := ServiceAccountKubeconfigPath(DPTPControllerManager, s.clusterInstall.ClusterName)
-	return s.updateSecretItemContext(c, DPTPControllerManager, string(api.ClusterAPPCI), keyAndField, secretbootstrap.ItemContext{
+	return s.updateSecretItemContext(c, DPTPControllerManager, keyAndField, secretbootstrap.ItemContext{
 		Field: keyAndField,
 		Item:  BuildUFarm,
 	})
@@ -293,7 +293,7 @@ func (s *ciSecretBootstrapStep) updateDPTPControllerManagerSecret(c *secretboots
 func (s *ciSecretBootstrapStep) updateGithubLdapUserGroupCreatorSecret(c *secretbootstrap.Config) error {
 	if *s.clusterInstall.Onboard.UseTokenFileInKubeconfig {
 		keyAndFieldToken := ServiceAccountTokenFile(GithubLdapUserGroupCreator, s.clusterInstall.ClusterName)
-		if err := s.updateSecretItemContext(c, GithubLdapUserGroupCreator, string(api.ClusterAPPCI), keyAndFieldToken, secretbootstrap.ItemContext{
+		if err := s.updateSecretItemContext(c, GithubLdapUserGroupCreator, keyAndFieldToken, secretbootstrap.ItemContext{
 			Field: keyAndFieldToken,
 			Item:  BuildUFarm,
 		}); err != nil {
@@ -301,7 +301,7 @@ func (s *ciSecretBootstrapStep) updateGithubLdapUserGroupCreatorSecret(c *secret
 		}
 	}
 	keyAndField := ServiceAccountKubeconfigPath(GithubLdapUserGroupCreator, s.clusterInstall.ClusterName)
-	return s.updateSecretItemContext(c, GithubLdapUserGroupCreator, string(api.ClusterAPPCI), keyAndField, secretbootstrap.ItemContext{
+	return s.updateSecretItemContext(c, GithubLdapUserGroupCreator, keyAndField, secretbootstrap.ItemContext{
 		Field: keyAndField,
 		Item:  BuildUFarm,
 	})
@@ -310,7 +310,7 @@ func (s *ciSecretBootstrapStep) updateGithubLdapUserGroupCreatorSecret(c *secret
 func (s *ciSecretBootstrapStep) updatePromotedImageGovernor(c *secretbootstrap.Config) error {
 	if *s.clusterInstall.Onboard.UseTokenFileInKubeconfig {
 		keyAndFieldToken := ServiceAccountTokenFile(PromotedImageGovernor, s.clusterInstall.ClusterName)
-		if err := s.updateSecretItemContext(c, PromotedImageGovernor, string(api.ClusterAPPCI), keyAndFieldToken, secretbootstrap.ItemContext{
+		if err := s.updateSecretItemContext(c, PromotedImageGovernor, keyAndFieldToken, secretbootstrap.ItemContext{
 			Field: keyAndFieldToken,
 			Item:  BuildUFarm,
 		}); err != nil {
@@ -318,7 +318,7 @@ func (s *ciSecretBootstrapStep) updatePromotedImageGovernor(c *secretbootstrap.C
 		}
 	}
 	keyAndField := ServiceAccountKubeconfigPath(PromotedImageGovernor, s.clusterInstall.ClusterName)
-	return s.updateSecretItemContext(c, PromotedImageGovernor, string(api.ClusterAPPCI), keyAndField, secretbootstrap.ItemContext{
+	return s.updateSecretItemContext(c, PromotedImageGovernor, keyAndField, secretbootstrap.ItemContext{
 		Field: keyAndField,
 		Item:  BuildUFarm,
 	})
@@ -327,7 +327,7 @@ func (s *ciSecretBootstrapStep) updatePromotedImageGovernor(c *secretbootstrap.C
 func (s *ciSecretBootstrapStep) updateClusterDisplay(c *secretbootstrap.Config) error {
 	if *s.clusterInstall.Onboard.UseTokenFileInKubeconfig {
 		keyAndFieldToken := ServiceAccountTokenFile(ClusterDisplay, s.clusterInstall.ClusterName)
-		if err := s.updateSecretItemContext(c, ClusterDisplay, string(api.ClusterAPPCI), keyAndFieldToken, secretbootstrap.ItemContext{
+		if err := s.updateSecretItemContext(c, ClusterDisplay, keyAndFieldToken, secretbootstrap.ItemContext{
 			Field: keyAndFieldToken,
 			Item:  BuildUFarm,
 		}); err != nil {
@@ -335,7 +335,7 @@ func (s *ciSecretBootstrapStep) updateClusterDisplay(c *secretbootstrap.Config) 
 		}
 	}
 	keyAndField := ServiceAccountKubeconfigPath(ClusterDisplay, s.clusterInstall.ClusterName)
-	return s.updateSecretItemContext(c, ClusterDisplay, string(api.ClusterAPPCI), keyAndField, secretbootstrap.ItemContext{
+	return s.updateSecretItemContext(c, ClusterDisplay, keyAndField, secretbootstrap.ItemContext{
 		Field: keyAndField,
 		Item:  BuildUFarm,
 	})
@@ -346,7 +346,7 @@ func (s *ciSecretBootstrapStep) updateChatBotSecret(c *secretbootstrap.Config) e
 	name := chatBot + "-kubeconfigs"
 	if *s.clusterInstall.Onboard.UseTokenFileInKubeconfig {
 		keyAndFieldToken := ServiceAccountTokenFile(chatBot, s.clusterInstall.ClusterName)
-		if err := s.updateSecretItemContext(c, name, string(api.ClusterAPPCI), keyAndFieldToken, secretbootstrap.ItemContext{
+		if err := s.updateSecretItemContext(c, name, keyAndFieldToken, secretbootstrap.ItemContext{
 			Field: keyAndFieldToken,
 			Item:  chatBot,
 		}); err != nil {
@@ -354,7 +354,7 @@ func (s *ciSecretBootstrapStep) updateChatBotSecret(c *secretbootstrap.Config) e
 		}
 	}
 	keyAndField := ServiceAccountKubeconfigPath(chatBot, s.clusterInstall.ClusterName)
-	return s.updateSecretItemContext(c, name, string(api.ClusterAPPCI), keyAndField, secretbootstrap.ItemContext{
+	return s.updateSecretItemContext(c, name, keyAndField, secretbootstrap.ItemContext{
 		Field: keyAndField,
 		Item:  chatBot,
 	})
@@ -423,7 +423,9 @@ func (s *ciSecretBootstrapStep) updateDexIdAndSecret(c *secretbootstrap.Config) 
 	return nil
 }
 
-func (s *ciSecretBootstrapStep) updateSecretItemContext(c *secretbootstrap.Config, name, cluster, key string, value secretbootstrap.ItemContext) error {
+// updateSecretItemContext sets a source item for the named app.ci secret, returning an error if the secret is missing.
+func (s *ciSecretBootstrapStep) updateSecretItemContext(c *secretbootstrap.Config, name, key string, value secretbootstrap.ItemContext) error {
+	const cluster = string(api.ClusterAPPCI)
 	s.log.WithFields(logrus.Fields{
 		"name":    name,
 		"cluster": cluster,

@@ -223,8 +223,9 @@ func TestMetadataFromMetric(t *testing.T) {
 				model.LabelName("label_ci_openshift_io_metadata_variant"): "variant",
 				model.LabelName("label_ci_openshift_io_metadata_target"):  "target",
 				model.LabelName("label_ci_openshift_io_metadata_step"):    "step",
-				model.LabelName("pod"):                                    "pod",
-				model.LabelName("container"):                              "container",
+
+				model.LabelName("pod"):       "pod",
+				model.LabelName("container"): "container",
 			},
 			meta: FullMetadata{
 				Metadata: api.Metadata{
@@ -507,9 +508,10 @@ func TestCachedQuery_Record(t *testing.T) {
 				model.LabelName("label_ci_openshift_io_metadata_variant"): "variant",
 				model.LabelName("label_ci_openshift_io_metadata_target"):  "target",
 				model.LabelName("label_ci_openshift_io_metadata_step"):    "step",
-				model.LabelName("pod"):                                    "pod",
-				model.LabelName("container"):                              "container",
-				model.LabelName("namespace"):                              "namespace",
+
+				model.LabelName("pod"):       "pod",
+				model.LabelName("container"): "container",
+				model.LabelName("namespace"): "namespace",
 			},
 			meta: FullMetadata{
 				Metadata: api.Metadata{
@@ -532,9 +534,10 @@ func TestCachedQuery_Record(t *testing.T) {
 				model.LabelName("label_ci_openshift_io_metadata_variant"): "VARIANT",
 				model.LabelName("label_ci_openshift_io_metadata_target"):  "TARGET",
 				model.LabelName("label_ci_openshift_io_metadata_step"):    "STEP",
-				model.LabelName("pod"):                                    "POD",
-				model.LabelName("container"):                              "CONTAINER",
-				model.LabelName("namespace"):                              "NAMESPACE",
+
+				model.LabelName("pod"):       "POD",
+				model.LabelName("container"): "CONTAINER",
+				model.LabelName("namespace"): "NAMESPACE",
 			},
 			meta: FullMetadata{
 				Metadata: api.Metadata{
@@ -557,9 +560,10 @@ func TestCachedQuery_Record(t *testing.T) {
 				model.LabelName("label_ci_openshift_io_metadata_variant"): "VARIANT",
 				model.LabelName("label_ci_openshift_io_metadata_target"):  "TARGET",
 				model.LabelName("label_ci_openshift_io_metadata_step"):    "STEP",
-				model.LabelName("pod"):                                    "POD",
-				model.LabelName("container"):                              "CONTAINER",
-				model.LabelName("namespace"):                              "OTHER_NAMESPACE",
+
+				model.LabelName("pod"):       "POD",
+				model.LabelName("container"): "CONTAINER",
+				model.LabelName("namespace"): "OTHER_NAMESPACE",
 			},
 			meta: FullMetadata{
 				Metadata: api.Metadata{

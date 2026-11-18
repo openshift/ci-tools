@@ -1,9 +1,12 @@
 package api
 
 import (
+	"bytes"
 	"encoding/json"
 	"fmt"
 	"strings"
+
+	goyaml "gopkg.in/yaml.v2"
 
 	corev1 "k8s.io/api/core/v1"
 	utilerrors "k8s.io/apimachinery/pkg/util/errors"
@@ -31,6 +34,14 @@ type GSMConfig struct {
 // BlockedCollection describes why ci-operator must not consume a collection.
 type BlockedCollection struct {
 	Reason string `json:"reason,omitempty"`
+}
+
+// UnmarshalJSON rejects unknown fields in blocked-collection metadata.
+func (block *BlockedCollection) UnmarshalJSON(data []byte) error {
+	type alias BlockedCollection
+	decoder := json.NewDecoder(bytes.NewReader(data))
+	decoder.DisallowUnknownFields()
+	return decoder.Decode((*alias)(block))
 }
 
 // GSMBundle defines a logical group of GSM secrets
@@ -101,6 +112,24 @@ func LoadGSMConfigFromFile(file string, config *GSMConfig) error {
 	bytes, err := gzip.ReadFileMaybeGZIP(file)
 	if err != nil {
 		return fmt.Errorf("couldn't read GSM config file: %w", err)
+	}
+	var document map[string]interface{}
+	if err := goyaml.Unmarshal(bytes, &document); err != nil {
+		return fmt.Errorf("error converting YAML to JSON: %w", err)
+	}
+	for name, value := range document {
+		if !strings.EqualFold(name, "blocked_collections") {
+			continue
+		}
+		collections, isMap := value.(map[interface{}]interface{})
+		if !isMap {
+			continue
+		}
+		for key := range collections {
+			if _, isString := key.(string); !isString {
+				return fmt.Errorf("blocked_collections contains a non-string key (%T); quote collection keys such as \"yes\"", key)
+			}
+		}
 	}
 	return yaml.UnmarshalStrict(bytes, config)
 }
@@ -285,6 +314,12 @@ type bundleKey struct {
 // Expects a resolved config (resolve() is called automatically during unmarshaling).
 func (c *GSMConfig) Validate() error {
 	var errs []error
+
+	for collection := range c.BlockedCollections {
+		if !gsmvalidation.ValidateCollectionName(collection) {
+			errs = append(errs, fmt.Errorf("blocked_collections has invalid collection name: %q", collection))
+		}
+	}
 
 	// Validate that dptp_collection is set if any bundle uses dockerconfig
 	hasDockerConfig := false

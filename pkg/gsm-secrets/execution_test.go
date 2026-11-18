@@ -11,16 +11,19 @@ import (
 	"time"
 
 	"cloud.google.com/go/iam/admin/apiv1/adminpb"
+	secretmanager "cloud.google.com/go/secretmanager/apiv1"
 	secretmanagerpb "cloud.google.com/go/secretmanager/apiv1/secretmanagerpb"
+	"github.com/google/go-cmp/cmp"
 	gax "github.com/googleapis/gax-go/v2"
 	"go.uber.org/mock/gomock"
 	"google.golang.org/api/googleapi"
+	"google.golang.org/api/option"
+	"google.golang.org/grpc"
 	"google.golang.org/grpc/codes"
+	"google.golang.org/grpc/credentials/insecure"
 	"google.golang.org/grpc/status"
 
 	"k8s.io/apimachinery/pkg/util/wait"
-
-	gsmvalidation "github.com/openshift/ci-tools/pkg/gsm-validation"
 )
 
 func TestGenerateServiceAccountKey(t *testing.T) {
@@ -519,16 +522,43 @@ func TestCreateSecrets(t *testing.T) {
 	}
 }
 
-// TestListSecretFieldsValidation tests the client-side validation logic
-// for non-recursive secret listing in ListSecretFieldsByCollectionAndGroup
-func TestListSecretFieldsValidation(t *testing.T) {
+// secretListRPC describes one scripted listing response or error.
+type secretListRPC struct {
+	secretmanagerpb.ListSecretsResponse
+	err error
+}
+
+// secretListTransport supplies scripted listing RPCs without network access.
+type secretListTransport struct {
+	t    *testing.T
+	rpcs []secretListRPC
+}
+
+// invoke returns the next scripted listing response or error.
+func (f *secretListTransport) invoke(ctx context.Context, method string, req, reply any, cc *grpc.ClientConn, invoker grpc.UnaryInvoker, opts ...grpc.CallOption) error {
+	if len(f.rpcs) == 0 {
+		f.t.Fatal("unexpected list request")
+	}
+	rpc := &f.rpcs[0]
+	f.rpcs = f.rpcs[1:]
+	response := reply.(*secretmanagerpb.ListSecretsResponse)
+	response.Secrets = rpc.Secrets
+	response.NextPageToken = rpc.NextPageToken
+	return rpc.err
+}
+
+func TestListSecretFieldsByCollectionAndGroup(t *testing.T) {
+	unexpectedErr := errors.New("unexpected error")
 	testCases := []struct {
 		name          string
 		collection    string
 		group         string
 		secretID      string
 		shouldInclude bool
-		description   string
+		rpcs          []secretListRPC
+		wantErr       error
+		wantFields    []string
+		cancel        bool
 	}{
 		{
 			name:          "valid direct child - simple group",
@@ -536,7 +566,6 @@ func TestListSecretFieldsValidation(t *testing.T) {
 			group:         "ibmcloud",
 			secretID:      "vsphere__ibmcloud__username",
 			shouldInclude: true,
-			description:   "Direct child with correct structure",
 		},
 		{
 			name:          "invalid - nested subgroup",
@@ -544,7 +573,6 @@ func TestListSecretFieldsValidation(t *testing.T) {
 			group:         "ibmcloud",
 			secretID:      "vsphere__ibmcloud__subgroup__username",
 			shouldInclude: false,
-			description:   "Has extra subgroup level",
 		},
 		{
 			name:          "valid - hierarchical group",
@@ -552,7 +580,6 @@ func TestListSecretFieldsValidation(t *testing.T) {
 			group:         "ibmcloud/ci",
 			secretID:      "vsphere__ibmcloud__ci__password",
 			shouldInclude: true,
-			description:   "Hierarchical group with correct depth",
 		},
 		{
 			name:          "invalid - hierarchical group with nesting",
@@ -560,7 +587,6 @@ func TestListSecretFieldsValidation(t *testing.T) {
 			group:         "ibmcloud/ci",
 			secretID:      "vsphere__ibmcloud__ci__prod__password",
 			shouldInclude: false,
-			description:   "Hierarchical group with extra nesting",
 		},
 		{
 			name:          "valid - empty group",
@@ -568,7 +594,6 @@ func TestListSecretFieldsValidation(t *testing.T) {
 			group:         "",
 			secretID:      "test__field",
 			shouldInclude: true,
-			description:   "Empty group with direct field",
 		},
 		{
 			name:          "invalid - empty group with nesting",
@@ -576,7 +601,6 @@ func TestListSecretFieldsValidation(t *testing.T) {
 			group:         "",
 			secretID:      "test__subgroup__field",
 			shouldInclude: false,
-			description:   "Empty group but has subgroup",
 		},
 		{
 			name:          "invalid - wrong collection",
@@ -584,7 +608,6 @@ func TestListSecretFieldsValidation(t *testing.T) {
 			group:         "ibmcloud",
 			secretID:      "other-collection__ibmcloud__username",
 			shouldInclude: false,
-			description:   "Collection doesn't match",
 		},
 		{
 			name:          "invalid - wrong group",
@@ -592,45 +615,87 @@ func TestListSecretFieldsValidation(t *testing.T) {
 			group:         "ibmcloud",
 			secretID:      "vsphere__other-group__username",
 			shouldInclude: false,
-			description:   "Group doesn't match",
+		},
+		{
+			name: "unavailable then success",
+			rpcs: []secretListRPC{{err: status.Error(codes.Unavailable, "connection reset by peer")}, {}},
+		},
+		{
+			name: "deadline exceeded then success",
+			rpcs: []secretListRPC{{err: status.Error(codes.DeadlineExceeded, "timeout")}, {}},
+		},
+		{
+			name:    "retry exhaustion",
+			rpcs:    []secretListRPC{{err: status.Error(codes.Unavailable, "unavailable")}, {err: status.Error(codes.Unavailable, "unavailable")}, {err: status.Error(codes.Unavailable, "unavailable")}},
+			wantErr: status.Error(codes.Unavailable, "unavailable"),
+		},
+		{
+			name:    "permission denied is not retried",
+			rpcs:    []secretListRPC{{err: status.Error(codes.PermissionDenied, "denied")}},
+			wantErr: status.Error(codes.PermissionDenied, "denied"),
+		},
+		{
+			name:    "unknown errors are not retried",
+			rpcs:    []secretListRPC{{err: unexpectedErr}},
+			wantErr: unexpectedErr,
+		},
+		{
+			name:    "canceled context makes no requests",
+			cancel:  true,
+			wantErr: context.Canceled,
+		},
+		{
+			name:       "later page failure restarts without duplicate fields",
+			collection: "test",
+			rpcs: []secretListRPC{
+				{ListSecretsResponse: secretmanagerpb.ListSecretsResponse{Secrets: []*secretmanagerpb.Secret{{Name: "projects/123/secrets/test__first"}}, NextPageToken: "next"}},
+				{err: status.Error(codes.Unavailable, "unavailable")},
+				{ListSecretsResponse: secretmanagerpb.ListSecretsResponse{Secrets: []*secretmanagerpb.Secret{{Name: "projects/123/secrets/test__first"}}, NextPageToken: "next"}},
+				{ListSecretsResponse: secretmanagerpb.ListSecretsResponse{Secrets: []*secretmanagerpb.Secret{{Name: "projects/123/secrets/test__second"}}}},
+			},
+			wantFields: []string{"first", "second"},
 		},
 	}
 
 	for _, tc := range testCases {
 		t.Run(tc.name, func(t *testing.T) {
-			// Build the expected prefix
-			groupParts := strings.ReplaceAll(tc.group, "/", gsmvalidation.CollectionSecretDelimiter)
-			base := fmt.Sprintf("%s%s", tc.collection, gsmvalidation.CollectionSecretDelimiter)
-			if groupParts != "" {
-				base = fmt.Sprintf("%s%s%s", base, groupParts, gsmvalidation.CollectionSecretDelimiter)
+			if tc.rpcs == nil {
+				tc.rpcs = []secretListRPC{{ListSecretsResponse: secretmanagerpb.ListSecretsResponse{
+					Secrets: []*secretmanagerpb.Secret{{Name: "projects/123/secrets/" + tc.secretID}},
+				}}}
 			}
-
-			// Check prefix match
-			if !strings.HasPrefix(tc.secretID, base) && tc.shouldInclude {
-				t.Errorf("Expected secret %q to match prefix %q, but it doesn't", tc.secretID, base)
-				return
+			transport := &secretListTransport{t: t, rpcs: tc.rpcs}
+			connection, err := grpc.NewClient("passthrough:///fake-gsm",
+				grpc.WithTransportCredentials(insecure.NewCredentials()),
+				grpc.WithUnaryInterceptor(transport.invoke))
+			if err != nil {
+				t.Fatal(err)
 			}
-
-			if !strings.HasPrefix(tc.secretID, base) {
-				// Prefix doesn't match, so it should be excluded
-				if tc.shouldInclude {
-					t.Errorf("Secret %q doesn't match prefix %q but was expected to be included", tc.secretID, base)
-				}
-				return
+			t.Cleanup(func() { connection.Close() })
+			client, err := secretmanager.NewClient(context.Background(), option.WithGRPCConn(connection))
+			if err != nil {
+				t.Fatal(err)
 			}
-
-			// Validate part count
-			parts := strings.Split(tc.secretID, gsmvalidation.CollectionSecretDelimiter)
-			expectedParts := 2 // collection + field
-			if tc.group != "" {
-				expectedParts += strings.Count(tc.group, "/") + 1
+			t.Cleanup(func() { client.Close() })
+			ctx, cancel := context.WithCancel(context.Background())
+			defer cancel()
+			if tc.cancel {
+				cancel()
 			}
-
-			actuallyIncluded := len(parts) == expectedParts
-
-			if actuallyIncluded != tc.shouldInclude {
-				t.Errorf("%s: Secret %q - expected included=%v, got included=%v (parts=%d, expected=%d)",
-					tc.description, tc.secretID, tc.shouldInclude, actuallyIncluded, len(parts), expectedParts)
+			got, err := listSecretFieldsWithBackoff(ctx, client, Config{ProjectIdNumber: "123"}, tc.collection, tc.group, wait.Backoff{Steps: 3})
+			if !errors.Is(err, tc.wantErr) {
+				t.Fatalf("error: got %v, want %v", err, tc.wantErr)
+			}
+			want := tc.wantFields
+			if tc.shouldInclude {
+				parts := strings.Split(tc.secretID, "__")
+				want = []string{parts[len(parts)-1]}
+			}
+			if diff := cmp.Diff(want, got); diff != "" {
+				t.Errorf("unexpected fields (-want +got):\n%s", diff)
+			}
+			if !tc.cancel && len(transport.rpcs) != 0 {
+				t.Errorf("%d expected RPCs were not made", len(transport.rpcs))
 			}
 		})
 	}

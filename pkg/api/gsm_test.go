@@ -8,6 +8,7 @@ import (
 	"testing"
 
 	"github.com/google/go-cmp/cmp"
+	"github.com/google/go-cmp/cmp/cmpopts"
 
 	corev1 "k8s.io/api/core/v1"
 	"sigs.k8s.io/yaml"
@@ -956,42 +957,101 @@ bundles:
 	})
 }
 
+// TestLoadGSMConfigFromFile covers optional metadata, resolution and serialization.
 func TestLoadGSMConfigFromFile(t *testing.T) {
-	t.Run("loads and resolves config from YAML file", func(t *testing.T) {
-		// Create a temporary YAML file
-		tmpDir := t.TempDir()
-		configFile := filepath.Join(tmpDir, "test-config.yaml")
+	for _, tc := range []struct {
+		name, data  string
+		wantError   string
+		want        map[string]BlockedCollection
+		wantBundles []GSMBundle
+	}{
+		{name: "absent policy", data: "{}"},
+		{name: "null policy", data: "blocked_collections: null"},
+		{name: "empty policy", data: "blocked_collections: {}", want: map[string]BlockedCollection{}},
+		{name: "quoted boolean-like keys", data: `blocked_collections: {"yes": {}, "no": {}}`, want: map[string]BlockedCollection{"yes": {}, "no": {}}},
+		{name: "unquoted boolean-like key", data: "blocked_collections: {yes: {}}", wantError: "quote collection keys"},
+		{name: "case-insensitive policy key", data: "BLOCKED_COLLECTIONS: {yes: {}}", wantError: "quote collection keys"},
+		{name: "numeric key", data: "blocked_collections: {42: {}}", wantError: "quote collection keys"},
+		{name: "unknown reason field", data: "blocked_collections: {secrets: {reasno: maintenance}}", wantError: `unknown field "reasno"`},
+		{name: "legacy fields remain permissive", data: "legacy_metadata: ignored\ncluster_groups: {yes: [build01]}"},
+		{name: "malformed YAML keeps error context", data: "bundles: [", wantError: "error converting YAML to JSON:"},
+		{
+			name: "reason forms with resolved synced bundle",
+			data: `blocked_collections: {omitted: {}, null-entry: null, empty: {reason: ''}, null-reason: {reason: null}, secrets: {reason: maintenance}}
+cluster_groups: {test-group: [cluster1]}
+components: {credentials: [{collection: secrets, group: group1}]}
+bundles: [{name: test-bundle, components: [credentials], sync_to_cluster: true, targets: [{cluster_groups: [test-group], namespace: default}]}]
+`,
+			want:        map[string]BlockedCollection{"omitted": {}, "null-entry": {}, "empty": {}, "null-reason": {}, "secrets": {Reason: "maintenance"}},
+			wantBundles: []GSMBundle{{Name: "test-bundle", SyncToCluster: true, GSMSecrets: []GSMSecretRef{{Collection: "secrets", Group: "group1"}}, Targets: []TargetSpec{{Cluster: "cluster1", Namespace: "default", Type: corev1.SecretTypeOpaque}}}},
+		},
+	} {
+		t.Run(tc.name, func(t *testing.T) {
+			configFile := filepath.Join(t.TempDir(), "gsm-config.yaml")
+			if err := os.WriteFile(configFile, []byte(tc.data), 0600); err != nil {
+				t.Fatal(err)
+			}
+			var config GSMConfig
+			if err := LoadGSMConfigFromFile(configFile, &config); err != nil {
+				if tc.wantError == "" || !strings.Contains(err.Error(), tc.wantError) {
+					t.Fatalf("unexpected error: %v", err)
+				}
+				return
+			}
+			if tc.wantError != "" {
+				t.Fatalf("expected error containing %q, got blocked collections %#v", tc.wantError, config.BlockedCollections)
+			}
+			if diff := cmp.Diff(tc.want, config.BlockedCollections); diff != "" {
+				t.Errorf("unexpected blocked collections (-want +got):\n%s", diff)
+			}
+			if diff := cmp.Diff(tc.wantBundles, config.Bundles); diff != "" {
+				t.Errorf("unexpected bundles (-want +got):\n%s", diff)
+			}
+			encoded, err := yaml.Marshal(config)
+			if err != nil {
+				t.Fatal(err)
+			}
+			var roundTrip GSMConfig
+			if err := os.WriteFile(configFile, encoded, 0600); err != nil {
+				t.Fatal(err)
+			}
+			if err := LoadGSMConfigFromFile(configFile, &roundTrip); err != nil {
+				t.Fatal(err)
+			}
+			if diff := cmp.Diff(config, roundTrip, cmpopts.EquateEmpty()); diff != "" {
+				t.Errorf("config changed after round trip (-want +got):\n%s", diff)
+			}
+		})
+	}
+}
 
-		yamlContent := `
-cluster_groups:
-  test-group: [cluster1]
-bundles:
-  - name: test-bundle
-    gsm_secrets:
-      - collection: secrets
-        group: group1
-    targets:
-      - cluster_groups: [test-group]
-        namespace: default
-`
-		if err := os.WriteFile(configFile, []byte(yamlContent), 0644); err != nil {
-			t.Fatalf("failed to write test file: %v", err)
-		}
-
-		var config GSMConfig
-		if err := LoadGSMConfigFromFile(configFile, &config); err != nil {
-			t.Fatalf("unexpected error: %v", err)
-		}
-
-		// Verify cluster_groups were expanded
-		if len(config.Bundles[0].Targets) != 1 {
-			t.Fatalf("expected 1 target, got %d", len(config.Bundles[0].Targets))
-		}
-
-		if config.Bundles[0].Targets[0].Cluster != "cluster1" {
-			t.Errorf("expected cluster 'cluster1', got %q", config.Bundles[0].Targets[0].Cluster)
-		}
-	})
+// TestUnmarshalJSON checks narrow blocked-metadata decoding.
+func TestUnmarshalJSON(t *testing.T) {
+	for _, tc := range []struct {
+		name, data, wantError string
+		want                  BlockedCollection
+	}{
+		{name: "custom reason", data: `{"reason":"maintenance"}`, want: BlockedCollection{Reason: "maintenance"}},
+		{name: "null entry", data: `null`},
+		{name: "unknown field", data: `{"reasno":"maintenance"}`, wantError: `json: unknown field "reasno"`},
+	} {
+		t.Run(tc.name, func(t *testing.T) {
+			var block BlockedCollection
+			err := block.UnmarshalJSON([]byte(tc.data))
+			if tc.wantError != "" {
+				if err == nil || err.Error() != tc.wantError {
+					t.Fatalf("expected error %q, got %v", tc.wantError, err)
+				}
+				return
+			}
+			if err != nil {
+				t.Fatal(err)
+			}
+			if diff := cmp.Diff(tc.want, block); diff != "" {
+				t.Errorf("unexpected metadata (-want +got):\n%s", diff)
+			}
+		})
+	}
 }
 
 func TestGSMConfigValidate(t *testing.T) {
@@ -1004,6 +1064,7 @@ func TestGSMConfigValidate(t *testing.T) {
 		{
 			name: "valid config with all fields",
 			config: GSMConfig{
+				BlockedCollections: map[string]BlockedCollection{"test-secrets": {}},
 				ClusterGroups: map[string][]string{
 					"build-clusters": {"build01"},
 				},
@@ -1026,6 +1087,18 @@ func TestGSMConfigValidate(t *testing.T) {
 				},
 			},
 			expectError: false,
+		},
+		{
+			name:          "error: empty blocked collection name",
+			config:        GSMConfig{BlockedCollections: map[string]BlockedCollection{"": {}}},
+			expectError:   true,
+			errorContains: `blocked_collections has invalid collection name: ""`,
+		},
+		{
+			name:          "error: malformed blocked collection name",
+			config:        GSMConfig{BlockedCollections: map[string]BlockedCollection{"invalid/name": {}}},
+			expectError:   true,
+			errorContains: `blocked_collections has invalid collection name: "invalid/name"`,
 		},
 		{
 			name: "valid config - auto discovery (no fields)",

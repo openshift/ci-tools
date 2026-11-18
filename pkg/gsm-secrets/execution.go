@@ -407,18 +407,52 @@ func (a *Actions) RevokeObsoleteServiceAccountKeys(ctx context.Context, client I
 	}
 }
 
-// ListSecretFieldsByCollectionAndGroup lists all field (secret) names in a GSM collection and group.
-// Uses substring filtering on the server side, then validates client-side to match only direct children (non-recursive).
-// Group path separators (/) are converted to __ for the GSM secret name pattern.
-//
-// Example:
-//
-//		collection="vsphere", group="ibmcloud/ci"
-//		→ Matches: vsphere__ibmcloud__ci__username, vsphere__ibmcloud__ci__password
-//		→ Does NOT match: vsphere__ibmcloud__ci__subgroup__field (subgroup is excluded)
-//
-//	 Returns field names as saved in GSM (e.g., "aws--u--creds", not "aws_creds")
+// ListSecretFieldsByCollectionAndGroup returns the field names of direct children in a GSM collection and group.
+// Group path separators (/) are converted to __; field names retain their GSM encoding.
+// It makes up to four listing attempts for transient RPC errors. SDK timeouts apply per RPC;
+// callers can use ctx to limit RPC duration across attempts.
 func ListSecretFieldsByCollectionAndGroup(ctx context.Context, client SecretManagerClient, config Config, collection, group string) ([]string, error) {
+	return listSecretFieldsWithBackoff(ctx, client, config, collection, group, retry.DefaultBackoff)
+}
+
+// isTransientSecretListError reports whether err is an unavailable or deadline-exceeded RPC error.
+func isTransientSecretListError(err error) bool {
+	switch status.Code(err) {
+	case codes.Unavailable, codes.DeadlineExceeded:
+		return true
+	default:
+		return false
+	}
+}
+
+// listSecretFieldsWithBackoff lists direct-child field names, retrying transient RPC errors using backoff.
+func listSecretFieldsWithBackoff(ctx context.Context, client SecretManagerClient, config Config, collection, group string, backoff wait.Backoff) ([]string, error) {
+	var result []string
+	attemptCount := 0
+	err := retry.OnError(backoff, isTransientSecretListError, func() error {
+		if err := ctx.Err(); err != nil {
+			return err
+		}
+		attemptCount++
+		var err error
+		result, err = listSecretFields(ctx, client, config, collection, group)
+		if attemptCount < backoff.Steps && ctx.Err() == nil && isTransientSecretListError(err) {
+			logrus.WithError(err).WithFields(logrus.Fields{
+				"collection": collection,
+				"group":      group,
+				"attempt":    attemptCount,
+			}).Info("Transient error listing secrets, retrying")
+		}
+		return err
+	})
+	if err != nil {
+		return nil, err
+	}
+	return result, nil
+}
+
+// listSecretFields lists direct-child field names in a GSM collection and group, returning an error if any page fails.
+func listSecretFields(ctx context.Context, client SecretManagerClient, config Config, collection, group string) ([]string, error) {
 	groupParts := strings.ReplaceAll(group, "/", gsmvalidation.CollectionSecretDelimiter)
 	base := fmt.Sprintf("%s%s", collection, gsmvalidation.CollectionSecretDelimiter)
 	if groupParts != "" {

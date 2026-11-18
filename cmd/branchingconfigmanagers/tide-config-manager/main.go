@@ -343,6 +343,9 @@ func (gae *generalAvailabilityEvent) ensureStaffEngApprovedLabel(q *prowconfig.T
 
 func (gae *generalAvailabilityEvent) overrideExcludedBranches(q *prowconfig.TideQuery) {
 	branches := sets.New[string](q.ExcludedBranches...)
+	// Ensure main and master are always excluded so the complement query never applies to them;
+	// only the dedicated main/master query (with verified) should match PRs targeting those branches.
+	branches.Insert(mainBranch, masterBranch)
 	if branches.Has(gae.releasePast) {
 		branches.Insert(gae.releaseCurrent)
 		branches.Insert(gae.releaseFuture)

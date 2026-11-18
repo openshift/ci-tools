@@ -37,6 +37,8 @@ type SnapshotAssignment struct {
 	OverrideID      string    `json:"overrideID,omitempty"`
 	ValidUntil      time.Time `json:"validUntil,omitempty"`
 	Explanation     string    `json:"explanation,omitempty"`
+	// Root identifies the job config tree the job came from: "git" or "efs".
+	Root string `json:"root,omitempty"`
 }
 
 // PolicySnapshot is a complete, immutable dispatcher policy generation.
@@ -431,7 +433,7 @@ func CompileSnapshot(input CompileInput) (*PolicySnapshot, CompileSummary, error
 	for _, name := range sortedProwJobNames(baseline) {
 		job := baseline[name]
 		demand := effectiveDemand(job.Demand)
-		assignments[name] = SnapshotAssignment{Cluster: job.Cluster, BaselineCluster: job.Cluster, Capabilities: append([]string(nil), job.Capabilities...), Demand: demand, Explanation: "baseline Git assignment"}
+		assignments[name] = SnapshotAssignment{Cluster: job.Cluster, BaselineCluster: job.Cluster, Capabilities: append([]string(nil), job.Capabilities...), Demand: demand, Explanation: "baseline assignment", Root: job.Root}
 		loads[job.Cluster] += demand
 	}
 	capacities := make(map[string]int, len(inventory))

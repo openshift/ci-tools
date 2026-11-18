@@ -22,6 +22,10 @@ type ProwJobData struct {
 	Demand float64
 	// Group is the repository-relative job configuration path used for impact summaries.
 	Group string
+	// Root identifies the job config tree the job came from: "git" or "efs".
+	// It is omitted when empty so snapshots written before this field existed
+	// keep their checksum and are not discarded on upgrade.
+	Root string `json:"root,omitempty"`
 }
 
 func NewProwjobs(jobsStoragePath string) *Prowjobs {

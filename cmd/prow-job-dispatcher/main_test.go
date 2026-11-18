@@ -17,6 +17,7 @@ import (
 	corev1 "k8s.io/api/core/v1"
 	"k8s.io/apimachinery/pkg/util/sets"
 	prowconfig "sigs.k8s.io/prow/pkg/config"
+	"sigs.k8s.io/yaml"
 
 	"github.com/openshift/ci-tools/pkg/api"
 	"github.com/openshift/ci-tools/pkg/dispatcher"
@@ -171,7 +172,7 @@ func TestDispatchJobs(t *testing.T) {
 	}
 	for _, tc := range testCases {
 		t.Run(tc.name, func(t *testing.T) {
-			_, actual := dispatchJobs(tc.prowJobConfigDir, tc.config, tc.jobVolumes, sets.New[string](), tc.distribution, tc.clusterMap)
+			_, actual := dispatchJobs([]jobRoot{{path: tc.prowJobConfigDir}}, tc.config, tc.jobVolumes, sets.New[string](), tc.distribution, tc.clusterMap)
 			equalError(t, tc.expected, actual)
 			if tc.config != nil && !reflect.DeepEqual(tc.expectedBuildFarm, tc.config.BuildFarm) {
 				t.Errorf("%s: actual differs from expected:\n%s", t.Name(), cmp.Diff(tc.expectedBuildFarm, tc.config.BuildFarm))
@@ -301,7 +302,7 @@ func TestDispatchJobConfig(t *testing.T) {
 	}
 	for _, tc := range testCases {
 		t.Run(tc.name, func(t *testing.T) {
-			actual, actualErr := tc.cv.dispatchJobConfig(tc.jc, tc.path, tc.config, tc.jobVolumes)
+			actual, actualErr := tc.cv.dispatchJobConfig(tc.jc, tc.path, jobRoot{}, tc.config, tc.jobVolumes)
 			if diff := cmp.Diff(tc.expected, actual); diff != "" {
 				t.Errorf("%s: actual does not match expected, diff: %s", tc.name, diff)
 			}
@@ -337,7 +338,7 @@ func TestFindClusterForJobConfigRespectsHysteresisAndMovementBudget(t *testing.T
 
 	t.Run("hysteresis keeps near-optimal prior placement", func(t *testing.T) {
 		cv := newVolume(10, 9, .10, -1)
-		cluster, err := cv.findClusterForJobConfig("", jobConfig, "periodics.yaml", config, map[string]float64{"job": 1})
+		cluster, err := cv.findClusterForJobConfig("", jobConfig, "periodics.yaml", jobRoot{}, config, map[string]float64{"job": 1})
 		if err != nil {
 			t.Fatal(err)
 		}
@@ -348,7 +349,7 @@ func TestFindClusterForJobConfigRespectsHysteresisAndMovementBudget(t *testing.T
 
 	t.Run("movement budget prevents routine churn", func(t *testing.T) {
 		cv := newVolume(100, 0, 0, 0)
-		cluster, err := cv.findClusterForJobConfig("", jobConfig, "periodics.yaml", config, map[string]float64{"job": 10})
+		cluster, err := cv.findClusterForJobConfig("", jobConfig, "periodics.yaml", jobRoot{}, config, map[string]float64{"job": 10})
 		if err != nil {
 			t.Fatal(err)
 		}
@@ -359,7 +360,7 @@ func TestFindClusterForJobConfigRespectsHysteresisAndMovementBudget(t *testing.T
 
 	t.Run("unlimited budget permits meaningful rebalance", func(t *testing.T) {
 		cv := newVolume(100, 0, 0, -1)
-		cluster, err := cv.findClusterForJobConfig("", jobConfig, "periodics.yaml", config, map[string]float64{"job": 10})
+		cluster, err := cv.findClusterForJobConfig("", jobConfig, "periodics.yaml", jobRoot{}, config, map[string]float64{"job": 10})
 		if err != nil {
 			t.Fatal(err)
 		}
@@ -474,7 +475,7 @@ func TestStaticJobVolumeAccumulationIsDeterministic(t *testing.T) {
 			for i := 0; i < iterations; i++ {
 				cv := newClusterVolume()
 				jc := jobConfig(tc.presubmits)
-				jobsForProjection, err := cv.classifyJobsForProjection(jc, "jobs.yaml", config, jobVolumes)
+				jobsForProjection, err := cv.classifyJobsForProjection(jc, "jobs.yaml", jobRoot{}, config, jobVolumes)
 				if err != nil {
 					t.Fatalf("iteration %d job classification returned an error: %v", i, err)
 				}
@@ -482,7 +483,7 @@ func TestStaticJobVolumeAccumulationIsDeterministic(t *testing.T) {
 				if projected != want {
 					t.Fatalf("iteration %d projected volume = %v, want %v", i, projected, want)
 				}
-				selected, err := cv.findClusterForJobConfig("", jc, "jobs.yaml", config, jobVolumes)
+				selected, err := cv.findClusterForJobConfig("", jc, "jobs.yaml", jobRoot{}, config, jobVolumes)
 				if err != nil {
 					t.Fatalf("iteration %d dispatch returned an error: %v", i, err)
 				}
@@ -532,7 +533,7 @@ func TestFindClusterForJobConfigUsesProportionalCapacity(t *testing.T) {
 	}
 	jobConfig := &prowconfig.JobConfig{Periodics: []prowconfig.Periodic{{JobBase: prowconfig.JobBase{Name: "periodic-a"}}}}
 
-	got, err := cv.findClusterForJobConfig("", jobConfig, "periodic-a.yaml", config, map[string]float64{"periodic-a": 10})
+	got, err := cv.findClusterForJobConfig("", jobConfig, "periodic-a.yaml", jobRoot{}, config, map[string]float64{"periodic-a": 10})
 	if err != nil {
 		t.Fatalf("findClusterForJobConfig() returned an error: %v", err)
 	}
@@ -569,7 +570,7 @@ func TestFindClusterForJobConfigProjectsOnlyCandidateDemand(t *testing.T) {
 		{JobBase: prowconfig.JobBase{Name: "relocatable"}},
 	}}
 
-	got, err := cv.findClusterForJobConfig("", jobConfig, "mixed-periodics.yaml", config, map[string]float64{
+	got, err := cv.findClusterForJobConfig("", jobConfig, "mixed-periodics.yaml", jobRoot{}, config, map[string]float64{
 		"pinned":      1000,
 		"relocatable": 1,
 	})
@@ -629,7 +630,7 @@ func TestFindClusterForJobConfigPreservesManualClusterAssignments(t *testing.T) 
 				clusterMap:         clusterMap,
 			}
 
-			selected, err := cv.findClusterForJobConfig("", jobConfig, path, config, map[string]float64{"manual-job": 7})
+			selected, err := cv.findClusterForJobConfig("", jobConfig, path, jobRoot{}, config, map[string]float64{"manual-job": 7})
 			if err != nil {
 				t.Fatalf("findClusterForJobConfig() returned an error: %v", err)
 			}
@@ -692,7 +693,7 @@ func TestFindClusterForJobConfigStickinessIncludesProjectedDemand(t *testing.T) 
 				clusterMap:         clusterMap,
 			}
 
-			got, err := cv.findClusterForJobConfig("", jobConfig, "periodic-a.yaml", config, map[string]float64{"periodic-a": tc.volume})
+			got, err := cv.findClusterForJobConfig("", jobConfig, "periodic-a.yaml", jobRoot{}, config, map[string]float64{"periodic-a": tc.volume})
 			if err != nil {
 				t.Fatalf("findClusterForJobConfig() returned an error: %v", err)
 			}
@@ -734,7 +735,7 @@ func TestFindClusterForJobConfigBreaksTiesDeterministically(t *testing.T) {
 			volumeDistribution: map[string]float64{"build01": 1, "build02": 1},
 			clusterMap:         clusterMap,
 		}
-		got, err := cv.findClusterForJobConfig("", jobConfig, path, config, nil)
+		got, err := cv.findClusterForJobConfig("", jobConfig, path, jobRoot{}, config, nil)
 		if err != nil {
 			t.Fatalf("iteration %d returned an error: %v", i, err)
 		}
@@ -791,9 +792,8 @@ func TestFindClusterForJobConfigTieBreakIsIndependentOfCheckoutRoot(t *testing.T
 			specialClusters:    map[string]float64{},
 			volumeDistribution: map[string]float64{"build01": 1, "build02": 1},
 			clusterMap:         clusterMap,
-			prowJobConfigDir:   root,
 		}
-		got, err := cv.findClusterForJobConfig("", jobConfig, filepath.Join(root, relativePath), config, nil)
+		got, err := cv.findClusterForJobConfig("", jobConfig, filepath.Join(root, relativePath), jobRoot{path: root}, config, nil)
 		if err != nil {
 			t.Fatalf("root %q returned an error: %v", root, err)
 		}
@@ -1316,16 +1316,16 @@ func TestDispatchDeltaJobs(t *testing.T) {
 			},
 			wantErr: false,
 			expectedPjs: map[string]dispatcher.ProwJobData{
-				"pull-ci-openshift-cluster-api-provider-gcp-master-e2e-gcp":          {Cluster: "build01", Capabilities: []string{"intranet"}, Demand: 7, Group: "capabilities/cluster-api-provider-gcp-presubmits.yaml"},
-				"pull-ci-openshift-cluster-api-provider-gcp-master-govet":            {Cluster: "build02", Demand: 5, Group: "capabilities/cluster-api-provider-gcp-presubmits.yaml"},
-				"pull-ci-openshift-cluster-api-provider-gcp-master-e2e-gcp-operator": {Cluster: "build01", Capabilities: []string{"intranet"}, Demand: 5, Group: "capabilities/cluster-api-provider-gcp-presubmits.yaml"},
-				"pull-ci-openshift-cluster-api-provider-gcp-master-goimports":        {Cluster: "build02", Demand: 5, Group: "capabilities/cluster-api-provider-gcp-presubmits.yaml"},
+				"pull-ci-openshift-cluster-api-provider-gcp-master-e2e-gcp":          {Cluster: "build01", Capabilities: []string{"intranet"}, Demand: 7, Group: "capabilities/cluster-api-provider-gcp-presubmits.yaml", Root: "git"},
+				"pull-ci-openshift-cluster-api-provider-gcp-master-govet":            {Cluster: "build02", Demand: 5, Group: "capabilities/cluster-api-provider-gcp-presubmits.yaml", Root: "git"},
+				"pull-ci-openshift-cluster-api-provider-gcp-master-e2e-gcp-operator": {Cluster: "build01", Capabilities: []string{"intranet"}, Demand: 5, Group: "capabilities/cluster-api-provider-gcp-presubmits.yaml", Root: "git"},
+				"pull-ci-openshift-cluster-api-provider-gcp-master-goimports":        {Cluster: "build02", Demand: 5, Group: "capabilities/cluster-api-provider-gcp-presubmits.yaml", Root: "git"},
 			},
 		},
 	}
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
-			if err := dispatchDeltaJobs(tt.args.prowJobConfigDir, tt.args.config, tt.args.blocked, tt.args.pjs, tt.args.cm, 5); (err != nil) != tt.wantErr {
+			if err := dispatchDeltaJobs([]jobRoot{{path: tt.args.prowJobConfigDir}}, tt.args.config, tt.args.blocked, tt.args.pjs, tt.args.cm, 5); (err != nil) != tt.wantErr {
 				t.Errorf("dispatchDeltaJobs() error = %v, wantErr %v", err, tt.wantErr)
 			}
 			if !reflect.DeepEqual(tt.expectedPjs, tt.args.pjs) {
@@ -1434,10 +1434,10 @@ func TestAddToVolumeSkipsBlockedRelocationForMatchingUpgradePeriodic(t *testing.
 		"periodic-something-else":  1,
 	}
 
-	if err := cv.addToVolume("build02", prowconfig.JobBase{Name: "periodic-build01-upgrade"}, "foo-periodics.yaml", config, jobVolumes); err != nil {
+	if err := cv.addToVolume("build02", prowconfig.JobBase{Name: "periodic-build01-upgrade"}, "foo-periodics.yaml", jobRoot{}, config, jobVolumes); err != nil {
 		t.Fatalf("addToVolume returned error for matching periodic: %v", err)
 	}
-	if err := cv.addToVolume("build02", prowconfig.JobBase{Name: "periodic-something-else"}, "foo-periodics.yaml", config, jobVolumes); err != nil {
+	if err := cv.addToVolume("build02", prowconfig.JobBase{Name: "periodic-something-else"}, "foo-periodics.yaml", jobRoot{}, config, jobVolumes); err != nil {
 		t.Fatalf("addToVolume returned error for non-matching periodic: %v", err)
 	}
 
@@ -1531,7 +1531,7 @@ func TestDispatchJobsPrechargesLaterFixedFile(t *testing.T) {
 				api.CloudAWS: {"build01": {}, "build02": {}},
 			}}
 			inventory := dispatcher.ClusterMap{"build01": {Provider: "aws", Capacity: 100}, "build02": {Provider: "aws", Capacity: 100}}
-			got, err := dispatchJobs(root, config, map[string]float64{"movable": 1, "fixed": 100}, sets.New[string](), nil, inventory)
+			got, err := dispatchJobs([]jobRoot{{path: root}}, config, map[string]float64{"movable": 1, "fixed": 100}, sets.New[string](), nil, inventory)
 			if err != nil {
 				t.Fatal(err)
 			}
@@ -1565,13 +1565,13 @@ func TestFixedDemandIsCountedOnce(t *testing.T) {
 				{JobBase: prowconfig.JobBase{Name: "movable"}},
 			}}
 			volumes := map[string]float64{"fixed": 100, "movable": 1}
-			if err := cv.prechargeFixedDemand(jc, "jobs.yaml", config, volumes); err != nil {
+			if err := cv.prechargeFixedDemand(jc, "jobs.yaml", jobRoot{}, config, volumes); err != nil {
 				t.Fatal(err)
 			}
 			if got := cv.clusterVolumeMap["aws"]["build01"]; got != tc.wantFixed {
 				t.Fatalf("precharged load = %v, want %v", got, tc.wantFixed)
 			}
-			jobs, err := cv.classifyJobsForProjection(jc, "jobs.yaml", config, volumes)
+			jobs, err := cv.classifyJobsForProjection(jc, "jobs.yaml", jobRoot{}, config, volumes)
 			if err != nil {
 				t.Fatal(err)
 			}
@@ -1583,7 +1583,7 @@ func TestFixedDemandIsCountedOnce(t *testing.T) {
 				t.Fatalf("projected load = %v, want %v", got, wantProjection)
 			}
 			for _, job := range jc.Periodics {
-				if err := cv.addToVolume("build02", job.JobBase, "jobs.yaml", config, volumes); err != nil {
+				if err := cv.addToVolume("build02", job.JobBase, "jobs.yaml", jobRoot{}, config, volumes); err != nil {
 					t.Fatal(err)
 				}
 			}
@@ -1624,17 +1624,208 @@ func TestDeltaRefreshesRestrictions(t *testing.T) {
 			job := prowconfig.JobBase{Name: "job", Cluster: "build01", Labels: tc.labels}
 			assignments := map[string]dispatcher.ProwJobData{"job": tc.existing}
 			jc := &prowconfig.JobConfig{Periodics: []prowconfig.Periodic{{JobBase: job}}}
-			if err := findClusterAssigmentsForJobs(jc, "/jobs", "/jobs/jobs.yaml", config, assignments, sets.New[string](), inventory, 5); err != nil {
+			if err := findClusterAssigmentsForJobs(jc, jobRoot{path: "/jobs"}, "/jobs/jobs.yaml", config, assignments, sets.New[string](), inventory, sets.New[string](), nil, 5); err != nil {
 				t.Fatal(err)
 			}
 			wantDemand := tc.existing.Demand
 			if wantDemand <= 0 {
 				wantDemand = 5
 			}
-			want := dispatcher.ProwJobData{Cluster: tc.wantCluster, Demand: wantDemand, Group: "jobs.yaml", Capabilities: extractCapabilities(tc.labels)}
+			want := dispatcher.ProwJobData{Cluster: tc.wantCluster, Demand: wantDemand, Group: "jobs.yaml", Capabilities: extractCapabilities(tc.labels), Root: "git"}
 			if diff := cmp.Diff(want, assignments["job"]); diff != "" {
 				t.Errorf("unexpected assignment (-want +got):\n%s", diff)
 			}
 		})
+	}
+}
+
+func TestReadOnlyRootOwnsDuplicateJob(t *testing.T) {
+	jobName := "pull-ci-openshift-repo-main-unit"
+	write := func(dir, cluster string, padding int) {
+		t.Helper()
+		jc := &prowconfig.JobConfig{PresubmitsStatic: map[string][]prowconfig.Presubmit{
+			"openshift/repo": {{
+				JobBase: prowconfig.JobBase{Name: jobName, Cluster: cluster, Labels: map[string]string{"ci-operator.openshift.io/padding": fmt.Sprintf("%0*d", padding, 0)}},
+			}},
+		}}
+		data, err := yaml.Marshal(jc)
+		if err != nil {
+			t.Fatal(err)
+		}
+		if err := os.MkdirAll(dir, 0o755); err != nil {
+			t.Fatal(err)
+		}
+		if err := os.WriteFile(filepath.Join(dir, "presubmits.yaml"), data, 0o644); err != nil {
+			t.Fatal(err)
+		}
+	}
+
+	// The git file is deliberately larger so it is processed first; ownership
+	// must not depend on file order.
+	gitRoot := t.TempDir()
+	efsRoot := t.TempDir()
+	write(gitRoot, "build01", 2048)
+	write(efsRoot, "build02", 16)
+
+	for _, roots := range [][]jobRoot{
+		{{path: gitRoot}, {path: efsRoot, readOnly: true}},
+		{{path: efsRoot, readOnly: true}, {path: gitRoot}},
+	} {
+		config := dispatcher.Config{
+			DetermineE2EByJob: true,
+			Default:           "api.ci",
+			BuildFarm: map[api.Cloud]map[api.Cluster]*dispatcher.BuildFarmConfig{
+				api.CloudAWS: {api.ClusterBuild01: {}, api.ClusterBuild02: {}},
+			},
+			BuildFarmCloud: map[api.Cloud][]string{api.CloudAWS: {string(api.ClusterBuild01), string(api.ClusterBuild02)}},
+		}
+		clusterMap := dispatcher.ClusterMap{
+			"build01": dispatcher.ClusterInfo{Provider: "aws", Capacity: 100},
+			"build02": dispatcher.ClusterInfo{Provider: "aws", Capacity: 100},
+		}
+		pjs, err := dispatchJobsWithPolicy(roots, &config, map[string]float64{jobName: 10}, sets.New[string](),
+			map[string]float64{"build01": 100}, clusterMap, nil, 0, -1, 1)
+		if err != nil {
+			t.Fatal(err)
+		}
+		got, ok := pjs[jobName]
+		if !ok {
+			t.Fatalf("job %q missing from assignments: %v", jobName, pjs)
+		}
+		if got.Root != "efs" {
+			t.Fatalf("expected the read-only definition to own the job, got %+v", got)
+		}
+	}
+}
+
+func TestShadowedJobSkippedBeforeValidation(t *testing.T) {
+	cv := &clusterVolume{
+		clusterMap:       dispatcher.ClusterMap{"build01": dispatcher.ClusterInfo{Provider: "aws", Capacity: 100}},
+		clusterVolumeMap: map[string]map[string]float64{"aws": {"build01": 0}},
+		readOnlyJobNames: sets.New[string]("shadowed"),
+		minimumJobDemand: 1,
+	}
+	// The job requires a capability no cluster provides: the writable duplicate
+	// must be dropped before validation, or the whole dispatch fails.
+	jc := &prowconfig.JobConfig{PresubmitsStatic: map[string][]prowconfig.Presubmit{
+		"openshift/repo": {{
+			JobBase: prowconfig.JobBase{Name: "shadowed", Labels: map[string]string{"capability/missing": "missing"}},
+		}},
+	}}
+	config := &dispatcher.Config{Default: "api.ci", BuildFarm: map[api.Cloud]map[api.Cluster]*dispatcher.BuildFarmConfig{
+		api.CloudAWS: {api.ClusterBuild01: {}},
+	}}
+	jobs, err := cv.classifyJobsForProjection(jc, "presubmits.yaml", jobRoot{}, config, map[string]float64{"shadowed": 10})
+	if err != nil {
+		t.Fatalf("shadowed duplicate must not be validated: %v", err)
+	}
+	if len(jobs) != 0 {
+		t.Fatalf("shadowed duplicate must not be projected, got %+v", jobs)
+	}
+
+	// The same definition must fail when nothing shadows it, otherwise the
+	// assertion above would pass on a fixture that never fails validation.
+	unshadowed := &clusterVolume{
+		clusterMap:       cv.clusterMap,
+		clusterVolumeMap: cv.clusterVolumeMap,
+		readOnlyJobNames: sets.New[string](),
+		minimumJobDemand: 1,
+	}
+	if _, err := unshadowed.classifyJobsForProjection(jc, "presubmits.yaml", jobRoot{}, config, map[string]float64{"shadowed": 10}); err == nil {
+		t.Fatal("expected the unshadowed definition to fail validation")
+	}
+}
+
+func TestReadOnlyRootIgnoresStaleGitFilenameRules(t *testing.T) {
+	jobName := "periodic-openshift-repo-e2e"
+	gitRoot := t.TempDir()
+	efsRoot := t.TempDir()
+	// The Git file was migrated away, so only the EFS copy remains. Its filename
+	// rule, though, is still in the config the dispatcher loaded.
+	jc := &prowconfig.JobConfig{Periodics: []prowconfig.Periodic{
+		{JobBase: prowconfig.JobBase{Name: jobName}},
+	}}
+	data, err := yaml.Marshal(jc)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if err := os.WriteFile(filepath.Join(efsRoot, "repo-main-periodics.yaml"), data, 0o644); err != nil {
+		t.Fatal(err)
+	}
+
+	// Without filtering, the read-only file matches the stale filename rule and
+	// the path rule, and DetermineClusterForJob rejects the file outright.
+	configPath := filepath.Join(t.TempDir(), "config.yaml")
+	if err := os.WriteFile(configPath, []byte(`default: api.ci
+buildFarm:
+  aws:
+    build01:
+      filenames:
+      - repo-main-periodics.yaml
+    build02: {}
+groups:
+  api.ci:
+    paths:
+    - .*-periodics.yaml$
+`), 0o644); err != nil {
+		t.Fatal(err)
+	}
+	config, err := dispatcher.LoadConfig(configPath)
+	if err != nil {
+		t.Fatal(err)
+	}
+	clusterMap := dispatcher.ClusterMap{
+		"build01": dispatcher.ClusterInfo{Provider: "aws", Capacity: 100},
+		"build02": dispatcher.ClusterInfo{Provider: "aws", Capacity: 100},
+	}
+	pjs, err := dispatchJobsWithPolicy(
+		[]jobRoot{{path: gitRoot}, {path: efsRoot, readOnly: true}},
+		config, map[string]float64{jobName: 10}, sets.New[string](),
+		map[string]float64{"build01": 100}, clusterMap, nil, 0, -1, 1)
+	if err != nil {
+		t.Fatalf("dispatch must not fail on a stale filename rule: %v", err)
+	}
+	if got := pjs[jobName]; got.Cluster != "api.ci" {
+		t.Fatalf("expected the path rule to classify the read-only file, got %+v", got)
+	}
+}
+
+func TestDeltaPlacesNewJobOnBuildFarm(t *testing.T) {
+	config := dispatcher.Config{
+		Default: "api.ci",
+		BuildFarm: map[api.Cloud]map[api.Cluster]*dispatcher.BuildFarmConfig{
+			api.CloudAWS: {api.ClusterBuild01: {}, api.ClusterBuild02: {}},
+		},
+	}
+	clusterMap := dispatcher.ClusterMap{
+		"build01": dispatcher.ClusterInfo{Provider: "aws", Capacity: 100},
+		"build02": dispatcher.ClusterInfo{Provider: "aws", Capacity: 100},
+	}
+	jc := &prowconfig.JobConfig{Periodics: []prowconfig.Periodic{
+		{JobBase: prowconfig.JobBase{Name: "periodic-openshift-repo-e2e"}},
+	}}
+	assignments := map[string]dispatcher.ProwJobData{
+		// One cluster already carries a job, so the new one goes to the other.
+		"existing": {Cluster: "build01"},
+	}
+	if err := findClusterAssigmentsForJobs(jc, jobRoot{}, "periodics.yaml", &config, assignments,
+		sets.New[string](), clusterMap, sets.New[string](), nil, 1); err != nil {
+		t.Fatal(err)
+	}
+	got := assignments["periodic-openshift-repo-e2e"].Cluster
+	if got != "build02" {
+		t.Fatalf("expected the new job on a build-farm cluster, got %q", got)
+	}
+
+	// An established assignment is not rebalanced by delta.
+	established := map[string]dispatcher.ProwJobData{
+		"periodic-openshift-repo-e2e": {Cluster: "build01"},
+	}
+	if err := findClusterAssigmentsForJobs(jc, jobRoot{}, "periodics.yaml", &config, established,
+		sets.New[string](), clusterMap, sets.New[string](), nil, 1); err != nil {
+		t.Fatal(err)
+	}
+	if got := established["periodic-openshift-repo-e2e"].Cluster; got != "build01" {
+		t.Fatalf("delta must keep a compatible assignment, got %q", got)
 	}
 }

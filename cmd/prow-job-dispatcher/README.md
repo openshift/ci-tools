@@ -86,3 +86,58 @@ The reconcile success timestamp and error counter are exported as
 `prowjob_dispatcher_last_baseline_update_timestamp_seconds` metric records input
 delivery to the control plane, including unchanged inputs; it does not measure
 Git synchronization or demand-query freshness. These metrics start at zero.
+
+## Read-only job roots
+
+`--read-only-jobs-dir` adds a job config root that is planned but never written.
+It can be passed more than once. It is used for the EFS job-config volume that Prow
+reads in addition to the Git tree (`--prow-jobs-dir`).
+
+- Each root is walked independently and job groups are computed relative to the
+  root they came from. Read-only groups are namespaced with an `efs/` prefix, so the
+  same repository-relative path in two roots stays two groups in override impact
+  summaries.
+- Entries whose name starts with `..` are skipped, matching Prow's job loader. This
+  is where side-car state lives.
+- When the same job name exists in both a writable and a read-only root, the
+  read-only definition owns the job. The writable duplicate is dropped *before*
+  validation, projection and demand charging, so it cannot fail the pass on a stale
+  capability requirement, be charged twice, have its pin precharged, or restrict the
+  file to its cloud provider. Ownership is decided from the current scan, not from
+  the previous assignment, so a job that moves between roots is picked up by the
+  next delta pass.
+- The legacy per-cluster filename rules in `--config-path` are populated from
+  writable-root files only, and they are not consulted for read-only files: the
+  same basename can exist in another root and select a different cluster, and a
+  rule can outlive the Git file it was learned from. Path and job-name rules still
+  apply to every root.
+- A job the delta pass sees for the first time is placed on the eligible build-farm
+  cluster with the fewest assignments, instead of staying on the default cluster
+  until the next full dispatch.
+
+The EFS `cluster:` field is not written by this tool. Placement is decided by the
+dispatcher at admission time, so the read-only roots are enough for those jobs to be
+scheduled; the field only matters if the dispatcher is unreachable, in which case
+Prow falls back to the configured default cluster.
+
+## Assignments API
+
+
+`GET /assignments` returns the bulk placement view used by
+[`efs-cluster-writer`](../efs-cluster-writer) to materialize fallback `cluster:`
+values onto EFS.
+
+| Query | Meaning |
+|---|---|
+| `root` | Return only jobs from this root (`git` or `efs`). Omit for all. |
+| `after` | Long-poll until the served generation is greater than this value. |
+
+Without `after` the current immutable generation is returned immediately. The
+response contains the generation, its input digest, the filtered assignments, the
+cluster inventory and the blocked clusters, and carries
+`X-Dispatcher-Policy-Generation`. It is gated by the same bearer token as the
+control API (`--control-api-token-path`); without a configured control API there is
+no token to check and the endpoint stays open.
+
+`POST /control/v1/rescan` (same token) runs the delta pass immediately, so a
+newly published job does not wait for the periodic scan.

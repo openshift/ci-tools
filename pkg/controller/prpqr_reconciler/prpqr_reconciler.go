@@ -18,6 +18,7 @@ import (
 	kerrors "k8s.io/apimachinery/pkg/api/errors"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/apimachinery/pkg/types"
+	"k8s.io/apimachinery/pkg/util/sets"
 	"k8s.io/apimachinery/pkg/util/wait"
 	"k8s.io/client-go/util/retry"
 	ctrlruntimeclient "sigs.k8s.io/controller-runtime/pkg/client"
@@ -30,6 +31,7 @@ import (
 	"sigs.k8s.io/controller-runtime/pkg/source"
 	prowv1 "sigs.k8s.io/prow/pkg/apis/prowjobs/v1"
 	prowconfig "sigs.k8s.io/prow/pkg/config"
+	"sigs.k8s.io/prow/pkg/kube"
 	"sigs.k8s.io/prow/pkg/pjutil"
 
 	"github.com/openshift/ci-tools/pkg/api"
@@ -313,7 +315,20 @@ func (r *reconciler) triggerJobs(ctx context.Context,
 
 			submitted := generateJobNameToSubmit(inject, pullRequests, jobSpec.ShardCount, jobSpec.ShardIndex)
 			aggregatorJob, err := generateAggregatorJob(baseMetadata, uid, mimickedJob, jobSpec.JobName(jobconfig.PeriodicPrefix),
-				req.Name, req.Namespace, r.prowConfigGetter, time.Now(), submitted, r.defaultAggregatorJobTimeout, r.configResolverClient)
+				req.Name, req.Namespace, r.prowConfigGetter, time.Now(), submitted, r.defaultAggregatorJobTimeout, r.configResolverClient, prpqr.Spec.Private)
+			if err == nil && prpqr.Spec.Private {
+				var aggregatorBucket string
+				aggregatorBucket, err = privateAggregationBucket(aggregatorJob.Spec.DecorationConfig.GCSConfiguration)
+				for index := 0; err == nil && index < len(aggregatedProwjobs); index++ {
+					worker := aggregatedProwjobs[index]
+					var workerBucket string
+					workerBucket, err = privateAggregationBucket(worker.Spec.DecorationConfig.GCSConfiguration)
+					if err == nil && workerBucket != aggregatorBucket {
+						err = fmt.Errorf("private aggregation artifact buckets differ between worker cluster %q and aggregator cluster %q", worker.Spec.Cluster, aggregatorJob.Spec.Cluster)
+						break
+					}
+				}
+			}
 			if err != nil {
 				logger.WithError(err).Error("Failed to generate an aggregator prowjob")
 				statuses[mimickedJob] = &v1.PullRequestPayloadJobStatus{
@@ -758,6 +773,9 @@ func (r *reconciler) generateProwjob(ciopConfig *api.ReleaseBuildConfiguration,
 	}
 	periodic.ExtraRefs = refs
 
+	if err := setPrivateArtifacts(periodic, r.prowConfigGetter.Config(), private); err != nil {
+		return nil, err
+	}
 	if err := r.prowConfigGetter.Defaulter().DefaultPeriodic(periodic); err != nil {
 		return nil, fmt.Errorf("failed to default the ProwJob: %w", err)
 	}
@@ -822,9 +840,94 @@ func (r *reconciler) generateAggregatedProwjobs(uid string, ciopConfig *api.Rele
 	return ret, nil
 }
 
+// parseArtifactBucket parses a supported object-storage destination for isolation checks.
+func parseArtifactBucket(bucket string) (*prowv1.ProwPath, error) {
+	parsed, err := prowv1.ParsePath(bucket)
+	if err != nil {
+		return nil, fmt.Errorf("parsing artifact bucket: %w", err)
+	}
+	if parsed.Bucket() == "" || (parsed.StorageProvider() != "gs" && parsed.StorageProvider() != "s3") ||
+		parsed.User != nil || parsed.RawQuery != "" || parsed.ForceQuery || strings.Contains(bucket, "#") {
+		return nil, fmt.Errorf("artifact bucket must identify gs or s3 storage without user information, query or fragment")
+	}
+	return parsed, nil
+}
+
+// privateAggregationBucket returns the bare GCS bucket supported by the aggregation reader.
+func privateAggregationBucket(config *prowv1.GCSConfiguration) (string, error) {
+	if config == nil || config.PathPrefix != "" || config.LocalOutputDir != "" {
+		return "", fmt.Errorf("private aggregation requires remote storage without a path prefix or local output directory")
+	}
+	parsed, err := parseArtifactBucket(config.Bucket)
+	if err != nil {
+		return "", fmt.Errorf("private aggregation: %w", err)
+	}
+	if parsed.StorageProvider() != "gs" || parsed.Path != "" {
+		return "", fmt.Errorf("private aggregation requires a GCS bucket without a path prefix")
+	}
+	return parsed.Bucket(), nil
+}
+
+// setPrivateArtifacts routes private jobs to explicitly configured private storage.
+func setPrivateArtifacts(periodic *prowconfig.Periodic, config *prowconfig.Config, private bool) error {
+	if !private {
+		return nil
+	}
+	if config == nil {
+		return fmt.Errorf("private payload artifact storage configuration is unavailable")
+	}
+	cluster := periodic.Cluster
+	if cluster == "" {
+		cluster = kube.DefaultClusterAlias
+	}
+	privateDefaults := config.Plank.GuessDefaultDecorationConfig("openshift-priv", cluster)
+	if privateDefaults.GCSConfiguration == nil || privateDefaults.GCSConfiguration.Bucket == "" ||
+		privateDefaults.GCSCredentialsSecret == nil || *privateDefaults.GCSCredentialsSecret == "" {
+		return fmt.Errorf("private payload artifact storage is not configured separately from public storage")
+	}
+	privateBucket, err := parseArtifactBucket(privateDefaults.GCSConfiguration.Bucket)
+	if err != nil {
+		return fmt.Errorf("private payload artifact storage: %w", err)
+	}
+	publicScopes := sets.New[string]("")
+	publicClusters := sets.New[string](cluster, kube.DefaultClusterAlias, "*")
+	for _, entry := range config.Plank.DefaultDecorationConfigs {
+		if entry.Cluster != "" && entry.Cluster != "*" {
+			publicClusters.Insert(entry.Cluster)
+		}
+		if strings.SplitN(entry.OrgRepo, "/", 2)[0] != "openshift-priv" {
+			publicScopes.Insert(entry.OrgRepo)
+		}
+	}
+	for _, scope := range sets.List(publicScopes) {
+		for _, publicCluster := range sets.List(publicClusters) {
+			publicDefaults := config.Plank.GuessDefaultDecorationConfig(scope, publicCluster)
+			sharedBucket := false
+			if publicDefaults.GCSConfiguration != nil {
+				publicBucket, err := parseArtifactBucket(publicDefaults.GCSConfiguration.Bucket)
+				if err != nil {
+					return fmt.Errorf("private payload artifact storage cannot be isolated from public scope %q on cluster %q: %w", scope, publicCluster, err)
+				}
+				sharedBucket = privateBucket.BucketWithScheme() == publicBucket.BucketWithScheme()
+			}
+			if (publicCluster == cluster && publicDefaults.GCSCredentialsSecret != nil && *privateDefaults.GCSCredentialsSecret == *publicDefaults.GCSCredentialsSecret) ||
+				sharedBucket {
+				return fmt.Errorf("private payload artifact storage is not configured separately from public storage for scope %q on cluster %q", scope, publicCluster)
+			}
+		}
+	}
+	if periodic.DecorationConfig == nil {
+		periodic.DecorationConfig = &prowv1.DecorationConfig{}
+	}
+	periodic.DecorationConfig.GCSConfiguration = privateDefaults.GCSConfiguration
+	periodic.DecorationConfig.GCSCredentialsSecret = privateDefaults.GCSCredentialsSecret
+	periodic.Hidden = true
+	return nil
+}
+
 func generateAggregatorJob(baseCiop *api.Metadata, uid, aggregatorJobName, jobName, prpqrName, prpqrNamespace string,
 	getCfg prowConfigGetter, startTime time.Time, submitted string, aggregatedJobTimeout time.Duration,
-	configResolverClient injectingResolverClient) (*prowv1.ProwJob, error) {
+	configResolverClient injectingResolverClient, private bool) (*prowv1.ProwJob, error) {
 	ciopConfig := &api.ReleaseBuildConfiguration{
 		Metadata: *baseCiop,
 		Prowgen:  &api.ProwgenOverrides{EnableSecretsStoreCSIDriver: new(true)},
@@ -857,11 +960,6 @@ func generateAggregatorJob(baseCiop *api.Metadata, uid, aggregatorJobName, jobNa
 		},
 	}
 
-	unresolvedConfigRaw, err := yaml.Marshal(ciopConfig)
-	if err != nil {
-		return nil, fmt.Errorf("couldn't marshal ci-operator config")
-	}
-
 	emptyMetadata := &api.Metadata{}
 	jobBaseGen, err := prowgen.NewProwJobBaseBuilderForTest(ciopConfig, emptyMetadata, prowgen.NewCiOperatorPodSpecGenerator(), ciopConfig.Tests[0], configResolverClient.ClusterProfile)
 	if err != nil {
@@ -878,6 +976,21 @@ func generateAggregatorJob(baseCiop *api.Metadata, uid, aggregatorJobName, jobNa
 
 	// The aggregator job doesn't need to clone any repository.
 	periodic.ExtraRefs = nil
+
+	if err := setPrivateArtifacts(periodic, getCfg.Config(), private); err != nil {
+		return nil, err
+	}
+	if private {
+		bucket, err := privateAggregationBucket(periodic.DecorationConfig.GCSConfiguration)
+		if err != nil {
+			return nil, err
+		}
+		ciopConfig.Tests[0].MultiStageTestConfiguration.Environment["GOOGLE_STORAGE_BUCKET"] = bucket
+	}
+	unresolvedConfigRaw, err := yaml.Marshal(ciopConfig)
+	if err != nil {
+		return nil, fmt.Errorf("couldn't marshal ci-operator config: %w", err)
+	}
 
 	periodic.Spec.Containers[0].Env = append(periodic.Spec.Containers[0].Env, corev1.EnvVar{Name: "UNRESOLVED_CONFIG", Value: string(unresolvedConfigRaw)})
 

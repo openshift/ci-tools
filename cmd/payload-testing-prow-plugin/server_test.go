@@ -25,6 +25,7 @@ import (
 
 	"github.com/openshift/ci-tools/pkg/api"
 	prpqv1 "github.com/openshift/ci-tools/pkg/api/pullrequestpayloadqualification/v1"
+	cioperatorconfig "github.com/openshift/ci-tools/pkg/config"
 	"github.com/openshift/ci-tools/pkg/release/config"
 	"github.com/openshift/ci-tools/pkg/testhelper"
 )
@@ -675,6 +676,9 @@ func (c *fakeTrustedChecker) trustedUser(author, _, _ string, _ int) (bool, erro
 }
 
 func TestHandle(t *testing.T) {
+	if err := userv1.AddToScheme(scheme.Scheme); err != nil {
+		t.Fatal(err)
+	}
 	ghc := fakegithub.NewFakeClient()
 	pr123 := github.PullRequest{}
 	privatePR := github.PullRequest{Base: github.PullRequestBranch{Repo: github.Repo{Private: true}}}
@@ -684,14 +688,17 @@ func TestHandle(t *testing.T) {
 		999: {},
 	}
 
-	testCases := []struct {
+	type handleTestCase struct {
 		name                  string
 		s                     *server
 		ic                    github.IssueCommentEvent
 		expectedMessage       string
 		expectedAdditionalPRs []config.AdditionalPR
 		expectedPrivate       bool
-	}{
+		expectedLookup        *api.Metadata
+		expectedPullRequests  []prpqv1.PullRequestUnderTest
+	}
+	testCases := []handleTestCase{
 		{
 			name: "basic case",
 			s: &server{
@@ -1301,9 +1308,92 @@ trigger 0 job(s) of type all for the ci release of OCP 4.8
 			expectedMessage: `it appears that you have attempted to use some version of the payload command, but your comment was incorrectly formatted and cannot be acted upon. See the [docs](https://docs.ci.openshift.org/release-oversight/payload-testing/#usage) for usage info.`,
 		},
 	}
+	for _, eligibilityTest := range []struct {
+		name, org, errorText            string
+		configs                         cioperatorconfig.ByOrgRepo
+		disabled, missingConfig, denied bool
+	}{
+		{name: "real private mirror", org: "openshift-priv", configs: cioperatorconfig.ByOrgRepo{"openshift": {"component": nil}}},
+		{name: "public eligibility unchanged", org: "openshift", configs: cioperatorconfig.ByOrgRepo{}},
+		{name: "missing counterpart", org: "openshift-priv", configs: cioperatorconfig.ByOrgRepo{}, errorText: "expected one public counterpart for openshift-priv/component, found 0: []"},
+		{name: "ambiguous counterpart", org: "openshift-priv", configs: cioperatorconfig.ByOrgRepo{"openshift": {"component": nil}, "operator-framework": {"component": nil}}, errorText: "expected one public counterpart for openshift-priv/component, found 2: [openshift/component operator-framework/component]"},
+		{name: "disabled public promotion", org: "openshift-priv", configs: cioperatorconfig.ByOrgRepo{"openshift": {"component": nil}}, disabled: true},
+		{name: "public config missing", org: "openshift-priv", configs: cioperatorconfig.ByOrgRepo{"openshift": {"component": nil}}, missingConfig: true},
+		{name: "private authorization denied before lookup", org: "openshift-priv", configs: cioperatorconfig.ByOrgRepo{"openshift": {"component": nil}}, denied: true},
+	} {
+		lookup := api.Metadata{Org: "openshift", Repo: "component", Branch: "release-4.99"}
+		resolver := &fakeCIOpConfigResolver{configs: map[api.Metadata]*api.ReleaseBuildConfiguration{
+			lookup: {PromotionConfiguration: &api.PromotionConfiguration{Targets: []api.PromotionTarget{{Namespace: "ocp", Disabled: eligibilityTest.disabled}}}},
+		}}
+		if eligibilityTest.missingConfig {
+			delete(resolver.configs, lookup)
+		}
+		private := eligibilityTest.org == "openshift-priv"
+		pr := &github.PullRequest{Base: github.PullRequestBranch{Ref: lookup.Branch, SHA: "base-sha", Repo: github.Repo{Private: private}}, Head: github.PullRequestBranch{SHA: "private-head-sha"}, User: github.User{Login: "author"}, Title: "synthetic change"}
+		githubClient := fakegithub.NewFakeClient()
+		githubClient.PullRequests = map[int]*github.PullRequest{123: pr}
+		client := fakeclient.NewClientBuilder().Build()
+		serv := &server{ghc: githubClient, ctx: context.Background(), kubeClient: client, namespace: "ci", trustedChecker: &fakeTrustedChecker{}, ciOpConfigResolver: resolver, publicConfigs: fakePublicConfigs(eligibilityTest.configs), testResolver: newFakeTestResolver(), jobResolver: newFakeJobResolver(map[string][]config.Job{"4.10": {{Name: "periodic-ci-openshift-release-master-nightly-4.10-e2e-aws-serial"}}})}
+		entry := handleTestCase{name: eligibilityTest.name, s: serv, ic: github.IssueCommentEvent{GUID: "eligibility", Repo: github.Repo{Owner: github.User{Login: eligibilityTest.org}, Name: "component"}, Issue: github.Issue{Number: 123, PullRequest: &struct{}{}}, Comment: github.IssueComment{User: github.User{Login: "requester"}, Body: "/payload 4.10 nightly informing"}}, expectedLookup: &lookup}
+		entry.expectedMessage = "trigger 1 job(s) of type informing for the nightly release of OCP 4.10\n- periodic-ci-openshift-release-master-nightly-4.10-e2e-aws-serial\n\nSee details on https://pr-payload-tests.ci.openshift.org/runs/ci/eligibility-0\n"
+		if private {
+			entry.expectedMessage = "trigger 1 job(s) of type informing for the nightly release of OCP 4.10\n- periodic-ci-openshift-release-master-nightly-4.10-e2e-aws-serial\n\nThis run includes private repositories; details are omitted from the public payload-testing UI. Related jobs are hidden — use deck-internal.\n"
+			entry.expectedPrivate = true
+		}
+		entry.expectedPullRequests = []prpqv1.PullRequestUnderTest{{Org: eligibilityTest.org, Repo: "component", BaseRef: lookup.Branch, BaseSHA: pr.Base.SHA, PullRequest: &prpqv1.PullRequest{Number: 123, Author: "author", SHA: pr.Head.SHA, Title: pr.Title}}}
+		if eligibilityTest.errorText != "" {
+			entry.expectedMessage = formatError(fmt.Errorf("%s", eligibilityTest.errorText))
+			entry.expectedLookup = nil
+			entry.expectedPullRequests = nil
+			entry.expectedPrivate = false
+		}
+		if eligibilityTest.disabled {
+			entry.expectedMessage = "the repo openshift-priv/component does not contribute to the OpenShift official images, or the base branch is not currently having images promoted"
+			entry.expectedPullRequests = nil
+			entry.expectedPrivate = false
+		}
+		if eligibilityTest.missingConfig {
+			entry.expectedMessage = formatError(fmt.Errorf("could not resolve ci-operator's config for openshift-priv/component/release-4.99: config missing"))
+			entry.expectedPullRequests = nil
+			entry.expectedPrivate = false
+		}
+		if eligibilityTest.denied {
+			serv.privatePayloadGroup = "private-testers"
+			entry.expectedMessage = "user requester is not a member of the `private-testers` group required to trigger payload tests on private repositories; join that Rover group to gain access"
+			entry.expectedLookup = nil
+			entry.expectedPullRequests = nil
+			entry.expectedPrivate = false
+		}
+		testCases = append(testCases, entry)
+	}
 	for _, tc := range testCases {
 		t.Run(tc.name, func(t *testing.T) {
 			actualMessage, actualAddtionalPRs := tc.s.handle(logrus.WithField("tc.name", tc.name), tc.ic)
+			if resolver, ok := tc.s.ciOpConfigResolver.(*fakeCIOpConfigResolver); ok && resolver.configs != nil {
+				var expected []api.Metadata
+				if tc.expectedLookup != nil {
+					expected = append(expected, *tc.expectedLookup)
+				}
+				if diff := cmp.Diff(expected, resolver.requested); diff != "" {
+					t.Errorf("eligibility lookups differ (-want +got):\n%s", diff)
+				}
+				var runs prpqv1.PullRequestPayloadQualificationRunList
+				if err := tc.s.kubeClient.List(context.Background(), &runs); err != nil {
+					t.Fatal(err)
+				}
+				count := 0
+				if tc.expectedPullRequests != nil {
+					count = 1
+				}
+				if len(runs.Items) != count {
+					t.Fatalf("created %d runs, want %d", len(runs.Items), count)
+				}
+				if count > 0 {
+					if diff := cmp.Diff(tc.expectedPullRequests, runs.Items[0].Spec.PullRequests); diff != "" {
+						t.Errorf("original PR refs differ (-want +got):\n%s", diff)
+					}
+				}
+			}
 			if diff := cmp.Diff(tc.expectedMessage, actualMessage); diff != "" {
 				t.Errorf("%s differs from expectedMessage:\n%s", tc.name, diff)
 			}
@@ -1438,9 +1528,18 @@ Please contact an administrator to resolve this issue.`,
 }
 
 type fakeCIOpConfigResolver struct {
+	configs   map[api.Metadata]*api.ReleaseBuildConfiguration
+	requested []api.Metadata
 }
 
-func (r fakeCIOpConfigResolver) Config(m *api.Metadata) (*api.ReleaseBuildConfiguration, error) {
+func (r *fakeCIOpConfigResolver) Config(m *api.Metadata) (*api.ReleaseBuildConfiguration, error) {
+	if r.configs != nil {
+		r.requested = append(r.requested, *m)
+		if result, ok := r.configs[*m]; ok {
+			return result, nil
+		}
+		return nil, fmt.Errorf("config missing")
+	}
 	if m == nil {
 		return nil, fmt.Errorf("some error")
 	}
@@ -1450,6 +1549,12 @@ func (r fakeCIOpConfigResolver) Config(m *api.Metadata) (*api.ReleaseBuildConfig
 		}, nil
 	}
 	return &api.ReleaseBuildConfiguration{}, nil
+}
+
+type fakePublicConfigs cioperatorconfig.ByOrgRepo
+
+func (configs fakePublicConfigs) GetAll() cioperatorconfig.ByOrgRepo {
+	return cioperatorconfig.ByOrgRepo(configs)
 }
 
 func makeTrustedApps(slugs ...string) prowflagutil.Strings {

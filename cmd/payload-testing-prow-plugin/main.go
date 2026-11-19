@@ -191,6 +191,7 @@ func main() {
 		testResolver:        &fileTestResolver{configAgent: configAgent},
 		trustedChecker:      trusted,
 		ciOpConfigResolver:  registryserver.NewResolverClient(api.URLForService(api.ServiceConfig)),
+		publicConfigs:       configAgent,
 		privatePayloadGroup: o.privatePayloadGroup,
 		isTrustedApp:        trusted.isTrustedApp,
 	}

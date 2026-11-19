@@ -16,6 +16,9 @@
   spec:
     agent: kubernetes
     decoration_config:
+      gcs_configuration:
+        bucket: private-artifacts
+      gcs_credentials_secret: private-writer
       skip_cloning: true
       timeout: 6h0m0s
     hidden: true
@@ -57,6 +60,7 @@
                   AGGREGATION_ID: f7331d8d45f00b0ebbaac7bb013d6f744b834ea8e866ac77f013394b
                   EXPLICIT_GCS_PREFIX: logs/openshift-priv-cluster-etcd-operator-42-test-name
                   GOOGLE_SA_CREDENTIAL_FILE: /var/run/secrets/google-serviceaccount-credentials.json
+                  GOOGLE_STORAGE_BUCKET: private-artifacts
                   JOB_START_TIME: "1970-01-01T01:00:00+01:00"
                   TIMEOUT: 6h0m0s
                   VERIFICATION_JOB_NAME: periodic-ci-test-org-test-repo-test-branch-test-name
@@ -153,6 +157,9 @@
     agent: kubernetes
     cluster: build02
     decoration_config:
+      gcs_configuration:
+        bucket: private-artifacts
+      gcs_credentials_secret: private-writer
       oauth_token_secret:
         key: oauth
         name: github-credentials-openshift-ci-robot-private-git-cloner
@@ -253,6 +260,9 @@
     agent: kubernetes
     cluster: build02
     decoration_config:
+      gcs_configuration:
+        bucket: private-artifacts
+      gcs_credentials_secret: private-writer
       oauth_token_secret:
         key: oauth
         name: github-credentials-openshift-ci-robot-private-git-cloner

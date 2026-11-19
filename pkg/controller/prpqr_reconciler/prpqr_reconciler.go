@@ -313,7 +313,7 @@ func (r *reconciler) triggerJobs(ctx context.Context,
 
 			submitted := generateJobNameToSubmit(inject, pullRequests, jobSpec.ShardCount, jobSpec.ShardIndex)
 			aggregatorJob, err := generateAggregatorJob(baseMetadata, uid, mimickedJob, jobSpec.JobName(jobconfig.PeriodicPrefix),
-				req.Name, req.Namespace, r.prowConfigGetter, time.Now(), submitted, r.defaultAggregatorJobTimeout, r.configResolverClient)
+				req.Name, req.Namespace, r.prowConfigGetter, time.Now(), submitted, r.defaultAggregatorJobTimeout, r.configResolverClient, prpqr.Spec.Private)
 			if err != nil {
 				logger.WithError(err).Error("Failed to generate an aggregator prowjob")
 				statuses[mimickedJob] = &v1.PullRequestPayloadJobStatus{
@@ -758,6 +758,9 @@ func (r *reconciler) generateProwjob(ciopConfig *api.ReleaseBuildConfiguration,
 	}
 	periodic.ExtraRefs = refs
 
+	if err := setPrivateArtifacts(periodic, r.prowConfigGetter.Config(), private); err != nil {
+		return nil, err
+	}
 	if err := r.prowConfigGetter.Defaulter().DefaultPeriodic(periodic); err != nil {
 		return nil, fmt.Errorf("failed to default the ProwJob: %w", err)
 	}
@@ -822,9 +825,34 @@ func (r *reconciler) generateAggregatedProwjobs(uid string, ciopConfig *api.Rele
 	return ret, nil
 }
 
+// setPrivateArtifacts routes private jobs to explicitly configured private storage.
+func setPrivateArtifacts(periodic *prowconfig.Periodic, config *prowconfig.Config, private bool) error {
+	if !private {
+		return nil
+	}
+	if config == nil {
+		return fmt.Errorf("private payload artifact storage configuration is unavailable")
+	}
+	privateDefaults := config.Plank.GuessDefaultDecorationConfig("openshift-priv", periodic.Cluster)
+	publicDefaults := config.Plank.GuessDefaultDecorationConfig("", periodic.Cluster)
+	if privateDefaults.GCSConfiguration == nil || privateDefaults.GCSConfiguration.Bucket == "" ||
+		privateDefaults.GCSCredentialsSecret == nil || *privateDefaults.GCSCredentialsSecret == "" ||
+		(publicDefaults.GCSCredentialsSecret != nil && *privateDefaults.GCSCredentialsSecret == *publicDefaults.GCSCredentialsSecret) ||
+		(publicDefaults.GCSConfiguration != nil && privateDefaults.GCSConfiguration.Bucket == publicDefaults.GCSConfiguration.Bucket) {
+		return fmt.Errorf("private payload artifact storage is not configured separately from public storage")
+	}
+	if periodic.DecorationConfig == nil {
+		periodic.DecorationConfig = &prowv1.DecorationConfig{}
+	}
+	periodic.DecorationConfig.GCSConfiguration = privateDefaults.GCSConfiguration
+	periodic.DecorationConfig.GCSCredentialsSecret = privateDefaults.GCSCredentialsSecret
+	periodic.Hidden = true
+	return nil
+}
+
 func generateAggregatorJob(baseCiop *api.Metadata, uid, aggregatorJobName, jobName, prpqrName, prpqrNamespace string,
 	getCfg prowConfigGetter, startTime time.Time, submitted string, aggregatedJobTimeout time.Duration,
-	configResolverClient injectingResolverClient) (*prowv1.ProwJob, error) {
+	configResolverClient injectingResolverClient, private bool) (*prowv1.ProwJob, error) {
 	ciopConfig := &api.ReleaseBuildConfiguration{
 		Metadata: *baseCiop,
 		Prowgen:  &api.ProwgenOverrides{EnableSecretsStoreCSIDriver: new(true)},
@@ -857,11 +885,6 @@ func generateAggregatorJob(baseCiop *api.Metadata, uid, aggregatorJobName, jobNa
 		},
 	}
 
-	unresolvedConfigRaw, err := yaml.Marshal(ciopConfig)
-	if err != nil {
-		return nil, fmt.Errorf("couldn't marshal ci-operator config")
-	}
-
 	emptyMetadata := &api.Metadata{}
 	jobBaseGen, err := prowgen.NewProwJobBaseBuilderForTest(ciopConfig, emptyMetadata, prowgen.NewCiOperatorPodSpecGenerator(), ciopConfig.Tests[0], configResolverClient.ClusterProfile)
 	if err != nil {
@@ -878,6 +901,17 @@ func generateAggregatorJob(baseCiop *api.Metadata, uid, aggregatorJobName, jobNa
 
 	// The aggregator job doesn't need to clone any repository.
 	periodic.ExtraRefs = nil
+
+	if err := setPrivateArtifacts(periodic, getCfg.Config(), private); err != nil {
+		return nil, err
+	}
+	if private {
+		ciopConfig.Tests[0].MultiStageTestConfiguration.Environment["GOOGLE_STORAGE_BUCKET"] = periodic.DecorationConfig.GCSConfiguration.Bucket
+	}
+	unresolvedConfigRaw, err := yaml.Marshal(ciopConfig)
+	if err != nil {
+		return nil, fmt.Errorf("couldn't marshal ci-operator config: %w", err)
+	}
 
 	periodic.Spec.Containers[0].Env = append(periodic.Spec.Containers[0].Env, corev1.EnvVar{Name: "UNRESOLVED_CONFIG", Value: string(unresolvedConfigRaw)})
 

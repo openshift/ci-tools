@@ -460,6 +460,9 @@ func TestReconcile(t *testing.T) {
 
 	for _, tc := range testCases {
 		t.Run(tc.name, func(t *testing.T) {
+			if strings.HasPrefix(tc.name, "private repo") {
+				tc.prowConfig.Plank.DefaultDecorationConfigs = artifactTestConfig().Plank.DefaultDecorationConfigs
+			}
 			createInterceptor := func(omitStatusURL bool) func(ctx context.Context, client ctrlruntimeclient.WithWatch, obj ctrlruntimeclient.Object, opts ...ctrlruntimeclient.CreateOption) error {
 				return func(ctx context.Context, client ctrlruntimeclient.WithWatch, obj ctrlruntimeclient.Object, opts ...ctrlruntimeclient.CreateOption) error {
 					if prowJob, ok := obj.(*prowv1.ProwJob); ok && !omitStatusURL {

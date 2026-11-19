@@ -22,7 +22,6 @@ import (
 
 	"k8s.io/apimachinery/pkg/util/sets"
 	prowconfig "sigs.k8s.io/prow/pkg/config"
-	"sigs.k8s.io/prow/pkg/flagutil"
 	"sigs.k8s.io/prow/pkg/interrupts"
 	"sigs.k8s.io/prow/pkg/plugins"
 	"sigs.k8s.io/yaml"
@@ -33,49 +32,16 @@ import (
 )
 
 type options struct {
-	mode string
-
-	serverOptions
-
-	instrumentationOptions flagutil.InstrumentationOptions
-
 	loglevel string
 	logStyle string
 
-	releaseRepo   string
-	config        string
-	disableCors   bool
-	GitHubOptions flagutil.GitHubOptions
-}
-
-type serverOptions struct {
-	port             int
-	numRepos         int
-	serverConfigPath string
+	releaseRepo string
+	config      string
 }
 
 func (o *options) Validate() error {
-	switch o.mode {
-	case "api":
-		if o.port == 0 {
-			return errors.New("--port is required")
-		}
-		if o.serverConfigPath == "" {
-			return errors.New("--server-config-path is required")
-		}
-		if err := o.GitHubOptions.Validate(false); err != nil {
-			return err
-		}
-	case "ui":
-		if o.port == 0 {
-			return errors.New("--port is required")
-		}
-	case "cli":
-		if o.releaseRepo == "" {
-			return errors.New("--release-repo is required")
-		}
-	default:
-		return errors.New("--mode must be either \"server\", \"ui\", or \"cli\"")
+	if o.releaseRepo == "" {
+		return errors.New("--release-repo is required")
 	}
 	if level, err := logrus.ParseLevel(o.loglevel); err != nil {
 		return fmt.Errorf("--loglevel invalid: %w", err)
@@ -85,9 +51,7 @@ func (o *options) Validate() error {
 	if o.logStyle != logStyleJson && o.logStyle != logStyleText {
 		return fmt.Errorf("--log-style must be one of %s or %s, not %s", logStyleText, logStyleJson, o.logStyle)
 	}
-
-	return o.instrumentationOptions.Validate(false)
-
+	return nil
 }
 
 const (
@@ -115,17 +79,10 @@ var (
 func gatherOptions() options {
 	o := options{}
 	fs := flag.NewFlagSet(os.Args[0], flag.ExitOnError)
-	o.instrumentationOptions.AddFlags(fs)
-	fs.StringVar(&o.mode, "mode", "cli", "Whether to run the repo initializer as an interactive cli, a standalone server, or in ui mode.")
 	fs.StringVar(&o.releaseRepo, "release-repo", "", "Path to the root of the openshift/release repository.")
 	fs.StringVar(&o.config, "config", "", "JSON configuration to use instead of the interactive mode.")
 	fs.StringVar(&o.loglevel, "loglevel", "debug", "Logging level.")
 	fs.StringVar(&o.logStyle, "log-style", "json", "Logging style: json or text.")
-	fs.IntVar(&o.port, "port", 0, "Port to run on if in server mode.")
-	fs.IntVar(&o.numRepos, "num-repos", 4, "The number of o/release repos to check out.")
-	fs.BoolVar(&o.disableCors, "disable-cors", false, "Set this to disable CORS.")
-	fs.StringVar(&o.serverConfigPath, "server-config-path", "", "Path to the dir containing configs necessary to run the server.")
-	o.GitHubOptions.AddFlags(fs)
 	if err := fs.Parse(os.Args[1:]); err != nil {
 		fmt.Printf("ERROR: could not parse input: %v", err)
 		os.Exit(1)
@@ -191,29 +148,6 @@ func main() {
 		errorExit(fmt.Sprintf("%v", err))
 	}
 
-	switch o.mode {
-	case "api":
-		mainApi(o)
-	case "cli":
-		mainCli(o)
-	case "ui":
-		mainUI(o)
-	default:
-		errorExit("invalid mode specified. must be one of \"server\", \"ui\", or \"cli\"")
-	}
-}
-
-func mainApi(o options) {
-	go serveAPI(o.port, o.instrumentationOptions.HealthPort, o.numRepos, o.GitHubOptions, o.disableCors, o.serverConfigPath)
-	interrupts.WaitForGracefulShutdown()
-}
-
-func mainUI(o options) {
-	go serveUI(o.port, o.instrumentationOptions.HealthPort, o.instrumentationOptions.MetricsPort)
-	interrupts.WaitForGracefulShutdown()
-}
-
-func mainCli(o options) {
 	go func() {
 		interrupts.WaitForGracefulShutdown()
 		os.Exit(1)

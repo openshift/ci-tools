@@ -86,7 +86,15 @@ func (cp *ClusterProfiles) Resolve() error {
 	return aggerrs.NewAggregate(errs)
 }
 
+// GCPFederation identifies the AWS hub, Google workload identity provider and destination service account.
+type GCPFederation struct {
+	HubRoleARN     string `json:"hub_role_arn" yaml:"hub_role_arn"`
+	Provider       string `json:"provider" yaml:"provider"`
+	ServiceAccount string `json:"service_account" yaml:"service_account"`
+}
+
 type ClusterProfile struct {
+	GCPFederation   *GCPFederation         `json:"gcp_federation,omitempty" yaml:"gcp_federation,omitempty"`
 	Name            string                 `yaml:"name,omitempty" json:"name,omitempty"`
 	Owners          []ClusterProfileOwners `yaml:"owners,omitempty" json:"owners,omitempty"`
 	ClusterType     string                 `yaml:"cluster_type,omitempty" json:"cluster_type,omitempty"`

@@ -1251,6 +1251,7 @@ type StepDNSConfig struct {
 // The resource name will be exposed to the step via the specificed environment
 // variable.
 type StepLease struct {
+	GCPWorkloadIdentity bool `json:"-"`
 	// ResourceType is the type of resource that will be leased.
 	ResourceType string `json:"resource_type"`
 	// Env is the environment variable that will contain the resource name.
@@ -1284,6 +1285,8 @@ type TestStep struct {
 // MultiStageTestConfiguration is a flexible configuration mode that allows tighter control over
 // the multiple stages of end to end tests.
 type MultiStageTestConfiguration struct {
+	// GCPWorkloadIdentity requests short-lived gcloud credentials from the assigned GCP profile.
+	GCPWorkloadIdentity bool `json:"gcp_workload_identity,omitempty"`
 	// ClusterProfile defines the profile/cloud provider for end-to-end test steps.
 	ClusterProfile string `json:"cluster_profile,omitempty"`
 	// Pre is the array of test steps run to set up the environment for the test.
@@ -1333,6 +1336,8 @@ type DependencyOverrides map[string]string
 // references. It is the type that MultiStageTestConfigurations are converted to when parsed by the
 // ci-operator-configresolver.
 type MultiStageTestConfigurationLiteral struct {
+	// GCPWorkloadIdentity requests short-lived gcloud credentials from the assigned GCP profile.
+	GCPWorkloadIdentity bool `json:"gcp_workload_identity,omitempty"`
 	// ClusterProfileLiteral defines the profile/cloud provider for end-to-end test steps.
 	ClusterProfileLiteral *ClusterProfileLiteral `json:"cluster_profile_literal,omitempty"`
 	// Pre is the array of test steps run to set up the environment for the test.

@@ -82,6 +82,7 @@ import (
 	"github.com/openshift/ci-tools/pkg/api/configresolver"
 	"github.com/openshift/ci-tools/pkg/api/nsttl"
 	"github.com/openshift/ci-tools/pkg/defaults"
+	"github.com/openshift/ci-tools/pkg/gcpworkloadidentity"
 	gsm "github.com/openshift/ci-tools/pkg/gsm-secrets"
 	"github.com/openshift/ci-tools/pkg/interrupt"
 	"github.com/openshift/ci-tools/pkg/junit"
@@ -155,6 +156,15 @@ var (
 const CustomProwMetadata = "custom-prow-metadata.json"
 
 func main() {
+	if len(os.Args) > 1 && os.Args[1] == "gcp-wif-token" {
+		if len(os.Args) != 6 {
+			logrus.Fatal("gcp-wif-token requires AWS home and hub roles, a Google provider and service account")
+		}
+		if err := gcpworkloadidentity.Refresh(context.Background(), os.Args[2], os.Args[3], os.Args[4], os.Args[5]); err != nil {
+			logrus.Fatal("Google credential helper stopped")
+		}
+		return
+	}
 	censor, closer, err := setupLogger()
 	if err != nil {
 		logrus.WithError(err).Fatal("Could not set up logging.")

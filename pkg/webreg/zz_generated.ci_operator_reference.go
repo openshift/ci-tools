@@ -700,6 +700,8 @@ const ciOperatorReferenceYaml = "# The list of base images describe\n" +
 	"            # Environment has the values of parameters for the steps.\n" +
 	"            env:\n" +
 	"                \"\": \"\"\n" +
+	"            # GCPWorkloadIdentity requests short-lived gcloud credentials from the assigned GCP profile.\n" +
+	"            gcp_workload_identity: true\n" +
 	"            # Leases lists resources that should be acquired for the test.\n" +
 	"            leases:\n" +
 	"                - # Env is the environment variable that will contain the resource name.\n" +
@@ -1235,6 +1237,8 @@ const ciOperatorReferenceYaml = "# The list of base images describe\n" +
 	"            # Environment has the values of parameters for the steps.\n" +
 	"            env:\n" +
 	"                \"\": \"\"\n" +
+	"            # GCPWorkloadIdentity requests short-lived gcloud credentials from the assigned GCP profile.\n" +
+	"            gcp_workload_identity: true\n" +
 	"            # Leases lists resources that should be acquired for the test.\n" +
 	"            leases:\n" +
 	"                - # Env is the environment variable that will contain the resource name.\n" +
@@ -1695,6 +1699,8 @@ const ciOperatorReferenceYaml = "# The list of base images describe\n" +
 	"        # Environment has the values of parameters for the steps.\n" +
 	"        env:\n" +
 	"            \"\": \"\"\n" +
+	"        # GCPWorkloadIdentity requests short-lived gcloud credentials from the assigned GCP profile.\n" +
+	"        gcp_workload_identity: true\n" +
 	"        # Leases lists resources that should be acquired for the test.\n" +
 	"        leases:\n" +
 	"            - # Env is the environment variable that will contain the resource name.\n" +
@@ -2230,6 +2236,8 @@ const ciOperatorReferenceYaml = "# The list of base images describe\n" +
 	"        # Environment has the values of parameters for the steps.\n" +
 	"        env:\n" +
 	"            \"\": \"\"\n" +
+	"        # GCPWorkloadIdentity requests short-lived gcloud credentials from the assigned GCP profile.\n" +
+	"        gcp_workload_identity: true\n" +
 	"        # Leases lists resources that should be acquired for the test.\n" +
 	"        leases:\n" +
 	"            - # Env is the environment variable that will contain the resource name.\n" +

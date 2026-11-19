@@ -88,6 +88,7 @@ func (r *registry) mergeWorkflow(config *api.MultiStageTestConfiguration) ([][]a
 		return nil, []error{fmt.Errorf("no workflow named %s", *config.Workflow)}
 	}
 	var errs []error
+	config.GCPWorkloadIdentity = config.GCPWorkloadIdentity || workflow.GCPWorkloadIdentity
 	if config.ClusterProfile == "" {
 		config.ClusterProfile = workflow.ClusterProfile
 	}
@@ -134,6 +135,7 @@ func (r *registry) resolveTest(
 ) (api.MultiStageTestConfigurationLiteral, error) {
 	var resolveErrors []error
 	expandedFlow := api.MultiStageTestConfigurationLiteral{
+		GCPWorkloadIdentity:      config.GCPWorkloadIdentity,
 		AllowSkipOnSuccess:       config.AllowSkipOnSuccess,
 		AllowBestEffortPostSteps: config.AllowBestEffortPostSteps,
 		Leases:                   config.Leases,

@@ -680,6 +680,9 @@ func (v *Validator) validateTestConfigurationType(
 			validationErrors = append(validationErrors, fmt.Errorf("%s: non-literal test found in fully-resolved configuration", fieldRoot))
 		}
 		typeCount++
+		if testConfig.GCPWorkloadIdentity && testConfig.ClusterProfile == "" && testConfig.Workflow == nil {
+			validationErrors = append(validationErrors, fmt.Errorf("%s: gcp_workload_identity requires a cluster profile", fieldRoot))
+		}
 		if testConfig.ClusterProfile != "" {
 			clusterCount++
 			validationErrors = append(validationErrors, v.validateClusterProfile(fieldRoot, testConfig.ClusterProfile, test.As, metadata)...)
@@ -696,6 +699,9 @@ func (v *Validator) validateTestConfigurationType(
 	if testConfig := test.MultiStageTestConfigurationLiteral; testConfig != nil {
 		typeCount++
 		context := newContext(fieldPath(fieldRoot).addField("steps"), testConfig.Environment, releases, inputImagesSeen)
+		if testConfig.GCPWorkloadIdentity && (testConfig.ClusterProfileLiteral == nil || testConfig.ClusterProfileLiteral.ClusterType != "gcp") {
+			validationErrors = append(validationErrors, fmt.Errorf("%s: gcp_workload_identity requires a GCP cluster profile", fieldRoot))
+		}
 		if testConfig.ClusterProfileLiteral != nil {
 			clusterCount++
 			validationErrors = append(validationErrors, v.validateClusterProfile(fieldRoot, testConfig.ClusterProfileLiteral.Name, test.As, metadata)...)

@@ -317,8 +317,13 @@ func (r *reconciler) triggerJobs(ctx context.Context,
 			aggregatorJob, err := generateAggregatorJob(baseMetadata, uid, mimickedJob, jobSpec.JobName(jobconfig.PeriodicPrefix),
 				req.Name, req.Namespace, r.prowConfigGetter, time.Now(), submitted, r.defaultAggregatorJobTimeout, r.configResolverClient, prpqr.Spec.Private)
 			if err == nil && prpqr.Spec.Private {
-				for _, worker := range aggregatedProwjobs {
-					if worker.Spec.DecorationConfig.GCSConfiguration.Bucket != aggregatorJob.Spec.DecorationConfig.GCSConfiguration.Bucket {
+				var aggregatorBucket string
+				aggregatorBucket, err = privateAggregationBucket(aggregatorJob.Spec.DecorationConfig.GCSConfiguration.Bucket)
+				for index := 0; err == nil && index < len(aggregatedProwjobs); index++ {
+					worker := aggregatedProwjobs[index]
+					var workerBucket string
+					workerBucket, err = privateAggregationBucket(worker.Spec.DecorationConfig.GCSConfiguration.Bucket)
+					if err == nil && workerBucket != aggregatorBucket {
 						err = fmt.Errorf("private aggregation artifact buckets differ between worker cluster %q and aggregator cluster %q", worker.Spec.Cluster, aggregatorJob.Spec.Cluster)
 						break
 					}
@@ -835,6 +840,31 @@ func (r *reconciler) generateAggregatedProwjobs(uid string, ciopConfig *api.Rele
 	return ret, nil
 }
 
+// parseArtifactBucket parses a supported object-storage destination for isolation checks.
+func parseArtifactBucket(bucket string) (*prowv1.ProwPath, error) {
+	parsed, err := prowv1.ParsePath(bucket)
+	if err != nil {
+		return nil, fmt.Errorf("parsing artifact bucket: %w", err)
+	}
+	if parsed.Bucket() == "" || (parsed.StorageProvider() != "gs" && parsed.StorageProvider() != "s3") ||
+		parsed.User != nil || parsed.RawQuery != "" || parsed.ForceQuery || strings.Contains(bucket, "#") {
+		return nil, fmt.Errorf("artifact bucket must identify gs or s3 storage without user information, query or fragment")
+	}
+	return parsed, nil
+}
+
+// privateAggregationBucket returns the bare GCS bucket supported by the aggregation reader.
+func privateAggregationBucket(bucket string) (string, error) {
+	parsed, err := parseArtifactBucket(bucket)
+	if err != nil {
+		return "", fmt.Errorf("private aggregation: %w", err)
+	}
+	if parsed.StorageProvider() != "gs" || parsed.Path != "" {
+		return "", fmt.Errorf("private aggregation requires a GCS bucket without a path prefix")
+	}
+	return parsed.Bucket(), nil
+}
+
 // setPrivateArtifacts routes private jobs to explicitly configured private storage.
 func setPrivateArtifacts(periodic *prowconfig.Periodic, config *prowconfig.Config, private bool) error {
 	if !private {
@@ -852,6 +882,10 @@ func setPrivateArtifacts(periodic *prowconfig.Periodic, config *prowconfig.Confi
 		privateDefaults.GCSCredentialsSecret == nil || *privateDefaults.GCSCredentialsSecret == "" {
 		return fmt.Errorf("private payload artifact storage is not configured separately from public storage")
 	}
+	privateBucket, err := parseArtifactBucket(privateDefaults.GCSConfiguration.Bucket)
+	if err != nil {
+		return fmt.Errorf("private payload artifact storage: %w", err)
+	}
 	publicScopes := sets.New[string]("")
 	for _, entry := range config.Plank.DefaultDecorationConfigs {
 		if strings.SplitN(entry.OrgRepo, "/", 2)[0] != "openshift-priv" {
@@ -860,8 +894,16 @@ func setPrivateArtifacts(periodic *prowconfig.Periodic, config *prowconfig.Confi
 	}
 	for _, scope := range sets.List(publicScopes) {
 		publicDefaults := config.Plank.GuessDefaultDecorationConfig(scope, cluster)
+		sharedBucket := false
+		if publicDefaults.GCSConfiguration != nil {
+			publicBucket, err := parseArtifactBucket(publicDefaults.GCSConfiguration.Bucket)
+			if err != nil {
+				return fmt.Errorf("private payload artifact storage cannot be isolated from public scope %q: %w", scope, err)
+			}
+			sharedBucket = privateBucket.BucketWithScheme() == publicBucket.BucketWithScheme()
+		}
 		if (publicDefaults.GCSCredentialsSecret != nil && *privateDefaults.GCSCredentialsSecret == *publicDefaults.GCSCredentialsSecret) ||
-			(publicDefaults.GCSConfiguration != nil && privateDefaults.GCSConfiguration.Bucket == publicDefaults.GCSConfiguration.Bucket) {
+			sharedBucket {
 			return fmt.Errorf("private payload artifact storage is not configured separately from public storage for scope %q", scope)
 		}
 	}
@@ -930,7 +972,11 @@ func generateAggregatorJob(baseCiop *api.Metadata, uid, aggregatorJobName, jobNa
 		return nil, err
 	}
 	if private {
-		ciopConfig.Tests[0].MultiStageTestConfiguration.Environment["GOOGLE_STORAGE_BUCKET"] = periodic.DecorationConfig.GCSConfiguration.Bucket
+		bucket, err := privateAggregationBucket(periodic.DecorationConfig.GCSConfiguration.Bucket)
+		if err != nil {
+			return nil, err
+		}
+		ciopConfig.Tests[0].MultiStageTestConfiguration.Environment["GOOGLE_STORAGE_BUCKET"] = bucket
 	}
 	unresolvedConfigRaw, err := yaml.Marshal(ciopConfig)
 	if err != nil {

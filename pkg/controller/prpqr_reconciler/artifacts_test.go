@@ -31,6 +31,74 @@ func artifactTestConfig() *prowconfig.Config {
 	}}}}
 }
 
+func TestParseArtifactBucket(t *testing.T) {
+	for _, tc := range []struct {
+		name, input, identity string
+		wantError             bool
+	}{
+		{name: "bare GCS", input: "artifacts", identity: "gs://artifacts"},
+		{name: "explicit GCS", input: "gs://artifacts", identity: "gs://artifacts"},
+		{name: "uppercase scheme", input: "GS://artifacts", identity: "gs://artifacts"},
+		{name: "GCS prefix", input: "artifacts/prefix", identity: "gs://artifacts"},
+		{name: "S3 prefix", input: "s3://artifacts/prefix", identity: "s3://artifacts"},
+		{name: "empty", wantError: true},
+		{name: "missing host", input: "gs:///prefix", wantError: true},
+		{name: "invalid escape", input: "gs://%zz", wantError: true},
+		{name: "unsupported scheme", input: "https://artifacts", wantError: true},
+		{name: "userinfo", input: "gs://user@artifacts", wantError: true},
+		{name: "query", input: "gs://artifacts?query", wantError: true},
+		{name: "empty query", input: "gs://artifacts?", wantError: true},
+		{name: "fragment", input: "gs://artifacts#fragment", wantError: true},
+		{name: "empty fragment", input: "gs://artifacts#", wantError: true},
+	} {
+		t.Run(tc.name, func(t *testing.T) {
+			parsed, err := parseArtifactBucket(tc.input)
+			if tc.wantError {
+				if err == nil || !strings.Contains(err.Error(), "artifact bucket") {
+					t.Fatalf("unexpected error: %v", err)
+				}
+				return
+			}
+			if err != nil {
+				t.Fatal(err)
+			}
+			if got := parsed.BucketWithScheme(); got != tc.identity {
+				t.Errorf("identity = %q, want %q", got, tc.identity)
+			}
+		})
+	}
+}
+
+func TestPrivateAggregationBucket(t *testing.T) {
+	for _, tc := range []struct {
+		name, input string
+		wantError   bool
+	}{
+		{name: "bare", input: "artifacts"},
+		{name: "GCS URI", input: "gs://artifacts"},
+		{name: "different provider", input: "s3://artifacts", wantError: true},
+		{name: "prefix", input: "gs://artifacts/prefix", wantError: true},
+		{name: "trailing slash", input: "gs://artifacts/", wantError: true},
+		{name: "malformed", input: "gs://", wantError: true},
+	} {
+		t.Run(tc.name, func(t *testing.T) {
+			bucket, err := privateAggregationBucket(tc.input)
+			if tc.wantError {
+				if err == nil || !strings.Contains(err.Error(), "private aggregation") {
+					t.Fatalf("unexpected error: %v", err)
+				}
+				return
+			}
+			if err != nil {
+				t.Fatal(err)
+			}
+			if bucket != "artifacts" {
+				t.Errorf("bucket = %q, want artifacts", bucket)
+			}
+		})
+	}
+}
+
 func TestSetPrivateArtifacts(t *testing.T) {
 	for _, tc := range []struct {
 		name                                        string
@@ -40,6 +108,7 @@ func TestSetPrivateArtifacts(t *testing.T) {
 		wantError                                   bool
 		publicScope, publicBucket, publicSecret     string
 		cluster, privateCluster                     string
+		globalBucket, privateBucket                 string
 	}{
 		{name: "public unchanged", refs: []prowv1.Refs{{Org: "openshift", Repo: "component"}}, bucket: "public-artifacts", secret: "public-writer"},
 		{name: "private only", private: true, refs: []prowv1.Refs{{Org: "openshift-priv", Repo: "component"}}, bucket: "private-artifacts", secret: "private-writer"},
@@ -54,9 +123,32 @@ func TestSetPrivateArtifacts(t *testing.T) {
 		{name: "distinct public org storage", private: true, publicScope: "openshift", publicBucket: "other-public", publicSecret: "other-writer", bucket: "private-artifacts", secret: "private-writer"},
 		{name: "public org collision does not change public jobs", publicScope: "openshift", publicBucket: "private-artifacts", refs: []prowv1.Refs{{Org: "openshift", Repo: "component"}}, bucket: "private-artifacts", secret: "public-writer"},
 		{name: "default cluster private storage", private: true, privateCluster: "default", bucket: "private-artifacts", secret: "private-writer"},
+		{name: "public URI private bare collision", private: true, globalBucket: "gs://shared-artifacts", privateBucket: "shared-artifacts", wantError: true},
+		{name: "public bare private URI collision", private: true, globalBucket: "shared-artifacts", privateBucket: "gs://shared-artifacts", wantError: true},
+		{name: "scheme case does not isolate buckets", private: true, globalBucket: "GS://shared-artifacts", privateBucket: "shared-artifacts", wantError: true},
+		{name: "public org URI collision", private: true, publicScope: "openshift", publicBucket: "gs://private-artifacts", wantError: true},
+		{name: "public repository bare collision", private: true, publicScope: "example/component", publicBucket: "private-artifacts", privateBucket: "gs://private-artifacts", wantError: true},
+		{name: "different prefixes do not isolate a bucket", private: true, globalBucket: "gs://shared-artifacts/public", privateBucket: "shared-artifacts/private", wantError: true},
+		{name: "distinct URI buckets accepted", private: true, globalBucket: "gs://public-artifacts", privateBucket: "gs://private-artifacts", bucket: "gs://private-artifacts", secret: "private-writer"},
+		{name: "distinct providers accepted", private: true, globalBucket: "s3://private-artifacts", bucket: "private-artifacts", secret: "private-writer"},
+		{name: "private prefix with distinct bucket accepted", private: true, privateBucket: "gs://private-artifacts/prefix", bucket: "gs://private-artifacts/prefix", secret: "private-writer"},
+		{name: "private missing host rejected", private: true, privateBucket: "gs://", wantError: true},
+		{name: "private malformed URL rejected", private: true, privateBucket: "gs://%zz", wantError: true},
+		{name: "private query rejected", private: true, privateBucket: "gs://private-artifacts?query", wantError: true},
+		{name: "private fragment rejected", private: true, privateBucket: "gs://private-artifacts#fragment", wantError: true},
+		{name: "private userinfo rejected", private: true, privateBucket: "gs://user@private-artifacts", wantError: true},
+		{name: "unsupported scheme rejected", private: true, privateBucket: "gcs://private-artifacts", wantError: true},
+		{name: "malformed public destination fails closed", private: true, publicScope: "openshift", publicBucket: "gs://", wantError: true},
+		{name: "public malformed destination unchanged", globalBucket: "gs://", bucket: "gs://", secret: "public-writer"},
 	} {
 		t.Run(tc.name, func(t *testing.T) {
 			config := artifactTestConfig()
+			if tc.globalBucket != "" {
+				config.Plank.DefaultDecorationConfigs[0].Config.GCSConfiguration.Bucket = tc.globalBucket
+			}
+			if tc.privateBucket != "" {
+				config.Plank.DefaultDecorationConfigs[1].Config.GCSConfiguration.Bucket = tc.privateBucket
+			}
 			config.Plank.DefaultDecorationConfigs[1].Cluster = tc.privateCluster
 			if tc.publicScope != "" {
 				public := &prowv1.DecorationConfig{}
@@ -103,15 +195,20 @@ func TestSetPrivateArtifacts(t *testing.T) {
 
 func TestGenerateAggregatorJob(t *testing.T) {
 	for _, tc := range []struct {
-		name    string
-		private bool
-		bucket  string
+		name             string
+		private          bool
+		bucket           string
+		configuredBucket string
 	}{
 		{name: "public"},
 		{name: "private", private: true, bucket: "private-artifacts"},
+		{name: "private URI reader gets bare bucket", private: true, configuredBucket: "gs://private-artifacts", bucket: "private-artifacts"},
 	} {
 		t.Run(tc.name, func(t *testing.T) {
 			getter := &fakeProwConfigGetter{cfg: artifactTestConfig()}
+			if tc.configuredBucket != "" {
+				getter.cfg.Plank.DefaultDecorationConfigs[1].Config.GCSConfiguration.Bucket = tc.configuredBucket
+			}
 			job, err := generateAggregatorJob(&api.Metadata{Org: "openshift-priv", Repo: "component", Branch: "release-4.99"}, "id", "aggregator-test", "test", "run", "ci", getter, time.Unix(0, 0), "submitted", time.Hour, &fakeResolverClient{}, tc.private)
 			if err != nil {
 				t.Fatal(err)
@@ -142,7 +239,11 @@ func TestGenerateAggregatorJob(t *testing.T) {
 			if !found {
 				t.Fatal("missing unresolved config")
 			}
-			if tc.private && job.Spec.DecorationConfig.GCSConfiguration.Bucket != tc.bucket {
+			writerBucket := tc.bucket
+			if tc.configuredBucket != "" {
+				writerBucket = tc.configuredBucket
+			}
+			if tc.private && job.Spec.DecorationConfig.GCSConfiguration.Bucket != writerBucket {
 				t.Fatal("aggregator artifacts are not private")
 			}
 		})
@@ -168,6 +269,12 @@ func TestTriggerJobs(t *testing.T) {
 		{name: "private matching buckets across clusters", private: true, workerBucket: "private-artifacts", aggregatorBucket: "private-artifacts", wantJobs: 3},
 		{name: "private mismatched buckets create no jobs", private: true, workerBucket: "private-worker-artifacts", aggregatorBucket: "private-aggregator-artifacts", errorText: "private aggregation artifact buckets differ"},
 		{name: "public differing private defaults unchanged", workerBucket: "private-worker-artifacts", aggregatorBucket: "private-aggregator-artifacts", wantJobs: 3},
+		{name: "private worker URI matches bare aggregator", private: true, workerBucket: "gs://private-artifacts", aggregatorBucket: "private-artifacts", wantJobs: 3},
+		{name: "private bare worker matches URI aggregator", private: true, workerBucket: "private-artifacts", aggregatorBucket: "gs://private-artifacts", wantJobs: 3},
+		{name: "private uppercase worker scheme matches aggregator", private: true, workerBucket: "GS://private-artifacts", aggregatorBucket: "private-artifacts", wantJobs: 3},
+		{name: "private equal prefixes are not reader compatible", private: true, workerBucket: "gs://private-artifacts/prefix", aggregatorBucket: "gs://private-artifacts/prefix", errorText: "private aggregation"},
+		{name: "private worker prefix rejected", private: true, workerBucket: "private-artifacts/prefix", aggregatorBucket: "private-artifacts", errorText: "private aggregation"},
+		{name: "private s3 aggregation unsupported by reader", private: true, workerBucket: "s3://private-artifacts", aggregatorBucket: "s3://private-artifacts", errorText: "private aggregation"},
 	} {
 		t.Run(tc.name, func(t *testing.T) {
 			config := artifactTestConfig()

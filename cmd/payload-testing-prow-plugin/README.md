@@ -15,7 +15,8 @@ Private payload jobs, including mixed-repository runs and aggregators, require
 `openshift-priv` Prow decoration defaults with a distinct artifact bucket and
 credential reference. Missing private storage configuration fails closed.
 Private buckets must be separate from all configured public decoration scopes
-across configured clusters, including public organization and repository overrides.
+across configured clusters, including public organization and repository overrides
+and cluster-wildcard fallbacks not covered by named cluster overrides.
 Credential references must be separate on each job's cluster; matching secret
 names on unrelated clusters do not imply a shared identity.
 Bucket isolation compares parsed storage provider and bucket identities, so

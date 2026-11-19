@@ -890,7 +890,7 @@ func setPrivateArtifacts(periodic *prowconfig.Periodic, config *prowconfig.Confi
 		return fmt.Errorf("private payload artifact storage: %w", err)
 	}
 	publicScopes := sets.New[string]("")
-	publicClusters := sets.New[string](cluster, kube.DefaultClusterAlias)
+	publicClusters := sets.New[string](cluster, kube.DefaultClusterAlias, "*")
 	for _, entry := range config.Plank.DefaultDecorationConfigs {
 		if entry.Cluster != "" && entry.Cluster != "*" {
 			publicClusters.Insert(entry.Cluster)

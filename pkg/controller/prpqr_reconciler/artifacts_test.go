@@ -115,6 +115,7 @@ func TestSetPrivateArtifacts(t *testing.T) {
 		globalBucket, privateBucket                 string
 		publicCluster, laterPublicBucket            string
 		privatePrefix                               string
+		maskedPublicFallback                        bool
 	}{
 		{name: "public unchanged", refs: []prowv1.Refs{{Org: "openshift", Repo: "component"}}, bucket: "public-artifacts", secret: "public-writer"},
 		{name: "private only", private: true, refs: []prowv1.Refs{{Org: "openshift-priv", Repo: "component"}}, bucket: "private-artifacts", secret: "private-writer"},
@@ -156,6 +157,8 @@ func TestSetPrivateArtifacts(t *testing.T) {
 		{name: "ordered other cluster override removes collision", private: true, publicCluster: "build02", publicScope: "openshift", publicBucket: "private-artifacts", laterPublicBucket: "other-public-artifacts", bucket: "private-artifacts", secret: "private-writer"},
 		{name: "wildcard cluster public bucket collision", private: true, publicCluster: "*", publicScope: "openshift", publicBucket: "private-artifacts", wantError: true},
 		{name: "nonaggregated private prefix preserved", private: true, privatePrefix: "private-prefix", bucket: "private-artifacts", secret: "private-writer"},
+		{name: "wildcard public fallback remains isolated", private: true, cluster: "build01", globalBucket: "private-artifacts", maskedPublicFallback: true, wantError: true},
+		{name: "ordered wildcard override removes fallback collision", private: true, cluster: "build01", globalBucket: "private-artifacts", maskedPublicFallback: true, laterPublicBucket: "public-fallback", bucket: "private-artifacts", secret: "private-writer"},
 	} {
 		t.Run(tc.name, func(t *testing.T) {
 			config := artifactTestConfig()
@@ -185,6 +188,26 @@ func TestSetPrivateArtifacts(t *testing.T) {
 			}
 			if tc.missingCredentials {
 				config.Plank.DefaultDecorationConfigs[1].Config.GCSCredentialsSecret = ptr.To("")
+			}
+			if tc.maskedPublicFallback {
+				fallbackDefaults := []*prowconfig.DefaultDecorationConfigEntry{
+					config.Plank.DefaultDecorationConfigs[0],
+					{Cluster: "default", Config: &prowv1.DecorationConfig{GCSConfiguration: &prowv1.GCSConfiguration{Bucket: "public-default"}}},
+					{Cluster: "build01", Config: &prowv1.DecorationConfig{GCSConfiguration: &prowv1.GCSConfiguration{Bucket: "public-build01"}}},
+				}
+				fallbackBucket := "private-artifacts"
+				if tc.laterPublicBucket != "" {
+					fallbackDefaults = append(fallbackDefaults, &prowconfig.DefaultDecorationConfigEntry{Cluster: "*", Config: &prowv1.DecorationConfig{GCSConfiguration: &prowv1.GCSConfiguration{Bucket: tc.laterPublicBucket}}})
+					fallbackBucket = tc.laterPublicBucket
+				}
+				config.Plank.DefaultDecorationConfigs = append(fallbackDefaults, config.Plank.DefaultDecorationConfigs[1:]...)
+				public := &prowconfig.Periodic{JobBase: prowconfig.JobBase{Cluster: "build03", UtilityConfig: prowconfig.UtilityConfig{Decorate: ptr.To(true)}}}
+				if err := config.DefaultPeriodic(public); err != nil {
+					t.Fatal(err)
+				}
+				if got := public.DecorationConfig.GCSConfiguration.Bucket; got != fallbackBucket {
+					t.Fatalf("public fallback bucket = %q, want %q", got, fallbackBucket)
+				}
 			}
 			periodic := &prowconfig.Periodic{JobBase: prowconfig.JobBase{Cluster: tc.cluster, UtilityConfig: prowconfig.UtilityConfig{Decorate: ptr.To(true), ExtraRefs: tc.refs}}}
 			err := setPrivateArtifacts(periodic, config, tc.private)
@@ -303,6 +326,7 @@ func TestTriggerJobs(t *testing.T) {
 		workerPrefix, aggregatorPrefix           string
 		workerLocalOutput, aggregatorLocalOutput string
 		publicCluster, publicBucket              string
+		maskedPublicFallback                     bool
 	}{
 		{name: "private matching buckets across clusters", private: true, workerBucket: "private-artifacts", aggregatorBucket: "private-artifacts", wantJobs: 3},
 		{name: "private mismatched buckets create no jobs", private: true, workerBucket: "private-worker-artifacts", aggregatorBucket: "private-aggregator-artifacts", errorText: "private aggregation artifact buckets differ"},
@@ -320,6 +344,7 @@ func TestTriggerJobs(t *testing.T) {
 		{name: "other cluster public bucket creates no private jobs", private: true, workerBucket: "private-artifacts", aggregatorBucket: "private-artifacts", publicCluster: "build03", publicBucket: "gs://private-artifacts", errorText: "private payload artifact storage"},
 		{name: "isolated other cluster public bucket accepted", private: true, workerBucket: "private-artifacts", aggregatorBucket: "private-artifacts", publicCluster: "build03", publicBucket: "other-public-artifacts", wantJobs: 3},
 		{name: "public prefix behavior unchanged", workerBucket: "private-artifacts", aggregatorBucket: "private-artifacts", workerPrefix: "hidden", aggregatorPrefix: "hidden", wantJobs: 3},
+		{name: "wildcard public fallback collision creates no private jobs", private: true, workerBucket: "private-artifacts", aggregatorBucket: "private-artifacts", maskedPublicFallback: true, errorText: "private payload artifact storage"},
 	} {
 		t.Run(tc.name, func(t *testing.T) {
 			config := artifactTestConfig()
@@ -329,6 +354,14 @@ func TestTriggerJobs(t *testing.T) {
 			config.Plank.DefaultDecorationConfigs = append(config.Plank.DefaultDecorationConfigs, &prowconfig.DefaultDecorationConfigEntry{OrgRepo: "openshift-priv", Cluster: "build02", Config: &prowv1.DecorationConfig{GCSConfiguration: &prowv1.GCSConfiguration{Bucket: tc.workerBucket, PathPrefix: tc.workerPrefix, LocalOutputDir: tc.workerLocalOutput}}})
 			if tc.publicCluster != "" {
 				config.Plank.DefaultDecorationConfigs = append(config.Plank.DefaultDecorationConfigs, &prowconfig.DefaultDecorationConfigEntry{OrgRepo: "openshift", Cluster: tc.publicCluster, Config: &prowv1.DecorationConfig{GCSConfiguration: &prowv1.GCSConfiguration{Bucket: tc.publicBucket}}})
+			}
+			if tc.maskedPublicFallback {
+				config.Plank.DefaultDecorationConfigs[0].Config.GCSConfiguration.Bucket = "private-artifacts"
+				config.Plank.DefaultDecorationConfigs = append([]*prowconfig.DefaultDecorationConfigEntry{
+					config.Plank.DefaultDecorationConfigs[0],
+					{Cluster: "default", Config: &prowv1.DecorationConfig{GCSConfiguration: &prowv1.GCSConfiguration{Bucket: "public-default"}}},
+					{Cluster: "build02", Config: &prowv1.DecorationConfig{GCSConfiguration: &prowv1.GCSConfiguration{Bucket: "public-worker"}}},
+				}, config.Plank.DefaultDecorationConfigs[1:]...)
 			}
 			scheme := runtime.NewScheme()
 			if err := prowv1.AddToScheme(scheme); err != nil {

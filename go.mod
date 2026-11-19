@@ -307,7 +307,7 @@ require (
 	golang.org/x/lint v0.0.0-20241112194109-818c5a804067 // indirect
 	golang.org/x/mod v0.42.0 // indirect
 	// https://security.snyk.io/vuln/SNYK-GOLANG-GOLANGORGXNETHTML-5816820
-	golang.org/x/net v0.61.0
+	golang.org/x/net v0.62.0 // indirect
 	golang.org/x/sys v0.49.0 // indirect
 	golang.org/x/telemetry v0.0.0-20260924152758-ed294f943157 // indirect
 	golang.org/x/term v0.47.0 // indirect

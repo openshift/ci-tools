@@ -24,7 +24,6 @@ version="v${build_date}-${git_commit}"
 
 if [[ ${2:-} == "remove-dummy" ]]; then
   rm -f cmd/pod-scaler/frontend/dist/dummy # we keep this file in git to keep the thing compiling without static assets
-  rm -f cmd/repo-init/frontend/dist/dummy
 fi
 
 declare -A skipped_images_map

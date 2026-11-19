@@ -1,9 +1,0 @@
-**/node_modules
-dist/*
-!dist/dummy
-yarn-error.log
-stats.json
-coverage
-.DS_Store
-.idea
-.env

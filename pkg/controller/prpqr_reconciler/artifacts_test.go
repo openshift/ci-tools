@@ -71,8 +71,9 @@ func TestParseArtifactBucket(t *testing.T) {
 
 func TestPrivateAggregationBucket(t *testing.T) {
 	for _, tc := range []struct {
-		name, input string
-		wantError   bool
+		name, input             string
+		wantError               bool
+		pathPrefix, localOutput string
 	}{
 		{name: "bare", input: "artifacts"},
 		{name: "GCS URI", input: "gs://artifacts"},
@@ -80,9 +81,12 @@ func TestPrivateAggregationBucket(t *testing.T) {
 		{name: "prefix", input: "gs://artifacts/prefix", wantError: true},
 		{name: "trailing slash", input: "gs://artifacts/", wantError: true},
 		{name: "malformed", input: "gs://", wantError: true},
+		{name: "separate path prefix", input: "artifacts", pathPrefix: "hidden", wantError: true},
+		{name: "normalized path prefix still rejected", input: "artifacts", pathPrefix: ".", wantError: true},
+		{name: "local output disables upload", input: "artifacts", localOutput: "/artifacts", wantError: true},
 	} {
 		t.Run(tc.name, func(t *testing.T) {
-			bucket, err := privateAggregationBucket(tc.input)
+			bucket, err := privateAggregationBucket(&prowv1.GCSConfiguration{Bucket: tc.input, PathPrefix: tc.pathPrefix, LocalOutputDir: tc.localOutput})
 			if tc.wantError {
 				if err == nil || !strings.Contains(err.Error(), "private aggregation") {
 					t.Fatalf("unexpected error: %v", err)
@@ -109,6 +113,8 @@ func TestSetPrivateArtifacts(t *testing.T) {
 		publicScope, publicBucket, publicSecret     string
 		cluster, privateCluster                     string
 		globalBucket, privateBucket                 string
+		publicCluster, laterPublicBucket            string
+		privatePrefix                               string
 	}{
 		{name: "public unchanged", refs: []prowv1.Refs{{Org: "openshift", Repo: "component"}}, bucket: "public-artifacts", secret: "public-writer"},
 		{name: "private only", private: true, refs: []prowv1.Refs{{Org: "openshift-priv", Repo: "component"}}, bucket: "private-artifacts", secret: "private-writer"},
@@ -140,6 +146,16 @@ func TestSetPrivateArtifacts(t *testing.T) {
 		{name: "unsupported scheme rejected", private: true, privateBucket: "gcs://private-artifacts", wantError: true},
 		{name: "malformed public destination fails closed", private: true, publicScope: "openshift", publicBucket: "gs://", wantError: true},
 		{name: "public malformed destination unchanged", globalBucket: "gs://", bucket: "gs://", secret: "public-writer"},
+		{name: "other cluster public org bucket collision", private: true, cluster: "build01", publicCluster: "build02", publicScope: "openshift", publicBucket: "gs://private-artifacts", wantError: true},
+		{name: "other cluster public global bucket collision", private: true, cluster: "build01", publicCluster: "build02", publicBucket: "private-artifacts", wantError: true},
+		{name: "explicit default cluster public bucket collision", private: true, cluster: "build01", publicCluster: "default", publicScope: "example/component", publicBucket: "private-artifacts", wantError: true},
+		{name: "same secret name on unrelated cluster accepted", private: true, cluster: "build01", publicCluster: "build02", publicScope: "openshift", publicSecret: "private-writer", bucket: "private-artifacts", secret: "private-writer"},
+		{name: "same secret name on unrelated default cluster accepted", private: true, cluster: "build01", publicCluster: "default", publicScope: "openshift", publicSecret: "private-writer", bucket: "private-artifacts", secret: "private-writer"},
+		{name: "empty cluster normalizes for credential collision", private: true, publicCluster: "default", publicScope: "openshift", publicSecret: "private-writer", wantError: true},
+		{name: "isolated other cluster bucket accepted", private: true, publicCluster: "build02", publicScope: "openshift", publicBucket: "other-public-artifacts", bucket: "private-artifacts", secret: "private-writer"},
+		{name: "ordered other cluster override removes collision", private: true, publicCluster: "build02", publicScope: "openshift", publicBucket: "private-artifacts", laterPublicBucket: "other-public-artifacts", bucket: "private-artifacts", secret: "private-writer"},
+		{name: "wildcard cluster public bucket collision", private: true, publicCluster: "*", publicScope: "openshift", publicBucket: "private-artifacts", wantError: true},
+		{name: "nonaggregated private prefix preserved", private: true, privatePrefix: "private-prefix", bucket: "private-artifacts", secret: "private-writer"},
 	} {
 		t.Run(tc.name, func(t *testing.T) {
 			config := artifactTestConfig()
@@ -150,7 +166,8 @@ func TestSetPrivateArtifacts(t *testing.T) {
 				config.Plank.DefaultDecorationConfigs[1].Config.GCSConfiguration.Bucket = tc.privateBucket
 			}
 			config.Plank.DefaultDecorationConfigs[1].Cluster = tc.privateCluster
-			if tc.publicScope != "" {
+			config.Plank.DefaultDecorationConfigs[1].Config.GCSConfiguration.PathPrefix = tc.privatePrefix
+			if tc.publicScope != "" || tc.publicCluster != "" {
 				public := &prowv1.DecorationConfig{}
 				if tc.publicBucket != "" {
 					public.GCSConfiguration = &prowv1.GCSConfiguration{Bucket: tc.publicBucket}
@@ -158,7 +175,10 @@ func TestSetPrivateArtifacts(t *testing.T) {
 				if tc.publicSecret != "" {
 					public.GCSCredentialsSecret = ptr.To(tc.publicSecret)
 				}
-				config.Plank.DefaultDecorationConfigs = append(config.Plank.DefaultDecorationConfigs, &prowconfig.DefaultDecorationConfigEntry{OrgRepo: tc.publicScope, Config: public})
+				config.Plank.DefaultDecorationConfigs = append(config.Plank.DefaultDecorationConfigs, &prowconfig.DefaultDecorationConfigEntry{OrgRepo: tc.publicScope, Cluster: tc.publicCluster, Config: public})
+				if tc.laterPublicBucket != "" {
+					config.Plank.DefaultDecorationConfigs = append(config.Plank.DefaultDecorationConfigs, &prowconfig.DefaultDecorationConfigEntry{OrgRepo: tc.publicScope, Cluster: tc.publicCluster, Config: &prowv1.DecorationConfig{GCSConfiguration: &prowv1.GCSConfiguration{Bucket: tc.laterPublicBucket}}})
+				}
 			}
 			if tc.missingPrivate {
 				config.Plank.DefaultDecorationConfigs = config.Plank.DefaultDecorationConfigs[:1]
@@ -186,6 +206,9 @@ func TestSetPrivateArtifacts(t *testing.T) {
 			if periodic.Hidden != tc.private {
 				t.Errorf("Hidden = %v, want %v", periodic.Hidden, tc.private)
 			}
+			if got := periodic.DecorationConfig.GCSConfiguration.PathPrefix; got != tc.privatePrefix {
+				t.Errorf("PathPrefix = %q, want %q", got, tc.privatePrefix)
+			}
 			if diff := cmp.Diff(tc.refs, periodic.ExtraRefs); diff != "" {
 				t.Errorf("refs changed (-want +got):\n%s", diff)
 			}
@@ -195,21 +218,33 @@ func TestSetPrivateArtifacts(t *testing.T) {
 
 func TestGenerateAggregatorJob(t *testing.T) {
 	for _, tc := range []struct {
-		name             string
-		private          bool
-		bucket           string
-		configuredBucket string
+		name                    string
+		private                 bool
+		bucket                  string
+		configuredBucket        string
+		pathPrefix, localOutput string
+		wantError               bool
 	}{
 		{name: "public"},
 		{name: "private", private: true, bucket: "private-artifacts"},
 		{name: "private URI reader gets bare bucket", private: true, configuredBucket: "gs://private-artifacts", bucket: "private-artifacts"},
+		{name: "private separate prefix rejected", private: true, pathPrefix: "hidden", wantError: true},
+		{name: "private local output rejected", private: true, localOutput: "/artifacts", wantError: true},
 	} {
 		t.Run(tc.name, func(t *testing.T) {
 			getter := &fakeProwConfigGetter{cfg: artifactTestConfig()}
+			getter.cfg.Plank.DefaultDecorationConfigs[1].Config.GCSConfiguration.PathPrefix = tc.pathPrefix
+			getter.cfg.Plank.DefaultDecorationConfigs[1].Config.GCSConfiguration.LocalOutputDir = tc.localOutput
 			if tc.configuredBucket != "" {
 				getter.cfg.Plank.DefaultDecorationConfigs[1].Config.GCSConfiguration.Bucket = tc.configuredBucket
 			}
 			job, err := generateAggregatorJob(&api.Metadata{Org: "openshift-priv", Repo: "component", Branch: "release-4.99"}, "id", "aggregator-test", "test", "run", "ci", getter, time.Unix(0, 0), "submitted", time.Hour, &fakeResolverClient{}, tc.private)
+			if tc.wantError {
+				if err == nil || !strings.Contains(err.Error(), "private aggregation") {
+					t.Fatalf("unexpected error: %v", err)
+				}
+				return
+			}
 			if err != nil {
 				t.Fatal(err)
 			}
@@ -261,10 +296,13 @@ func (getter artifactProwConfigGetter) Defaulter() periodicDefaulter {
 
 func TestTriggerJobs(t *testing.T) {
 	for _, tc := range []struct {
-		name, workerBucket, aggregatorBucket string
-		private                              bool
-		wantJobs                             int
-		errorText                            string
+		name, workerBucket, aggregatorBucket     string
+		private                                  bool
+		wantJobs                                 int
+		errorText                                string
+		workerPrefix, aggregatorPrefix           string
+		workerLocalOutput, aggregatorLocalOutput string
+		publicCluster, publicBucket              string
 	}{
 		{name: "private matching buckets across clusters", private: true, workerBucket: "private-artifacts", aggregatorBucket: "private-artifacts", wantJobs: 3},
 		{name: "private mismatched buckets create no jobs", private: true, workerBucket: "private-worker-artifacts", aggregatorBucket: "private-aggregator-artifacts", errorText: "private aggregation artifact buckets differ"},
@@ -275,11 +313,23 @@ func TestTriggerJobs(t *testing.T) {
 		{name: "private equal prefixes are not reader compatible", private: true, workerBucket: "gs://private-artifacts/prefix", aggregatorBucket: "gs://private-artifacts/prefix", errorText: "private aggregation"},
 		{name: "private worker prefix rejected", private: true, workerBucket: "private-artifacts/prefix", aggregatorBucket: "private-artifacts", errorText: "private aggregation"},
 		{name: "private s3 aggregation unsupported by reader", private: true, workerBucket: "s3://private-artifacts", aggregatorBucket: "s3://private-artifacts", errorText: "private aggregation"},
+		{name: "private worker path prefix creates no jobs", private: true, workerBucket: "private-artifacts", aggregatorBucket: "private-artifacts", workerPrefix: "hidden", errorText: "private aggregation"},
+		{name: "private aggregator path prefix creates no jobs", private: true, workerBucket: "private-artifacts", aggregatorBucket: "private-artifacts", aggregatorPrefix: "hidden", errorText: "private aggregation"},
+		{name: "private worker local output creates no jobs", private: true, workerBucket: "private-artifacts", aggregatorBucket: "private-artifacts", workerLocalOutput: "/artifacts", errorText: "private aggregation"},
+		{name: "private aggregator local output creates no jobs", private: true, workerBucket: "private-artifacts", aggregatorBucket: "private-artifacts", aggregatorLocalOutput: "/artifacts", errorText: "private aggregation"},
+		{name: "other cluster public bucket creates no private jobs", private: true, workerBucket: "private-artifacts", aggregatorBucket: "private-artifacts", publicCluster: "build03", publicBucket: "gs://private-artifacts", errorText: "private payload artifact storage"},
+		{name: "isolated other cluster public bucket accepted", private: true, workerBucket: "private-artifacts", aggregatorBucket: "private-artifacts", publicCluster: "build03", publicBucket: "other-public-artifacts", wantJobs: 3},
+		{name: "public prefix behavior unchanged", workerBucket: "private-artifacts", aggregatorBucket: "private-artifacts", workerPrefix: "hidden", aggregatorPrefix: "hidden", wantJobs: 3},
 	} {
 		t.Run(tc.name, func(t *testing.T) {
 			config := artifactTestConfig()
 			config.Plank.DefaultDecorationConfigs[1].Config.GCSConfiguration.Bucket = tc.aggregatorBucket
-			config.Plank.DefaultDecorationConfigs = append(config.Plank.DefaultDecorationConfigs, &prowconfig.DefaultDecorationConfigEntry{OrgRepo: "openshift-priv", Cluster: "build02", Config: &prowv1.DecorationConfig{GCSConfiguration: &prowv1.GCSConfiguration{Bucket: tc.workerBucket}}})
+			config.Plank.DefaultDecorationConfigs[1].Config.GCSConfiguration.PathPrefix = tc.aggregatorPrefix
+			config.Plank.DefaultDecorationConfigs[1].Config.GCSConfiguration.LocalOutputDir = tc.aggregatorLocalOutput
+			config.Plank.DefaultDecorationConfigs = append(config.Plank.DefaultDecorationConfigs, &prowconfig.DefaultDecorationConfigEntry{OrgRepo: "openshift-priv", Cluster: "build02", Config: &prowv1.DecorationConfig{GCSConfiguration: &prowv1.GCSConfiguration{Bucket: tc.workerBucket, PathPrefix: tc.workerPrefix, LocalOutputDir: tc.workerLocalOutput}}})
+			if tc.publicCluster != "" {
+				config.Plank.DefaultDecorationConfigs = append(config.Plank.DefaultDecorationConfigs, &prowconfig.DefaultDecorationConfigEntry{OrgRepo: "openshift", Cluster: tc.publicCluster, Config: &prowv1.DecorationConfig{GCSConfiguration: &prowv1.GCSConfiguration{Bucket: tc.publicBucket}}})
+			}
 			scheme := runtime.NewScheme()
 			if err := prowv1.AddToScheme(scheme); err != nil {
 				t.Fatal(err)

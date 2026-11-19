@@ -705,10 +705,10 @@ func (o *options) Complete() error {
 	handleTargetAdditionalSuffix(o)
 	setDisablePodScalerFromTarget(o)
 
-	if err := o.loadGSMConfig(); err != nil {
-		return err
-	}
 	if o.enableSecretsStoreCSIDriver {
+		if err := api.LoadGSMConfigFromFile(o.gsmConfigPath, &o.gsmConfig); err != nil {
+			return err
+		}
 		if err = api.LoadGSMProjectConfigFromFile(o.gsmProjectConfigPath, &o.gsmProjectConfig); err != nil {
 			return err
 		}
@@ -717,17 +717,9 @@ func (o *options) Complete() error {
 	return overrideTestStepDependencyParams(o)
 }
 
-// loadGSMConfig loads the supplied source even without CSI, leaving legacy jobs without a path unchanged.
-func (o *options) loadGSMConfig() error {
-	if o.gsmConfigPath == "" && !o.enableSecretsStoreCSIDriver {
-		return nil
-	}
-	return api.LoadGSMConfigFromFile(o.gsmConfigPath, &o.gsmConfig)
-}
-
-// checkBlockedCollections checks only tests present in the selected execution graph.
+// checkBlockedCollections rejects selected tests that use blocked collections when CSI is enabled.
 func (o *options) checkBlockedCollections(steps api.OrderedStepList) error {
-	if len(o.gsmConfig.BlockedCollections) == 0 {
+	if !o.enableSecretsStoreCSIDriver || len(o.gsmConfig.BlockedCollections) == 0 {
 		return nil
 	}
 	selected := sets.New[string]()

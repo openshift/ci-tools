@@ -9,7 +9,6 @@ import (
 	"os"
 	"path/filepath"
 	"reflect"
-	"strings"
 	"testing"
 	"time"
 
@@ -45,53 +44,18 @@ func init() {
 	}
 }
 
-// TestLoadGSMConfig covers source loading independently of CSI.
-func TestLoadGSMConfig(t *testing.T) {
-	for _, tc := range []struct {
-		name, data, wantError string
-		noPath, csi           bool
-		want                  map[string]api.BlockedCollection
-	}{
-		{name: "legacy no path", noPath: true},
-		{name: "CSI requires config", noPath: true, csi: true, wantError: "couldn't read GSM config file:"},
-		{name: "explicit missing source", wantError: "couldn't read GSM config file:"},
-		{name: "invalid source", data: "bundles: [", wantError: "error converting YAML to JSON:"},
-		{name: "policy with CSI disabled", data: "blocked_collections: {blocked: {}}", want: map[string]api.BlockedCollection{"blocked": {}}},
-	} {
-		t.Run(tc.name, func(t *testing.T) {
-			o := options{gsmConfigPath: filepath.Join(t.TempDir(), "gsm-config.yaml"), enableSecretsStoreCSIDriver: tc.csi}
-			if tc.noPath {
-				o.gsmConfigPath = ""
-			}
-			if tc.data != "" {
-				if err := os.WriteFile(o.gsmConfigPath, []byte(tc.data), 0600); err != nil {
-					t.Fatal(err)
-				}
-			}
-			if err := o.loadGSMConfig(); err != nil {
-				if tc.wantError == "" || !strings.HasPrefix(err.Error(), tc.wantError) {
-					t.Fatalf("unexpected error: %v", err)
-				}
-				return
-			}
-			if tc.wantError != "" {
-				t.Fatalf("expected error starting with %q", tc.wantError)
-			}
-			testhelper.Diff(t, "blocked collections", tc.want, o.gsmConfig.BlockedCollections)
-		})
-	}
-}
-
 // TestCheckBlockedCollections covers selected targets and credential extraction.
 func TestCheckBlockedCollections(t *testing.T) {
 	want := errors.New("test selected: The secret collection blocked is blocked. Contact <#CBN38N3MW> to get more details.")
 	for _, tc := range []struct {
-		name       string
-		test       api.TestStepConfiguration
-		unselected bool
-		raw        bool
-		want       error
+		name        string
+		test        api.TestStepConfiguration
+		unselected  bool
+		raw         bool
+		csiDisabled bool
+		want        error
 	}{
+		{name: "CSI disabled with populated policy", test: api.TestStepConfiguration{Secret: &api.Secret{Collection: "blocked"}}, csiDisabled: true},
 		{name: "unselected", test: api.TestStepConfiguration{Secret: &api.Secret{Collection: "blocked"}}, unselected: true},
 		{name: "selected secret", test: api.TestStepConfiguration{Secret: &api.Secret{Collection: "blocked"}}, want: want},
 		{name: "selected raw test", test: api.TestStepConfiguration{Secret: &api.Secret{Collection: "blocked"}}, raw: true, want: want},
@@ -108,7 +72,8 @@ func TestCheckBlockedCollections(t *testing.T) {
 				tc.test.ContainerTestConfiguration = &api.ContainerTestConfiguration{From: "src"}
 			}
 			o := options{
-				configSpec: &api.ReleaseBuildConfiguration{Tests: []api.TestStepConfiguration{tc.test}},
+				enableSecretsStoreCSIDriver: !tc.csiDisabled,
+				configSpec:                  &api.ReleaseBuildConfiguration{Tests: []api.TestStepConfiguration{tc.test}},
 				gsmConfig: api.GSMConfig{BlockedCollections: map[string]api.BlockedCollection{"blocked": {}}, Bundles: []api.GSMBundle{
 					{Name: "synced", SyncToCluster: true, Targets: []api.TargetSpec{{Namespace: "ci"}}, GSMSecrets: []api.GSMSecretRef{{Collection: "blocked"}}},
 				}},

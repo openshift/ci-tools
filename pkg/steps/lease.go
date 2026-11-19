@@ -15,6 +15,7 @@ import (
 	kerrors "k8s.io/apimachinery/pkg/api/errors"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	utilerrors "k8s.io/apimachinery/pkg/util/errors"
+	"k8s.io/utils/ptr"
 	ctrlruntimeclient "sigs.k8s.io/controller-runtime/pkg/client"
 
 	"github.com/openshift/ci-tools/pkg/api"
@@ -281,8 +282,9 @@ func (s *leaseStep) handleClusterProfile(ctx context.Context, l *stepLease, name
 		return fmt.Errorf("resolve cluster profile %s: %w", clusterProfileName, err)
 	}
 
+	federated := ptr.Deref(l.GCPWorkloadIdentity, false)
 	secretName := cpDetails.Secret
-	if l.GCPWorkloadIdentity {
+	if federated {
 		if cpDetails.ClusterType != "gcp" || cpDetails.GCPFederation == nil || cpDetails.GCPFederation.Provider == "" || cpDetails.GCPFederation.ServiceAccount == "" || cpDetails.GCPFederation.HubRoleARN == "" {
 			return fmt.Errorf("assigned profile %q does not support GCP workload identity", clusterProfileName)
 		}
@@ -290,7 +292,7 @@ func (s *leaseStep) handleClusterProfile(ctx context.Context, l *stepLease, name
 		cpDetails = cpDetails.DeepCopy()
 		cpDetails.Secret += "-wif"
 	}
-	secretData, err := s.importClusterProfileSecret(ctx, secretName, cpDetails.Secret, l.GCPWorkloadIdentity)
+	secretData, err := s.importClusterProfileSecret(ctx, secretName, cpDetails.Secret, federated)
 	if err != nil {
 		return fmt.Errorf("import secret %s for cluster profile %s: %w", cpDetails.Secret, clusterProfileName, err)
 	}
@@ -298,11 +300,11 @@ func (s *leaseStep) handleClusterProfile(ctx context.Context, l *stepLease, name
 	s.stsHubRoleARN = string(secretData[api.STSHubRoleARNSecretKey])
 	s.stsTargetRoleARN = string(secretData[api.STSTargetRoleARNSecretKey])
 
-	if l.GCPWorkloadIdentity {
+	if federated {
 		s.stsHubRoleARN = cpDetails.GCPFederation.HubRoleARN
 		s.stsTargetRoleARN = ""
 	}
-	if l.GCPWorkloadIdentity || (s.stsHubRoleARN != "" && s.stsTargetRoleARN != "") {
+	if federated || (s.stsHubRoleARN != "" && s.stsTargetRoleARN != "") {
 		secret := &coreapi.Secret{}
 		objKey := ctrlruntimeclient.ObjectKey{Namespace: "ci", Name: api.STSClusterSecretName}
 		if err := s.kubeClient.Get(ctx, objKey, secret); err != nil && !kerrors.IsNotFound(err) {
@@ -314,7 +316,7 @@ func (s *leaseStep) handleClusterProfile(ctx context.Context, l *stepLease, name
 		}
 
 		if s.stsHomeRoleARN == "" {
-			if l.GCPWorkloadIdentity {
+			if federated {
 				return fmt.Errorf("no AWS home role configured for GCP workload identity on this build cluster")
 			}
 			logrus.Warnf("STS hub and target role ARNs are set for profile %s but home_role_arn "+

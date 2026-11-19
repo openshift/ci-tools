@@ -701,7 +701,7 @@ const ciOperatorReferenceYaml = "# The list of base images describe\n" +
 	"            env:\n" +
 	"                \"\": \"\"\n" +
 	"            # GCPWorkloadIdentity requests short-lived gcloud credentials from the assigned GCP profile.\n" +
-	"            gcp_workload_identity: true\n" +
+	"            gcp_workload_identity: false\n" +
 	"            # Leases lists resources that should be acquired for the test.\n" +
 	"            leases:\n" +
 	"                - # Env is the environment variable that will contain the resource name.\n" +
@@ -1238,7 +1238,7 @@ const ciOperatorReferenceYaml = "# The list of base images describe\n" +
 	"            env:\n" +
 	"                \"\": \"\"\n" +
 	"            # GCPWorkloadIdentity requests short-lived gcloud credentials from the assigned GCP profile.\n" +
-	"            gcp_workload_identity: true\n" +
+	"            gcp_workload_identity: false\n" +
 	"            # Leases lists resources that should be acquired for the test.\n" +
 	"            leases:\n" +
 	"                - # Env is the environment variable that will contain the resource name.\n" +
@@ -1700,7 +1700,7 @@ const ciOperatorReferenceYaml = "# The list of base images describe\n" +
 	"        env:\n" +
 	"            \"\": \"\"\n" +
 	"        # GCPWorkloadIdentity requests short-lived gcloud credentials from the assigned GCP profile.\n" +
-	"        gcp_workload_identity: true\n" +
+	"        gcp_workload_identity: false\n" +
 	"        # Leases lists resources that should be acquired for the test.\n" +
 	"        leases:\n" +
 	"            - # Env is the environment variable that will contain the resource name.\n" +
@@ -2237,7 +2237,7 @@ const ciOperatorReferenceYaml = "# The list of base images describe\n" +
 	"        env:\n" +
 	"            \"\": \"\"\n" +
 	"        # GCPWorkloadIdentity requests short-lived gcloud credentials from the assigned GCP profile.\n" +
-	"        gcp_workload_identity: true\n" +
+	"        gcp_workload_identity: false\n" +
 	"        # Leases lists resources that should be acquired for the test.\n" +
 	"        leases:\n" +
 	"            - # Env is the environment variable that will contain the resource name.\n" +

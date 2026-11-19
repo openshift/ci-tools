@@ -173,7 +173,7 @@ func newMultiStageTestStep(
 		additionalSuffix:                 targetAdditionalSuffix,
 		nodeName:                         nodeName,
 		profile:                          ms.ClusterProfileLiteral,
-		gcpWorkloadIdentity:              ms.GCPWorkloadIdentity,
+		gcpWorkloadIdentity:              ptr.Deref(ms.GCPWorkloadIdentity, false),
 		config:                           config,
 		params:                           params,
 		env:                              ms.Environment,

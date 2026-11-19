@@ -13,6 +13,7 @@ import (
 	"github.com/aws/aws-sdk-go-v2/credentials/stscreds"
 	"github.com/aws/aws-sdk-go-v2/service/sts"
 	"github.com/sirupsen/logrus"
+	"golang.org/x/oauth2"
 	"golang.org/x/oauth2/google/externalaccount"
 )
 
@@ -49,15 +50,20 @@ func Refresh(ctx context.Context, home, hub, provider, account string) error {
 		ServiceAccountImpersonationURL: "https://iamcredentials.googleapis.com/v1/projects/-/serviceAccounts/" + url.PathEscape(account) + ":generateAccessToken",
 		AwsSecurityCredentialsSupplier: supplier{src},
 	}
+	return refreshLoop(ctx, func(ctx context.Context) (time.Duration, error) {
+		return refreshOnce(func() (oauth2.TokenSource, error) { return externalaccount.NewTokenSource(ctx, conf) }, TokenFile)
+	}, 15*time.Second)
+}
+
+func refreshLoop(ctx context.Context, refresh func(context.Context) (time.Duration, error), retryDelay time.Duration) error {
 	for ctx.Err() == nil {
 		// Start a fresh Google exchange before expiry while retaining the AWS cache.
 		requestCtx, cancel := context.WithTimeout(ctx, time.Minute)
-		next, err := refreshOnce(requestCtx, conf)
+		next, err := refresh(requestCtx)
 		cancel()
 		if err != nil {
-			// Upstream response bodies can contain authentication material.
-			logrus.Warn("Google credential refresh failed; retrying")
-			next = 15 * time.Second
+			logrus.WithError(err).Warn("Google credential refresh failed; retrying")
+			next = retryDelay
 		}
 		select {
 		case <-ctx.Done():
@@ -68,20 +74,27 @@ func Refresh(ctx context.Context, home, hub, provider, account string) error {
 	return ctx.Err()
 }
 
-func refreshOnce(ctx context.Context, conf externalaccount.Config) (time.Duration, error) {
-	src, err := externalaccount.NewTokenSource(ctx, conf)
+// Provider errors can embed raw HTTP bodies. Preserve the cause for errors.Is/As
+// while exposing only the operation name to logs.
+type providerError struct{ cause error }
+
+func (e providerError) Error() string { return "credential provider failed" }
+func (e providerError) Unwrap() error { return e.cause }
+
+func refreshOnce(newSource func() (oauth2.TokenSource, error), path string) (time.Duration, error) {
+	src, err := newSource()
 	if err != nil {
-		return 0, err
+		return 0, fmt.Errorf("create Google token source: %w", providerError{err})
 	}
 	tok, err := src.Token()
 	if err != nil {
-		return 0, err
+		return 0, fmt.Errorf("obtain Google access token: %w", providerError{err})
 	}
-	if tok.AccessToken == "" || time.Until(tok.Expiry) < time.Minute {
+	if tok == nil || tok.AccessToken == "" || time.Until(tok.Expiry) < time.Minute {
 		return 0, fmt.Errorf("received an empty or expiring Google token")
 	}
-	if err := writeToken(TokenFile, tok.AccessToken); err != nil {
-		return 0, err
+	if err := writeToken(path, tok.AccessToken); err != nil {
+		return 0, fmt.Errorf("publish Google access token: %w", err)
 	}
 	return time.Until(tok.Expiry) * 4 / 5, nil
 }
@@ -89,18 +102,24 @@ func refreshOnce(ctx context.Context, conf externalaccount.Config) (time.Duratio
 func writeToken(path, token string) error {
 	f, err := os.CreateTemp(filepath.Dir(path), ".token-*")
 	if err != nil {
-		return err
+		return fmt.Errorf("create temporary token file: %w", err)
 	}
-	defer os.Remove(f.Name())
-	if _, err = f.WriteString(token); err == nil {
-		err = f.Chmod(0444)
+	// A successful rename moves the file. Cleanup after a failure is best effort.
+	defer func() { _ = os.Remove(f.Name()) }()
+	if _, err = f.WriteString(token); err != nil {
+		err = fmt.Errorf("write temporary token file: %w", err)
+	} else if err = f.Chmod(0444); err != nil {
+		err = fmt.Errorf("set token file permissions: %w", err)
 	}
 	closeErr := f.Close()
 	if err != nil {
 		return err
 	}
 	if closeErr != nil {
-		return closeErr
+		return fmt.Errorf("close temporary token file: %w", closeErr)
 	}
-	return os.Rename(f.Name(), path)
+	if err := os.Rename(f.Name(), path); err != nil {
+		return fmt.Errorf("replace token file: %w", err)
+	}
+	return nil
 }

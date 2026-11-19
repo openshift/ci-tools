@@ -857,21 +857,24 @@ func TestAcquireLeases(t *testing.T) {
 }
 
 func TestGCPFederationUsesLeasedMember(t *testing.T) {
+	federation := &api.GCPFederation{Provider: "projects/1/locations/global/workloadIdentityPools/p/providers/a", HubRoleARN: "hub", ServiceAccount: "jobs2@example.com"}
 	for _, tc := range []struct {
 		name                                  string
 		optIn, supported, home, expectFailure bool
+		wantFederation                        *api.GCPFederation
+		wantHome, wantHub, wantTarget         string
 	}{
-		{"federated member", true, true, true, false},
-		{"unsupported member in same pool", true, false, true, true},
-		{"build cluster lacks home role", true, true, false, true},
-		{"legacy job on enabled member", false, true, false, false},
+		{name: "federated member", optIn: true, supported: true, home: true, wantFederation: federation, wantHome: "home", wantHub: "hub", wantTarget: ""},
+		{name: "unsupported member in same pool", optIn: true, home: true, expectFailure: true},
+		{name: "build cluster lacks home role", optIn: true, supported: true, expectFailure: true},
+		{name: "legacy job on enabled member", supported: true, wantFederation: federation, home: true, wantHome: "home", wantHub: "legacy-hub", wantTarget: "legacy-target"},
 	} {
 		t.Run(tc.name, func(t *testing.T) {
 			member := &api.ClusterProfile{Name: "jobs2", ClusterType: "gcp", Secret: "cluster-jobs2"}
 			if tc.supported {
-				member.GCPFederation = &api.GCPFederation{Provider: "projects/1/locations/global/workloadIdentityPools/p/providers/a", HubRoleARN: "hub", ServiceAccount: "jobs2@example.com"}
+				member.GCPFederation = federation.DeepCopy()
 			}
-			input := &corev1.Secret{ObjectMeta: v1.ObjectMeta{Name: member.Secret, Namespace: "ci"}, Data: map[string][]byte{"openshift_gcp_project": []byte("jobs2"), "gce.json": []byte("old-key"), "future-key": []byte("other-key")}}
+			input := &corev1.Secret{ObjectMeta: v1.ObjectMeta{Name: member.Secret, Namespace: "ci"}, Data: map[string][]byte{"openshift_gcp_project": []byte("jobs2"), "gce.json": []byte("old-key"), "future-key": []byte("other-key"), api.STSHubRoleARNSecretKey: []byte("legacy-hub"), api.STSTargetRoleARNSecretKey: []byte("legacy-target")}}
 			builder := fakectrlruntimeclient.NewClientBuilder().WithObjects(input)
 			if tc.home {
 				builder = builder.WithObjects(&corev1.Secret{ObjectMeta: v1.ObjectMeta{Name: api.STSClusterSecretName, Namespace: "ci"}, Data: map[string][]byte{api.STSHomeRoleARNKey: []byte("home")}})
@@ -883,13 +886,19 @@ func TestGCPFederationUsesLeasedMember(t *testing.T) {
 				}
 				return member, nil
 			}}
-			l := &stepLease{StepLease: api.StepLease{ClusterProfile: &api.ClusterProfileLiteral{Name: "gcp-pool"}, GCPWorkloadIdentity: tc.optIn}}
+			l := &stepLease{StepLease: api.StepLease{ClusterProfile: &api.ClusterProfileLiteral{Name: "gcp-pool"}, GCPWorkloadIdentity: ptr.To(tc.optIn)}}
 			err := step.handleClusterProfile(context.Background(), l, []string{"jobs2--region--quota-1"})
 			if (err != nil) != tc.expectFailure {
 				t.Fatalf("unexpected result: %v", err)
 			}
 			if tc.expectFailure {
 				return
+			}
+			if diff := cmp.Diff(tc.wantFederation, step.clusterProfile.GCPFederation); diff != "" {
+				t.Errorf("federation (-want +got): %s", diff)
+			}
+			if step.stsHomeRoleARN != tc.wantHome || step.stsHubRoleARN != tc.wantHub || step.stsTargetRoleARN != tc.wantTarget {
+				t.Errorf("unexpected home/hub/target roles: %q/%q/%q", step.stsHomeRoleARN, step.stsHubRoleARN, step.stsTargetRoleARN)
 			}
 			if member.Secret != "cluster-jobs2" {
 				t.Fatal("changed shared profile")

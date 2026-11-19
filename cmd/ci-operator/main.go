@@ -155,13 +155,17 @@ var (
 // CustomProwMetadata the name of the custom prow metadata file that's expected to be found in the artifacts directory.
 const CustomProwMetadata = "custom-prow-metadata.json"
 
+func runGCPWIFToken(ctx context.Context, args []string) error {
+	if len(args) != 4 {
+		return errors.New("gcp-wif-token requires AWS home and hub roles, a Google provider and service account")
+	}
+	return gcpworkloadidentity.Refresh(ctx, args[0], args[1], args[2], args[3])
+}
+
 func main() {
 	if len(os.Args) > 1 && os.Args[1] == "gcp-wif-token" {
-		if len(os.Args) != 6 {
-			logrus.Fatal("gcp-wif-token requires AWS home and hub roles, a Google provider and service account")
-		}
-		if err := gcpworkloadidentity.Refresh(context.Background(), os.Args[2], os.Args[3], os.Args[4], os.Args[5]); err != nil {
-			logrus.Fatal("Google credential helper stopped")
+		if err := runGCPWIFToken(context.Background(), os.Args[2:]); err != nil {
+			logrus.WithError(err).Fatal("Google credential helper stopped")
 		}
 		return
 	}

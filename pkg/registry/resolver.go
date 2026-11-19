@@ -88,7 +88,9 @@ func (r *registry) mergeWorkflow(config *api.MultiStageTestConfiguration) ([][]a
 		return nil, []error{fmt.Errorf("no workflow named %s", *config.Workflow)}
 	}
 	var errs []error
-	config.GCPWorkloadIdentity = config.GCPWorkloadIdentity || workflow.GCPWorkloadIdentity
+	if config.GCPWorkloadIdentity == nil {
+		config.GCPWorkloadIdentity = workflow.GCPWorkloadIdentity
+	}
 	if config.ClusterProfile == "" {
 		config.ClusterProfile = workflow.ClusterProfile
 	}

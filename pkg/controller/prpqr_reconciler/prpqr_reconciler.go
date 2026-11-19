@@ -18,6 +18,7 @@ import (
 	kerrors "k8s.io/apimachinery/pkg/api/errors"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/apimachinery/pkg/types"
+	"k8s.io/apimachinery/pkg/util/sets"
 	"k8s.io/apimachinery/pkg/util/wait"
 	"k8s.io/client-go/util/retry"
 	ctrlruntimeclient "sigs.k8s.io/controller-runtime/pkg/client"
@@ -30,6 +31,7 @@ import (
 	"sigs.k8s.io/controller-runtime/pkg/source"
 	prowv1 "sigs.k8s.io/prow/pkg/apis/prowjobs/v1"
 	prowconfig "sigs.k8s.io/prow/pkg/config"
+	"sigs.k8s.io/prow/pkg/kube"
 	"sigs.k8s.io/prow/pkg/pjutil"
 
 	"github.com/openshift/ci-tools/pkg/api"
@@ -314,6 +316,14 @@ func (r *reconciler) triggerJobs(ctx context.Context,
 			submitted := generateJobNameToSubmit(inject, pullRequests, jobSpec.ShardCount, jobSpec.ShardIndex)
 			aggregatorJob, err := generateAggregatorJob(baseMetadata, uid, mimickedJob, jobSpec.JobName(jobconfig.PeriodicPrefix),
 				req.Name, req.Namespace, r.prowConfigGetter, time.Now(), submitted, r.defaultAggregatorJobTimeout, r.configResolverClient, prpqr.Spec.Private)
+			if err == nil && prpqr.Spec.Private {
+				for _, worker := range aggregatedProwjobs {
+					if worker.Spec.DecorationConfig.GCSConfiguration.Bucket != aggregatorJob.Spec.DecorationConfig.GCSConfiguration.Bucket {
+						err = fmt.Errorf("private aggregation artifact buckets differ between worker cluster %q and aggregator cluster %q", worker.Spec.Cluster, aggregatorJob.Spec.Cluster)
+						break
+					}
+				}
+			}
 			if err != nil {
 				logger.WithError(err).Error("Failed to generate an aggregator prowjob")
 				statuses[mimickedJob] = &v1.PullRequestPayloadJobStatus{
@@ -833,13 +843,27 @@ func setPrivateArtifacts(periodic *prowconfig.Periodic, config *prowconfig.Confi
 	if config == nil {
 		return fmt.Errorf("private payload artifact storage configuration is unavailable")
 	}
-	privateDefaults := config.Plank.GuessDefaultDecorationConfig("openshift-priv", periodic.Cluster)
-	publicDefaults := config.Plank.GuessDefaultDecorationConfig("", periodic.Cluster)
+	cluster := periodic.Cluster
+	if cluster == "" {
+		cluster = kube.DefaultClusterAlias
+	}
+	privateDefaults := config.Plank.GuessDefaultDecorationConfig("openshift-priv", cluster)
 	if privateDefaults.GCSConfiguration == nil || privateDefaults.GCSConfiguration.Bucket == "" ||
-		privateDefaults.GCSCredentialsSecret == nil || *privateDefaults.GCSCredentialsSecret == "" ||
-		(publicDefaults.GCSCredentialsSecret != nil && *privateDefaults.GCSCredentialsSecret == *publicDefaults.GCSCredentialsSecret) ||
-		(publicDefaults.GCSConfiguration != nil && privateDefaults.GCSConfiguration.Bucket == publicDefaults.GCSConfiguration.Bucket) {
+		privateDefaults.GCSCredentialsSecret == nil || *privateDefaults.GCSCredentialsSecret == "" {
 		return fmt.Errorf("private payload artifact storage is not configured separately from public storage")
+	}
+	publicScopes := sets.New[string]("")
+	for _, entry := range config.Plank.DefaultDecorationConfigs {
+		if strings.SplitN(entry.OrgRepo, "/", 2)[0] != "openshift-priv" {
+			publicScopes.Insert(entry.OrgRepo)
+		}
+	}
+	for _, scope := range sets.List(publicScopes) {
+		publicDefaults := config.Plank.GuessDefaultDecorationConfig(scope, cluster)
+		if (publicDefaults.GCSCredentialsSecret != nil && *privateDefaults.GCSCredentialsSecret == *publicDefaults.GCSCredentialsSecret) ||
+			(publicDefaults.GCSConfiguration != nil && privateDefaults.GCSConfiguration.Bucket == publicDefaults.GCSConfiguration.Bucket) {
+			return fmt.Errorf("private payload artifact storage is not configured separately from public storage for scope %q", scope)
+		}
 	}
 	if periodic.DecorationConfig == nil {
 		periodic.DecorationConfig = &prowv1.DecorationConfig{}

@@ -14,6 +14,10 @@ the public payload-testing UI.
 Private payload jobs, including mixed-repository runs and aggregators, require
 `openshift-priv` Prow decoration defaults with a distinct artifact bucket and
 credential reference. Missing private storage configuration fails closed.
+Private storage must be separate from all configured public decoration scopes on
+each job's cluster, including public organization and repository overrides.
+Private aggregation batches with different worker and aggregator buckets are
+rejected before any jobs in that batch are created.
 Aggregators pass the selected private bucket to the
 `openshift-release-analysis-prpqr-aggregator` step through `GOOGLE_STORAGE_BUCKET`;
 the step must support that input before enabling private aggregation.

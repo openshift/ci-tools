@@ -82,6 +82,7 @@ import (
 	"github.com/openshift/ci-tools/pkg/api/configresolver"
 	"github.com/openshift/ci-tools/pkg/api/nsttl"
 	"github.com/openshift/ci-tools/pkg/defaults"
+	"github.com/openshift/ci-tools/pkg/gcpworkloadidentity"
 	gsm "github.com/openshift/ci-tools/pkg/gsm-secrets"
 	"github.com/openshift/ci-tools/pkg/interrupt"
 	"github.com/openshift/ci-tools/pkg/junit"
@@ -154,7 +155,20 @@ var (
 // CustomProwMetadata the name of the custom prow metadata file that's expected to be found in the artifacts directory.
 const CustomProwMetadata = "custom-prow-metadata.json"
 
+func runGCPWIFToken(ctx context.Context, args []string) error {
+	if len(args) != 4 {
+		return errors.New("gcp-wif-token requires AWS home and hub roles, a Google provider and service account")
+	}
+	return gcpworkloadidentity.Refresh(ctx, args[0], args[1], args[2], args[3])
+}
+
 func main() {
+	if len(os.Args) > 1 && os.Args[1] == "gcp-wif-token" {
+		if err := runGCPWIFToken(context.Background(), os.Args[2:]); err != nil {
+			logrus.WithError(err).Fatal("Google credential helper stopped")
+		}
+		return
+	}
 	censor, closer, err := setupLogger()
 	if err != nil {
 		logrus.WithError(err).Fatal("Could not set up logging.")

@@ -15,6 +15,7 @@ import (
 	kerrors "k8s.io/apimachinery/pkg/api/errors"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	utilerrors "k8s.io/apimachinery/pkg/util/errors"
+	"k8s.io/utils/ptr"
 	ctrlruntimeclient "sigs.k8s.io/controller-runtime/pkg/client"
 
 	"github.com/openshift/ci-tools/pkg/api"
@@ -281,7 +282,17 @@ func (s *leaseStep) handleClusterProfile(ctx context.Context, l *stepLease, name
 		return fmt.Errorf("resolve cluster profile %s: %w", clusterProfileName, err)
 	}
 
-	secretData, err := s.importClusterProfileSecret(ctx, cpDetails.Secret)
+	federated := ptr.Deref(l.GCPWorkloadIdentity, false)
+	secretName := cpDetails.Secret
+	if federated {
+		if cpDetails.ClusterType != "gcp" || cpDetails.GCPFederation == nil || cpDetails.GCPFederation.Provider == "" || cpDetails.GCPFederation.ServiceAccount == "" || cpDetails.GCPFederation.HubRoleARN == "" {
+			return fmt.Errorf("assigned profile %q does not support GCP workload identity", clusterProfileName)
+		}
+		// Other targets in the namespace can still use the ordinary profile secret.
+		cpDetails = cpDetails.DeepCopy()
+		cpDetails.Secret += "-wif"
+	}
+	secretData, err := s.importClusterProfileSecret(ctx, secretName, cpDetails.Secret, federated)
 	if err != nil {
 		return fmt.Errorf("import secret %s for cluster profile %s: %w", cpDetails.Secret, clusterProfileName, err)
 	}
@@ -289,7 +300,11 @@ func (s *leaseStep) handleClusterProfile(ctx context.Context, l *stepLease, name
 	s.stsHubRoleARN = string(secretData[api.STSHubRoleARNSecretKey])
 	s.stsTargetRoleARN = string(secretData[api.STSTargetRoleARNSecretKey])
 
-	if s.stsHubRoleARN != "" && s.stsTargetRoleARN != "" {
+	if federated {
+		s.stsHubRoleARN = cpDetails.GCPFederation.HubRoleARN
+		s.stsTargetRoleARN = ""
+	}
+	if federated || (s.stsHubRoleARN != "" && s.stsTargetRoleARN != "") {
 		secret := &coreapi.Secret{}
 		objKey := ctrlruntimeclient.ObjectKey{Namespace: "ci", Name: api.STSClusterSecretName}
 		if err := s.kubeClient.Get(ctx, objKey, secret); err != nil && !kerrors.IsNotFound(err) {
@@ -301,6 +316,9 @@ func (s *leaseStep) handleClusterProfile(ctx context.Context, l *stepLease, name
 		}
 
 		if s.stsHomeRoleARN == "" {
+			if federated {
+				return fmt.Errorf("no AWS home role configured for GCP workload identity on this build cluster")
+			}
 			logrus.Warnf("STS hub and target role ARNs are set for profile %s but home_role_arn "+
 				"was not found in Secret %s; STS will not be activated",
 				clusterProfileName, api.STSClusterSecretName)
@@ -316,18 +334,32 @@ func (s *leaseStep) handleClusterProfile(ctx context.Context, l *stepLease, name
 // importClusterProfileSecret retrieves the cluster profile secret from the
 // ci namespace, copies it into the test namespace, and returns the raw data
 // so callers can extract additional fields (e.g. STS role ARNs).
-func (s *leaseStep) importClusterProfileSecret(ctx context.Context, secretName string) (map[string][]byte, error) {
+func (s *leaseStep) importClusterProfileSecret(ctx context.Context, secretName, destination string, federated bool) (map[string][]byte, error) {
 	ciSecret := &coreapi.Secret{}
 	err := s.kubeClient.Get(ctx, ctrlruntimeclient.ObjectKey{Namespace: "ci", Name: secretName}, ciSecret)
 	if err != nil {
 		return nil, fmt.Errorf("failed to get secret '%s' from ci namespace: %w", secretName, err)
 	}
 
+	if federated {
+		// Import only the fields needed by migrated consumers. A future credential
+		// added to the legacy bundle must not silently enter a federated job.
+		data := map[string][]byte{}
+		for _, field := range []string{"openshift_gcp_project", "public_hosted_zone", "ssh-privatekey", "ssh-publickey", "pull-secret"} {
+			if value, ok := ciSecret.Data[field]; ok {
+				data[field] = value
+			}
+		}
+		if len(data["openshift_gcp_project"]) == 0 {
+			return nil, fmt.Errorf("profile %s lacks openshift_gcp_project", secretName)
+		}
+		ciSecret.Data = data
+	}
 	newSecret := &coreapi.Secret{
 		Data: ciSecret.Data,
 		Type: ciSecret.Type,
 		ObjectMeta: metav1.ObjectMeta{
-			Name:      secretName,
+			Name:      destination,
 			Namespace: s.namespace(),
 		},
 	}

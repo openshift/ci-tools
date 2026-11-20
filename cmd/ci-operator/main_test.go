@@ -2026,3 +2026,18 @@ func TestAdjustLeaseAcquireTimeout(t *testing.T) {
 		})
 	}
 }
+
+func TestRunGCPWIFTokenArgs(t *testing.T) {
+	ctx, cancel := context.WithCancel(context.Background())
+	cancel()
+	for _, n := range []int{0, 3, 4, 5} {
+		err := runGCPWIFToken(ctx, make([]string, n))
+		if n == 4 {
+			if !errors.Is(err, context.Canceled) {
+				t.Fatalf("valid arguments: %v", err)
+			}
+		} else if err == nil || err.Error() != "gcp-wif-token requires AWS home and hub roles, a Google provider and service account" {
+			t.Fatalf("%d arguments: %v", n, err)
+		}
+	}
+}

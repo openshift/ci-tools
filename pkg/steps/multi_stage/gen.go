@@ -11,10 +11,12 @@ import (
 	"k8s.io/apimachinery/pkg/api/resource"
 	utilerrors "k8s.io/apimachinery/pkg/util/errors"
 	"k8s.io/apimachinery/pkg/util/sets"
+	"k8s.io/utils/ptr"
 	prowapi "sigs.k8s.io/prow/pkg/apis/prowjobs/v1"
 	"sigs.k8s.io/prow/pkg/entrypoint"
 
 	"github.com/openshift/ci-tools/pkg/api"
+	"github.com/openshift/ci-tools/pkg/gcpworkloadidentity"
 	base_steps "github.com/openshift/ci-tools/pkg/steps"
 	"github.com/openshift/ci-tools/pkg/steps/csi_secrets"
 	"github.com/openshift/ci-tools/pkg/steps/utils"
@@ -244,6 +246,9 @@ func (s *multiStageTestStep) generatePods(
 				continue
 			}
 			addProfile(s.profileSecretName(), *s.profile, stsEnabled, pod)
+			if s.gcpWorkloadIdentity {
+				addGCPWorkloadIdentity(pod, s.stsHomeRoleARN, s.gcpFederation)
+			}
 		}
 		if step.Cli != "" {
 			dependency := api.StepDependency{Name: fmt.Sprintf("%s:cli", api.ReleaseStreamFor(step.Cli))}
@@ -525,10 +530,8 @@ func addProfile(name string, profile api.ClusterProfileLiteral, stsEnabled bool,
 	}
 }
 
-func addSTSVolumes(pod *coreapi.Pod) {
-	expirationSeconds := int64(86400)
-
-	pod.Spec.Volumes = append(pod.Spec.Volumes, coreapi.Volume{
+func projectedSTSToken(expirationSeconds int64) coreapi.Volume {
+	return coreapi.Volume{
 		Name: stsTokenVolumeName,
 		VolumeSource: coreapi.VolumeSource{
 			Projected: &coreapi.ProjectedVolumeSource{
@@ -541,7 +544,11 @@ func addSTSVolumes(pod *coreapi.Pod) {
 				}},
 			},
 		},
-	})
+	}
+}
+
+func addSTSVolumes(pod *coreapi.Pod) {
+	pod.Spec.Volumes = append(pod.Spec.Volumes, projectedSTSToken(86400))
 
 	stsConfigCMName := stsConfigMapName(pod.Labels[MultiStageTestLabel])
 	pod.Spec.Volumes = append(pod.Spec.Volumes, coreapi.Volume{
@@ -568,6 +575,39 @@ func addSTSVolumes(pod *coreapi.Pod) {
 			ReadOnly:  true,
 		},
 	)
+}
+
+// addGCPWorkloadIdentity mounts the AWS identity in a restartable init container.
+// The workload receives only the rotating Google token for its assigned profile.
+func addGCPWorkloadIdentity(pod *coreapi.Pod, home string, profile *api.GCPFederation) {
+	const tokenVolume = "gcp-access-token"
+	dir := path.Dir(gcpworkloadidentity.TokenFile)
+	pod.Spec.Volumes = append(pod.Spec.Volumes, projectedSTSToken(3600), coreapi.Volume{
+		Name:         tokenVolume,
+		VolumeSource: coreapi.VolumeSource{EmptyDir: &coreapi.EmptyDirVolumeSource{Medium: coreapi.StorageMediumMemory}},
+	})
+	pod.Spec.InitContainers = append(pod.Spec.InitContainers, coreapi.Container{
+		Name:            "gcp-wif-token",
+		ImagePullPolicy: coreapi.PullAlways,
+		Image:           "quay-proxy.ci.openshift.org/openshift/ci:ci_ci-operator_latest",
+		Command:         []string{"/usr/bin/ci-operator", "gcp-wif-token", home, profile.HubRoleARN, profile.Provider, profile.ServiceAccount},
+		RestartPolicy:   ptr.To(coreapi.ContainerRestartPolicyAlways),
+		Resources: coreapi.ResourceRequirements{Requests: coreapi.ResourceList{
+			coreapi.ResourceCPU:    resource.MustParse("10m"),
+			coreapi.ResourceMemory: resource.MustParse("64Mi"),
+		}},
+		StartupProbe: &coreapi.Probe{
+			ProbeHandler:  coreapi.ProbeHandler{Exec: &coreapi.ExecAction{Command: []string{"/bin/sh", "-c", "test -s " + gcpworkloadidentity.TokenFile}}},
+			PeriodSeconds: 5, FailureThreshold: 24,
+		},
+		VolumeMounts: []coreapi.VolumeMount{
+			{Name: tokenVolume, MountPath: dir},
+			{Name: stsTokenVolumeName, MountPath: stsTokenMountPath, ReadOnly: true},
+		},
+	})
+	c := &pod.Spec.Containers[0]
+	c.VolumeMounts = append(c.VolumeMounts, coreapi.VolumeMount{Name: tokenVolume, MountPath: dir, ReadOnly: true})
+	c.Env = append(c.Env, coreapi.EnvVar{Name: "CLOUDSDK_AUTH_ACCESS_TOKEN_FILE", Value: gcpworkloadidentity.TokenFile})
 }
 
 func addCliInjector(imagestream string, pod *coreapi.Pod) {

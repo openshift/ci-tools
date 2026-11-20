@@ -119,6 +119,8 @@ type multiStageTestStep struct {
 	requireNestedPodman              bool
 	leaseProxyServerAvailable        bool
 	leaseProxyClientConfigMapBackoff wait.Backoff
+	gcpWorkloadIdentity              bool
+	gcpFederation                    *api.GCPFederation
 	stsHomeRoleARN                   string
 	stsHubRoleARN                    string
 	stsTargetRoleARN                 string
@@ -171,6 +173,7 @@ func newMultiStageTestStep(
 		additionalSuffix:                 targetAdditionalSuffix,
 		nodeName:                         nodeName,
 		profile:                          ms.ClusterProfileLiteral,
+		gcpWorkloadIdentity:              ptr.Deref(ms.GCPWorkloadIdentity, false),
 		config:                           config,
 		params:                           params,
 		env:                              ms.Environment,
@@ -258,8 +261,12 @@ func (s *multiStageTestStep) run(ctx context.Context) error {
 		}
 	} else if clusterProfile != nil {
 		s.profile = api.FromClusterProfile(clusterProfile)
+		s.gcpFederation = clusterProfile.GCPFederation
 	}
 
+	if s.gcpWorkloadIdentity && s.gcpFederation == nil {
+		return fmt.Errorf("GCP workload identity requires a supported leased GCP profile")
+	}
 	if err := s.retrieveSTSRoleARNParams(); err != nil {
 		return fmt.Errorf("retrieve STS role ARN params: %w", err)
 	}

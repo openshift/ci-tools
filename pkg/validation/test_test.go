@@ -12,6 +12,7 @@ import (
 	aggerrs "k8s.io/apimachinery/pkg/util/errors"
 	"k8s.io/apimachinery/pkg/util/sets"
 	"k8s.io/utils/diff"
+	"k8s.io/utils/ptr"
 	prowv1 "sigs.k8s.io/prow/pkg/apis/prowjobs/v1"
 
 	"github.com/openshift/ci-tools/pkg/api"
@@ -32,6 +33,76 @@ func TestValidateTests(t *testing.T) {
 		resolved      bool
 		expectedError error
 	}{
+		{
+			id:      "GCP workload identity: raw enabled without profile",
+			release: &api.ReleaseTagConfiguration{Name: "origin-v4.0"},
+			tests: []api.TestStepConfiguration{{
+				As: "test",
+				MultiStageTestConfiguration: &api.MultiStageTestConfiguration{
+					GCPWorkloadIdentity: ptr.To(true),
+				},
+			}},
+			expectedError: errors.New("tests[0]: gcp_workload_identity requires a cluster profile"),
+		},
+		{
+			id:      "GCP workload identity: raw enabled via workflow",
+			release: &api.ReleaseTagConfiguration{Name: "origin-v4.0"},
+			tests: []api.TestStepConfiguration{{
+				As: "test",
+				MultiStageTestConfiguration: &api.MultiStageTestConfiguration{
+					GCPWorkloadIdentity: ptr.To(true),
+					Workflow:            ptr.To("workflow"),
+				},
+			}},
+		},
+		{
+			id:      "GCP workload identity: raw enabled via profile",
+			release: &api.ReleaseTagConfiguration{Name: "origin-v4.0"},
+			tests: []api.TestStepConfiguration{{
+				As: "test",
+				MultiStageTestConfiguration: &api.MultiStageTestConfiguration{
+					GCPWorkloadIdentity: ptr.To(true),
+					ClusterProfile:      "gcp",
+				},
+			}},
+		},
+		{
+			id:       "GCP workload identity: literal enabled without profile",
+			resolved: true,
+			release:  &api.ReleaseTagConfiguration{Name: "origin-v4.0"},
+			tests: []api.TestStepConfiguration{{
+				As: "test",
+				MultiStageTestConfigurationLiteral: &api.MultiStageTestConfigurationLiteral{
+					GCPWorkloadIdentity: ptr.To(true),
+				},
+			}},
+			expectedError: errors.New("tests[0]: gcp_workload_identity requires a GCP cluster profile"),
+		},
+		{
+			id:       "GCP workload identity: literal enabled with AWS profile",
+			resolved: true,
+			release:  &api.ReleaseTagConfiguration{Name: "origin-v4.0"},
+			tests: []api.TestStepConfiguration{{
+				As: "test",
+				MultiStageTestConfigurationLiteral: &api.MultiStageTestConfigurationLiteral{
+					GCPWorkloadIdentity:   ptr.To(true),
+					ClusterProfileLiteral: &api.ClusterProfileLiteral{Name: "aws", ClusterType: "aws"},
+				},
+			}},
+			expectedError: errors.New("tests[0]: gcp_workload_identity requires a GCP cluster profile"),
+		},
+		{
+			id:       "GCP workload identity: literal enabled with GCP profile",
+			resolved: true,
+			release:  &api.ReleaseTagConfiguration{Name: "origin-v4.0"},
+			tests: []api.TestStepConfiguration{{
+				As: "test",
+				MultiStageTestConfigurationLiteral: &api.MultiStageTestConfigurationLiteral{
+					GCPWorkloadIdentity:   ptr.To(true),
+					ClusterProfileLiteral: &api.ClusterProfileLiteral{Name: "gcp", ClusterType: "gcp"},
+				},
+			}},
+		},
 		{
 			id: `ReleaseBuildConfiguration{Tests: {As: "unit"}}`,
 			tests: []api.TestStepConfiguration{

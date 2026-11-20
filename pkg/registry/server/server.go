@@ -135,7 +135,7 @@ func getInjectTestFromQuery(w http.ResponseWriter, r *http.Request) (*api.Metada
 	return &ret, nil
 }
 
-func injectTest(injectTo api.ReleaseBuildConfiguration, configs Getter, resolverMetrics *metrics.Metrics, w http.ResponseWriter, r *http.Request, logger *logrus.Entry) *api.ReleaseBuildConfiguration {
+func injectTest(injectTo api.ReleaseBuildConfiguration, configs Getter, resolver Resolver, resolverMetrics *metrics.Metrics, w http.ResponseWriter, r *http.Request, logger *logrus.Entry) *api.ReleaseBuildConfiguration {
 	inject, err := getInjectTestFromQuery(w, r)
 	if err != nil {
 		// getInjectTestFromQuery deals with setting status code and writing response
@@ -152,7 +152,7 @@ func injectTest(injectTo api.ReleaseBuildConfiguration, configs Getter, resolver
 		logger.WithError(err).Warning("failed to get config")
 		return nil
 	}
-	configWithInjectedTest, err := injectTo.WithPresubmitFrom(&injectFromConfig, inject.Test)
+	configWithInjectedTest, err := injectTo.WithPresubmitFrom(&injectFromConfig, inject.Test, resolver.ResolveConfig)
 	if err != nil {
 		metrics.RecordError("test injection failed", resolverMetrics.ErrorRate)
 		w.WriteHeader(http.StatusInternalServerError) // TODO: Can be be 400 in some cases but meh
@@ -413,7 +413,7 @@ func ResolveAndMergeConfigsAndInjectTest(configs Getter, resolver Resolver, reso
 
 		// Only inject the test if the config containing it is not already included in the result
 		if !injectedTestIncluded {
-			mergedConfig = injectTest(*mergedConfig, configs, resolverMetrics, w, r, logger)
+			mergedConfig = injectTest(*mergedConfig, configs, resolver, resolverMetrics, w, r, logger)
 		}
 		if mergedConfig != nil {
 			resolveAndRespond(resolver, *mergedConfig, w, logger, resolverMetrics)

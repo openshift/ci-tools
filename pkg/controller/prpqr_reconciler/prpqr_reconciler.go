@@ -748,6 +748,8 @@ func (r *reconciler) generateProwjob(ciopConfig *api.ReleaseBuildConfiguration,
 		refs = append(refs, ref)
 	}
 
+	refs = withInjectedSourceRef(refs, ciopConfig, inject)
+
 	// If there are no refs, we are not testing against PR content, and can determine them from the injected test
 	if len(refs) == 0 {
 		refs = append(refs, prowv1.Refs{
@@ -766,6 +768,37 @@ func (r *reconciler) generateProwjob(ciopConfig *api.ReleaseBuildConfiguration,
 	pj.Namespace = prpqrNamespace
 
 	return &pj, nil
+}
+
+// withInjectedSourceRef adds an extra ref for the injected test's own source repository
+// when the resolved config needs it, i.e. when api.ReleaseBuildConfiguration.WithPresubmitFrom
+// had to carry over a project image build from that repository to satisfy one of the
+// injected test's dependencies (see its "Ref" field). Without this, that repository would
+// never be checked out in the job, and the carried-over image build would fail: neither the
+// base config's own refs nor the additional PRs under test include it.
+func withInjectedSourceRef(refs []prowv1.Refs, ciopConfig *api.ReleaseBuildConfiguration, inject *api.MetadataWithTest) []prowv1.Refs {
+	injectRef := fmt.Sprintf("%s.%s", inject.Org, inject.Repo)
+	needsInjectedSource := false
+	for i := range ciopConfig.Images.Items {
+		if ciopConfig.Images.Items[i].Ref == injectRef {
+			needsInjectedSource = true
+			break
+		}
+	}
+	if !needsInjectedSource {
+		return refs
+	}
+	for _, ref := range refs {
+		if ref.Org == inject.Org && ref.Repo == inject.Repo {
+			return refs
+		}
+	}
+	return append(refs, prowv1.Refs{
+		Org:       inject.Org,
+		Repo:      inject.Repo,
+		BaseRef:   inject.Branch,
+		PathAlias: ciopConfig.DeterminePathAlias(inject.Org, inject.Repo),
+	})
 }
 
 func (r *reconciler) clusterForJob(jobName string) (string, error) {

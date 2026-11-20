@@ -1,6 +1,7 @@
 package main
 
 import (
+	"errors"
 	"flag"
 	"fmt"
 	"io"
@@ -12,12 +13,14 @@ import (
 
 	"github.com/sirupsen/logrus"
 
+	utilerrors "k8s.io/apimachinery/pkg/util/errors"
 	"sigs.k8s.io/prow/cmd/generic-autobumper/bumper"
 	"sigs.k8s.io/prow/pkg/config/secret"
 	"sigs.k8s.io/prow/pkg/flagutil"
 	"sigs.k8s.io/prow/pkg/github"
 	"sigs.k8s.io/prow/pkg/labels"
 
+	"github.com/openshift/ci-tools/pkg/clusterimageset"
 	"github.com/openshift/ci-tools/pkg/github/orgclient"
 	"github.com/openshift/ci-tools/pkg/promotion"
 	"github.com/openshift/ci-tools/pkg/rehearse"
@@ -89,41 +92,80 @@ func validateOptions(o options) error {
 	return o.GitHubOptions.Validate(!o.Confirm)
 }
 
-func runAndCommitIfNeeded(stdout, stderr io.Writer, author, cmd string, args []string) (bool, error) {
-	fullCommand := fmt.Sprintf("%s %s", filepath.Base(cmd), strings.Join(args, " "))
+// runAndCommitIfNeeded commits a successful step or an explicitly allowed lookup
+// partial result, returning the commit status, deferred lookup error and fatal error.
+func runAndCommitIfNeeded(stdout, stderr io.Writer, author string, step step) (bool, error, error) {
+	fullCommand := fmt.Sprintf("%s %s", filepath.Base(step.command), strings.Join(step.arguments, " "))
 
 	logrus.Infof("Running: %s", fullCommand)
-	if err := bumper.Call(stdout, stderr, cmd, args); err != nil {
-		return false, fmt.Errorf("failed to run %s: %w", fullCommand, err)
+	command := exec.Command(step.command, step.arguments...)
+	command.Stdout, command.Stderr = stdout, stderr
+	var deferred error
+	if err := command.Run(); err != nil {
+		var exitError *exec.ExitError
+		if !step.allowLookupFailures || !errors.As(err, &exitError) || exitError.ExitCode() != clusterimageset.PartialUpdateExitCode {
+			return false, nil, fmt.Errorf("failed to run %s: %w", fullCommand, err)
+		}
+		deferred = fmt.Errorf("release lookup failures from %s: %w", fullCommand, err)
 	}
 
 	changed, err := bumper.HasChanges()
 	if err != nil {
-		return false, fmt.Errorf("error occurred when checking changes: %w", err)
+		return false, nil, fmt.Errorf("error occurred when checking changes: %w", err)
 	}
 
 	if !changed {
 		logrus.WithField("command", fullCommand).Info("No changes to commit")
-		return false, nil
+		return false, deferred, nil
 	}
 
 	gitCmd := "git"
 	addArgs := []string{"add", "."}
 	if err := bumper.Call(stdout, stderr, gitCmd, addArgs); err != nil {
-		return false, fmt.Errorf("failed to 'git add .': %w", err)
+		return false, nil, fmt.Errorf("failed to 'git add .': %w", err)
 	}
 
 	commitArgs := []string{"commit", "-m", fullCommand, "--author", author}
 	if err := bumper.Call(stdout, stderr, gitCmd, commitArgs); err != nil {
-		return false, fmt.Errorf("fail to %s %s: %w", gitCmd, strings.Join(commitArgs, " "), err)
+		return false, nil, fmt.Errorf("fail to %s %s: %w", gitCmd, strings.Join(commitArgs, " "), err)
 	}
 
-	return true, nil
+	return true, deferred, nil
 }
 
 type step struct {
-	command   string
-	arguments []string
+	command             string
+	arguments           []string
+	allowLookupFailures bool
+}
+
+// stepResult contains publication eligibility and deferred lookup failures.
+type stepResult struct {
+	needsPushing   bool
+	lookupFailures error
+}
+
+// publisher publishes the completed sequence of eligible commits.
+type publisher interface {
+	Publish() error
+}
+
+// finishSteps publishes eligible changes before returning deferred failures.
+func finishSteps(result stepResult, publication publisher) error {
+	if result.needsPushing {
+		if err := publication.Publish(); err != nil {
+			return utilerrors.NewAggregate([]error{err, result.lookupFailures})
+		}
+	}
+	return result.lookupFailures
+}
+
+// configPublication holds the clients and options for publishing config changes.
+type configPublication struct {
+	options options
+	client  github.Client
+	stdout  io.Writer
+	stderr  io.Writer
 }
 
 // prowgenArgs builds the argument list for the ci-operator-prowgen step. The
@@ -226,7 +268,8 @@ func main() {
 			arguments: []string{"--prow-jobs-dir", "./ci-operator/jobs", "--config-path", "./core-services/sanitize-prow-jobs/_config.yaml"},
 		},
 		{
-			command: "/usr/bin/clusterimageset-updater",
+			command:             "/usr/bin/clusterimageset-updater",
+			allowLookupFailures: true,
 			arguments: []string{
 				"--pools", "./clusters/hosted-mgmt",
 				"--imagesets", "./clusters/hosted-mgmt/hive-pools-clusterimagesets",
@@ -247,30 +290,35 @@ func main() {
 	stdout := bumper.HideSecretsWriter{Delegate: os.Stdout, Censor: secret.Censor}
 	stderr := bumper.HideSecretsWriter{Delegate: os.Stderr, Censor: secret.Censor}
 	author := fmt.Sprintf("%s <%s>", o.gitName, o.gitEmail)
-	needsPushing, err := runSteps(steps, author, stdout, stderr)
+	result, err := runSteps(steps, author, stdout, stderr)
 	if err != nil {
 		logrus.WithError(err).Fatal("failed to run steps")
 	}
-	if !needsPushing {
-		return
+	if err := finishSteps(result, &configPublication{options: o, client: gc, stdout: stdout, stderr: stderr}); err != nil {
+		logrus.WithError(err).Fatal("Config update completed with errors")
 	}
+}
 
+// Publish pushes eligible commits and creates or updates their pull request.
+func (publication *configPublication) Publish() error {
+	o, gc := publication.options, publication.client
+	stdout, stderr := publication.stdout, publication.stderr
 	title := fmt.Sprintf("%s by auto-config-brancher job at %s", matchTitle, time.Now().Format(time.RFC1123))
 
 	var prHead string
 	if o.GitHubOptions.TokenPath != "" {
 		if err := secret.Add(o.GitHubOptions.TokenPath); err != nil {
-			logrus.WithError(err).Fatal("Failed to register token for censoring.")
+			return fmt.Errorf("failed to register token for censoring: %w", err)
 		}
 		pushURL := fmt.Sprintf("https://%s:%s@github.com/%s/%s.git",
 			o.githubLogin, string(secret.GetTokenGenerator(o.GitHubOptions.TokenPath)()), o.githubLogin, githubRepo)
 		if err := bumper.GitPush(pushURL, remoteBranch, stdout, stderr, ""); err != nil {
-			logrus.WithError(err).Fatal("Failed to push changes.")
+			return fmt.Errorf("failed to push changes: %w", err)
 		}
 		prHead = o.githubLogin + ":" + remoteBranch
 	} else {
 		if err := pushWithGitClientFactory(o, remoteBranch); err != nil {
-			logrus.WithError(err).Fatal("Failed to push changes.")
+			return fmt.Errorf("failed to push changes: %w", err)
 		}
 		prHead = remoteBranch
 	}
@@ -286,13 +334,14 @@ func main() {
 	}
 	repo, err := gc.GetRepo(githubOrg, githubRepo)
 	if err != nil {
-		logrus.WithError(err).Fatalf("Error retrieving repository data: %v", err)
+		return fmt.Errorf("error retrieving repository data: %w", err)
 	}
 	isAppAuth := o.GitHubOptions.TokenPath == ""
 	prClient := github.Client(&orgclient.OrgAwareClient{Client: gc, Org: githubOrg, IsAppAuth: isAppAuth})
 	if err := bumper.UpdatePullRequestWithLabels(prClient, githubOrg, githubRepo, title, fmt.Sprintf("/cc @%s", o.assign), prHead, repo.DefaultBranch, remoteBranch, true, labelsToAdd, false); err != nil {
-		logrus.WithError(err).Fatal("PR creation failed.")
+		return fmt.Errorf("PR creation failed: %w", err)
 	}
+	return nil
 }
 
 func pushWithGitClientFactory(o options, branch string) error {
@@ -323,36 +372,39 @@ func pushWithGitClientFactory(o options, branch string) error {
 	return repoClient.PushToCentral(branch, true)
 }
 
-func runSteps(steps []step, author string, stdout, stderr io.Writer) (needsPushing bool, err error) {
+func runSteps(steps []step, author string, stdout, stderr io.Writer) (stepResult, error) {
+	var result stepResult
 	startCommitOut, err := exec.Command("git", "rev-parse", "HEAD").CombinedOutput()
 	if err != nil {
-		return false, fmt.Errorf("failed to execute `git rev-parse HEAD`: %w\noutput:%s\n", err, string(startCommitOut))
+		return stepResult{}, fmt.Errorf("failed to execute `git rev-parse HEAD`: %w\noutput:%s\n", err, string(startCommitOut))
 	}
 	startCommitSHA := strings.TrimSpace(string(startCommitOut))
 
 	var didCommit bool
 	for _, step := range steps {
-		committed, err := runAndCommitIfNeeded(stdout, stderr, author, step.command, step.arguments)
+		committed, deferred, err := runAndCommitIfNeeded(stdout, stderr, author, step)
 		if err != nil {
-			return false, fmt.Errorf("failed to run command and commit the changes: %w", err)
+			return stepResult{}, fmt.Errorf("failed to run command and commit the changes: %w", utilerrors.NewAggregate([]error{err, result.lookupFailures}))
 		}
+		result.lookupFailures = utilerrors.NewAggregate([]error{result.lookupFailures, deferred})
 
 		didCommit = didCommit || committed
 	}
 
 	if !didCommit {
 		logrus.Info("No new commits")
-		return false, nil
+		return result, nil
 	}
 
 	overallDiff, err := exec.Command("git", "diff", startCommitSHA).CombinedOutput()
 	if err != nil {
-		return false, fmt.Errorf("failed to check the overall diff: %w, out:\n%s\n", err, string(overallDiff))
+		return stepResult{}, fmt.Errorf("failed to check the overall diff: %w, out:\n%s\n", err, string(overallDiff))
 	}
 	if strings.TrimSpace(string(overallDiff)) == "" {
 		logrus.Info("Empty overall diff")
-		return false, nil
+		return result, nil
 	}
 
-	return true, nil
+	result.needsPushing = true
+	return result, nil
 }

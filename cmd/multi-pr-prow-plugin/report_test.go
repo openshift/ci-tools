@@ -125,6 +125,77 @@ Included PRs:
 				Name: "some-prow-job",
 			},
 		},
+		{
+			name: "report a prow job run against a branch without additional PRs",
+			jobRun: jobRun{
+				JobMetadata: api.MetadataWithTest{
+					Metadata: api.Metadata{
+						Org:    "openshift",
+						Repo:   "release",
+						Branch: "main",
+					},
+					Test: "integration",
+				},
+				OriginPR: github.PullRequest{
+					Base: github.PullRequestBranch{
+						Repo: github.Repo{
+							Owner: github.User{Login: "openshift"},
+							Name:  "ci-tools",
+						},
+						Ref: "main",
+					},
+					Head: github.PullRequestBranch{
+						SHA: "HEAD-SHA",
+					},
+					Number: 999,
+				},
+			},
+			prowJob: &prowv1.ProwJob{
+				TypeMeta: metav1.TypeMeta{Kind: "ProwJob", APIVersion: "prow.k8s.io/v1"},
+				ObjectMeta: metav1.ObjectMeta{
+					Name:              "aaaa-bbbbb-cccc",
+					Namespace:         "ci",
+					CreationTimestamp: metav1.Time{Time: time.Date(2024, 1, 0, 0, 0, 0, 0, time.UTC)},
+				},
+				Spec: prowv1.ProwJobSpec{
+					Job: "some-prow-job",
+					Refs: &prowv1.Refs{
+						Org:     "openshift",
+						Repo:    "release",
+						BaseRef: "main",
+						BaseSHA: "BASE-SHA",
+					},
+				},
+				Status: prowv1.ProwJobStatus{
+					State: "triggered",
+					URL:   "https://deck.prow.com",
+				},
+			},
+			expectedConfig: &Config{Jobs: []Job{
+				{
+					ProwJobID: "aaaa-bbbbb-cccc",
+					CheckRunDetails: CheckRunDetails{
+						ID:    1,
+						Title: "some-prow-job",
+						Text:  "[Job logs and status](https://deck.prow.com)\nTarget: `openshift/release@main` (base SHA BASE-SHA)\nIncluded PRs: only this PR\n",
+					},
+					Org:       "openshift",
+					Repo:      "ci-tools",
+					CreatedAt: time.Date(2024, 1, 0, 0, 0, 0, 0, time.UTC),
+				},
+			}},
+			expectedCheckRun: github.CheckRun{
+				ID:      1,
+				HeadSHA: "HEAD-SHA",
+				Status:  "in_progress",
+				Output: github.CheckRunOutput{
+					Title:   "some-prow-job",
+					Summary: "Job Triggered",
+					Text:    "[Job logs and status](https://deck.prow.com)\nTarget: `openshift/release@main` (base SHA BASE-SHA)\nIncluded PRs: only this PR\n",
+				},
+				Name: "some-prow-job",
+			},
+		},
 	}
 	for _, tc := range testCases {
 		t.Run(tc.name, func(t *testing.T) {
@@ -159,6 +230,49 @@ Included PRs:
 			checkRunKey := fmt.Sprintf("%s/%s-%d", tc.jobRun.OriginPR.Base.Repo.Owner.Login, tc.jobRun.OriginPR.Base.Repo.Name, 1)
 			if diff := cmp.Diff(fghc.checkRuns[checkRunKey], tc.expectedCheckRun); diff != "" {
 				t.Fatalf("checkRun doesn't match expected for prowJob (-want +got): %v", diff)
+			}
+		})
+	}
+}
+
+func TestCheckRunText(t *testing.T) {
+	additionalPRs := []github.PullRequest{
+		{Base: github.PullRequestBranch{Repo: github.Repo{Owner: github.User{Login: "openshift"}, Name: "ci-tools"}}, Number: 123},
+		{Base: github.PullRequestBranch{Repo: github.Repo{Owner: github.User{Login: "openshift"}, Name: "installer"}}, Number: 456},
+	}
+	target := &prowv1.Refs{Org: "openshift", Repo: "release", BaseRef: "main", BaseSHA: "BASE-SHA"}
+	testCases := []struct {
+		name          string
+		target        *prowv1.Refs
+		additionalPRs []github.PullRequest
+		expected      string
+	}{
+		{
+			name:          "unknown target with additional PRs",
+			additionalPRs: additionalPRs,
+			expected:      "[Job logs and status](https://deck.prow.com)\nIncluded PRs: \n* openshift/ci-tools#123\n* openshift/installer#456\n",
+		},
+		{
+			name:          "target with additional PRs",
+			target:        target,
+			additionalPRs: additionalPRs,
+			expected:      "[Job logs and status](https://deck.prow.com)\nTarget: `openshift/release@main` (base SHA BASE-SHA)\nIncluded PRs: \n* openshift/ci-tools#123\n* openshift/installer#456\n",
+		},
+		{
+			name:     "target with underscores is rendered literally",
+			target:   &prowv1.Refs{Org: "openshift", Repo: "ci_tools", BaseRef: "release_4.20_test", BaseSHA: "BASE-SHA"},
+			expected: "[Job logs and status](https://deck.prow.com)\nTarget: `openshift/ci_tools@release_4.20_test` (base SHA BASE-SHA)\nIncluded PRs: only this PR\n",
+		},
+		{
+			name:     "target without additional PRs",
+			target:   target,
+			expected: "[Job logs and status](https://deck.prow.com)\nTarget: `openshift/release@main` (base SHA BASE-SHA)\nIncluded PRs: only this PR\n",
+		},
+	}
+	for _, tc := range testCases {
+		t.Run(tc.name, func(t *testing.T) {
+			if diff := cmp.Diff(tc.expected, checkRunText("https://deck.prow.com", tc.target, tc.additionalPRs)); diff != "" {
+				t.Errorf("unexpected check run text (-want +got):\n%s", diff)
 			}
 		})
 	}

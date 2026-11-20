@@ -2,7 +2,6 @@ package main
 
 import (
 	"context"
-	"errors"
 	"fmt"
 	"regexp"
 	"strconv"
@@ -17,7 +16,6 @@ import (
 	prowv1 "sigs.k8s.io/prow/pkg/apis/prowjobs/v1"
 	prowconfig "sigs.k8s.io/prow/pkg/config"
 	"sigs.k8s.io/prow/pkg/github"
-	"sigs.k8s.io/prow/pkg/kube"
 	"sigs.k8s.io/prow/pkg/pjutil"
 	"sigs.k8s.io/prow/pkg/pluginhelp"
 	"sigs.k8s.io/prow/pkg/plugins/trigger"
@@ -38,7 +36,8 @@ const (
 )
 
 var (
-	testwithCommand = regexp.MustCompile(fmt.Sprintf(`(?mi)^%s\s+(?P<job>[-\w./]+)\s+(?P<prs>(?:[-\w./#:]+\s*)+)\s*$`, testwithPrefix))
+	// testwithCommand matches a request for a test, optionally followed by the additional PRs to include.
+	testwithCommand = regexp.MustCompile(fmt.Sprintf(`(?mi)^%s\s+(?P<job>[-\w./]+)(?:\s+(?P<prs>(?:[-\w./#:]+\s*)+))?\s*$`, testwithPrefix))
 	abortCommand    = fmt.Sprintf("%s abort", testwithPrefix)
 )
 
@@ -53,10 +52,14 @@ func helpProvider(_ []prowconfig.OrgRepo) (*pluginhelp.PluginHelp, error) {
 		Description: "The multi-pr-prow-plugin triggers the requested test against source(s) built from the origin PR and the requested additional PRs",
 	}
 	pluginHelp.AddCommand(pluginhelp.Command{
-		Usage:       "/testwith",
-		Description: "The multi-pr-prow-plugin /testwith command triggers the requested test against source(s) built from the origin PR and the requested additional PRs",
-		WhoCanUse:   "Members of the trusted organization for the repo.",
-		Examples:    []string{"/testwith openshift/kubernetes/master/e2e openshift/kubernetes#1234 openshift/installer#999"},
+		Usage: "/testwith <org>/<repo>/<branch>/[<variant>/]<test> [<org>/<repo>#<number> ...]",
+		Description: "The multi-pr-prow-plugin /testwith command triggers the requested test against source(s) built from the origin PR and the optional additional PRs. " +
+			"When none of the included PRs targets the org/repo containing the test, the test runs against the current head of the requested branch.",
+		WhoCanUse: "Members of the trusted organization for the repo.",
+		Examples: []string{
+			"/testwith openshift/kubernetes/master/e2e openshift/kubernetes#1234 openshift/installer#999",
+			"/testwith openshift/cluster-version-operator/main/e2e-agnostic-ovn",
+		},
 	})
 	pluginHelp.AddCommand(pluginhelp.Command{
 		Usage:       "/testwith abort",
@@ -194,7 +197,8 @@ func (s *server) handle(l *logrus.Entry, ic github.IssueCommentEvent) ([]*prowv1
 			return nil, fmt.Errorf("the user: %s is not trusted to trigger tests", user)
 		}
 
-		if ic.Comment.Body == abortCommand {
+		// The PR list is optional, so a padded abort command would otherwise be parsed as a request for a job named "abort".
+		if strings.Join(strings.Fields(ic.Comment.Body), " ") == abortCommand {
 			abortedJobs, err := s.abortMultiPRJobs(*pr, l)
 			if err != nil {
 				l.WithError(err).Errorf("error aborting multi-PR jobs")
@@ -258,6 +262,9 @@ func (s *server) determineJobRuns(comment string, originPR github.PullRequest) (
 		for _, match := range testwithCommand.FindAllStringSubmatch(line, -1) {
 			jobIndex := testwithCommand.SubexpIndex("job")
 			rawJob := match[jobIndex]
+			if strings.EqualFold(rawJob, "abort") {
+				return nil, fmt.Errorf("%s must be the only content of the comment", abortCommand)
+			}
 			jobMetadata, err := jobMetadataFromRawCommand(rawJob)
 			if err != nil {
 				return nil, err
@@ -438,7 +445,13 @@ func (s *server) generateProwJob(jr jobRun) (*prowv1.ProwJob, error) {
 		}
 	}
 	if primaryRef == nil {
-		return nil, errors.New("no ref for requested test included in command. The org, repo, and branch containing the requested test need to be targeted by at least one of the included PRs")
+		// None of the PRs targets the repo containing the test: run it against the head of the requested branch,
+		// keeping every PR, including the origin PR, as an extra ref.
+		branchRef, err := refsForBranch(testJobMetadata, ciopConfig, s.ghc)
+		if err != nil {
+			return nil, err
+		}
+		primaryRef = &branchRef
 	}
 
 	if err := s.prowConfigGetter.Defaulter().DefaultPeriodic(periodic); err != nil {
@@ -474,16 +487,58 @@ func (s *server) clusterForJob(jobName string) (string, error) {
 	return cluster, nil
 }
 
+// determineProwJobName returns the name of the job for jr, built from the origin PR, the additional PRs and the test.
+// When no PR targets the org/repo containing the test, the job runs against the branch alone, and the name also
+// includes the org, repo, branch and variant of the test so that requests for different targets do not collide.
 func determineProwJobName(jr jobRun) string {
-	formatPR := func(pr github.PullRequest) string {
-		repo := pr.Base.Repo
-		return fmt.Sprintf("%s-%s-%d", repo.Owner.Login, repo.Name, pr.Number)
-	}
-	var additionalPRs string
+	prefix := "multi-pr-" + prIdentifier(jr.OriginPR)
 	for _, pr := range jr.AdditionalPRs {
-		additionalPRs += formatPR(pr) + "-"
+		prefix += "-" + prIdentifier(pr)
 	}
-	return fmt.Sprintf("multi-pr-%s-%s%s", formatPR(jr.OriginPR), additionalPRs, jr.JobMetadata.Test)
+	if !hasPRForTestRepo(jr) {
+		return jr.JobMetadata.Metadata.SimpleJobName(prefix, jr.JobMetadata.Test)
+	}
+	return prefix + "-" + jr.JobMetadata.Test
+}
+
+// prIdentifier returns the org-repo-number identifier of pr used in job names.
+func prIdentifier(pr github.PullRequest) string {
+	return fmt.Sprintf("%s-%s-%d", pr.Base.Repo.Owner.Login, pr.Base.Repo.Name, pr.Number)
+}
+
+// hasPRForTestRepo reports whether the origin PR or any additional PR in jr is based on the org/repo containing
+// the requested test. generateProwJob merges such PRs onto the requested branch, so they form the primary ref.
+func hasPRForTestRepo(jr jobRun) bool {
+	if isBasedOn(jr.OriginPR, jr.JobMetadata.Org, jr.JobMetadata.Repo) {
+		return true
+	}
+	for _, pr := range jr.AdditionalPRs {
+		if isBasedOn(pr, jr.JobMetadata.Org, jr.JobMetadata.Repo) {
+			return true
+		}
+	}
+	return false
+}
+
+// isBasedOn reports whether pr is opened against org/repo.
+func isBasedOn(pr github.PullRequest, org, repo string) bool {
+	return pr.Base.Repo.Owner.Login == org && pr.Base.Repo.Name == repo
+}
+
+// refsForBranch returns refs for the current head of metadata's org/repo@branch with no pulls. The base SHA is
+// resolved from GitHub and the path alias is taken from config, the ci-operator configuration containing the test.
+func refsForBranch(metadata api.Metadata, config *api.ReleaseBuildConfiguration, ghc githubClient) (prowv1.Refs, error) {
+	baseSHA, err := ghc.GetRef(metadata.Org, metadata.Repo, "heads/"+metadata.Branch)
+	if err != nil {
+		return prowv1.Refs{}, fmt.Errorf("failed to get baseSHA of %s/%s@%s, the branch containing the requested test: %w", metadata.Org, metadata.Repo, metadata.Branch, err)
+	}
+	return prowv1.Refs{
+		Org:       metadata.Org,
+		Repo:      metadata.Repo,
+		BaseRef:   metadata.Branch,
+		BaseSHA:   baseSHA,
+		PathAlias: config.DeterminePathAlias(metadata.Org, metadata.Repo),
+	}, nil
 }
 
 func createRefsForPullRequests(prs []github.PullRequest, configResolver ciOpConfigResolver, ghc githubClient) ([]prowv1.Refs, error) {
@@ -550,11 +605,7 @@ func (s *server) abortMultiPRJobs(pr github.PullRequest, l *logrus.Entry) ([]*pr
 	repo := pr.Base.Repo.Name
 	number := pr.Number
 	selector := ctrlruntimeclient.MatchingLabels{
-		kube.OrgLabel:         org,
-		kube.RepoLabel:        repo,
-		kube.PullLabel:        strconv.Itoa(number),
-		kube.ProwJobTypeLabel: string(prowv1.PresubmitJob),
-		testwithLabel:         fmt.Sprintf("%s.%s.%d", org, repo, number),
+		testwithLabel: fmt.Sprintf("%s.%s.%d", org, repo, number),
 	}
 	jobs := &prowv1.ProwJobList{}
 	err := s.kubeClient.List(context.TODO(), jobs, selector, ctrlruntimeclient.InNamespace(s.namespace))

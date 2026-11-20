@@ -1,0 +1,95 @@
+apiVersion: prow.k8s.io/v1
+kind: ProwJob
+metadata:
+  annotations:
+    prow.k8s.io/context: ""
+    prow.k8s.io/job: multi-pr-openshift-oc-2170-openshift-cluster-version-operator-main-okd-e2e
+  labels:
+    ci.openshift.io/testwith: openshift.oc.2170
+    created-by-prow: "true"
+    prow.k8s.io/context: ""
+    prow.k8s.io/job: multi-pr-openshift-oc-2170-openshift-cluster-version-operator-m
+    prow.k8s.io/refs.base_ref: main
+    prow.k8s.io/refs.org: openshift
+    prow.k8s.io/refs.pull: "2170"
+    prow.k8s.io/refs.repo: oc
+    prow.k8s.io/type: periodic
+  name: some-uuid
+  namespace: ci
+spec:
+  agent: kubernetes
+  cluster: build02
+  decoration_config:
+    skip_cloning: true
+    timeout: 8h0m0s
+  extra_refs:
+  - base_ref: main
+    base_sha: heads/main
+    org: openshift
+    pulls:
+    - author: developer
+      number: 2170
+      sha: A_SHA
+    repo: oc
+  job: multi-pr-openshift-oc-2170-openshift-cluster-version-operator-main-okd-e2e
+  pod_spec:
+    containers:
+    - args:
+      - --gcs-upload-secret=/secrets/gcs/service-account.json
+      - --image-import-pull-secret=/etc/pull-secret/.dockerconfigjson
+      - --input-hash=multi-pr-openshift-oc-2170-openshift-cluster-version-operator-main-okd-e2e
+      - --report-credentials-file=/etc/report/credentials
+      - --target=e2e
+      - --variant=okd
+      - --with-test-from=openshift/cluster-version-operator@main__okd:e2e
+      command:
+      - ci-operator
+      env:
+      - name: HTTP_SERVER_IP
+        valueFrom:
+          fieldRef:
+            fieldPath: status.podIP
+      image: quay-proxy.ci.openshift.org/openshift/ci:ci_ci-operator_latest
+      imagePullPolicy: Always
+      name: ""
+      ports:
+      - containerPort: 8080
+        name: http
+      resources:
+        requests:
+          cpu: 10m
+      volumeMounts:
+      - mountPath: /secrets/gcs
+        name: gcs-credentials
+        readOnly: true
+      - mountPath: /secrets/manifest-tool
+        name: manifest-tool-local-pusher
+        readOnly: true
+      - mountPath: /etc/pull-secret
+        name: pull-secret
+        readOnly: true
+      - mountPath: /etc/report
+        name: result-aggregator
+        readOnly: true
+    serviceAccountName: ci-operator
+    volumes:
+    - name: manifest-tool-local-pusher
+      secret:
+        secretName: manifest-tool-local-pusher
+    - name: pull-secret
+      secret:
+        secretName: registry-pull-credentials
+    - name: result-aggregator
+      secret:
+        secretName: result-aggregator
+  refs:
+    base_ref: main
+    base_sha: heads/main
+    org: openshift
+    path_alias: github.com/openshift/cluster-version-operator-okd-alias
+    repo: cluster-version-operator
+  report: true
+  type: periodic
+status:
+  startTime: "1970-01-01T00:00:00Z"
+  state: triggered

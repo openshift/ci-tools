@@ -717,6 +717,82 @@ func (o *options) Complete() error {
 	return overrideTestStepDependencyParams(o)
 }
 
+// checkBlockedCollections rejects selected tests that use blocked collections when CSI is enabled.
+func (o *options) checkBlockedCollections(steps api.OrderedStepList) error {
+	if !o.enableSecretsStoreCSIDriver || len(o.gsmConfig.BlockedCollections) == 0 {
+		return nil
+	}
+	selected := sets.New[string]()
+	for _, step := range steps {
+		selected.Insert(step.Step.Name())
+	}
+	for _, step := range o.graphConfig.Steps {
+		test := step.TestStepConfiguration
+		if test == nil || !selected.Has(test.As) {
+			continue
+		}
+		var credentials []api.CredentialReference
+		secrets := append([]*api.Secret{test.Secret}, test.Secrets...)
+		for _, secret := range secrets {
+			if secret != nil {
+				credentials = append(credentials, api.CredentialReference{Collection: secret.Collection, Bundle: secret.Bundle, Namespace: secret.Namespace, Name: secret.Name})
+			}
+		}
+		if literal := test.MultiStageTestConfigurationLiteral; literal != nil {
+			for _, stage := range [][]api.LiteralTestStep{literal.Pre, literal.Test, literal.Post} {
+				for _, step := range stage {
+					credentials = append(credentials, step.Credentials...)
+				}
+			}
+			if profile := literal.ClusterProfileLiteral; profile != nil {
+				credentials = append(credentials, api.CredentialReference{Namespace: "ci", Name: profile.Secret})
+			}
+		}
+		for _, credential := range credentials {
+			if err := o.checkCredentialCollections(credential); err != nil {
+				return fmt.Errorf("test %s: %w", test.As, err)
+			}
+		}
+	}
+	return nil
+}
+
+// checkCredentialCollections inspects bundle sources before any sync-to-cluster conversion.
+func (o *options) checkCredentialCollections(credential api.CredentialReference) error {
+	collections := sets.New[string](credential.Collection)
+	for _, bundle := range o.gsmConfig.Bundles {
+		matches := credential.Bundle != "" && credential.Bundle == bundle.Name
+		if bundle.SyncToCluster && (matches || credential.Name != "" && credential.Name == bundle.Name) {
+			matches = false
+			for _, target := range bundle.Targets {
+				if target.Namespace == credential.Namespace {
+					matches = true
+				}
+			}
+		}
+		if !matches {
+			continue
+		}
+		for _, secret := range bundle.GSMSecrets {
+			collections.Insert(secret.Collection)
+		}
+		if bundle.DockerConfig != nil {
+			collections.Insert(o.gsmConfig.DPTPCollection)
+		}
+	}
+	for _, collection := range sets.List(collections) {
+		if block, found := o.gsmConfig.BlockedCollections[collection]; found {
+			reason := block.Reason
+			if reason == "" {
+				reason = fmt.Sprintf("The secret collection %s is blocked. Contact <#CBN38N3MW> to get more details.", collection)
+				return errors.New(reason)
+			}
+			return fmt.Errorf("secret collection %s is blocked: %s", collection, reason)
+		}
+	}
+	return nil
+}
+
 func (o *options) isLeaseClientAvailable() bool {
 	return o.leaseServer != "" && o.leaseServerCredentialsFile != ""
 }
@@ -1078,6 +1154,9 @@ func (o *options) Run() (errs []error) {
 	if len(sortErrs) > 0 {
 		errs = append(errs, append([]error{results.ForReason("building_graph").ForError(errors.New("could not sort nodes"))}, sortErrs...)...)
 		return
+	}
+	if err := o.checkBlockedCollections(stepList); err != nil {
+		return []error{results.ForReason("blocked_secret_collection").ForError(err)}
 	}
 	logrus.Infof("Running %s", strings.Join(nodeNames(stepList), ", "))
 	if o.printGraph {

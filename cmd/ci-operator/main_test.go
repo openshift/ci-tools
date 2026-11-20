@@ -28,17 +28,144 @@ import (
 	imagev1 "github.com/openshift/api/image/v1"
 
 	"github.com/openshift/ci-tools/pkg/api"
+	"github.com/openshift/ci-tools/pkg/defaults"
 	"github.com/openshift/ci-tools/pkg/results"
 	"github.com/openshift/ci-tools/pkg/secrets"
 	"github.com/openshift/ci-tools/pkg/steps"
 	"github.com/openshift/ci-tools/pkg/steps/loggingclient"
 	"github.com/openshift/ci-tools/pkg/testhelper"
 	utilgzip "github.com/openshift/ci-tools/pkg/util/gzip"
+	"github.com/openshift/ci-tools/pkg/validation"
 )
 
 func init() {
 	if err := imagev1.AddToScheme(scheme.Scheme); err != nil {
 		panic(fmt.Sprintf("failed to add imagev1 to scheme: %v", err))
+	}
+}
+
+// TestCheckBlockedCollections covers selected targets and credential extraction.
+func TestCheckBlockedCollections(t *testing.T) {
+	want := errors.New("test selected: The secret collection blocked is blocked. Contact <#CBN38N3MW> to get more details.")
+	for _, tc := range []struct {
+		name        string
+		test        api.TestStepConfiguration
+		unselected  bool
+		raw         bool
+		csiDisabled bool
+		want        error
+	}{
+		{name: "CSI disabled with populated policy", test: api.TestStepConfiguration{Secret: &api.Secret{Collection: "blocked"}}, csiDisabled: true},
+		{name: "unselected", test: api.TestStepConfiguration{Secret: &api.Secret{Collection: "blocked"}}, unselected: true},
+		{name: "selected secret", test: api.TestStepConfiguration{Secret: &api.Secret{Collection: "blocked"}}, want: want},
+		{name: "selected raw test", test: api.TestStepConfiguration{Secret: &api.Secret{Collection: "blocked"}}, raw: true, want: want},
+		{name: "unselected raw test", test: api.TestStepConfiguration{Secret: &api.Secret{Collection: "blocked"}}, raw: true, unselected: true},
+		{name: "selected secrets", test: api.TestStepConfiguration{Secret: &api.Secret{Collection: "allowed"}, Secrets: []*api.Secret{{Collection: "blocked"}}}, want: want},
+		{name: "pre", test: api.TestStepConfiguration{MultiStageTestConfigurationLiteral: &api.MultiStageTestConfigurationLiteral{Pre: []api.LiteralTestStep{{Credentials: []api.CredentialReference{{Collection: "blocked"}}}}}}, want: want},
+		{name: "test", test: api.TestStepConfiguration{MultiStageTestConfigurationLiteral: &api.MultiStageTestConfigurationLiteral{Test: []api.LiteralTestStep{{Credentials: []api.CredentialReference{{Collection: "blocked"}}}}}}, want: want},
+		{name: "post", test: api.TestStepConfiguration{MultiStageTestConfigurationLiteral: &api.MultiStageTestConfigurationLiteral{Post: []api.LiteralTestStep{{Credentials: []api.CredentialReference{{Collection: "blocked"}}}}}}, want: want},
+		{name: "profile", test: api.TestStepConfiguration{MultiStageTestConfigurationLiteral: &api.MultiStageTestConfigurationLiteral{ClusterProfileLiteral: &api.ClusterProfileLiteral{Secret: "synced"}}}, want: want},
+	} {
+		t.Run(tc.name, func(t *testing.T) {
+			tc.test.As = "selected"
+			if tc.test.MultiStageTestConfigurationLiteral == nil {
+				tc.test.ContainerTestConfiguration = &api.ContainerTestConfiguration{From: "src"}
+			}
+			o := options{
+				enableSecretsStoreCSIDriver: !tc.csiDisabled,
+				configSpec:                  &api.ReleaseBuildConfiguration{Tests: []api.TestStepConfiguration{tc.test}},
+				gsmConfig: api.GSMConfig{BlockedCollections: map[string]api.BlockedCollection{"blocked": {}}, Bundles: []api.GSMBundle{
+					{Name: "synced", SyncToCluster: true, Targets: []api.TargetSpec{{Namespace: "ci"}}, GSMSecrets: []api.GSMSecretRef{{Collection: "blocked"}}},
+				}},
+			}
+			if tc.raw {
+				o.configSpec.RawSteps = []api.StepConfiguration{{TestStepConfiguration: &tc.test}}
+				o.configSpec.Tests = []api.TestStepConfiguration{{As: "ordinary", Secret: &api.Secret{Collection: "allowed"}, ContainerTestConfiguration: &api.ContainerTestConfiguration{From: "src"}}}
+			}
+			o.graphConfig = defaults.FromConfigStatic(o.configSpec)
+			if tc.raw {
+				if err := validation.IsValidGraphConfiguration(o.graphConfig.Steps); err != nil {
+					t.Fatal(err)
+				}
+			}
+			selected := "selected"
+			if tc.unselected {
+				selected = "ordinary"
+			}
+			err := o.checkBlockedCollections(api.OrderedStepList{{Step: &fakeValidationStep{name: selected}}})
+			testhelper.Diff(t, "error", tc.want, err, testhelper.EquateErrorMessage)
+		})
+	}
+}
+
+// TestCheckCredentialCollections covers direct and underlying bundle sources.
+func TestCheckCredentialCollections(t *testing.T) {
+	fallback := errors.New("The secret collection blocked is blocked. Contact <#CBN38N3MW> to get more details.")
+	sharedConfig := `blocked_collections: {blocked: {}}
+bundles:
+- name: shared
+  sync_to_cluster: true
+  targets: [{cluster: build01, namespace: a}]
+  gsm_secrets: [{collection: allowed, group: group}]
+- name: shared
+  sync_to_cluster: true
+  targets: [{cluster: build01, namespace: b}]
+  gsm_secrets: [{collection: blocked, group: group}]
+`
+	crossClusterConfig := `blocked_collections: {blocked: {}}
+bundles:
+- name: shared
+  sync_to_cluster: true
+  targets: [{cluster: build01, namespace: ci}]
+  gsm_secrets: [{collection: allowed, group: group}]
+- name: shared
+  sync_to_cluster: true
+  targets: [{cluster: build02, namespace: ci}]
+  gsm_secrets: [{collection: blocked, group: group}]
+`
+	for _, tc := range []struct {
+		name, reason, config string
+		credential           api.CredentialReference
+		want                 error
+	}{
+		{name: "explicit field", credential: api.CredentialReference{Collection: "blocked", Group: "group", Field: "field"}, want: fallback},
+		{name: "auto discovery with reason", credential: api.CredentialReference{Collection: "blocked", Group: "group"}, reason: "maintenance", want: errors.New("secret collection blocked is blocked: maintenance")},
+		{name: "allowed direct", credential: api.CredentialReference{Collection: "allowed"}},
+		{name: "bundle", credential: api.CredentialReference{Bundle: "bundle"}, want: fallback},
+		{name: "synced bundle", credential: api.CredentialReference{Bundle: "synced", Namespace: "ci"}, want: fallback},
+		{name: "legacy synced secret", credential: api.CredentialReference{Name: "synced", Namespace: "ci"}, want: fallback},
+		{name: "other namespace", credential: api.CredentialReference{Name: "synced", Namespace: "other"}},
+		{name: "dockerconfig", credential: api.CredentialReference{Bundle: "docker"}, want: fallback},
+		{name: "allowed bundle", credential: api.CredentialReference{Bundle: "allowed"}},
+		{name: "same-named synced bundle allowed namespace", config: sharedConfig, credential: api.CredentialReference{Bundle: "shared", Namespace: "a"}},
+		{name: "same-named synced bundle blocked namespace", config: sharedConfig, credential: api.CredentialReference{Bundle: "shared", Namespace: "b"}, want: fallback},
+		{name: "ambiguous cross-cluster synced bundle rejects any blocked candidate", config: crossClusterConfig, credential: api.CredentialReference{Bundle: "shared", Namespace: "ci"}, want: fallback},
+	} {
+		t.Run(tc.name, func(t *testing.T) {
+			o := options{gsmConfig: api.GSMConfig{
+				BlockedCollections: map[string]api.BlockedCollection{"blocked": {Reason: tc.reason}}, DPTPCollection: "blocked",
+				Bundles: []api.GSMBundle{
+					{Name: "bundle", GSMSecrets: []api.GSMSecretRef{{Collection: "allowed"}, {Collection: "blocked"}}},
+					{Name: "synced", SyncToCluster: true, Targets: []api.TargetSpec{{Namespace: "ci"}}, GSMSecrets: []api.GSMSecretRef{{Collection: "blocked"}}},
+					{Name: "docker", DockerConfig: &api.DockerConfigSpec{}},
+					{Name: "allowed", GSMSecrets: []api.GSMSecretRef{{Collection: "allowed"}}},
+				},
+			}}
+			if tc.config != "" {
+				configFile := filepath.Join(t.TempDir(), "gsm-config.yaml")
+				if err := os.WriteFile(configFile, []byte(tc.config), 0600); err != nil {
+					t.Fatal(err)
+				}
+				o.gsmConfig = api.GSMConfig{}
+				if err := api.LoadGSMConfigFromFile(configFile, &o.gsmConfig); err != nil {
+					t.Fatal(err)
+				}
+				if err := o.gsmConfig.Validate(); err != nil {
+					t.Fatal(err)
+				}
+			}
+			testhelper.Diff(t, "error", tc.want, o.checkCredentialCollections(tc.credential), testhelper.EquateErrorMessage)
+		})
 	}
 }
 

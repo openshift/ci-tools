@@ -65,11 +65,12 @@ var blockedClusterRelocationJobExceptions = []*regexp.Regexp{
 }
 
 type options struct {
-	prowJobConfigDir    string
-	configPath          string
-	clusterConfigPath   string
-	jobsStoragePath     string
-	snapshotStoragePath string
+	prowJobConfigDir          string
+	readOnlyProwJobConfigDirs flagutil.Strings
+	configPath                string
+	clusterConfigPath         string
+	jobsStoragePath           string
+	snapshotStoragePath       string
 
 	prometheusDaysBefore       int
 	rebalanceHysteresisPercent float64
@@ -118,6 +119,7 @@ func gatherOptions() options {
 	fs := flag.NewFlagSet(os.Args[0], flag.ExitOnError)
 
 	fs.StringVar(&o.prowJobConfigDir, "prow-jobs-dir", "", "Path to a root of directory structure with Prow job config files (ci-operator/jobs in openshift/release)")
+	fs.Var(&o.readOnlyProwJobConfigDirs, "read-only-jobs-dir", "Additional job config root that is read-only for planning. Can be passed multiple times; never written to.")
 	fs.StringVar(&o.configPath, "config-path", "", "Path to the config file (core-services/sanitize-prow-jobs/_config.yaml in openshift/release)")
 	fs.StringVar(&o.clusterConfigPath, "cluster-config-path", "core-services/sanitize-prow-jobs/_clusters.yaml", "Path to the config file (core-services/sanitize-prow-jobs/_clusters.yaml in openshift/release)")
 	fs.StringVar(&o.jobsStoragePath, "jobs-storage-path", "", "Path to the file holding only job assignments in Gob format")
@@ -291,27 +293,40 @@ func verifyProwSchedulerCacheBound(path string, propagationBound time.Duration) 
 
 // getCloudProvidersForE2ETests returns a set of cloud providers where a cluster is hosted for an e2e test defined in the given Prow job config.
 func getCloudProvidersForE2ETests(jc *prowconfig.JobConfig) sets.Set[string] {
+	return getCloudProvidersForOwnedJobs(jc, func(string) bool { return true })
+}
+
+// getCloudProvidersForOwnedJobs collects the cloud providers required by the
+// jobs the file owns. A shadowed definition must not restrict where the
+// surviving jobs of the file may run.
+func getCloudProvidersForOwnedJobs(jc *prowconfig.JobConfig, owned func(name string) bool) sets.Set[string] {
 	cloudProviders := sets.New[string]()
+	add := func(job prowconfig.JobBase) {
+		if !owned(job.Name) {
+			return
+		}
+		if cloud := dispatcher.DetermineCloud(job); cloud != "" {
+			cloudProviders.Insert(cloud)
+		}
+	}
 	for k := range jc.PresubmitsStatic {
 		for _, job := range jc.PresubmitsStatic[k] {
-			if cloud := dispatcher.DetermineCloud(job.JobBase); cloud != "" {
-				cloudProviders.Insert(cloud)
-			}
+			add(job.JobBase)
 		}
 	}
 	for k := range jc.PostsubmitsStatic {
 		for _, job := range jc.PostsubmitsStatic[k] {
-			if cloud := dispatcher.DetermineCloud(job.JobBase); cloud != "" {
-				cloudProviders.Insert(cloud)
-			}
+			add(job.JobBase)
 		}
 	}
 	for _, job := range jc.Periodics {
-		if cloud := dispatcher.DetermineCloud(job.JobBase); cloud != "" {
-			cloudProviders.Insert(cloud)
-		}
+		add(job.JobBase)
 	}
 	return cloudProviders
+}
+
+func (cv *clusterVolume) cloudProvidersForRoot(jc *prowconfig.JobConfig, root jobRoot) sets.Set[string] {
+	return getCloudProvidersForOwnedJobs(jc, func(name string) bool { return !cv.shadowedByReadOnlyRoot(name, root) })
 }
 
 type clusterVolume struct {
@@ -324,13 +339,80 @@ type clusterVolume struct {
 	blocked             sets.Set[string]
 	volumeDistribution  map[string]float64
 	clusterMap          dispatcher.ClusterMap
-	prowJobConfigDir    string
 	previousAssignments map[string]dispatcher.ProwJobData
 	hysteresis          float64
 	movementBudget      float64
 	movedDemand         float64
 	minimumJobDemand    float64
 	prechargedJobs      sets.Set[string]
+	// readOnlyJobNames holds every job name defined in a read-only root. A job
+	// defined in both a writable and a read-only root is owned by the read-only
+	// one, so the writable definition must not be planned, validated or charged.
+	readOnlyJobNames sets.Set[string]
+	// readOnlyConfig classifies read-only roots without per-cluster filename rules.
+	readOnlyConfig *dispatcher.Config
+}
+
+// configForRoot returns the config view used to classify a job from root.
+// Per-cluster filename rules describe files in the writable tree: a rule that
+// outlived its Git file would otherwise capture an equally named read-only file
+// and, when a path rule matches too, make the file match two rules and fail the
+// pass. Path and job rules still apply to every root.
+func (cv *clusterVolume) configForRoot(config *dispatcher.Config, root jobRoot) *dispatcher.Config {
+	if !root.readOnly || cv.readOnlyConfig == nil {
+		return config
+	}
+	return cv.readOnlyConfig
+}
+
+// withoutBuildFarmFilenames copies config with every per-cluster filename rule
+// removed, keeping the cluster set itself so build-farm membership is unchanged.
+func withoutBuildFarmFilenames(config *dispatcher.Config) *dispatcher.Config {
+	clone := *config
+	clone.BuildFarm = make(map[api.Cloud]map[api.Cluster]*dispatcher.BuildFarmConfig, len(config.BuildFarm))
+	for cloud, clusters := range config.BuildFarm {
+		entries := make(map[api.Cluster]*dispatcher.BuildFarmConfig, len(clusters))
+		for cluster := range clusters {
+			entries[cluster] = &dispatcher.BuildFarmConfig{}
+		}
+		clone.BuildFarm[cloud] = entries
+	}
+	return &clone
+}
+
+// shadowedByReadOnlyRoot reports whether a definition from a writable root is
+// superseded by an equally named job in a read-only root.
+func (cv *clusterVolume) shadowedByReadOnlyRoot(jobName string, root jobRoot) bool {
+	return !root.readOnly && cv.readOnlyJobNames.Has(jobName)
+}
+
+// groupNameForRoot is the repository-relative path of a job file, namespaced for
+// read-only roots so the same relative path in two roots stays two groups in
+// override impact summaries.
+func groupNameForRoot(root jobRoot, path string) (string, error) {
+	group, err := repositoryRelativeTieBreakPath(root.path, path)
+	if err != nil {
+		return "", err
+	}
+	if root.readOnly {
+		return "efs/" + group, nil
+	}
+	return group, nil
+}
+
+// jobRoot is a job config tree the dispatcher reads. Only the writable root is
+// ever modified (by the PR path); read-only roots are planning inputs.
+type jobRoot struct {
+	path     string
+	readOnly bool
+}
+
+func (o options) jobRoots() []jobRoot {
+	roots := []jobRoot{{path: o.prowJobConfigDir}}
+	for _, p := range o.readOnlyProwJobConfigDirs.Strings() {
+		roots = append(roots, jobRoot{path: p, readOnly: true})
+	}
+	return roots
 }
 
 func sortedStringKeys[T any](values map[string]T) []string {
@@ -380,7 +462,7 @@ func demandForJob(jobVolumes map[string]float64, jobName string, minimumJobDeman
 // findClusterForJobConfig finds a cluster running on a preferred cloud provider for the jobs in a Prow job config.
 // The chosen cluster will be the one with minimal workload with the given cloud provider.
 // If the cluster provider is empty string, it will choose the one with minimal workload across all cloud providers.
-func (cv *clusterVolume) findClusterForJobConfig(cloudProvider string, jc *prowconfig.JobConfig, path string, config *dispatcher.Config, jobVolumes map[string]float64) (string, error) {
+func (cv *clusterVolume) findClusterForJobConfig(cloudProvider string, jc *prowconfig.JobConfig, path string, root jobRoot, config *dispatcher.Config, jobVolumes map[string]float64) (string, error) {
 	if _, ok := cv.clusterVolumeMap[cloudProvider]; !ok {
 		cloudProvider = ""
 	}
@@ -395,7 +477,7 @@ func (cv *clusterVolume) findClusterForJobConfig(cloudProvider string, jc *prowc
 		}
 		if !jobsClassified {
 			jobsClassified = true
-			jobsForProjection, jobsForProjectionErr = cv.classifyJobsForProjection(jc, path, config, jobVolumes)
+			jobsForProjection, jobsForProjectionErr = cv.classifyJobsForProjection(jc, path, root, config, jobVolumes)
 		}
 		if jobsForProjectionErr != nil {
 			return 0, jobsForProjectionErr
@@ -418,7 +500,7 @@ func (cv *clusterVolume) findClusterForJobConfig(cloudProvider string, jc *prowc
 		}
 	}
 	if cluster == "" {
-		tieBreakPath, err := repositoryRelativeTieBreakPath(cv.prowJobConfigDir, path)
+		tieBreakPath, err := repositoryRelativeTieBreakPath(root.path, path)
 		if err != nil {
 			return "", err
 		}
@@ -457,7 +539,7 @@ func (cv *clusterVolume) findClusterForJobConfig(cloudProvider string, jc *prowc
 	classifiedJobs, err := func() ([]projectedJob, error) {
 		if !jobsClassified {
 			jobsClassified = true
-			jobsForProjection, jobsForProjectionErr = cv.classifyJobsForProjection(jc, path, config, jobVolumes)
+			jobsForProjection, jobsForProjectionErr = cv.classifyJobsForProjection(jc, path, root, config, jobVolumes)
 		}
 		return jobsForProjection, jobsForProjectionErr
 	}()
@@ -501,7 +583,7 @@ func (cv *clusterVolume) findClusterForJobConfig(cloudProvider string, jc *prowc
 	var errs []error
 	for _, k := range sortedStringKeys(jc.PresubmitsStatic) {
 		for _, job := range jc.PresubmitsStatic[k] {
-			if err := cv.addToVolume(cluster, job.JobBase, path, config, jobVolumes); err != nil {
+			if err := cv.addToVolume(cluster, job.JobBase, path, root, config, jobVolumes); err != nil {
 				errs = append(errs, err)
 			}
 		}
@@ -509,13 +591,13 @@ func (cv *clusterVolume) findClusterForJobConfig(cloudProvider string, jc *prowc
 
 	for _, k := range sortedStringKeys(jc.PostsubmitsStatic) {
 		for _, job := range jc.PostsubmitsStatic[k] {
-			if err := cv.addToVolume(cluster, job.JobBase, path, config, jobVolumes); err != nil {
+			if err := cv.addToVolume(cluster, job.JobBase, path, root, config, jobVolumes); err != nil {
 				errs = append(errs, err)
 			}
 		}
 	}
 	for _, job := range jc.Periodics {
-		if err := cv.addToVolume(cluster, job.JobBase, path, config, jobVolumes); err != nil {
+		if err := cv.addToVolume(cluster, job.JobBase, path, root, config, jobVolumes); err != nil {
 			errs = append(errs, err)
 		}
 	}
@@ -523,9 +605,13 @@ func (cv *clusterVolume) findClusterForJobConfig(cloudProvider string, jc *prowc
 	return cluster, utilerrors.NewAggregate(errs)
 }
 
-func (cv *clusterVolume) classifyJobsForProjection(jc *prowconfig.JobConfig, path string, config *dispatcher.Config, jobVolumes map[string]float64) ([]projectedJob, error) {
+func (cv *clusterVolume) classifyJobsForProjection(jc *prowconfig.JobConfig, path string, root jobRoot, config *dispatcher.Config, jobVolumes map[string]float64) ([]projectedJob, error) {
+	config = cv.configForRoot(config, root)
 	var jobsForProjection []projectedJob
 	addProjectedJob := func(jobBase prowconfig.JobBase) error {
+		if cv.shadowedByReadOnlyRoot(jobBase.Name, root) {
+			return nil
+		}
 		determinedCluster, canBeRelocated, err := config.DetermineClusterForJob(jobBase, path, cv.clusterMap)
 		if err != nil {
 			return fmt.Errorf("failed to determine projected cluster for job %s in path %q: %w", jobBase.Name, path, err)
@@ -626,6 +712,33 @@ func extractCapabilities(labels map[string]string) []string {
 	return capabilities
 }
 
+// lowestLoadBuildFarmCluster picks the eligible build-farm cluster with the
+// fewest assignments. Ties break on the cluster name so repeated runs agree.
+func lowestLoadBuildFarmCluster(config *dispatcher.Config, pjs map[string]dispatcher.ProwJobData, blocked sets.Set[string]) string {
+	loads := make(map[string]int, len(pjs))
+	for _, assignment := range pjs {
+		loads[assignment.Cluster]++
+	}
+	var candidates []string
+	for _, clusters := range config.BuildFarm {
+		for cluster := range clusters {
+			name := string(cluster)
+			if blocked.Has(name) {
+				continue
+			}
+			candidates = append(candidates, name)
+		}
+	}
+	sort.Strings(candidates)
+	best, bestLoad := "", -1
+	for _, candidate := range candidates {
+		if load := loads[candidate]; bestLoad < 0 || load < bestLoad {
+			best, bestLoad = candidate, load
+		}
+	}
+	return best
+}
+
 func isBlockedClusterRelocationException(jobName string) bool {
 	for _, re := range blockedClusterRelocationJobExceptions {
 		if re.MatchString(jobName) {
@@ -645,21 +758,30 @@ func blockedClustersForJob(jobName string, determinedCluster string, blocked set
 	return filteredBlocked
 }
 
-func findClusterAssigmentsForJobs(jc *prowconfig.JobConfig, prowJobConfigDir, path string, config *dispatcher.Config, pjs map[string]dispatcher.ProwJobData, blocked sets.Set[string], cm dispatcher.ClusterMap, minimumJobDemand float64) error {
+func findClusterAssigmentsForJobs(jc *prowconfig.JobConfig, root jobRoot, path string, config *dispatcher.Config, pjs map[string]dispatcher.ProwJobData, blocked sets.Set[string], cm dispatcher.ClusterMap, readOnlyJobNames sets.Set[string], readOnlyConfig *dispatcher.Config, minimumJobDemand float64) error {
+	if root.readOnly && readOnlyConfig != nil {
+		config = readOnlyConfig
+	}
 	mostUsedCluster := dispatcher.FindMostUsedCluster(jc)
-	group, err := repositoryRelativeTieBreakPath(prowJobConfigDir, path)
+	group, err := groupNameForRoot(root, path)
 	if err != nil {
 		return err
 	}
 
 	refreshJobAssignment := func(cluster string, jobBase prowconfig.JobBase, pjs map[string]dispatcher.ProwJobData) error {
+		// Ownership comes from the current scan, not from a stored assignment,
+		// so a job that moved between roots is picked up by the next delta pass.
+		if !root.readOnly && readOnlyJobNames.Has(jobBase.Name) {
+			return nil
+		}
 		determinedCluster, canBeRelocated, err := config.DetermineClusterForJob(jobBase, path, cm)
 		if err != nil {
 			return fmt.Errorf("failed to determine cluster for the job %s in path %q: %w", jobBase.Name, path, err)
 		}
 
 		demand := demandForJob(nil, jobBase.Name, minimumJobDemand)
-		if existing, exists := pjs[jobBase.Name]; exists {
+		existing, exists := pjs[jobBase.Name]
+		if exists {
 			if existing.Demand > 0 && !math.IsNaN(existing.Demand) && !math.IsInf(existing.Demand, 0) {
 				demand = existing.Demand
 			}
@@ -673,6 +795,14 @@ func findClusterAssigmentsForJobs(jc *prowconfig.JobConfig, prowJobConfigDir, pa
 		}
 		blockedForJob := blockedClustersForJob(jobBase.Name, string(determinedCluster), blocked)
 		c := dispatcher.DetermineTargetCluster(cluster, string(determinedCluster), string(config.Default), canBeRelocated, blockedForJob)
+		if !exists && canBeRelocated && config.IsInBuildFarm(api.Cluster(c)) == "" {
+			// A job delta sees for the first time has no established placement.
+			// Leaving it on the default cluster would keep it off the build farm
+			// until the next full dispatch.
+			if target := lowestLoadBuildFarmCluster(config, pjs, blockedForJob); target != "" {
+				c = target
+			}
+		}
 		refreshed := dispatcher.ProwJobData{Cluster: c, Capabilities: extractCapabilities(jobBase.Labels), Demand: demand, Group: group}
 		if reflect.DeepEqual(pjs[jobBase.Name], refreshed) {
 			return nil
@@ -708,8 +838,8 @@ func findClusterAssigmentsForJobs(jc *prowconfig.JobConfig, prowJobConfigDir, pa
 }
 
 // prechargeFixedDemand makes fixed load visible before any greedy placement.
-func (cv *clusterVolume) prechargeFixedDemand(jc *prowconfig.JobConfig, path string, config *dispatcher.Config, jobVolumes map[string]float64) error {
-	jobs, err := cv.classifyJobsForProjection(jc, path, config, jobVolumes)
+func (cv *clusterVolume) prechargeFixedDemand(jc *prowconfig.JobConfig, path string, root jobRoot, config *dispatcher.Config, jobVolumes map[string]float64) error {
+	jobs, err := cv.classifyJobsForProjection(jc, path, root, config, jobVolumes)
 	if err != nil {
 		return err
 	}
@@ -728,7 +858,11 @@ func (cv *clusterVolume) prechargeFixedDemand(jc *prowconfig.JobConfig, path str
 	return nil
 }
 
-func (cv *clusterVolume) addToVolume(cluster string, jobBase prowconfig.JobBase, path string, config *dispatcher.Config, jobVolumes map[string]float64) error {
+func (cv *clusterVolume) addToVolume(cluster string, jobBase prowconfig.JobBase, path string, root jobRoot, config *dispatcher.Config, jobVolumes map[string]float64) error {
+	if cv.shadowedByReadOnlyRoot(jobBase.Name, root) {
+		return nil
+	}
+	config = cv.configForRoot(config, root)
 	determinedCluster, canBeRelocated, err := config.DetermineClusterForJob(jobBase, path, cv.clusterMap)
 
 	if err != nil {
@@ -737,7 +871,7 @@ func (cv *clusterVolume) addToVolume(cluster string, jobBase prowconfig.JobBase,
 
 	blockedForJob := blockedClustersForJob(jobBase.Name, string(determinedCluster), cv.blocked)
 	c := dispatcher.DetermineTargetCluster(cluster, string(determinedCluster), string(config.Default), canBeRelocated, blockedForJob)
-	group, err := repositoryRelativeTieBreakPath(cv.prowJobConfigDir, path)
+	group, err := groupNameForRoot(root, path)
 	if err != nil {
 		return err
 	}
@@ -755,14 +889,14 @@ func (cv *clusterVolume) addToVolume(cluster string, jobBase prowconfig.JobBase,
 }
 
 // dispatchJobConfig dispatches the jobs defined in a Prow jon config
-func (cv *clusterVolume) dispatchJobConfig(jc *prowconfig.JobConfig, path string, config *dispatcher.Config, jobVolumes map[string]float64) (string, error) {
-	cloudProvidersForE2ETests := getCloudProvidersForE2ETests(jc)
+func (cv *clusterVolume) dispatchJobConfig(jc *prowconfig.JobConfig, path string, root jobRoot, config *dispatcher.Config, jobVolumes map[string]float64) (string, error) {
+	cloudProvidersForE2ETests := cv.cloudProvidersForRoot(jc, root)
 	var cloudProvider, cluster string
 	var err error
 	if cloudProvidersForE2ETests.Len() == 1 {
 		cloudProvider, _ = cloudProvidersForE2ETests.PopAny()
 	}
-	if cluster, err = cv.findClusterForJobConfig(cloudProvider, jc, path, config, jobVolumes); err != nil {
+	if cluster, err = cv.findClusterForJobConfig(cloudProvider, jc, path, root, config, jobVolumes); err != nil {
 		return "", fmt.Errorf("fail to find cluster for job config: %w", err)
 	}
 	return cluster, nil
@@ -776,6 +910,7 @@ type configResult struct {
 
 type fileSizeInfo struct {
 	path string
+	root jobRoot
 	info fs.DirEntry
 	size int64
 }
@@ -1032,83 +1167,32 @@ func syncDirectory(path string) error {
 //   - When all the e2e tests are targeting the same cloud provider, we run the test pod on the that cloud provider too.
 //   - When the e2e tests are targeting different cloud providers, or there is no e2e tests at all, we can run the tests
 //     on any cluster in the build farm. Those jobs are used to load balance the workload of clusters in the build farm.
-func dispatchJobs(prowJobConfigDir string, config *dispatcher.Config, jobVolumes map[string]float64, blocked sets.Set[string], volumeDistribution map[string]float64, cm dispatcher.ClusterMap) (map[string]dispatcher.ProwJobData, error) {
-	return dispatchJobsWithPolicy(prowJobConfigDir, config, jobVolumes, blocked, volumeDistribution, cm, nil, 0, -1, 1)
+func dispatchJobs(roots []jobRoot, config *dispatcher.Config, jobVolumes map[string]float64, blocked sets.Set[string], volumeDistribution map[string]float64, cm dispatcher.ClusterMap) (map[string]dispatcher.ProwJobData, error) {
+	return dispatchJobsWithPolicy(roots, config, jobVolumes, blocked, volumeDistribution, cm, nil, 0, -1, 1)
 }
 
-func dispatchJobsWithPolicy(prowJobConfigDir string, config *dispatcher.Config, jobVolumes map[string]float64, blocked sets.Set[string], volumeDistribution map[string]float64, cm dispatcher.ClusterMap, previous map[string]dispatcher.ProwJobData, hysteresisPercent, movementBudgetPercent, minimumJobDemand float64) (map[string]dispatcher.ProwJobData, error) {
+func dispatchJobsWithPolicy(roots []jobRoot, config *dispatcher.Config, jobVolumes map[string]float64, blocked sets.Set[string], volumeDistribution map[string]float64, cm dispatcher.ClusterMap, previous map[string]dispatcher.ProwJobData, hysteresisPercent, movementBudgetPercent, minimumJobDemand float64) (map[string]dispatcher.ProwJobData, error) {
 	if config == nil {
 		return nil, fmt.Errorf("config is nil")
 	}
 
 	// cv stores the volume for each cluster in the build farm
-	cv := &clusterVolume{
-		clusterVolumeMap:    map[string]map[string]float64{},
-		cloudProviders:      sets.New[string](),
-		pjs:                 map[string]dispatcher.ProwJobData{},
-		blocked:             blocked,
-		specialClusters:     map[string]float64{},
-		volumeDistribution:  volumeDistribution,
-		clusterMap:          cm,
-		prowJobConfigDir:    prowJobConfigDir,
-		previousAssignments: previous,
-		hysteresis:          hysteresisPercent / 100,
-		movementBudget:      -1,
-		minimumJobDemand:    minimumJobDemand,
-	}
-	for cloudProvider, v := range config.BuildFarm {
-		for cluster := range v {
-			cloudProviderString := string(cloudProvider)
-			if _, ok := cv.clusterVolumeMap[cloudProviderString]; !ok {
-				cv.clusterVolumeMap[cloudProviderString] = map[string]float64{}
-			}
-			cv.clusterVolumeMap[cloudProviderString][string(cluster)] = 0
-		}
-		if len(cv.clusterVolumeMap) > 0 {
-			cv.cloudProviders.Insert(string(cloudProvider))
-		}
-	}
-
+	cv := newClusterVolume(config, blocked, volumeDistribution, cm, previous, hysteresisPercent, minimumJobDemand)
 	// no clusters in the build farm
 	if len(cv.clusterVolumeMap) == 0 {
 		return nil, nil
 	}
 
-	results := map[string][]string{}
-	var errs []error
-
-	dispatch := func(jobConfig *prowconfig.JobConfig, path string, info fs.DirEntry) {
-		cluster, err := cv.dispatchJobConfig(jobConfig, path, config, jobVolumes)
-		if err != nil {
-			errs = append(errs, fmt.Errorf("failed to dispatch job config %q: %w", path, err))
-
-		}
-		cr := configResult{cluster: cluster, path: path, filename: info.Name()}
-		if !config.MatchingPathRegEx(cr.path) {
-			results[cr.cluster] = append(results[cr.cluster], cr.filename)
-		}
-	}
-	fileList, err := composeFileInfoList(prowJobConfigDir)
+	fileList, err := configuredJobFiles(roots)
 	if err != nil {
 		return nil, fmt.Errorf("failed to dispatch all Prow jobs: %w", err)
 	}
-
-	sort.Slice(fileList, func(i, j int) bool {
-		if fileList[i].size != fileList[j].size {
-			return fileList[i].size > fileList[j].size
-		}
-		return fileList[i].path < fileList[j].path
-	})
-	cv.prechargedJobs = sets.New[string]()
-	precharge := func(jobConfig *prowconfig.JobConfig, path string, _ fs.DirEntry) {
-		if err := cv.prechargeFixedDemand(jobConfig, path, config, jobVolumes); err != nil {
-			errs = append(errs, err)
-		}
+	cv.readOnlyJobNames, err = readOnlyRootJobNames(roots)
+	if err != nil {
+		return nil, fmt.Errorf("failed to index read-only job names: %w", err)
 	}
-	if err := dispatchEveryFile(fileList, precharge); err != nil {
-		errs = append(errs, err)
-	}
-	if err := utilerrors.NewAggregate(errs); err != nil {
+	cv.readOnlyConfig = withoutBuildFarmFilenames(config)
+	if err := cv.runPrechargePass(fileList, config, jobVolumes); err != nil {
 		return nil, err
 	}
 	if movementBudgetPercent >= 0 {
@@ -1118,46 +1202,130 @@ func dispatchJobsWithPolicy(prowJobConfigDir string, config *dispatcher.Config, 
 		}
 		cv.movementBudget = movementBudget
 	}
-	if err := dispatchEveryFile(fileList, dispatch); err != nil {
-		errs = append(errs, err)
-	}
 
-	for cloudProvider, m := range cv.clusterVolumeMap {
-		for cluster, volume := range m {
-			logrus.WithField("cloudProvider", cloudProvider).WithField("cluster", cluster).WithField("volume", volume).Info("dispatched the volume on the cluster")
-		}
-	}
-
-	for cluster, volume := range cv.specialClusters {
-		logrus.WithField("cluster", cluster).WithField("volume", volume).Info("dispatched the volume on the cluster")
-	}
-	for cloudProvider, jobGroups := range config.BuildFarm {
-		for cluster := range jobGroups {
-			config.BuildFarm[cloudProvider][cluster] = &dispatcher.BuildFarmConfig{FilenamesRaw: results[string(cluster)]}
-		}
-	}
-
-	return cv.pjs, utilerrors.NewAggregate(errs)
+	results, err := cv.dispatchAllFiles(fileList, config, jobVolumes)
+	cv.logVolumes()
+	applyResultsToBuildFarm(config, results)
+	return cv.pjs, err
 }
 
-func dispatchDeltaJobs(prowJobConfigDir string, config *dispatcher.Config, blocked sets.Set[string], pjs map[string]dispatcher.ProwJobData, cm dispatcher.ClusterMap, minimumJobDemand float64) error {
-	var errs []error
-	dispatch := func(jobConfig *prowconfig.JobConfig, path string, info fs.DirEntry) {
-		if err := findClusterAssigmentsForJobs(jobConfig, prowJobConfigDir, path, config, pjs, blocked, cm, minimumJobDemand); err != nil {
-			errs = append(errs, err)
+func newClusterVolume(config *dispatcher.Config, blocked sets.Set[string], volumeDistribution map[string]float64, cm dispatcher.ClusterMap, previous map[string]dispatcher.ProwJobData, hysteresisPercent, minimumJobDemand float64) *clusterVolume {
+	cv := &clusterVolume{
+		clusterVolumeMap:    map[string]map[string]float64{},
+		cloudProviders:      sets.New[string](),
+		pjs:                 map[string]dispatcher.ProwJobData{},
+		blocked:             blocked,
+		specialClusters:     map[string]float64{},
+		volumeDistribution:  volumeDistribution,
+		clusterMap:          cm,
+		previousAssignments: previous,
+		hysteresis:          hysteresisPercent / 100,
+		movementBudget:      -1,
+		minimumJobDemand:    minimumJobDemand,
+	}
+	for cloudProvider, clusters := range config.BuildFarm {
+		cloudProviderString := string(cloudProvider)
+		if _, ok := cv.clusterVolumeMap[cloudProviderString]; !ok {
+			cv.clusterVolumeMap[cloudProviderString] = map[string]float64{}
 		}
+		for cluster := range clusters {
+			cv.clusterVolumeMap[cloudProviderString][string(cluster)] = 0
+		}
+		cv.cloudProviders.Insert(cloudProviderString)
 	}
-	fileList, err := composeFileInfoList(prowJobConfigDir)
-	if err != nil {
-		return fmt.Errorf("failed to dispatch all Prow jobs: %w", err)
-	}
+	return cv
+}
 
+// configuredJobFiles lists every job config file in the roots, largest first so
+// that a file defining more jobs is planned before smaller ones.
+func configuredJobFiles(roots []jobRoot) ([]fileSizeInfo, error) {
+	fileList, err := composeFileInfoList(roots)
+	if err != nil {
+		return nil, err
+	}
 	sort.Slice(fileList, func(i, j int) bool {
 		if fileList[i].size != fileList[j].size {
 			return fileList[i].size > fileList[j].size
 		}
 		return fileList[i].path < fileList[j].path
 	})
+	return fileList, nil
+}
+
+// runPrechargePass makes every fixed placement visible before any greedy
+// placement starts, so movable jobs are scored against real load.
+func (cv *clusterVolume) runPrechargePass(fileList []fileSizeInfo, config *dispatcher.Config, jobVolumes map[string]float64) error {
+	cv.prechargedJobs = sets.New[string]()
+	var errs []error
+	precharge := func(jobConfig *prowconfig.JobConfig, path string, root jobRoot, _ fs.DirEntry) {
+		if err := cv.prechargeFixedDemand(jobConfig, path, root, config, jobVolumes); err != nil {
+			errs = append(errs, err)
+		}
+	}
+	if err := dispatchEveryFile(fileList, precharge); err != nil {
+		errs = append(errs, err)
+	}
+	return utilerrors.NewAggregate(errs)
+}
+
+// dispatchAllFiles places every job and records the filenames backing the legacy
+// per-cluster filename rules.
+func (cv *clusterVolume) dispatchAllFiles(fileList []fileSizeInfo, config *dispatcher.Config, jobVolumes map[string]float64) (map[string][]string, error) {
+	results := map[string][]string{}
+	var errs []error
+	dispatch := func(jobConfig *prowconfig.JobConfig, path string, root jobRoot, info fs.DirEntry) {
+		cluster, err := cv.dispatchJobConfig(jobConfig, path, root, config, jobVolumes)
+		if err != nil {
+			errs = append(errs, fmt.Errorf("failed to dispatch job config %q: %w", path, err))
+		}
+		// Only writable-root files back the legacy filename rules: the same
+		// basename can exist in another root and select a different cluster.
+		cr := configResult{cluster: cluster, path: path, filename: info.Name()}
+		if !root.readOnly && !config.MatchingPathRegEx(cr.path) {
+			results[cr.cluster] = append(results[cr.cluster], cr.filename)
+		}
+	}
+	if err := dispatchEveryFile(fileList, dispatch); err != nil {
+		errs = append(errs, err)
+	}
+	return results, utilerrors.NewAggregate(errs)
+}
+
+func (cv *clusterVolume) logVolumes() {
+	for cloudProvider, m := range cv.clusterVolumeMap {
+		for cluster, volume := range m {
+			logrus.WithField("cloudProvider", cloudProvider).WithField("cluster", cluster).WithField("volume", volume).Info("dispatched the volume on the cluster")
+		}
+	}
+	for cluster, volume := range cv.specialClusters {
+		logrus.WithField("cluster", cluster).WithField("volume", volume).Info("dispatched the volume on the cluster")
+	}
+}
+
+func applyResultsToBuildFarm(config *dispatcher.Config, results map[string][]string) {
+	for cloudProvider, jobGroups := range config.BuildFarm {
+		for cluster := range jobGroups {
+			config.BuildFarm[cloudProvider][cluster] = &dispatcher.BuildFarmConfig{FilenamesRaw: results[string(cluster)]}
+		}
+	}
+}
+
+func dispatchDeltaJobs(roots []jobRoot, config *dispatcher.Config, blocked sets.Set[string], pjs map[string]dispatcher.ProwJobData, cm dispatcher.ClusterMap, minimumJobDemand float64) error {
+	var errs []error
+	readOnlyJobNames, err := readOnlyRootJobNames(roots)
+	if err != nil {
+		return fmt.Errorf("failed to index read-only job names: %w", err)
+	}
+	readOnlyConfig := withoutBuildFarmFilenames(config)
+	dispatch := func(jobConfig *prowconfig.JobConfig, path string, root jobRoot, info fs.DirEntry) {
+		if err := findClusterAssigmentsForJobs(jobConfig, root, path, config, pjs, blocked, cm, readOnlyJobNames, readOnlyConfig, minimumJobDemand); err != nil {
+			errs = append(errs, err)
+		}
+	}
+	fileList, err := configuredJobFiles(roots)
+	if err != nil {
+		return fmt.Errorf("failed to dispatch all Prow jobs: %w", err)
+	}
 	if err := dispatchEveryFile(fileList, dispatch); err != nil {
 		errs = append(errs, err)
 	}
@@ -1173,10 +1341,10 @@ func assignmentsRequireMetadataMigration(assignments map[string]dispatcher.ProwJ
 	return false
 }
 
-func dispatchEveryFile(fileList []fileSizeInfo, dispatch func(jobConfig *prowconfig.JobConfig, path string, info fs.DirEntry)) error {
+func dispatchEveryFile(fileList []fileSizeInfo, dispatch func(jobConfig *prowconfig.JobConfig, path string, root jobRoot, info fs.DirEntry)) error {
 	var errs []error
 	for _, file := range fileList {
-		func(path string, info fs.DirEntry) {
+		func(path string, root jobRoot, info fs.DirEntry) {
 			data, err := gzip.ReadFileMaybeGZIP(path)
 			if err != nil {
 				errs = append(errs, fmt.Errorf("failed to read file %q: %w", path, err))
@@ -1188,10 +1356,34 @@ func dispatchEveryFile(fileList []fileSizeInfo, dispatch func(jobConfig *prowcon
 				errs = append(errs, fmt.Errorf("failed to unmarshal file %q: %w", path, err))
 				return
 			}
-			dispatch(jobConfig, path, info)
-		}(file.path, file.info)
+			dispatch(jobConfig, path, root, info)
+		}(file.path, file.root, file.info)
 	}
 	return utilerrors.NewAggregate(errs)
+}
+
+// readOnlyRootJobNames indexes every job defined in the read-only roots. A job
+// name that appears there owns the job, so an equally named definition in a
+// writable root is skipped before it is validated, projected or charged.
+func readOnlyRootJobNames(roots []jobRoot) (sets.Set[string], error) {
+	names := sets.New[string]()
+	var errs []error
+	for _, root := range roots {
+		if !root.readOnly {
+			continue
+		}
+		fileList, err := composeFileInfoList([]jobRoot{root})
+		if err != nil {
+			errs = append(errs, err)
+			continue
+		}
+		if err := dispatchEveryFile(fileList, func(jobConfig *prowconfig.JobConfig, _ string, _ jobRoot, _ fs.DirEntry) {
+			addConfiguredJobNames(jobConfig, names)
+		}); err != nil {
+			errs = append(errs, err)
+		}
+	}
+	return names, utilerrors.NewAggregate(errs)
 }
 
 func addConfiguredJobNames(jobConfig *prowconfig.JobConfig, jobNames sets.Set[string]) {
@@ -1212,7 +1404,7 @@ func addConfiguredJobNames(jobConfig *prowconfig.JobConfig, jobNames sets.Set[st
 
 func movementBudgetForConfiguredJobFiles(fileList []fileSizeInfo, jobVolumes map[string]float64, movementBudgetPercent, minimumJobDemand float64) (float64, error) {
 	jobNames := sets.New[string]()
-	if err := dispatchEveryFile(fileList, func(jobConfig *prowconfig.JobConfig, _ string, _ fs.DirEntry) {
+	if err := dispatchEveryFile(fileList, func(jobConfig *prowconfig.JobConfig, _ string, _ jobRoot, _ fs.DirEntry) {
 		addConfiguredJobNames(jobConfig, jobNames)
 	}); err != nil {
 		return 0, err
@@ -1228,32 +1420,40 @@ func movementBudgetForConfiguredJobs(jobNames sets.Set[string], jobVolumes map[s
 	return totalDemand * movementBudgetPercent / 100
 }
 
-func composeFileInfoList(prowJobConfigDir string) ([]fileSizeInfo, error) {
+func composeFileInfoList(roots []jobRoot) ([]fileSizeInfo, error) {
 	fileList := make([]fileSizeInfo, 0)
 	var errs []error
-	if err := filepath.WalkDir(prowJobConfigDir, func(path string, info fs.DirEntry, err error) error {
-		if err != nil {
-			errs = append(errs, fmt.Errorf("failed to walk file/directory '%s'", path))
-			return nil
-		}
+	for _, root := range roots {
+		if err := filepath.WalkDir(root.path, func(path string, info fs.DirEntry, err error) error {
+			if err != nil {
+				errs = append(errs, fmt.Errorf("failed to walk file/directory '%s': %w", path, err))
+				return nil
+			}
+			if path != root.path && strings.HasPrefix(info.Name(), "..") {
+				if info.IsDir() {
+					return filepath.SkipDir
+				}
+				return nil
+			}
+			if info.IsDir() || !strings.HasSuffix(path, ".yaml") {
+				return nil
+			}
+			fileInfo, err := os.Stat(path)
+			if err != nil {
+				errs = append(errs, fmt.Errorf("failed to get file info for '%s': %w", path, err))
+				return nil
+			}
 
-		if info.IsDir() || !strings.HasSuffix(path, ".yaml") {
+			fileList = append(fileList, fileSizeInfo{
+				path: path,
+				root: root,
+				info: info,
+				size: fileInfo.Size(),
+			})
 			return nil
+		}); err != nil {
+			errs = append(errs, err)
 		}
-		fileInfo, err := os.Stat(path)
-		if err != nil {
-			errs = append(errs, fmt.Errorf("failed to get file info for '%s': %w", path, err))
-			return nil
-		}
-
-		fileList = append(fileList, fileSizeInfo{
-			path: path,
-			info: info,
-			size: fileInfo.Size(),
-		})
-		return nil
-	}); err != nil {
-		errs = append(errs, err)
 	}
 	return fileList, utilerrors.NewAggregate(errs)
 }
@@ -1478,7 +1678,7 @@ func main() {
 
 			pjs := prowjobs.GetDataCopy()
 
-			if err := dispatchDeltaJobs(o.prowJobConfigDir, config, blocked, pjs, cm, o.MinimumJobDemand); err != nil {
+			if err := dispatchDeltaJobs(o.jobRoots(), config, blocked, pjs, cm, o.MinimumJobDemand); err != nil {
 				return fmt.Errorf("failed to dispatch delta jobs: %w", err)
 			}
 			if err := dispatcher.WriteGob(o.jobsStoragePath, pjs); err != nil {
@@ -1536,7 +1736,7 @@ func main() {
 			}
 
 			pjs, err := dispatchJobsWithPolicy(
-				o.prowJobConfigDir, config, jobVolumes, blocked, promVolumes.CalculateVolumeDistribution(configClusterMap), configClusterMap,
+				o.jobRoots(), config, jobVolumes, blocked, promVolumes.CalculateVolumeDistribution(configClusterMap), configClusterMap,
 				currentAssignments, o.rebalanceHysteresisPercent, o.movementBudgetPercent, o.MinimumJobDemand,
 			)
 			if err != nil {
@@ -1686,7 +1886,8 @@ func main() {
 		go serveObservation(observationServer)
 	}
 	if controlPlane != nil {
-		mux.Handle("/control/v1/", dispatcher.NewControlServer(controlPlane, secret.GetTokenGenerator(o.controlAPITokenPath)))
+		token := secret.GetTokenGenerator(o.controlAPITokenPath)
+		mux.Handle("/control/v1/", dispatcher.NewControlServer(controlPlane, token))
 	}
 	httpServer := &http.Server{
 		Addr:              ":8080",

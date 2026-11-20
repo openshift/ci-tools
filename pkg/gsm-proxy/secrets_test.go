@@ -7,6 +7,7 @@ import (
 	"net"
 	"sync/atomic"
 	"testing"
+	"time"
 
 	"cloud.google.com/go/secretmanager/apiv1/secretmanagerpb"
 	"github.com/google/go-cmp/cmp"
@@ -17,24 +18,33 @@ import (
 	"google.golang.org/grpc/credentials/insecure"
 	"google.golang.org/grpc/status"
 	"google.golang.org/grpc/test/bufconn"
+	"google.golang.org/protobuf/types/known/timestamppb"
 
 	gsmsecrets "github.com/openshift/ci-tools/pkg/gsm-secrets"
 )
 
 type fakeGSMServer struct {
 	secretmanagerpb.UnimplementedSecretManagerServiceServer
-	list func(context.Context, *secretmanagerpb.ListSecretsRequest) (*secretmanagerpb.ListSecretsResponse, error)
+	list       func(context.Context, *secretmanagerpb.ListSecretsRequest) (*secretmanagerpb.ListSecretsResponse, error)
+	secret     *secretmanagerpb.Secret
+	getError   error
+	getRequest *secretmanagerpb.GetSecretRequest
 }
 
 func (s *fakeGSMServer) ListSecrets(ctx context.Context, request *secretmanagerpb.ListSecretsRequest) (*secretmanagerpb.ListSecretsResponse, error) {
 	return s.list(ctx, request)
 }
 
-func newTestGSMSecretLister(t *testing.T, list func(context.Context, *secretmanagerpb.ListSecretsRequest) (*secretmanagerpb.ListSecretsResponse, error), opts ...option.ClientOption) *GSMSecretLister {
+func (s *fakeGSMServer) GetSecret(_ context.Context, request *secretmanagerpb.GetSecretRequest) (*secretmanagerpb.Secret, error) {
+	s.getRequest = request
+	return s.secret, s.getError
+}
+
+func newTestGSMClient(t *testing.T, fake *fakeGSMServer) *GSMClient {
 	t.Helper()
 	listener := bufconn.Listen(1 << 20)
 	server := grpc.NewServer()
-	secretmanagerpb.RegisterSecretManagerServiceServer(server, &fakeGSMServer{list: list})
+	secretmanagerpb.RegisterSecretManagerServiceServer(server, fake)
 	go func() {
 		if err := server.Serve(listener); err != nil && !errors.Is(err, grpc.ErrServerStopped) {
 			t.Errorf("fake GSM server: %v", err)
@@ -49,21 +59,21 @@ func newTestGSMSecretLister(t *testing.T, list func(context.Context, *secretmana
 		t.Fatal(err)
 	}
 	t.Cleanup(func() { connection.Close() })
-	lister, err := NewGSMSecretLister(context.Background(), gsmsecrets.Config{ProjectIdString: "test-project"},
-		append(opts, option.WithGRPCConn(connection), option.WithoutAuthentication())...,
+	client, err := NewGSMClient(context.Background(), gsmsecrets.Config{ProjectIdString: "test-project"},
+		option.WithGRPCConn(connection), option.WithoutAuthentication(),
 	)
 	if err != nil {
 		t.Fatal(err)
 	}
 	t.Cleanup(func() {
-		if err := lister.Close(); err != nil {
+		if err := client.Close(); err != nil {
 			t.Errorf("close GSM client: %v", err)
 		}
 	})
-	return lister
+	return client
 }
 
-func TestGSMSecretListerList(t *testing.T) {
+func TestGSMClientList(t *testing.T) {
 	type page struct {
 		secretIDs     []string
 		nextPageToken string
@@ -186,7 +196,7 @@ func TestGSMSecretListerList(t *testing.T) {
 	for _, tc := range testCases {
 		t.Run(tc.name, func(t *testing.T) {
 			var requests atomic.Int32
-			lister := newTestGSMSecretLister(t, func(_ context.Context, req *secretmanagerpb.ListSecretsRequest) (*secretmanagerpb.ListSecretsResponse, error) {
+			client := newTestGSMClient(t, &fakeGSMServer{list: func(_ context.Context, req *secretmanagerpb.ListSecretsRequest) (*secretmanagerpb.ListSecretsResponse, error) {
 				requests.Add(1)
 				if req.Parent != "projects/test-project" || req.Filter != fmt.Sprintf("name:%q", tc.collection+"__") {
 					t.Errorf("request parent/filter = %q / %q", req.Parent, req.Filter)
@@ -206,13 +216,13 @@ func TestGSMSecretListerList(t *testing.T) {
 					})
 				}
 				return response, nil
-			})
+			}})
 			ctx, cancel := context.WithCancel(context.Background())
 			defer cancel()
 			if tc.cancelContext {
 				cancel()
 			}
-			got, err := lister.List(ctx, tc.collection)
+			got, err := client.List(ctx, tc.collection)
 			if (err != nil) != tc.wantErr {
 				t.Fatalf("error = %v, want error = %t", err, tc.wantErr)
 			}
@@ -227,6 +237,109 @@ func TestGSMSecretListerList(t *testing.T) {
 			}
 			if got := requests.Load(); got != tc.wantRequests {
 				t.Errorf("page fetch count = %d, want %d", got, tc.wantRequests)
+			}
+		})
+	}
+}
+
+func TestGSMClientDescribe(t *testing.T) {
+	const passwordSecret = "projects/test-project/secrets/team__aws__prod__password"
+	created := time.Date(2026, 11, 5, 12, 0, 0, 0, time.UTC)
+	testCases := []struct {
+		name        string
+		path        string
+		secret      *secretmanagerpb.Secret
+		getErr      error
+		want        SecretDescription
+		wantErr     error
+		wantCode    codes.Code
+		wantRequest string
+	}{
+		{
+			name: "only the supported metadata is returned",
+			path: "aws/prod/password",
+			secret: &secretmanagerpb.Secret{
+				Name:        "projects/test-project/secrets/team__aws__prod__password",
+				CreateTime:  timestamppb.New(created),
+				Etag:        "etag-1",
+				Labels:      map[string]string{"jira-project": "dptp", "extra": "ignored"},
+				Annotations: map[string]string{"rotation-instructions": "rotate yearly", "request-information": "ticket-123", "extra": "ignored"},
+			},
+			want: SecretDescription{
+				CreateTime: &created,
+				Metadata:   SecretMetadata{JiraProject: "dptp", RotationInstructions: "rotate yearly", RequestInformation: "ticket-123"},
+			},
+			wantRequest: passwordSecret,
+		},
+		{
+			name:        "secret without metadata returns an empty description",
+			path:        "aws/prod/password",
+			secret:      &secretmanagerpb.Secret{},
+			wantRequest: passwordSecret,
+		},
+		{
+			name:    "malformed path makes no Google call",
+			path:    "aws//password",
+			wantErr: ErrInvalidSecretPath,
+		},
+		{
+			name:    "path without a group makes no Google call",
+			path:    "updater-service-account",
+			wantErr: ErrInvalidSecretPath,
+		},
+		{
+			name:    "field containing the delimiter makes no Google call",
+			path:    "aws/__index",
+			wantErr: ErrInvalidSecretPath,
+		},
+		{
+			name:    "reserved updater service account secret makes no Google call",
+			path:    "aws/updater-service-account",
+			wantErr: ErrInvalidSecretPath,
+		},
+		{
+			name:        "Google NotFound status is preserved",
+			path:        "aws/prod/password",
+			getErr:      status.Error(codes.NotFound, "not found"),
+			wantCode:    codes.NotFound,
+			wantRequest: passwordSecret,
+		},
+		{
+			name:        "Google PermissionDenied status is preserved",
+			path:        "aws/prod/password",
+			getErr:      status.Error(codes.PermissionDenied, "denied"),
+			wantCode:    codes.PermissionDenied,
+			wantRequest: passwordSecret,
+		},
+	}
+	for _, tc := range testCases {
+		t.Run(tc.name, func(t *testing.T) {
+			upstream := &fakeGSMServer{secret: tc.secret, getError: tc.getErr}
+			client := newTestGSMClient(t, upstream)
+
+			got, err := client.Describe(context.Background(), "team", tc.path)
+
+			switch {
+			case tc.wantErr != nil:
+				if !errors.Is(err, tc.wantErr) {
+					t.Errorf("error = %v, want %v", err, tc.wantErr)
+				}
+			case tc.wantCode != codes.OK:
+				if status.Code(err) != tc.wantCode {
+					t.Errorf("error code = %v, want %v (error: %v)", status.Code(err), tc.wantCode, err)
+				}
+			case err != nil:
+				t.Errorf("unexpected error: %v", err)
+			}
+			if diff := cmp.Diff(tc.want, got); diff != "" {
+				t.Errorf("description mismatch (-want +got): %s", diff)
+			}
+			var gotRequest string
+			if upstream.getRequest != nil {
+				gotRequest = upstream.getRequest.Name
+			}
+			if gotRequest != tc.wantRequest {
+				t.Errorf("Google request = %q, want %q", gotRequest, tc.wantRequest)
 			}
 		})
 	}

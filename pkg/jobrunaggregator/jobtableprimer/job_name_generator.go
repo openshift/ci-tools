@@ -5,6 +5,7 @@ import (
 	"fmt"
 	"io"
 	"net/http"
+	"slices"
 	"sort"
 	"strings"
 
@@ -32,9 +33,10 @@ type FakePeriodic struct {
 }
 
 type jobNameGenerator struct {
-	periodicURLs      []string
-	releaseConfigURLs []string
-	releases          []jobrunaggregatorapi.ReleaseRow
+	periodicURLs          []string
+	componentPeriodicURLs []string
+	releaseConfigURLs     []string
+	releases              []jobrunaggregatorapi.ReleaseRow
 }
 
 var (
@@ -58,6 +60,9 @@ func newJobNameGenerator() *jobNameGenerator {
 		periodicURLs: []string{
 			"https://raw.githubusercontent.com/openshift/release/main/ci-operator/jobs/openshift/release/openshift-release-main-periodics.yaml",
 			"https://raw.githubusercontent.com/openshift/release/main/ci-operator/jobs/openshift/multiarch/openshift-multiarch-main-periodics.yaml",
+		},
+		componentPeriodicURLs: []string{
+			"https://raw.githubusercontent.com/openshift/release/main/ci-operator/jobs/openshift/cluster-api-actuator-pkg/openshift-cluster-api-actuator-pkg-release-5.0-periodics.yaml",
 		},
 		releaseConfigURLs: []string{},
 	}
@@ -141,7 +146,7 @@ func (s *jobNameGenerator) GenerateJobNames() ([]string, error) {
 		jobNames = append(jobNames, "")
 	}
 
-	for _, url := range s.periodicURLs {
+	for _, url := range append(slices.Clone(s.periodicURLs), s.componentPeriodicURLs...) {
 		periodicConfig := &FakePeriodicConfig{}
 		if skip, err := readConfigURL(url, periodicConfig, yaml.Unmarshal); err != nil {
 			return jobNames, err
@@ -152,13 +157,10 @@ func (s *jobNameGenerator) GenerateJobNames() ([]string, error) {
 		jobNames = append(jobNames, fmt.Sprintf("// begin %v", url))
 		localLines := []string{}
 		for _, curr := range periodicConfig.Periodics {
-			// TODO: the single file for say "master" actually contains every release, but we only want jobs 4.10+
-			// where we started disruption monitoring. Adding a bunch of future rows to buy us time but this could
-			// stand some logic.
-			foundRelease := false
+			foundRelease := slices.Contains(s.componentPeriodicURLs, url)
 			for _, release := range s.releases {
-				if release.Major > 4 || (release.Major == 4 && release.Minor > 9) {
-					if strings.Contains(curr.Name, "-"+release.Release) {
+				if eligibleRelease(release) {
+					if strings.Contains(curr.Name, "-"+release.Release+"-") || strings.HasSuffix(curr.Name, "-"+release.Release) {
 						foundRelease = true
 						break
 					}

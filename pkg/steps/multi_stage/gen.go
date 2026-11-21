@@ -203,7 +203,7 @@ func (s *multiStageTestStep) generatePods(
 		}...)
 		container.Env = append(container.Env, env...)
 		container.Env = append(container.Env, s.generateParams(step.Environment)...)
-		depEnv, depErrs := s.envForDependencies(step)
+		depEnv, depVolumes, depMounts, depErrs := s.resourcesForDependencies(step)
 		if len(depErrs) != 0 {
 			errs = append(errs, depErrs...)
 			continue
@@ -278,6 +278,10 @@ func (s *multiStageTestStep) generatePods(
 		}
 
 		addLeaseProxyScripts(pod, container)
+		if err := addDependencyVolumes(pod, container, depVolumes, depMounts); err != nil {
+			errs = append(errs, fmt.Errorf("step %s: %w", step.As, err))
+			continue
+		}
 
 		ret = append(ret, *pod)
 	}
@@ -418,8 +422,10 @@ func (s *multiStageTestStep) generateParams(env []api.StepParameter) []coreapi.E
 	return ret
 }
 
-func (s *multiStageTestStep) envForDependencies(step api.LiteralTestStep) ([]coreapi.EnvVar, []error) {
+func (s *multiStageTestStep) resourcesForDependencies(step api.LiteralTestStep) ([]coreapi.EnvVar, []coreapi.Volume, []coreapi.VolumeMount, []error) {
 	var env []coreapi.EnvVar
+	var volumes []coreapi.Volume
+	var mounts []coreapi.VolumeMount
 	var errs []error
 	var claimRelease *api.ClaimRelease
 	if s.clusterClaim != nil {
@@ -435,7 +441,7 @@ func (s *multiStageTestStep) envForDependencies(step api.LiteralTestStep) ([]cor
 			imageStream, name, _ := s.config.DependencyParts(dependency, claimRelease)
 			depRef, err := utils.ImageDigestFor(s.client, s.jobSpec.Namespace, imageStream, name)()
 			if err != nil {
-				errs = append(errs, fmt.Errorf("could not determine image pull spec for image %s on step %s", dependency.Name, step.As))
+				errs = append(errs, fmt.Errorf("could not determine image pull spec for image %s on step %s: %w", dependency.Name, step.As, err))
 				continue
 			}
 			ref = depRef
@@ -443,8 +449,59 @@ func (s *multiStageTestStep) envForDependencies(step api.LiteralTestStep) ([]cor
 		env = append(env, coreapi.EnvVar{
 			Name: dependency.Env, Value: ref,
 		})
+		if dependency.MountPath != "" {
+			pullPolicy := coreapi.PullAlways
+			if strings.Contains(ref, "@") {
+				pullPolicy = coreapi.PullIfNotPresent
+			}
+			volumes = append(volumes, coreapi.Volume{
+				VolumeSource: coreapi.VolumeSource{
+					Image: &coreapi.ImageVolumeSource{
+						Reference:  ref,
+						PullPolicy: pullPolicy,
+					},
+				},
+			})
+			mounts = append(mounts, coreapi.VolumeMount{
+				MountPath: dependency.MountPath,
+				ReadOnly:  true,
+			})
+		}
 	}
-	return env, errs
+	return env, volumes, mounts, errs
+}
+
+// addDependencyVolumes runs after other volumes are added so names and mount
+// paths can be checked against the complete pod.
+func addDependencyVolumes(pod *coreapi.Pod, container *coreapi.Container, volumes []coreapi.Volume, mounts []coreapi.VolumeMount) error {
+	names := sets.New[string]()
+	for _, volume := range pod.Spec.Volumes {
+		names.Insert(volume.Name)
+	}
+	nextName := 0
+	for i := range volumes {
+		mount := &mounts[i]
+		for _, existing := range container.VolumeMounts {
+			mountPath, existingPath := path.Clean(mount.MountPath), path.Clean(existing.MountPath)
+			if mountPath == existingPath || strings.HasPrefix(mountPath, strings.TrimSuffix(existingPath, "/")+"/") || strings.HasPrefix(existingPath, strings.TrimSuffix(mountPath, "/")+"/") {
+				return fmt.Errorf("dependency mount at %q overlaps volume %q mounted at %q", mount.MountPath, existing.Name, existing.MountPath)
+			}
+		}
+		var name string
+		for {
+			name = fmt.Sprintf("dependency-%d", nextName)
+			nextName++
+			if !names.Has(name) {
+				break
+			}
+		}
+		names.Insert(name)
+		volumes[i].Name = name
+		mount.Name = name
+		pod.Spec.Volumes = append(pod.Spec.Volumes, volumes[i])
+		container.VolumeMounts = append(container.VolumeMounts, *mount)
+	}
+	return nil
 }
 
 func getClusterClaimPodParams(secretVolumeMounts []coreapi.VolumeMount, testName string) ([]coreapi.EnvVar, []coreapi.VolumeMount, error) {

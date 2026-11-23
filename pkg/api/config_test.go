@@ -490,6 +490,86 @@ func TestWithPresubmitFrom(t *testing.T) {
 				}},
 			},
 		},
+		{
+			name: "a project image used as a step's or an observer's from is carried over and the from rewritten",
+			base: &ReleaseBuildConfiguration{Metadata: Metadata{Org: "org", Repo: "component", Branch: "main"}},
+			source: &ReleaseBuildConfiguration{
+				Metadata: Metadata{Org: "org", Repo: "source", Branch: "main"},
+				Images: ImageConfiguration{Items: []ProjectDirectoryImageBuildStepConfiguration{
+					{To: "app", ProjectDirectoryImageBuildInputs: ProjectDirectoryImageBuildInputs{DockerfilePath: "Dockerfile"}},
+				}},
+				Tests: []TestStepConfiguration{{
+					As: "e2e",
+					MultiStageTestConfigurationLiteral: &MultiStageTestConfigurationLiteral{
+						Pre:  []LiteralTestStep{{As: "setup", From: "src", Commands: "true"}},
+						Test: []LiteralTestStep{{As: "run", From: "app", Commands: "true"}},
+						Post: []LiteralTestStep{{As: "cleanup", From: "src", Commands: "true"}},
+						Observers: []Observer{
+							{Name: "watch", From: "app"},
+							{Name: "watch-src", From: "src"},
+						},
+					},
+				}},
+			},
+			test: "e2e",
+			expected: &ReleaseBuildConfiguration{
+				Metadata: Metadata{Org: "org", Repo: "component", Branch: "main"},
+				Images: ImageConfiguration{Items: []ProjectDirectoryImageBuildStepConfiguration{
+					{To: "app-org.source", Ref: "org.source", ProjectDirectoryImageBuildInputs: ProjectDirectoryImageBuildInputs{DockerfilePath: "Dockerfile"}},
+				}},
+				Tests: []TestStepConfiguration{{
+					As: "e2e",
+					MultiStageTestConfigurationLiteral: &MultiStageTestConfigurationLiteral{
+						Pre:  []LiteralTestStep{{As: "setup", From: "src", Commands: "true"}},
+						Test: []LiteralTestStep{{As: "run", From: "pipeline:app-org.source", Commands: "true"}},
+						Post: []LiteralTestStep{{As: "cleanup", From: "src", Commands: "true"}},
+						Observers: []Observer{
+							{Name: "watch", From: "pipeline:app-org.source"},
+							{Name: "watch-src", From: "src"},
+						},
+					},
+				}},
+			},
+		},
+		{
+			name: "the resolver cannot mutate the source configuration: it runs on a deep copy",
+			base: &ReleaseBuildConfiguration{Metadata: Metadata{Org: "org", Repo: "component", Branch: "main"}},
+			source: &ReleaseBuildConfiguration{
+				Metadata: Metadata{Org: "org", Repo: "source", Branch: "main"},
+				Tests: []TestStepConfiguration{{
+					As:                          "e2e",
+					NodeArchitecture:            NodeArchitectureARM64,
+					MultiStageTestConfiguration: &MultiStageTestConfiguration{Workflow: pointer.StringPtr("example-e2e")},
+				}},
+			},
+			test: "e2e",
+			// Mirrors registry.ResolveConfig, which propagates a test's architecture onto
+			// its MultiStageTestConfiguration. That nested pointer is shared with source
+			// unless the configuration handed to the resolver is deep-copied first.
+			resolve: func(config ReleaseBuildConfiguration) (ReleaseBuildConfiguration, error) {
+				var tests []TestStepConfiguration
+				for _, step := range config.Tests {
+					if step.MultiStageTestConfiguration != nil {
+						if step.MultiStageTestConfiguration.NodeArchitecture == nil && step.NodeArchitecture != "" {
+							step.MultiStageTestConfiguration.NodeArchitecture = &step.NodeArchitecture
+						}
+						step.MultiStageTestConfigurationLiteral = &MultiStageTestConfigurationLiteral{}
+						step.MultiStageTestConfiguration = nil
+					}
+					tests = append(tests, step)
+				}
+				config.Tests = tests
+				return config, nil
+			},
+			expected: &ReleaseBuildConfiguration{
+				Metadata: Metadata{Org: "org", Repo: "component", Branch: "main"},
+				Tests: []TestStepConfiguration{{
+					As:                                 "e2e",
+					NodeArchitecture:                   NodeArchitectureARM64,
+					MultiStageTestConfigurationLiteral: &MultiStageTestConfigurationLiteral{},
+				}},
+			},
+		},
 	}
 	for _, tc := range testCases {
 		t.Run(tc.name, func(t *testing.T) {

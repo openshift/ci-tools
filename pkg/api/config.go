@@ -122,25 +122,33 @@ func pipelineImageDependency(source *ReleaseBuildConfiguration, dependency strin
 	return PipelineImageStreamTagReference(name), true
 }
 
-// testDependencyNames collects the dependency names referenced anywhere in a test's
-// expanded (literal_steps) form. Callers are responsible for resolving the test's
-// workflow, chains and references first: a dependency declared inside a referenced
-// step is invisible here otherwise, since it does not exist yet in the test's own
-// steps.
-func testDependencyNames(test *TestStepConfiguration) []string {
-	var names []string
+// testImageReferences collects the images referenced anywhere in a test's expanded
+// (literal_steps) form: the names of its dependencies, and the `from` image each step
+// or observer runs in. Callers are responsible for resolving the test's workflow,
+// chains and references first: a reference declared inside a referenced step is
+// invisible here otherwise, since it does not exist yet in the test's own steps.
+func testImageReferences(test *TestStepConfiguration) []string {
+	var refs []string
 	literal := test.MultiStageTestConfigurationLiteral
 	if literal == nil {
-		return names
+		return refs
 	}
 	for _, steps := range [][]LiteralTestStep{literal.Pre, literal.Test, literal.Post} {
 		for _, step := range steps {
 			for _, dep := range step.Dependencies {
-				names = append(names, dep.Name)
+				refs = append(refs, dep.Name)
+			}
+			if step.From != "" {
+				refs = append(refs, step.From)
 			}
 		}
 	}
-	return names
+	for _, observer := range literal.Observers {
+		if observer.From != "" {
+			refs = append(refs, observer.From)
+		}
+	}
+	return refs
 }
 
 // imageParentNames returns the names of the pipeline images an image build pulls
@@ -200,10 +208,11 @@ func renameSourceParent(result, source *ReleaseBuildConfiguration, renamed map[P
 }
 
 // includeInjectedTestSourceImages copies any project-built pipeline images that the
-// injected test depends on (transitively, following `from` and `inputs`) from source
-// into result, so that "no base image import, project image build, or bundle image
-// build is configured to provide this dependency" is not raised for them at validation
-// time.
+// injected test references (in a dependency name or a step/observer `from`) from
+// source into result, transitively following `from` and `inputs`, so that the images
+// are actually built and the "no base image import, project image build, or bundle
+// image build is configured to provide this dependency" error is not raised for them
+// at validation time.
 //
 // The images are namespaced with the source repository's "org.repo" ref, matching the
 // convention used elsewhere (see registry/server.ResolveAndMergeConfigsAndInjectTest)
@@ -214,7 +223,7 @@ func renameSourceParent(result, source *ReleaseBuildConfiguration, renamed map[P
 // will fail to build.
 func includeInjectedTestSourceImages(result, source *ReleaseBuildConfiguration, test *TestStepConfiguration) {
 	needed := map[PipelineImageStreamTagReference]bool{}
-	queue := testDependencyNames(test)
+	queue := testImageReferences(test)
 	for len(queue) > 0 {
 		dependency := queue[0]
 		queue = queue[1:]
@@ -284,9 +293,17 @@ func includeInjectedTestSourceImages(result, source *ReleaseBuildConfiguration, 
 	}
 	for _, steps := range [][]LiteralTestStep{literal.Pre, literal.Test, literal.Post} {
 		for i := range steps {
+			if steps[i].From != "" {
+				steps[i].From = renameDependency(steps[i].From)
+			}
 			for j := range steps[i].Dependencies {
 				steps[i].Dependencies[j].Name = renameDependency(steps[i].Dependencies[j].Name)
 			}
+		}
+	}
+	for i := range literal.Observers {
+		if literal.Observers[i].From != "" {
+			literal.Observers[i].From = renameDependency(literal.Observers[i].From)
 		}
 	}
 }
@@ -360,7 +377,12 @@ func (config *ReleaseBuildConfiguration) WithPresubmitFrom(source *ReleaseBuildC
 		return nil, fmt.Errorf("test '%s' not found in source configuration", test)
 	}
 
-	resolvedSource, err := resolve(*source)
+	// Resolve a deep copy: the resolver takes the configuration by value, but its
+	// nested tests are still shared with source, and the real resolver
+	// (registry.ResolveConfig) mutates them (e.g. propagating a test's architecture
+	// onto its MultiStageTestConfiguration). source may be a shared/cached config
+	// (see configAgent.GetMatchingConfig) read concurrently by other requests.
+	resolvedSource, err := resolve(*source.DeepCopy())
 	if err != nil {
 		return nil, fmt.Errorf("failed to resolve source configuration to determine test %q's dependencies: %w", test, err)
 	}

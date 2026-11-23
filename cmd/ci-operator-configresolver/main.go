@@ -228,6 +228,9 @@ var validStreams = []*regexp.Regexp{
 	regexp.MustCompile(`^origin/(4\.(1[2-9]|2\d)|5\.\d+)`),
 	regexp.MustCompile(`^origin/scos-(4\.(1[2-9]|2\d)|5\.\d+)`),
 	regexp.MustCompile(`^ocp-priv/(4\.(1[2-9]|2\d)|5\.\d+)`),
+	// https://issues.redhat.com/browse/DPTP-5553
+	regexp.MustCompile(`^ocp-arm64/(4\.(1[2-9]|2\d)|5\.\d+)$`),
+	regexp.MustCompile(`^ocp-multi/(4\.(1[2-9]|2\d)|5\.\d+)$`),
 	regexp.MustCompile(`^origin/sriov-(4\.(1[2-9]|2\d)|5\.\d+)`),
 	regexp.MustCompile(`^origin/metallb-(4\.(1[2-9]|2\d)|5\.\d+)`),
 	regexp.MustCompile(`^origin/ptp-(4\.(1[2-9]|2\d)|5\.\d+)`),

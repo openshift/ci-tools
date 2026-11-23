@@ -72,6 +72,38 @@ func TestValidateStream(t *testing.T) {
 			isName: "4.16",
 		},
 		{
+			name:   "ocp-arm64/4.16 is valid",
+			isNS:   "ocp-arm64",
+			isName: "4.16",
+		},
+		{
+			name:   "ocp-multi/4.16 is valid",
+			isNS:   "ocp-multi",
+			isName: "4.16",
+		},
+		{
+			name:   "ocp-arm64/5.0 is valid",
+			isNS:   "ocp-arm64",
+			isName: "5.0",
+		},
+		{
+			name:   "ocp-multi/5.0 is valid",
+			isNS:   "ocp-multi",
+			isName: "5.0",
+		},
+		{
+			name:     "ocp-arm64/4.120 is invalid",
+			isNS:     "ocp-arm64",
+			isName:   "4.120",
+			expected: errors.New("not a valid integrated stream: ocp-arm64/4.120"),
+		},
+		{
+			name:     "ocp-multi/5.0abc is invalid",
+			isNS:     "ocp-multi",
+			isName:   "5.0abc",
+			expected: errors.New("not a valid integrated stream: ocp-multi/5.0abc"),
+		},
+		{
 			name:     "origin/bar-4.15 is invalid",
 			isNS:     "origin",
 			isName:   "bar-4.15",

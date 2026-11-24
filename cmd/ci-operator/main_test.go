@@ -46,7 +46,7 @@ func init() {
 
 // TestCheckBlockedCollections covers selected targets and credential extraction.
 func TestCheckBlockedCollections(t *testing.T) {
-	want := errors.New("test selected: The secret collection blocked is blocked. Contact <#CBN38N3MW> to get more details.")
+	want := errors.New("test selected: The secret collection blocked is blocked. Contact #forum-ocp-testplatform to get more details.")
 	for _, tc := range []struct {
 		name        string
 		test        api.TestStepConfiguration
@@ -100,7 +100,7 @@ func TestCheckBlockedCollections(t *testing.T) {
 
 // TestCheckCredentialCollections covers direct and underlying bundle sources.
 func TestCheckCredentialCollections(t *testing.T) {
-	fallback := errors.New("The secret collection blocked is blocked. Contact <#CBN38N3MW> to get more details.")
+	fallback := errors.New("The secret collection blocked is blocked. Contact #forum-ocp-testplatform to get more details.")
 	sharedConfig := `blocked_collections: {blocked: {}}
 bundles:
 - name: shared

@@ -784,7 +784,7 @@ func (o *options) checkCredentialCollections(credential api.CredentialReference)
 		if block, found := o.gsmConfig.BlockedCollections[collection]; found {
 			reason := block.Reason
 			if reason == "" {
-				reason = fmt.Sprintf("The secret collection %s is blocked. Contact <#CBN38N3MW> to get more details.", collection)
+				reason = fmt.Sprintf("The secret collection %s is blocked. Contact #forum-ocp-testplatform to get more details.", collection)
 				return errors.New(reason)
 			}
 			return fmt.Errorf("secret collection %s is blocked: %s", collection, reason)

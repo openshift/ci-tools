@@ -1,0 +1,8 @@
+scheduler:
+  enabled: true
+presets:
+- labels:
+    ci-operator.openshift.io/variant: dynamic-tests-5.1
+  env:
+  - name: FROM_PROW_PRESET
+    value: applied

@@ -1,0 +1,10 @@
+tests:
+- organization: openshift
+  repository: release
+  branch: main
+  variant: dynamic-tests-5.1
+  test: e2e-aws-ovn-techpreview
+- organization: openshift
+  repository: release
+  branch: main
+  test: unit

@@ -1,0 +1,30 @@
+presubmits:
+  openshift/release:
+  - name: pull-ci-openshift-release-main-unit
+    agent: kubernetes
+    branches:
+    - ^main$
+    context: ci/prow/unit
+    cluster: build01
+    spec:
+      containers:
+      - command: [ci-operator]
+        args: [--target=unit]
+        image: ci-operator:latest
+  - name: pull-ci-openshift-release-main-dynamic-tests-5.1-e2e-aws-ovn-techpreview
+    agent: kubernetes
+    branches:
+    - ^main$
+    - ^main-
+    skip_branches:
+    - ^main-excluded$
+    path_alias: example.org/source
+    context: ci/prow/dynamic-tests-5.1-e2e-aws-ovn-techpreview
+    cluster: build02
+    labels:
+      ci-operator.openshift.io/variant: dynamic-tests-5.1
+    spec:
+      containers:
+      - command: [ci-operator]
+        args: [--variant, dynamic-tests-5.1, --target=e2e-aws-ovn-techpreview, --enable-secrets-store-csi-driver=true]
+        image: ci-operator:latest

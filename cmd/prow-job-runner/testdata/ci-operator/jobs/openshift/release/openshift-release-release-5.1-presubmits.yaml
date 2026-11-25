@@ -1,0 +1,12 @@
+presubmits:
+  openshift/release:
+  - name: pull-ci-openshift-release-release-5.1-unit
+    agent: kubernetes
+    branches:
+    - ^release-5\.1$
+    context: ci/prow/unit
+    spec:
+      containers:
+      - command: [ci-operator]
+        args: [--target=unit]
+        image: ci-operator:latest

@@ -1,0 +1,6 @@
+{
+  "number": 123,
+  "user": {"login": "contributor"},
+  "base": {"ref": "release-5.1", "sha": "base-sha", "repo": {"owner": {"login": "openshift"}, "name": "installer"}},
+  "head": {"ref": "topic", "sha": "head-sha", "repo": {"owner": {"login": "contributor"}, "name": "installer"}}
+}

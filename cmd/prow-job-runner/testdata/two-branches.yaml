@@ -1,0 +1,9 @@
+tests:
+- organization: openshift
+  repository: release
+  branch: release-5.1
+  test: unit
+- organization: openshift
+  repository: release
+  branch: main
+  test: unit

@@ -20,6 +20,7 @@ import (
 
 // TestRun checks the rendered jobs, including source config selection and target refs.
 func TestRun(t *testing.T) {
+	t.Setenv("KUBERNETES_SERVICE_HOST", "")
 	const prFile = "--pull-request-data=testdata/pr.json"
 	const prefix = "pull-ci-openshift-release-main-"
 	const e2e = "e2e-aws-ovn-techpreview"
@@ -44,7 +45,7 @@ func TestRun(t *testing.T) {
 		jobs      []renderedJob
 		wantErr   string
 	}{
-		{name: "external tests with and without variants in plan order", args: []string{"--dry-run", prFile, planFlag}, repo: "installer", branch: "release-5.1",
+		{name: "external tests with and without variants in plan order", args: []string{"--dry-run", prFile, planFlag, "--no-in-cluster-config", "--projected-token-file=unused"}, repo: "installer", branch: "release-5.1",
 			jobs: []renderedJob{
 				{e2eJob, []string{"--variant", "dynamic-tests-5.1", "--target=" + e2e, "--enable-secrets-store-csi-driver=true", "--with-test-from=openshift/release@main__dynamic-tests-5.1:" + e2e}, e2eContext},
 				{prefix + "unit", []string{"--target=unit", "--with-test-from=openshift/release@main:unit"}, unitContext},
@@ -61,6 +62,8 @@ func TestRun(t *testing.T) {
 		{name: "feature branch excluded from native job", args: []string{"--dry-run"}, plan: "tests: [{organization: openshift, repository: release, branch: main, variant: dynamic-tests-5.1, test: " + e2e + "}]", jobSpec: strings.Replace(jobSpec, `"main"`, `"main-excluded"`, 1), repo: "release", branch: "main-excluded",
 			jobs: []renderedJob{{e2eJob, []string{"--variant", "dynamic-tests-5.1", "--target=" + e2e, "--enable-secrets-store-csi-driver=true", "--with-test-from=openshift/release@main__dynamic-tests-5.1:" + e2e}, e2eContext}}},
 		{name: "live execution requires cluster credentials", args: []string{prFile, planFlag}, wantErr: "loading Prow cluster credentials"},
+		{name: "live execution loads explicit kubeconfig", args: []string{prFile, planFlag, "--kubeconfig=testdata/pr.json"}, wantErr: `--kubeconfig="testdata/pr.json"`},
+		{name: "suffix requires directory", args: []string{prFile, planFlag, "--kubeconfig-suffix=.config"}, wantErr: "--kubeconfig-dir must be set"},
 		{name: "mutually exclusive sources", args: []string{prFile, planFlag, "--pull-request=org/repo#1"}, wantErr: "mutually exclusive"},
 		{name: "missing PR source", args: []string{planFlag}, wantErr: "provide --pull-request or --pull-request-data"},
 		{name: "invalid PR", args: []string{planFlag, "--pull-request=org/repo#bad"}, wantErr: "invalid --pull-request"},

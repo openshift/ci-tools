@@ -17,9 +17,8 @@ import (
 	"k8s.io/apimachinery/pkg/util/wait"
 	"sigs.k8s.io/controller-runtime/pkg/client"
 	prowapi "sigs.k8s.io/prow/pkg/apis/prowjobs/v1"
+	"sigs.k8s.io/prow/pkg/flagutil"
 	"sigs.k8s.io/prow/pkg/pjutil"
-
-	"github.com/openshift/ci-tools/pkg/util"
 )
 
 // prowJobClient creates ProwJobs and reads their latest status from the Prow cluster.
@@ -41,11 +40,14 @@ type jobExecution struct {
 	errors  []error
 }
 
-// newProwJobClient loads KUBECONFIG or in-cluster credentials and creates a ProwJob client.
-func newProwJobClient() (client.Client, error) {
-	config, err := util.LoadClusterConfig()
+// newProwJobClient creates a live ProwJob client for the infrastructure cluster selected by opts.
+func newProwJobClient(opts *flagutil.KubernetesOptions) (client.Client, error) {
+	config, err := opts.InfrastructureClusterConfig(false)
 	if err != nil {
 		return nil, fmt.Errorf("loading Prow cluster credentials: %w", err)
+	}
+	if config == nil || config.Host == "" {
+		return nil, errors.New("no Prow infrastructure cluster configured for live submission")
 	}
 	scheme := runtime.NewScheme()
 	if err := prowapi.AddToScheme(scheme); err != nil {

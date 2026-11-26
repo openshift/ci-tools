@@ -10,6 +10,7 @@ import (
 
 	"github.com/sirupsen/logrus"
 
+	"sigs.k8s.io/prow/pkg/flagutil"
 	"sigs.k8s.io/yaml"
 
 	"github.com/openshift/ci-tools/pkg/prow-job-runner/presubmits"
@@ -22,6 +23,7 @@ type Options struct {
 	PullRequest     string // GitHub org/repo#number; mutually exclusive with PullRequestData.
 	PullRequestData string // Path to a saved GitHub pull request API response.
 	DryRun          bool
+	Kubernetes      flagutil.KubernetesOptions
 }
 
 // Run resolves all requested tests, then submits and waits for them or writes their manifests to out in dry-run mode.
@@ -34,6 +36,9 @@ func Run(ctx context.Context, opts Options, out io.Writer) error {
 		return errors.New("--pull-request and --pull-request-data are mutually exclusive")
 	case opts.TestPlan == "":
 		return errors.New("--test-plan is required")
+	}
+	if err := opts.Kubernetes.Validate(opts.DryRun); err != nil {
+		return fmt.Errorf("validating Kubernetes options: %w", err)
 	}
 	tests, err := readTestPlan(ctx, opts.TestPlan, readGCSObject)
 	if err != nil {
@@ -53,7 +58,7 @@ func Run(ctx context.Context, opts Options, out io.Writer) error {
 		return err
 	}
 	if !opts.DryRun {
-		client, err := newProwJobClient()
+		client, err := newProwJobClient(&opts.Kubernetes)
 		if err != nil {
 			return err
 		}

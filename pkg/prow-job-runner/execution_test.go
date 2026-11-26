@@ -3,10 +3,10 @@ package prowjobrunner
 import (
 	"context"
 	"errors"
+	"flag"
 	"fmt"
 	"io"
 	"os"
-	"path/filepath"
 	"slices"
 	"strings"
 	"testing"
@@ -21,7 +21,20 @@ import (
 	"sigs.k8s.io/controller-runtime/pkg/client"
 	"sigs.k8s.io/controller-runtime/pkg/client/fake"
 	prowapi "sigs.k8s.io/prow/pkg/apis/prowjobs/v1"
+	"sigs.k8s.io/prow/pkg/flagutil"
 )
+
+// testKubeconfig selects a Prow infrastructure context without requiring a reachable cluster.
+const testKubeconfig = `apiVersion: v1
+kind: Config
+current-context: prow
+contexts:
+- name: prow
+  context: {cluster: prow}
+clusters:
+- name: prow
+  cluster: {server: "https://example.invalid"}
+`
 
 // statusRead represents one controller update or read error for a particular job.
 type statusRead struct {
@@ -328,34 +341,37 @@ func TestRetryableError(t *testing.T) {
 
 // TestNewProwJobClient checks local credential loading without contacting a cluster.
 func TestNewProwJobClient(t *testing.T) {
+	t.Setenv("KUBERNETES_SERVICE_HOST", "")
 	for _, tc := range []struct {
 		name       string
 		kubeconfig string
+		env        string
+		args       []string
 		wantErr    string
 	}{
-		{
-			name: "valid kubeconfig",
-			kubeconfig: `apiVersion: v1
-kind: Config
-current-context: prow
-contexts:
-- name: prow
-  context: {cluster: prow}
-clusters:
-- name: prow
-  cluster: {server: "https://example.invalid"}
-`,
-		},
-		{name: "invalid kubeconfig", kubeconfig: "[", wantErr: "loading Prow cluster credentials"},
-		{name: "empty kubeconfig", kubeconfig: "", wantErr: "loading Prow cluster credentials"},
+		{name: "environment kubeconfig", kubeconfig: testKubeconfig, env: "prow.config"},
+		{name: "explicit kubeconfig overrides environment", kubeconfig: testKubeconfig, env: "invalid.yaml", args: []string{"--kubeconfig=prow.config"}},
+		{name: "directory filters out invalid files", kubeconfig: testKubeconfig, env: "invalid.yaml", args: []string{"--kubeconfig-dir=.", "--kubeconfig-suffix=.config"}},
+		{name: "invalid kubeconfig", kubeconfig: "[", env: "prow.config", wantErr: "loading Prow cluster credentials"},
+		{name: "empty kubeconfig", env: "prow.config", wantErr: "loading Prow cluster credentials"},
+		{name: "no infrastructure context", kubeconfig: testKubeconfig, env: "prow.config", args: []string{"--no-in-cluster-config"}, wantErr: "no Prow infrastructure cluster configured"},
 	} {
 		t.Run(tc.name, func(t *testing.T) {
-			path := filepath.Join(t.TempDir(), "kubeconfig")
-			if err := os.WriteFile(path, []byte(tc.kubeconfig), 0600); err != nil {
+			t.Chdir(t.TempDir())
+			t.Setenv("KUBECONFIG", tc.env)
+			if err := os.WriteFile("prow.config", []byte(tc.kubeconfig), 0600); err != nil {
 				t.Fatal(err)
 			}
-			t.Setenv("KUBECONFIG", path)
-			pjclient, err := newProwJobClient()
+			if err := os.WriteFile("invalid.yaml", []byte("["), 0600); err != nil {
+				t.Fatal(err)
+			}
+			var opts flagutil.KubernetesOptions
+			fs := flag.NewFlagSet(tc.name, flag.ContinueOnError)
+			opts.AddFlags(fs)
+			if err := fs.Parse(tc.args); err != nil {
+				t.Fatal(err)
+			}
+			pjclient, err := newProwJobClient(&opts)
 			if tc.wantErr != "" {
 				if err == nil || !strings.Contains(err.Error(), tc.wantErr) {
 					t.Fatalf("want error containing %q, got %v", tc.wantErr, err)

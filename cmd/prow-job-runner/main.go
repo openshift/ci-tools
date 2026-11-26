@@ -37,7 +37,7 @@ func run(ctx context.Context, fs *flag.FlagSet, args []string, out io.Writer) er
 
 // main runs prow-job-runner and reports errors on stderr.
 func main() {
-	logrusutil.ComponentInit()
+	logrusutil.Init(&logrusutil.DefaultFieldsFormatter{WrappedFormatter: &logrus.TextFormatter{DisableColors: true}})
 	ctx, cancel := signal.NotifyContext(context.Background(), os.Interrupt, syscall.SIGTERM)
 	defer cancel()
 	fs := flag.NewFlagSet("prow-job-runner", flag.ExitOnError)

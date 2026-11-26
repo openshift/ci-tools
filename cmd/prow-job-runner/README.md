@@ -32,7 +32,7 @@ Both native and imported presubmits report to the target PR. For example, a pres
 
 Imported tests use `--with-test-from` to select the test from the source configuration. Existing ci-operator arguments are preserved.
 
-With `--dry-run`, the command prints one ProwJob YAML document per test, in the order requested. Progress messages go to stderr, so you can redirect stdout to save the manifests. No jobs are submitted.
+With `--dry-run`, the command prints one ProwJob YAML document per test, in the order requested. Progress and errors are logged as plain text on stderr, so you can redirect stdout to save the manifests. No jobs are submitted.
 
 Omit `--dry-run` to submit jobs to the Prow infrastructure cluster and wait for their results. Inside a cluster, Prow uses the service account for infrastructure access. Outside a cluster, use `--kubeconfig /path/to/config` with the Prow cluster as its current context. With no explicit file or directory, Prow uses the standard kubeconfig loading rules (including `KUBECONFIG`). Credentials need permission to create and get ProwJobs in the selected namespace. The jobs retain their configured build clusters and use the scheduler when enabled.
 

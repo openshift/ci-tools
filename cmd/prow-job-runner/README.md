@@ -1,6 +1,6 @@
 # prow-job-runner
 
-`prow-job-runner` previews CI jobs for a GitHub pull request. The branch in each test plan entry selects the test definition; the pull request selects the code to test. Only dry runs are supported.
+`prow-job-runner` runs CI jobs for a GitHub pull request. The branch in each test plan entry selects the test definition; the pull request selects the code to test.
 
 ```sh
 prow-job-runner --dry-run \
@@ -27,4 +27,12 @@ tests:
 - Use `--pull-request 'org/repo#number'` for an anonymous GitHub lookup. For a private PR or offline use, pass `--pull-request-data pr.json` instead, with a saved GitHub pull request response. When running inside a Prow presubmit, omit both flags to use its PR.
 - Use `--release-repo` to select a local `openshift/release` checkout. It defaults to `/home/prow/go/src/github.com/openshift/release`.
 
+Both native and imported presubmits report to the target PR. For example, a presubmit with context `ci/prow/unit` reports as `ci/prow/dynamic-second-stage/unit`. Tests with the same source context share a second-stage status on GitHub; the runner still tracks each ProwJob separately.
+
+Imported tests use `--with-test-from` to select the test from the source configuration. Existing ci-operator arguments are preserved.
+
 With `--dry-run`, the command prints one ProwJob YAML document per test, in the order requested. Progress messages go to stderr, so you can redirect stdout to save the manifests. No jobs are submitted.
+
+Omit `--dry-run` to submit all jobs and wait for their results. The command uses `KUBECONFIG` when set, otherwise in-cluster service account credentials. These credentials must target the Prow cluster and allow creating and getting ProwJobs in the `prowjob_namespace` from the release checkout's Prow configuration. The jobs retain their configured build clusters and use the scheduler when enabled.
+
+If a create response is lost, the runner checks for the job by name. It retries transient status reads and waits for Prow to mark each job complete, including aborted jobs. A rejected submission, a permanent read error, or any completed job that did not succeed causes an unsuccessful exit after the remaining jobs finish. Interrupting the command stops waiting but does not cancel or delete submitted jobs.

@@ -6,6 +6,8 @@ import (
 	"fmt"
 	"io"
 	"os"
+	"os/signal"
+	"syscall"
 
 	"github.com/sirupsen/logrus"
 
@@ -34,8 +36,10 @@ func run(ctx context.Context, fs *flag.FlagSet, args []string, out io.Writer) er
 // main runs prow-job-runner and reports errors on stderr.
 func main() {
 	logrusutil.ComponentInit()
+	ctx, cancel := signal.NotifyContext(context.Background(), os.Interrupt, syscall.SIGTERM)
+	defer cancel()
 	fs := flag.NewFlagSet("prow-job-runner", flag.ExitOnError)
-	if err := run(context.Background(), fs, os.Args[1:], os.Stdout); err != nil {
+	if err := run(ctx, fs, os.Args[1:], os.Stdout); err != nil {
 		logrus.WithError(err).Fatal("prow-job-runner failed")
 	}
 }

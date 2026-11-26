@@ -6,6 +6,7 @@ import (
 	"errors"
 	"fmt"
 	"io"
+	"time"
 
 	"github.com/sirupsen/logrus"
 
@@ -23,8 +24,8 @@ type Options struct {
 	DryRun          bool
 }
 
-// Run resolves all requested tests before writing their ProwJob manifests to out in dry-run mode.
-// If neither PR source is supplied, it uses JOB_SPEC. Live submission returns an error.
+// Run resolves all requested tests, then submits and waits for them or writes their manifests to out in dry-run mode.
+// If neither PR source is supplied, it uses JOB_SPEC. It returns an error if any submitted job fails.
 func Run(ctx context.Context, opts Options, out io.Writer) error {
 	switch {
 	case opts.ReleaseRepo == "":
@@ -52,7 +53,11 @@ func Run(ctx context.Context, opts Options, out io.Writer) error {
 		return err
 	}
 	if !opts.DryRun {
-		return errors.New("running presubmits: Not Implemented")
+		client, err := newProwJobClient()
+		if err != nil {
+			return err
+		}
+		return execute(ctx, client, jobs, 10*time.Second)
 	}
 	for _, job := range jobs {
 		data, err := yaml.Marshal(job)

@@ -5,6 +5,7 @@ presubmits:
     branches:
     - ^main$
     context: ci/prow/unit
+    skip_report: true
     cluster: build01
     spec:
       containers:

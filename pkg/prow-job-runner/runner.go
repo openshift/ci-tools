@@ -6,10 +6,12 @@ import (
 	"errors"
 	"fmt"
 	"io"
+	"strings"
 	"time"
 
 	"github.com/sirupsen/logrus"
 
+	"k8s.io/apimachinery/pkg/util/validation"
 	"sigs.k8s.io/prow/pkg/flagutil"
 	"sigs.k8s.io/yaml"
 
@@ -18,12 +20,13 @@ import (
 
 // Options selects the release checkout, ci-operator tests, pull request, and execution mode.
 type Options struct {
-	ReleaseRepo     string
-	TestPlan        string // Required local path or gs:// URL of the test plan.
-	PullRequest     string // GitHub org/repo#number; mutually exclusive with PullRequestData.
-	PullRequestData string // Path to a saved GitHub pull request API response.
-	DryRun          bool
-	Kubernetes      flagutil.KubernetesOptions
+	ReleaseRepo      string
+	TestPlan         string // Required local path or gs:// URL of the test plan.
+	PullRequest      string // GitHub org/repo#number; mutually exclusive with PullRequestData.
+	PullRequestData  string // Path to a saved GitHub pull request API response.
+	ProwJobNamespace string // Optional override for the release configuration's prowjob_namespace.
+	DryRun           bool
+	Kubernetes       flagutil.KubernetesOptions
 }
 
 // Run resolves all requested tests, then submits and waits for them or writes their manifests to out in dry-run mode.
@@ -36,6 +39,11 @@ func Run(ctx context.Context, opts Options, out io.Writer) error {
 		return errors.New("--pull-request and --pull-request-data are mutually exclusive")
 	case opts.TestPlan == "":
 		return errors.New("--test-plan is required")
+	}
+	if opts.ProwJobNamespace != "" {
+		if errs := validation.IsDNS1123Label(opts.ProwJobNamespace); len(errs) != 0 {
+			return fmt.Errorf("invalid --pj-namespace %q: %s", opts.ProwJobNamespace, strings.Join(errs, "; "))
+		}
 	}
 	if err := opts.Kubernetes.Validate(opts.DryRun); err != nil {
 		return fmt.Errorf("validating Kubernetes options: %w", err)
@@ -56,6 +64,11 @@ func Run(ctx context.Context, opts Options, out io.Writer) error {
 	jobs, err := presubmits.ForTests(opts.ReleaseRepo, tests, refs)
 	if err != nil {
 		return err
+	}
+	if opts.ProwJobNamespace != "" {
+		for _, job := range jobs {
+			job.Namespace = opts.ProwJobNamespace
+		}
 	}
 	if !opts.DryRun {
 		client, err := newProwJobClient(&opts.Kubernetes)

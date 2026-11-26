@@ -42,10 +42,11 @@ func TestRun(t *testing.T) {
 		repo      string
 		branch    string
 		pathAlias string
+		namespace string
 		jobs      []renderedJob
 		wantErr   string
 	}{
-		{name: "external tests with and without variants in plan order", args: []string{"--dry-run", prFile, planFlag, "--no-in-cluster-config", "--projected-token-file=unused"}, repo: "installer", branch: "release-5.1",
+		{name: "external tests with and without variants in the requested namespace", args: []string{"--dry-run", prFile, planFlag, "--no-in-cluster-config", "--projected-token-file=unused", "--pj-namespace=ci-staging"}, repo: "installer", branch: "release-5.1", namespace: "ci-staging",
 			jobs: []renderedJob{
 				{e2eJob, []string{"--variant", "dynamic-tests-5.1", "--target=" + e2e, "--enable-secrets-store-csi-driver=true", "--with-test-from=openshift/release@main__dynamic-tests-5.1:" + e2e}, e2eContext},
 				{prefix + "unit", []string{"--target=unit", "--with-test-from=openshift/release@main:unit"}, unitContext},
@@ -64,6 +65,7 @@ func TestRun(t *testing.T) {
 		{name: "live execution requires cluster credentials", args: []string{prFile, planFlag}, wantErr: "loading Prow cluster credentials"},
 		{name: "live execution loads explicit kubeconfig", args: []string{prFile, planFlag, "--kubeconfig=testdata/pr.json"}, wantErr: `--kubeconfig="testdata/pr.json"`},
 		{name: "suffix requires directory", args: []string{prFile, planFlag, "--kubeconfig-suffix=.config"}, wantErr: "--kubeconfig-dir must be set"},
+		{name: "invalid namespace", args: []string{prFile, planFlag, "--pj-namespace=CI/Staging"}, wantErr: `invalid --pj-namespace "CI/Staging"`},
 		{name: "mutually exclusive sources", args: []string{prFile, planFlag, "--pull-request=org/repo#1"}, wantErr: "mutually exclusive"},
 		{name: "missing PR source", args: []string{planFlag}, wantErr: "provide --pull-request or --pull-request-data"},
 		{name: "invalid PR", args: []string{planFlag, "--pull-request=org/repo#bad"}, wantErr: "invalid --pull-request"},
@@ -97,6 +99,10 @@ func TestRun(t *testing.T) {
 				t.Fatal(err)
 			}
 			decoder := k8syaml.NewYAMLOrJSONDecoder(&out, 4096)
+			wantNamespace := "ci"
+			if tc.namespace != "" {
+				wantNamespace = tc.namespace
+			}
 			var jobs []renderedJob
 			for {
 				var job prowapi.ProwJob
@@ -107,8 +113,8 @@ func TestRun(t *testing.T) {
 				if err != nil {
 					t.Fatal(err)
 				}
-				if job.Status.State != prowapi.SchedulingState || job.Namespace != "ci" {
-					t.Errorf("want scheduling state in namespace ci, got %s in %s", job.Status.State, job.Namespace)
+				if job.Status.State != prowapi.SchedulingState || job.Namespace != wantNamespace {
+					t.Errorf("want scheduling state in namespace %s, got %s in %s", wantNamespace, job.Status.State, job.Namespace)
 				}
 				if !job.Spec.Report || job.Annotations[kube.ContextAnnotation] != job.Spec.Context {
 					t.Errorf("%s: report=%t, context=%q, annotated context=%q", job.Spec.Job, job.Spec.Report, job.Spec.Context, job.Annotations[kube.ContextAnnotation])

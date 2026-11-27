@@ -725,6 +725,11 @@ const ciOperatorReferenceYaml = "# The list of base images describe\n" +
 	"                      documentation: ' '\n" +
 	"                      # Name of the environment variable.\n" +
 	"                      name: ' '\n" +
+	"                      # Overridable, if true, allows this parameter to be set via a trigger-time\n" +
+	"                      # environment variable on ci-operator (its own name, or the legacy\n" +
+	"                      # MULTISTAGE_PARAM_OVERRIDE_<NAME> form, which takes precedence).\n" +
+	"                      # Must be explicitly opted into per parameter.\n" +
+	"                      overridable: true\n" +
 	"                  # From is the container image that will be used for this observer.\n" +
 	"                  from: ' '\n" +
 	"                  # FromImage is a literal ImageStreamTag reference to use for this observer.\n" +
@@ -751,6 +756,11 @@ const ciOperatorReferenceYaml = "# The list of base images describe\n" +
 	"                        \"\": \"\"\n" +
 	"                  # Timeout is how long the we will wait before aborting a job with SIGINT.\n" +
 	"                  timeout: 0s\n" +
+	"            # ParamOverrides holds trigger-time parameter values, populated by\n" +
+	"            # ci-operator from the environment. Only honored for parameters\n" +
+	"            # declared with Overridable: true. Not meant to be set in CI config.\n" +
+	"            param_overrides:\n" +
+	"                \"\": \"\"\n" +
 	"            # Post is the array of test steps run after the tests finish and teardown/deprovision resources.\n" +
 	"            # Post steps always run, even if previous steps fail.\n" +
 	"            post:\n" +
@@ -810,6 +820,11 @@ const ciOperatorReferenceYaml = "# The list of base images describe\n" +
 	"                      documentation: ' '\n" +
 	"                      # Name of the environment variable.\n" +
 	"                      name: ' '\n" +
+	"                      # Overridable, if true, allows this parameter to be set via a trigger-time\n" +
+	"                      # environment variable on ci-operator (its own name, or the legacy\n" +
+	"                      # MULTISTAGE_PARAM_OVERRIDE_<NAME> form, which takes precedence).\n" +
+	"                      # Must be explicitly opted into per parameter.\n" +
+	"                      overridable: true\n" +
 	"                  # From is the container image that will be used for this step.\n" +
 	"                  from: ' '\n" +
 	"                  # FromImage is a literal ImageStreamTag reference to use for this step.\n" +
@@ -918,6 +933,11 @@ const ciOperatorReferenceYaml = "# The list of base images describe\n" +
 	"                      documentation: ' '\n" +
 	"                      # Name of the environment variable.\n" +
 	"                      name: ' '\n" +
+	"                      # Overridable, if true, allows this parameter to be set via a trigger-time\n" +
+	"                      # environment variable on ci-operator (its own name, or the legacy\n" +
+	"                      # MULTISTAGE_PARAM_OVERRIDE_<NAME> form, which takes precedence).\n" +
+	"                      # Must be explicitly opted into per parameter.\n" +
+	"                      overridable: true\n" +
 	"                  # From is the container image that will be used for this step.\n" +
 	"                  from: ' '\n" +
 	"                  # FromImage is a literal ImageStreamTag reference to use for this step.\n" +
@@ -1026,6 +1046,11 @@ const ciOperatorReferenceYaml = "# The list of base images describe\n" +
 	"                      documentation: ' '\n" +
 	"                      # Name of the environment variable.\n" +
 	"                      name: ' '\n" +
+	"                      # Overridable, if true, allows this parameter to be set via a trigger-time\n" +
+	"                      # environment variable on ci-operator (its own name, or the legacy\n" +
+	"                      # MULTISTAGE_PARAM_OVERRIDE_<NAME> form, which takes precedence).\n" +
+	"                      # Must be explicitly opted into per parameter.\n" +
+	"                      overridable: true\n" +
 	"                  # From is the container image that will be used for this step.\n" +
 	"                  from: ' '\n" +
 	"                  # FromImage is a literal ImageStreamTag reference to use for this step.\n" +
@@ -1296,6 +1321,7 @@ const ciOperatorReferenceYaml = "# The list of base images describe\n" +
 	"                    - default: \"\"\n" +
 	"                      documentation: ' '\n" +
 	"                      name: ' '\n" +
+	"                      overridable: true\n" +
 	"                  from: ' '\n" +
 	"                  from_image:\n" +
 	"                    # LiteralTestStep is a full test step definition.\n" +
@@ -1367,6 +1393,7 @@ const ciOperatorReferenceYaml = "# The list of base images describe\n" +
 	"                    - default: \"\"\n" +
 	"                      documentation: ' '\n" +
 	"                      name: ' '\n" +
+	"                      overridable: true\n" +
 	"                  from: ' '\n" +
 	"                  from_image:\n" +
 	"                    # LiteralTestStep is a full test step definition.\n" +
@@ -1438,6 +1465,7 @@ const ciOperatorReferenceYaml = "# The list of base images describe\n" +
 	"                    - default: \"\"\n" +
 	"                      documentation: ' '\n" +
 	"                      name: ' '\n" +
+	"                      overridable: true\n" +
 	"                  from: ' '\n" +
 	"                  from_image:\n" +
 	"                    # LiteralTestStep is a full test step definition.\n" +
@@ -1720,6 +1748,11 @@ const ciOperatorReferenceYaml = "# The list of base images describe\n" +
 	"                  documentation: ' '\n" +
 	"                  # Name of the environment variable.\n" +
 	"                  name: ' '\n" +
+	"                  # Overridable, if true, allows this parameter to be set via a trigger-time\n" +
+	"                  # environment variable on ci-operator (its own name, or the legacy\n" +
+	"                  # MULTISTAGE_PARAM_OVERRIDE_<NAME> form, which takes precedence).\n" +
+	"                  # Must be explicitly opted into per parameter.\n" +
+	"                  overridable: true\n" +
 	"              # From is the container image that will be used for this observer.\n" +
 	"              from: ' '\n" +
 	"              # FromImage is a literal ImageStreamTag reference to use for this observer.\n" +
@@ -1746,6 +1779,11 @@ const ciOperatorReferenceYaml = "# The list of base images describe\n" +
 	"                    \"\": \"\"\n" +
 	"              # Timeout is how long the we will wait before aborting a job with SIGINT.\n" +
 	"              timeout: 0s\n" +
+	"        # ParamOverrides holds trigger-time parameter values, populated by\n" +
+	"        # ci-operator from the environment. Only honored for parameters\n" +
+	"        # declared with Overridable: true. Not meant to be set in CI config.\n" +
+	"        param_overrides:\n" +
+	"            \"\": \"\"\n" +
 	"        # Post is the array of test steps run after the tests finish and teardown/deprovision resources.\n" +
 	"        # Post steps always run, even if previous steps fail.\n" +
 	"        post:\n" +
@@ -1805,6 +1843,11 @@ const ciOperatorReferenceYaml = "# The list of base images describe\n" +
 	"                  documentation: ' '\n" +
 	"                  # Name of the environment variable.\n" +
 	"                  name: ' '\n" +
+	"                  # Overridable, if true, allows this parameter to be set via a trigger-time\n" +
+	"                  # environment variable on ci-operator (its own name, or the legacy\n" +
+	"                  # MULTISTAGE_PARAM_OVERRIDE_<NAME> form, which takes precedence).\n" +
+	"                  # Must be explicitly opted into per parameter.\n" +
+	"                  overridable: true\n" +
 	"              # From is the container image that will be used for this step.\n" +
 	"              from: ' '\n" +
 	"              # FromImage is a literal ImageStreamTag reference to use for this step.\n" +
@@ -1913,6 +1956,11 @@ const ciOperatorReferenceYaml = "# The list of base images describe\n" +
 	"                  documentation: ' '\n" +
 	"                  # Name of the environment variable.\n" +
 	"                  name: ' '\n" +
+	"                  # Overridable, if true, allows this parameter to be set via a trigger-time\n" +
+	"                  # environment variable on ci-operator (its own name, or the legacy\n" +
+	"                  # MULTISTAGE_PARAM_OVERRIDE_<NAME> form, which takes precedence).\n" +
+	"                  # Must be explicitly opted into per parameter.\n" +
+	"                  overridable: true\n" +
 	"              # From is the container image that will be used for this step.\n" +
 	"              from: ' '\n" +
 	"              # FromImage is a literal ImageStreamTag reference to use for this step.\n" +
@@ -2021,6 +2069,11 @@ const ciOperatorReferenceYaml = "# The list of base images describe\n" +
 	"                  documentation: ' '\n" +
 	"                  # Name of the environment variable.\n" +
 	"                  name: ' '\n" +
+	"                  # Overridable, if true, allows this parameter to be set via a trigger-time\n" +
+	"                  # environment variable on ci-operator (its own name, or the legacy\n" +
+	"                  # MULTISTAGE_PARAM_OVERRIDE_<NAME> form, which takes precedence).\n" +
+	"                  # Must be explicitly opted into per parameter.\n" +
+	"                  overridable: true\n" +
 	"              # From is the container image that will be used for this step.\n" +
 	"              from: ' '\n" +
 	"              # FromImage is a literal ImageStreamTag reference to use for this step.\n" +
@@ -2291,6 +2344,7 @@ const ciOperatorReferenceYaml = "# The list of base images describe\n" +
 	"                - default: \"\"\n" +
 	"                  documentation: ' '\n" +
 	"                  name: ' '\n" +
+	"                  overridable: true\n" +
 	"              from: ' '\n" +
 	"              from_image:\n" +
 	"                # LiteralTestStep is a full test step definition.\n" +
@@ -2362,6 +2416,7 @@ const ciOperatorReferenceYaml = "# The list of base images describe\n" +
 	"                - default: \"\"\n" +
 	"                  documentation: ' '\n" +
 	"                  name: ' '\n" +
+	"                  overridable: true\n" +
 	"              from: ' '\n" +
 	"              from_image:\n" +
 	"                # LiteralTestStep is a full test step definition.\n" +
@@ -2433,6 +2488,7 @@ const ciOperatorReferenceYaml = "# The list of base images describe\n" +
 	"                - default: \"\"\n" +
 	"                  documentation: ' '\n" +
 	"                  name: ' '\n" +
+	"                  overridable: true\n" +
 	"              from: ' '\n" +
 	"              from_image:\n" +
 	"                # LiteralTestStep is a full test step definition.\n" +

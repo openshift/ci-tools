@@ -119,3 +119,24 @@ The EFS `cluster:` field is not written by this tool. Placement is decided by th
 dispatcher at admission time, so the read-only roots are enough for those jobs to be
 scheduled; the field only matters if the dispatcher is unreachable, in which case
 Prow falls back to the configured default cluster.
+
+## Assignments API
+
+`GET /assignments` returns the bulk placement view used by
+[`efs-cluster-writer`](../efs-cluster-writer) to materialize fallback `cluster:`
+values onto EFS.
+
+| Query | Meaning |
+|---|---|
+| `root` | Return only jobs from this root (`git` or `efs`). Omit for all. |
+| `after` | Long-poll until the served generation is greater than this value. |
+
+Without `after` the current immutable generation is returned immediately. The
+response contains the generation, its input digest, the filtered assignments, the
+cluster inventory and the blocked clusters, and carries
+`X-Dispatcher-Policy-Generation`. It is gated by the same bearer token as the
+control API (`--control-api-token-path`); without a configured control API the
+route is not served.
+
+`POST /control/v1/rescan` (same token) runs the delta pass immediately, so a
+newly published job does not wait for the periodic scan.

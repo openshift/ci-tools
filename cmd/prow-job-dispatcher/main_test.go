@@ -1316,10 +1316,10 @@ func TestDispatchDeltaJobs(t *testing.T) {
 			},
 			wantErr: false,
 			expectedPjs: map[string]dispatcher.ProwJobData{
-				"pull-ci-openshift-cluster-api-provider-gcp-master-e2e-gcp":          {Cluster: "build01", Capabilities: []string{"intranet"}, Demand: 7, Group: "capabilities/cluster-api-provider-gcp-presubmits.yaml"},
-				"pull-ci-openshift-cluster-api-provider-gcp-master-govet":            {Cluster: "build02", Demand: 5, Group: "capabilities/cluster-api-provider-gcp-presubmits.yaml"},
-				"pull-ci-openshift-cluster-api-provider-gcp-master-e2e-gcp-operator": {Cluster: "build01", Capabilities: []string{"intranet"}, Demand: 5, Group: "capabilities/cluster-api-provider-gcp-presubmits.yaml"},
-				"pull-ci-openshift-cluster-api-provider-gcp-master-goimports":        {Cluster: "build02", Demand: 5, Group: "capabilities/cluster-api-provider-gcp-presubmits.yaml"},
+				"pull-ci-openshift-cluster-api-provider-gcp-master-e2e-gcp":          {Cluster: "build01", Capabilities: []string{"intranet"}, Demand: 7, Group: "capabilities/cluster-api-provider-gcp-presubmits.yaml", Root: "git"},
+				"pull-ci-openshift-cluster-api-provider-gcp-master-govet":            {Cluster: "build02", Demand: 5, Group: "capabilities/cluster-api-provider-gcp-presubmits.yaml", Root: "git"},
+				"pull-ci-openshift-cluster-api-provider-gcp-master-e2e-gcp-operator": {Cluster: "build01", Capabilities: []string{"intranet"}, Demand: 5, Group: "capabilities/cluster-api-provider-gcp-presubmits.yaml", Root: "git"},
+				"pull-ci-openshift-cluster-api-provider-gcp-master-goimports":        {Cluster: "build02", Demand: 5, Group: "capabilities/cluster-api-provider-gcp-presubmits.yaml", Root: "git"},
 			},
 		},
 	}
@@ -1631,7 +1631,7 @@ func TestDeltaRefreshesRestrictions(t *testing.T) {
 			if wantDemand <= 0 {
 				wantDemand = 5
 			}
-			want := dispatcher.ProwJobData{Cluster: tc.wantCluster, Demand: wantDemand, Group: "jobs.yaml", Capabilities: extractCapabilities(tc.labels)}
+			want := dispatcher.ProwJobData{Cluster: tc.wantCluster, Demand: wantDemand, Group: "jobs.yaml", Capabilities: extractCapabilities(tc.labels), Root: "git"}
 			if diff := cmp.Diff(want, assignments["job"]); diff != "" {
 				t.Errorf("unexpected assignment (-want +got):\n%s", diff)
 			}
@@ -1641,14 +1641,11 @@ func TestDeltaRefreshesRestrictions(t *testing.T) {
 
 func TestReadOnlyRootOwnsDuplicateJob(t *testing.T) {
 	jobName := "pull-ci-openshift-repo-main-unit"
-	write := func(dir, capability string, padding int) {
+	write := func(dir, cluster string, padding int) {
 		t.Helper()
 		jc := &prowconfig.JobConfig{PresubmitsStatic: map[string][]prowconfig.Presubmit{
 			"openshift/repo": {{
-				JobBase: prowconfig.JobBase{
-					Name:   jobName,
-					Labels: map[string]string{"capability/" + capability: capability, "padding": fmt.Sprintf("%0*d", padding, 0)},
-				},
+				JobBase: prowconfig.JobBase{Name: jobName, Cluster: cluster, Labels: map[string]string{"ci-operator.openshift.io/padding": fmt.Sprintf("%0*d", padding, 0)}},
 			}},
 		}}
 		data, err := yaml.Marshal(jc)
@@ -1664,12 +1661,11 @@ func TestReadOnlyRootOwnsDuplicateJob(t *testing.T) {
 	}
 
 	// The git file is deliberately larger so it is processed first; ownership
-	// must not depend on file order. Only the capabilities of the winning
-	// definition survive, which tells the two copies apart.
+	// must not depend on file order.
 	gitRoot := t.TempDir()
 	efsRoot := t.TempDir()
-	write(gitRoot, "git", 2048)
-	write(efsRoot, "efs", 16)
+	write(gitRoot, "build01", 2048)
+	write(efsRoot, "build02", 16)
 
 	for _, roots := range [][]jobRoot{
 		{{path: gitRoot}, {path: efsRoot, readOnly: true}},
@@ -1684,8 +1680,8 @@ func TestReadOnlyRootOwnsDuplicateJob(t *testing.T) {
 			BuildFarmCloud: map[api.Cloud][]string{api.CloudAWS: {string(api.ClusterBuild01), string(api.ClusterBuild02)}},
 		}
 		clusterMap := dispatcher.ClusterMap{
-			"build01": dispatcher.ClusterInfo{Provider: "aws", Capacity: 100, Capabilities: []string{"git", "efs"}},
-			"build02": dispatcher.ClusterInfo{Provider: "aws", Capacity: 100, Capabilities: []string{"git", "efs"}},
+			"build01": dispatcher.ClusterInfo{Provider: "aws", Capacity: 100},
+			"build02": dispatcher.ClusterInfo{Provider: "aws", Capacity: 100},
 		}
 		pjs, err := dispatchJobsWithPolicy(roots, &config, map[string]float64{jobName: 10}, sets.New[string](),
 			map[string]float64{"build01": 100}, clusterMap, nil, 0, -1, 1)
@@ -1696,7 +1692,7 @@ func TestReadOnlyRootOwnsDuplicateJob(t *testing.T) {
 		if !ok {
 			t.Fatalf("job %q missing from assignments: %v", jobName, pjs)
 		}
-		if len(got.Capabilities) != 1 || got.Capabilities[0] != "efs" {
+		if got.Root != "efs" {
 			t.Fatalf("expected the read-only definition to own the job, got %+v", got)
 		}
 	}

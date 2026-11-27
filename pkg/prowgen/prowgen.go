@@ -149,6 +149,7 @@ func GenerateJobs(configSpec *cioperatorapi.ReleaseBuildConfiguration, info *cio
 			options.pipelineRunIfChanged = configSpec.Images.PipelineRunIfChanged
 			options.pipelineSkipIfOnlyChanged = configSpec.Images.PipelineSkipIfOnlyChanged
 			options.slackReporterConfig = configSpec.Images.SlackReporterConfig
+			options.defaultDisable = configSpec.Images.AlwaysRun != nil && !*configSpec.Images.AlwaysRun
 		}))
 
 		if configSpec.PromotionConfiguration != nil {

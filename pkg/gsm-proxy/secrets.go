@@ -7,6 +7,7 @@ import (
 	"log/slog"
 	"sort"
 	"strings"
+	"time"
 
 	secretmanager "cloud.google.com/go/secretmanager/apiv1"
 	"cloud.google.com/go/secretmanager/apiv1/secretmanagerpb"
@@ -17,22 +18,37 @@ import (
 	gsmvalidation "github.com/openshift/ci-tools/pkg/gsm-validation"
 )
 
-// SecretLister returns the group/field paths of one collection.
-// The result is names only. A GSM Secret must not cross this interface:
-// its annotations hold free text typed by users.
-type SecretLister interface {
-	List(ctx context.Context, collection string) ([]string, error)
+const (
+	jiraProjectLabel               = "jira-project"
+	rotationInstructionsAnnotation = "rotation-instructions"
+	requestInformationAnnotation   = "request-information"
+)
+
+// ErrInvalidSecretPath is returned for a secret path that is malformed or identifies a reserved secret.
+var ErrInvalidSecretPath = errors.New("invalid secret path")
+
+// SecretMetadata contains the supported ownership and rotation metadata of a secret.
+type SecretMetadata struct {
+	JiraProject          string `json:"jira_project"`
+	RotationInstructions string `json:"rotation_instructions"`
+	RequestInformation   string `json:"request_information"`
 }
 
-type GSMSecretLister struct {
+// SecretDescription is the metadata returned for one secret.
+type SecretDescription struct {
+	CreateTime *time.Time     `json:"create_time,omitempty"`
+	Metadata   SecretMetadata `json:"metadata"`
+}
+
+// GSMClient performs secret operations using one Google client and project.
+type GSMClient struct {
 	client      gsmsecrets.SecretManagerClient
 	parent      string
 	closeClient func() error
 }
 
-var _ SecretLister = (*GSMSecretLister)(nil)
-
-func NewGSMSecretLister(ctx context.Context, config gsmsecrets.Config, opts ...option.ClientOption) (*GSMSecretLister, error) {
+// NewGSMClient opens a Secret Manager client for the configured project.
+func NewGSMClient(ctx context.Context, config gsmsecrets.Config, opts ...option.ClientOption) (*GSMClient, error) {
 	if config.ProjectIdString == "" {
 		return nil, errors.New("GSM project ID must not be empty")
 	}
@@ -42,23 +58,25 @@ func NewGSMSecretLister(ctx context.Context, config gsmsecrets.Config, opts ...o
 	if err != nil {
 		return nil, fmt.Errorf("failed to create GSM client: %w", err)
 	}
-	return &GSMSecretLister{
+	return &GSMClient{
 		client:      secretManagerClient,
 		parent:      gsmsecrets.GetProjectResourceString(config.ProjectIdString),
 		closeClient: secretManagerClient.Close,
 	}, nil
 }
 
-func (lister *GSMSecretLister) Close() error {
-	return lister.closeClient()
+// Close releases the Google client resources.
+func (c *GSMClient) Close() error {
+	return c.closeClient()
 }
 
-func (lister *GSMSecretLister) List(ctx context.Context, collection string) ([]string, error) {
+// List returns sorted data-secret paths belonging to the collection.
+func (c *GSMClient) List(ctx context.Context, collection string) ([]string, error) {
 	if !gsmvalidation.ValidateCollectionName(collection) {
 		return nil, errors.New("invalid collection name")
 	}
-	it := lister.client.ListSecrets(ctx, &secretmanagerpb.ListSecretsRequest{
-		Parent: lister.parent,
+	it := c.client.ListSecrets(ctx, &secretmanagerpb.ListSecretsRequest{
+		Parent: c.parent,
 		// This substring filter only narrows candidates; it is not an access boundary.
 		Filter: fmt.Sprintf("name:%q", collection+gsmvalidation.CollectionSecretDelimiter),
 	})
@@ -82,4 +100,33 @@ func (lister *GSMSecretLister) List(ctx context.Context, collection string) ([]s
 	}
 	sort.Strings(names)
 	return names, nil
+}
+
+// Describe returns the metadata for the secret defined by collection and path.
+// It returns ErrInvalidSecretPath if path is malformed or identifies a reserved secret.
+func (c *GSMClient) Describe(ctx context.Context, collection, path string) (SecretDescription, error) {
+	group, field, ok := gsmvalidation.ParseSecretPath(collection, path)
+	if !ok {
+		return SecretDescription{}, ErrInvalidSecretPath
+	}
+	name := gsmsecrets.GetGSMSecretName(collection, group, field)
+	if gsmsecrets.ClassifySecret(name) != gsmsecrets.SecretTypeGeneric {
+		return SecretDescription{}, ErrInvalidSecretPath
+	}
+	secret, err := c.client.GetSecret(ctx, &secretmanagerpb.GetSecretRequest{Name: c.parent + "/secrets/" + name})
+	if err != nil {
+		return SecretDescription{}, fmt.Errorf("failed to describe secret: %w", err)
+	}
+	result := SecretDescription{
+		Metadata: SecretMetadata{
+			JiraProject:          secret.Labels[jiraProjectLabel],
+			RotationInstructions: secret.Annotations[rotationInstructionsAnnotation],
+			RequestInformation:   secret.Annotations[requestInformationAnnotation],
+		},
+	}
+	if secret.CreateTime != nil {
+		created := secret.CreateTime.AsTime()
+		result.CreateTime = &created
+	}
+	return result, nil
 }

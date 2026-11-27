@@ -218,6 +218,133 @@ func TestValidateSecretName(t *testing.T) {
 	}
 }
 
+func TestParseSecretPath(t *testing.T) {
+	testCases := []struct {
+		name          string
+		collection    string
+		path          string
+		expectedGroup string
+		expectedField string
+		expectedOK    bool
+	}{
+		{
+			name:          "simple group",
+			collection:    "team",
+			path:          "aws/password",
+			expectedGroup: "aws",
+			expectedField: "password",
+			expectedOK:    true,
+		},
+		{
+			name:          "hierarchical group",
+			collection:    "team",
+			path:          "aws/prod/password",
+			expectedGroup: "aws/prod",
+			expectedField: "password",
+			expectedOK:    true,
+		},
+		{
+			name:          "encoded names",
+			collection:    "team",
+			path:          "--dot--config/token_1",
+			expectedGroup: "--dot--config",
+			expectedField: "token_1",
+			expectedOK:    true,
+		},
+		{
+			name:       "empty collection",
+			collection: "",
+			path:       "aws/password",
+		},
+		{
+			name:       "collection contains delimiter",
+			collection: "team__other",
+			path:       "aws/password",
+		},
+		{
+			name:       "empty path",
+			collection: "team",
+			path:       "",
+		},
+		{
+			name:       "missing group",
+			collection: "team",
+			path:       "password",
+		},
+		{
+			name:       "empty group",
+			collection: "team",
+			path:       "/password",
+		},
+		{
+			name:       "empty field",
+			collection: "team",
+			path:       "aws/",
+		},
+		{
+			name:       "empty group segment",
+			collection: "team",
+			path:       "aws//password",
+		},
+		{
+			name:       "path traversal",
+			collection: "team",
+			path:       "aws/../password",
+		},
+		{
+			name:       "group contains the reserved delimiter",
+			collection: "team",
+			path:       "aws__other/password",
+		},
+		{
+			name:       "field contains the reserved delimiter",
+			collection: "team",
+			path:       "aws/field__other",
+		},
+		{
+			name:       "service account key has no group",
+			collection: "team",
+			path:       "updater-service-account",
+		},
+		{
+			name:          "combined GSM name at length limit",
+			collection:    "team",
+			path:          "aws/" + strings.Repeat("a", 244),
+			expectedGroup: "aws",
+			expectedField: strings.Repeat("a", 244),
+			expectedOK:    true,
+		},
+		{
+			name:       "combined GSM name exceeds length limit",
+			collection: "team",
+			path:       "aws/" + strings.Repeat("a", 245),
+		},
+		{
+			name:          "nested GSM name at length limit",
+			collection:    "team",
+			path:          "aws/prod/" + strings.Repeat("a", 238),
+			expectedGroup: "aws/prod",
+			expectedField: strings.Repeat("a", 238),
+			expectedOK:    true,
+		},
+		{
+			name:       "nested GSM name exceeds length limit",
+			collection: "team",
+			path:       "aws/prod/" + strings.Repeat("a", 239),
+		},
+	}
+
+	for _, tc := range testCases {
+		t.Run(tc.name, func(t *testing.T) {
+			group, field, ok := ParseSecretPath(tc.collection, tc.path)
+			if ok != tc.expectedOK || group != tc.expectedGroup || field != tc.expectedField {
+				t.Errorf("ParseSecretPath(%q, %q) = (%q, %q, %t), want (%q, %q, %t)",
+					tc.collection, tc.path, group, field, ok, tc.expectedGroup, tc.expectedField, tc.expectedOK)
+			}
+		})
+	}
+}
+
 func TestNormalizeName(t *testing.T) {
 	testCases := []struct {
 		name     string

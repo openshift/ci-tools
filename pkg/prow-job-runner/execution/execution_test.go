@@ -1,4 +1,4 @@
-package prowjobrunner
+package execution
 
 import (
 	"context"
@@ -88,6 +88,9 @@ func (c *executionClient) Get(ctx context.Context, key client.ObjectKey, obj cli
 	}
 	read := s.reads[0]
 	s.reads = s.reads[1:]
+	if c.cancelOnGet != nil {
+		defer c.cancelOnGet()
+	}
 	if read.err != nil {
 		return read.err
 	}
@@ -99,14 +102,11 @@ func (c *executionClient) Get(ctx context.Context, key client.ObjectKey, obj cli
 	if read.complete {
 		job.SetComplete()
 	}
-	if c.cancelOnGet != nil {
-		c.cancelOnGet()
-	}
 	return nil
 }
 
-// TestExecute checks submission, waiting for every submitted job, API failures, and cancellation.
-func TestExecute(t *testing.T) {
+// TestSubmitAndWait checks submission, waiting for every submitted job, API failures, and cancellation.
+func TestSubmitAndWait(t *testing.T) {
 	success := statusRead{state: prowapi.SuccessState, complete: true}
 	failure := statusRead{state: prowapi.FailureState, complete: true}
 	pending := statusRead{state: prowapi.PendingState}
@@ -174,6 +174,10 @@ func TestExecute(t *testing.T) {
 			name: "cancellation while waiting leaves jobs intact", jobs: []jobScenario{{name: "a", reads: []statusRead{pending}}}, cancelOnGet: true,
 			wantErrors: []string{"waiting for ProwJobs: context canceled"},
 		},
+		{
+			name: "cancellation during a failed status read stops polling", jobs: []jobScenario{{name: "a", reads: []statusRead{{err: io.EOF}}}}, cancelOnGet: true,
+			wantErrors: []string{"waiting for ProwJobs: context canceled"},
+		},
 	} {
 		t.Run(tc.name, func(t *testing.T) {
 			scheme := runtime.NewScheme()
@@ -209,7 +213,7 @@ func TestExecute(t *testing.T) {
 				original = append(original, job.DeepCopy())
 			}
 			// A zero polling interval runs scripted transitions without real timers.
-			err := execute(ctx, pjclient, jobs, 0)
+			err := SubmitAndWait(ctx, pjclient, jobs, 0)
 			if len(tc.wantErrors) == 0 && err != nil {
 				t.Fatal(err)
 			}
@@ -339,16 +343,18 @@ func TestRetryableError(t *testing.T) {
 	}
 }
 
-// TestNewProwJobClient checks local credential loading without contacting a cluster.
-func TestNewProwJobClient(t *testing.T) {
+// TestNewClient checks local credential loading without contacting a cluster.
+func TestNewClient(t *testing.T) {
 	t.Setenv("KUBERNETES_SERVICE_HOST", "")
 	for _, tc := range []struct {
 		name       string
 		kubeconfig string
 		env        string
 		args       []string
+		nilOptions bool
 		wantErr    string
 	}{
+		{name: "missing options", nilOptions: true, wantErr: "kubernetes options are required"},
 		{name: "environment kubeconfig", kubeconfig: testKubeconfig, env: "prow.config"},
 		{name: "explicit kubeconfig overrides environment", kubeconfig: testKubeconfig, env: "invalid.yaml", args: []string{"--kubeconfig=prow.config"}},
 		{name: "directory filters out invalid files", kubeconfig: testKubeconfig, env: "invalid.yaml", args: []string{"--kubeconfig-dir=.", "--kubeconfig-suffix=.config"}},
@@ -371,7 +377,11 @@ func TestNewProwJobClient(t *testing.T) {
 			if err := fs.Parse(tc.args); err != nil {
 				t.Fatal(err)
 			}
-			pjclient, err := newProwJobClient(&opts)
+			options := &opts
+			if tc.nilOptions {
+				options = nil
+			}
+			pjclient, err := NewClient(options)
 			if tc.wantErr != "" {
 				if err == nil || !strings.Contains(err.Error(), tc.wantErr) {
 					t.Fatalf("want error containing %q, got %v", tc.wantErr, err)

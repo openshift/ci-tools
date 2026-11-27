@@ -1,4 +1,5 @@
-package prowjobrunner
+// Package testplan reads and validates ordered ci-operator test coordinates.
+package testplan
 
 import (
 	"context"
@@ -16,8 +17,16 @@ import (
 	"github.com/openshift/ci-tools/pkg/api"
 )
 
-// planEntry identifies a test in a ci-operator configuration.
-type planEntry struct {
+// identifier matches a single component of a ci-operator test coordinate.
+var identifier = regexp.MustCompile(`^[\w.-]+$`)
+
+// Reader loads test plans from the local filesystem or GCS. Its zero value uses Prow's storage opener.
+type Reader struct {
+	ReadObject func(context.Context, string) ([]byte, error)
+}
+
+// entry identifies a test in a ci-operator configuration.
+type entry struct {
 	Organization string `json:"organization"`
 	Repository   string `json:"repository"`
 	Branch       string `json:"branch"`
@@ -25,11 +34,8 @@ type planEntry struct {
 	Test         string `json:"test"`
 }
 
-// identifier matches a single component of a ci-operator test coordinate.
-var identifier = regexp.MustCompile(`^[\w.-]+$`)
-
 // source validates the entry before its fields can be used in checkout paths or job names.
-func (e planEntry) source() (api.MetadataWithTest, error) {
+func (e entry) source() (api.MetadataWithTest, error) {
 	for _, field := range []struct{ name, value string }{
 		{"organization", e.Organization}, {"repository", e.Repository}, {"branch", e.Branch}, {"test", e.Test}, {"variant", e.Variant},
 	} {
@@ -59,24 +65,35 @@ func readGCSObject(ctx context.Context, path string) ([]byte, error) {
 	return data, nil
 }
 
-// readTestPlan reads a local or GCS YAML file and returns its validated tests in order.
-func readTestPlan(ctx context.Context, path string, readObject func(context.Context, string) ([]byte, error)) ([]api.MetadataWithTest, error) {
+// Read reads a local or GCS YAML file and returns its validated tests in order.
+func (r Reader) Read(ctx context.Context, path string) ([]api.MetadataWithTest, error) {
 	logrus.WithField("test_plan", path).Info("Reading test plan")
-	var data []byte
-	var err error
-	if strings.HasPrefix(path, "gs://") {
-		data, err = readObject(ctx, path)
-		if err != nil {
-			return nil, err
-		}
-	} else {
-		data, err = os.ReadFile(path)
-		if err != nil {
-			return nil, fmt.Errorf("reading local file: %w", err)
-		}
+	data, err := r.readContent(ctx, path)
+	if err != nil {
+		return nil, err
 	}
+	return decode(data)
+}
+
+// readContent selects a storage backend based on the plan path.
+func (r Reader) readContent(ctx context.Context, path string) ([]byte, error) {
+	if strings.HasPrefix(path, "gs://") {
+		if r.ReadObject != nil {
+			return r.ReadObject(ctx, path)
+		}
+		return readGCSObject(ctx, path)
+	}
+	data, err := os.ReadFile(path)
+	if err != nil {
+		return nil, fmt.Errorf("reading local file: %w", err)
+	}
+	return data, nil
+}
+
+// decode parses a YAML test plan and validates every entry before returning any tests.
+func decode(data []byte) ([]api.MetadataWithTest, error) {
 	var plan struct {
-		Tests []planEntry `json:"tests"`
+		Tests []entry `json:"tests"`
 	}
 	if err := yaml.UnmarshalStrict(data, &plan); err != nil {
 		return nil, fmt.Errorf("decoding YAML: %w", err)

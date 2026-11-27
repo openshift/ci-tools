@@ -18,17 +18,25 @@ import (
 	"sigs.k8s.io/prow/pkg/kube"
 )
 
+const (
+	// prFile selects the fixture GitHub response; planFlag selects its test plan.
+	prFile   = "--pull-request-data=testdata/pr.json"
+	planFlag = "--test-plan=testdata/test-plan.yaml"
+	// jobSpec is the Prow environment for a presubmit on openshift/release.
+	jobSpec = `{"type":"presubmit","refs":{"org":"openshift","repo":"release","base_ref":"main","base_sha":"base-sha","pulls":[{"number":123,"sha":"head-sha","author":"contributor"}]}}`
+	// prefix is the job name prefix for the main branch in the fixture.
+	prefix = "pull-ci-openshift-release-main-"
+	// e2e and e2eJob identify the variant test and its source presubmit.
+	e2e    = "e2e-aws-ovn-techpreview"
+	e2eJob = prefix + "dynamic-tests-5.1-" + e2e
+	// unitContext and e2eContext are the expected GitHub statuses on the target PR.
+	unitContext = "ci/prow/dynamic-second-stage/unit"
+	e2eContext  = "ci/prow/dynamic-second-stage/dynamic-tests-5.1-" + e2e
+)
+
 // TestRun checks the rendered jobs, including source config selection and target refs.
 func TestRun(t *testing.T) {
 	t.Setenv("KUBERNETES_SERVICE_HOST", "")
-	const prFile = "--pull-request-data=testdata/pr.json"
-	const prefix = "pull-ci-openshift-release-main-"
-	const e2e = "e2e-aws-ovn-techpreview"
-	const e2eJob = prefix + "dynamic-tests-5.1-" + e2e
-	const unitContext = "ci/prow/dynamic-second-stage/unit"
-	const e2eContext = "ci/prow/dynamic-second-stage/dynamic-tests-5.1-" + e2e
-	const planFlag = "--test-plan=testdata/test-plan.yaml"
-	const jobSpec = `{"type":"presubmit","refs":{"org":"openshift","repo":"release","base_ref":"main","base_sha":"base-sha","pulls":[{"number":123,"sha":"head-sha","author":"contributor"}]}}`
 	type renderedJob struct {
 		Name    string
 		Args    []string
@@ -46,7 +54,7 @@ func TestRun(t *testing.T) {
 		jobs      []renderedJob
 		wantErr   string
 	}{
-		{name: "external tests with and without variants in the requested namespace", args: []string{"--dry-run", prFile, planFlag, "--no-in-cluster-config", "--projected-token-file=unused", "--pj-namespace=ci-staging"}, repo: "installer", branch: "release-5.1", namespace: "ci-staging",
+		{name: "external tests with and without variants in the requested namespace", args: []string{"--dry-run", prFile, planFlag, "--no-in-cluster-config", "--projected-token-file=unused", "--kubeconfig=testdata/pr.json", "--pj-namespace=ci-staging"}, repo: "installer", branch: "release-5.1", namespace: "ci-staging",
 			jobs: []renderedJob{
 				{e2eJob, []string{"--variant", "dynamic-tests-5.1", "--target=" + e2e, "--enable-secrets-store-csi-driver=true", "--with-test-from=openshift/release@main__dynamic-tests-5.1:" + e2e}, e2eContext},
 				{prefix + "unit", []string{"--target=unit", "--with-test-from=openshift/release@main:unit"}, unitContext},

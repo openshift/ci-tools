@@ -63,3 +63,14 @@ podman run --rm \
 ```
 
 For live submission outside a cluster, also mount a kubeconfig and pass its container path with `--kubeconfig`.
+
+## Code organization
+
+`cmd/prow-job-runner` owns flag parsing, signal handling, and plain-text stderr logging. `pkg/prow-job-runner` validates options and coordinates the workflow through focused subpackages:
+
+- `testplan` reads local or GCS test plans and validates their ordered test coordinates.
+- `pullrequest` resolves GitHub references, saved API responses, or `JOB_SPEC` into pinned PR refs.
+- `presubmits` loads release configuration and configures jobs for those refs.
+- `execution` creates the infrastructure-cluster client, submits jobs, and tracks their results.
+
+Both modes resolve the entire plan before producing output or submitting work. Dry runs write the manifests without creating a Kubernetes client. For live runs, `execution` tracks each job by namespace and name, then returns the batch's accumulated errors once tracking finishes.

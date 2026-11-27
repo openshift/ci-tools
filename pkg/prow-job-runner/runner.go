@@ -1,4 +1,4 @@
-// Package prowjobrunner configures Prow presubmits for ci-operator tests on a pull request.
+// Package prowjobrunner coordinates test-plan loading, PR resolution, presubmit configuration, and execution.
 package prowjobrunner
 
 import (
@@ -12,11 +12,18 @@ import (
 	"github.com/sirupsen/logrus"
 
 	"k8s.io/apimachinery/pkg/util/validation"
+	prowapi "sigs.k8s.io/prow/pkg/apis/prowjobs/v1"
 	"sigs.k8s.io/prow/pkg/flagutil"
 	"sigs.k8s.io/yaml"
 
+	"github.com/openshift/ci-tools/pkg/prow-job-runner/execution"
 	"github.com/openshift/ci-tools/pkg/prow-job-runner/presubmits"
+	"github.com/openshift/ci-tools/pkg/prow-job-runner/pullrequest"
+	"github.com/openshift/ci-tools/pkg/prow-job-runner/testplan"
 )
+
+// pollInterval is the delay between status checks of submitted ProwJobs.
+const pollInterval = 10 * time.Second
 
 // Options selects the release checkout, ci-operator tests, pull request, and execution mode.
 type Options struct {
@@ -32,6 +39,25 @@ type Options struct {
 // Run resolves all requested tests, then submits and waits for them or writes their manifests to out in dry-run mode.
 // If neither PR source is supplied, it uses JOB_SPEC. It returns an error if any submitted job fails.
 func Run(ctx context.Context, opts Options, out io.Writer) error {
+	if err := opts.validate(); err != nil {
+		return err
+	}
+	jobs, err := configureJobs(ctx, opts)
+	if err != nil {
+		return err
+	}
+	if opts.DryRun {
+		return writeManifests(out, jobs)
+	}
+	client, err := execution.NewClient(&opts.Kubernetes)
+	if err != nil {
+		return err
+	}
+	return execution.SubmitAndWait(ctx, client, jobs, pollInterval)
+}
+
+// validate checks required inputs, mutually exclusive PR sources, and Kubernetes options before resolving jobs.
+func (opts Options) validate() error {
 	switch {
 	case opts.ReleaseRepo == "":
 		return errors.New("--release-repo must be a non-empty path")
@@ -48,35 +74,35 @@ func Run(ctx context.Context, opts Options, out io.Writer) error {
 	if err := opts.Kubernetes.Validate(opts.DryRun); err != nil {
 		return fmt.Errorf("validating Kubernetes options: %w", err)
 	}
-	tests, err := readTestPlan(ctx, opts.TestPlan, readGCSObject)
+	return nil
+}
+
+// configureJobs resolves the requested tests and PR into jobs with the selected namespace.
+func configureJobs(ctx context.Context, opts Options) ([]*prowapi.ProwJob, error) {
+	planReader := testplan.Reader{}
+	tests, err := planReader.Read(ctx, opts.TestPlan)
 	if err != nil {
-		return fmt.Errorf("reading test plan %q: %w", opts.TestPlan, err)
+		return nil, fmt.Errorf("reading test plan %q: %w", opts.TestPlan, err)
 	}
-	refs, err := readRefs(ctx, opts.PullRequest, opts.PullRequestData)
+	prReader := pullrequest.Reader{}
+	refs, err := prReader.Read(ctx, opts.PullRequest, opts.PullRequestData)
 	if err != nil {
-		return fmt.Errorf("reading PR info: %w", err)
+		return nil, fmt.Errorf("reading PR info: %w", err)
 	}
-	pull := refs.Pulls[0]
-	logrus.WithFields(logrus.Fields{
-		"org": refs.Org, "repo": refs.Repo, "pr": pull.Number,
-		"base_ref": refs.BaseRef, "base_sha": refs.BaseSHA, "head_sha": pull.SHA,
-	}).Info("Resolved pull request")
 	jobs, err := presubmits.ForTests(opts.ReleaseRepo, tests, refs)
 	if err != nil {
-		return err
+		return nil, err
 	}
 	if opts.ProwJobNamespace != "" {
 		for _, job := range jobs {
 			job.Namespace = opts.ProwJobNamespace
 		}
 	}
-	if !opts.DryRun {
-		client, err := newProwJobClient(&opts.Kubernetes)
-		if err != nil {
-			return err
-		}
-		return execute(ctx, client, jobs, 10*time.Second)
-	}
+	return jobs, nil
+}
+
+// writeManifests writes one YAML document per job to out in the requested order.
+func writeManifests(out io.Writer, jobs []*prowapi.ProwJob) error {
 	for _, job := range jobs {
 		data, err := yaml.Marshal(job)
 		if err != nil {

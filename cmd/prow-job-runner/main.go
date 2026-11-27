@@ -16,11 +16,14 @@ import (
 	"github.com/openshift/ci-tools/pkg/prow-job-runner"
 )
 
+// defaultReleaseRepo is the checkout path used by OpenShift CI jobs.
+const defaultReleaseRepo = "/home/prow/go/src/github.com/openshift/release"
+
 // run parses the command line and passes the selected options to the runner.
 func run(ctx context.Context, fs *flag.FlagSet, args []string, out io.Writer) error {
 	var opts prowjobrunner.Options
 	fs.BoolVar(&opts.DryRun, "dry-run", false, "Print configured presubmits to stdout")
-	fs.StringVar(&opts.ReleaseRepo, "release-repo", "/home/prow/go/src/github.com/openshift/release", "Path to a checkout of openshift/release")
+	fs.StringVar(&opts.ReleaseRepo, "release-repo", defaultReleaseRepo, "Path to a checkout of openshift/release")
 	fs.StringVar(&opts.TestPlan, "test-plan", "", "Local path or gs:// URL of the test plan YAML (required)")
 	fs.StringVar(&opts.PullRequest, "pull-request", "", "GitHub pull request, as <org>/<repo>#<number>")
 	fs.StringVar(&opts.PullRequestData, "pull-request-data", "", "Path to a GitHub pull request API response (JSON)")

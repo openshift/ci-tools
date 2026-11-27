@@ -1,8 +1,10 @@
-package prowjobrunner
+package testplan
 
 import (
 	"context"
 	"io/fs"
+	"os"
+	"path/filepath"
 	"strings"
 	"testing"
 
@@ -23,12 +25,12 @@ func (b planBucket) read(_ context.Context, path string) ([]byte, error) {
 	return []byte(data), nil
 }
 
-// TestReadTestPlan checks GCS routing, ordered decoding, and validation of plan entries.
-func TestReadTestPlan(t *testing.T) {
-	const path = "gs://plans/pr/test-plan.yaml"
+// TestRead checks local and GCS routing, ordered decoding, and validation of plan entries.
+func TestRead(t *testing.T) {
 	for _, tc := range []struct {
 		name    string
 		plan    string
+		local   bool
 		want    []api.MetadataWithTest
 		wantErr string
 	}{
@@ -41,6 +43,8 @@ func TestReadTestPlan(t *testing.T) {
 			},
 		},
 		{name: "missing GCS object", wantErr: fs.ErrNotExist.Error()},
+		{name: "local file", local: true, plan: "tests: [{organization: openshift, repository: installer, branch: main, test: unit}]", want: []api.MetadataWithTest{{Metadata: api.Metadata{Org: "openshift", Repo: "installer", Branch: "main"}, Test: "unit"}}},
+		{name: "missing local file", local: true, wantErr: "reading local file"},
 		{name: "invalid YAML", plan: "tests: [", wantErr: "decoding YAML"},
 		{name: "tests is not a list", plan: "tests: {test: e2e}", wantErr: "decoding YAML"},
 		{name: "empty list", plan: "tests: []", wantErr: "non-empty tests list"},
@@ -48,11 +52,24 @@ func TestReadTestPlan(t *testing.T) {
 		{name: "invalid entry identified by index", plan: "tests:\n- {organization: openshift, repository: installer, branch: main, test: unit}\n- {}", wantErr: "tests[1]: organization is required"},
 	} {
 		t.Run(tc.name, func(t *testing.T) {
+			path := "gs://plans/pr/test-plan.yaml"
 			bucket := planBucket{}
-			if tc.plan != "" {
+			if tc.local {
+				path = filepath.Join(t.TempDir(), "test-plan.yaml")
+				if tc.plan != "" {
+					if err := os.WriteFile(path, []byte(tc.plan), 0600); err != nil {
+						t.Fatal(err)
+					}
+				}
+			}
+			if !tc.local && tc.plan != "" {
 				bucket[path] = tc.plan
 			}
-			tests, err := readTestPlan(t.Context(), path, bucket.read)
+			reader := Reader{ReadObject: bucket.read}
+			if tc.local {
+				reader = Reader{}
+			}
+			tests, err := reader.Read(t.Context(), path)
 			if tc.wantErr != "" {
 				if err == nil || !strings.Contains(err.Error(), tc.wantErr) {
 					t.Fatalf("want error containing %q, got %v", tc.wantErr, err)
@@ -85,7 +102,7 @@ func TestSource(t *testing.T) {
 		{name: "parent directory variant", org: "org", repo: "repo", branch: "main", test: "unit", variant: "..", wantErr: `invalid variant ".."`},
 	} {
 		t.Run(tc.name, func(t *testing.T) {
-			entry := planEntry{Organization: tc.org, Repository: tc.repo, Branch: tc.branch, Test: tc.test, Variant: tc.variant}
+			entry := entry{Organization: tc.org, Repository: tc.repo, Branch: tc.branch, Test: tc.test, Variant: tc.variant}
 			if _, err := entry.source(); err == nil || err.Error() != tc.wantErr {
 				t.Fatalf("want %q, got %v", tc.wantErr, err)
 			}

@@ -11,10 +11,14 @@ import (
 	"github.com/openshift/ci-tools/pkg/jobconfig"
 )
 
+const (
+	// mainJob and releaseJob name the presubmits in the two source branch shards.
+	mainJob    = "pull-ci-org-source-main-fast-aws-unit"
+	releaseJob = "pull-ci-org-source-release-fast-aws-unit"
+)
+
 // TestResolve checks that only the requested source branch, test, and variant match.
 func TestResolve(t *testing.T) {
-	const mainJob = "pull-ci-org-source-main-fast-aws-unit"
-	const releaseJob = "pull-ci-org-source-release-fast-aws-unit"
 	jobs := []prowconfig.Presubmit{
 		{JobBase: prowconfig.JobBase{Name: mainJob, SourcePath: "org-source-main-presubmits.yaml", Labels: map[string]string{jobconfig.ProwJobLabelVariant: "fast-aws"}}},
 		{JobBase: prowconfig.JobBase{Name: mainJob, SourcePath: "org-source-main-presubmits.yaml"}},

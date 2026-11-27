@@ -87,10 +87,7 @@ func (r *reporter) reportNewProwJob(prowJob *prowv1.ProwJob, jr jobRun, logger *
 			return false, nil
 		}
 
-		text := fmt.Sprintf("[Job logs and status](%s)\nIncluded PRs: \n", created.Status.URL)
-		for _, pr := range jr.AdditionalPRs {
-			text += fmt.Sprintf("* %s/%s#%d\n", pr.Base.Repo.Owner.Login, pr.Base.Repo.Name, pr.Number)
-		}
+		text := checkRunText(created.Status.URL, created.Spec.Refs, jr.AdditionalPRs)
 		checkRun := github.CheckRun{
 			HeadSHA: jr.OriginPR.Head.SHA,
 			Status:  "in_progress",
@@ -131,6 +128,23 @@ func (r *reporter) reportNewProwJob(prowJob *prowv1.ProwJob, jr jobRun, logger *
 	}
 
 	return nil
+}
+
+// checkRunText returns the check run text linking to the job at url. It names the target refs the test runs
+// against, when known, and lists the additional PRs included alongside the PR the check run is reported on.
+func checkRunText(url string, target *prowv1.Refs, additionalPRs []github.PullRequest) string {
+	text := fmt.Sprintf("[Job logs and status](%s)\n", url)
+	if target != nil {
+		text += fmt.Sprintf("Target: `%s/%s@%s` (base SHA %s)\n", target.Org, target.Repo, target.BaseRef, target.BaseSHA)
+	}
+	if len(additionalPRs) == 0 {
+		return text + "Included PRs: only this PR\n"
+	}
+	text += "Included PRs: \n"
+	for _, pr := range additionalPRs {
+		text += fmt.Sprintf("* %s/%s#%d\n", pr.Base.Repo.Owner.Login, pr.Base.Repo.Name, pr.Number)
+	}
+	return text
 }
 
 var (

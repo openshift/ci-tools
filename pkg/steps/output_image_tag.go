@@ -182,6 +182,8 @@ func (s *outputImageTagStep) imageStreamTag(fromImage string) *imagev1.ImageStre
 	}
 }
 
+// OutputImageTagStep returns a step that tags an image from the pipeline image
+// stream into the configured output image stream tag.
 func OutputImageTagStep(config api.OutputImageTagStepConfiguration, client loggingclient.LoggingClient, jobSpec *api.JobSpec) api.Step {
 	return &outputImageTagStep{
 		config:  config,

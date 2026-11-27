@@ -980,6 +980,11 @@ func TestHintsAtInfraReason(t *testing.T) {
 			expected:   true,
 		},
 		{
+			name:       "HTTP2 stream error from peer",
+			logSnippet: "...eam error: stream ID 49; INTERNAL_ERROR; received from peer",
+			expected:   true,
+		},
+		{
 			name:       "network is unreachable",
 			logSnippet: "network is unreachable",
 			expected:   true,

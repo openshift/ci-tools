@@ -1,6 +1,6 @@
 # prow-job-runner
 
-`prow-job-runner` previews CI jobs for a GitHub pull request. The branch in each test plan entry selects the test definition; the pull request selects the code to test. Only dry runs are supported.
+`prow-job-runner` runs CI jobs for a GitHub pull request. The branch in each test plan entry selects the test definition; the pull request selects the code to test.
 
 ```sh
 prow-job-runner --dry-run \
@@ -26,5 +26,40 @@ tests:
 
 - Use `--pull-request 'org/repo#number'` for an anonymous GitHub lookup. For a private PR or offline use, pass `--pull-request-data pr.json` instead, with a saved GitHub pull request response. When running inside a Prow presubmit, omit both flags to use its PR.
 - Use `--release-repo` to select a local `openshift/release` checkout. It defaults to `/home/prow/go/src/github.com/openshift/release`.
+- Use `--pj-namespace ci-staging` to override the namespace for ProwJob resources in both dry-run output and live submission. By default, the runner uses `prowjob_namespace` from the release checkout.
 
-With `--dry-run`, the command prints one ProwJob YAML document per test, in the order requested. Progress messages go to stderr, so you can redirect stdout to save the manifests. No jobs are submitted.
+Both native and imported presubmits report to the target PR. For example, a presubmit with context `ci/prow/unit` reports as `ci/prow/dynamic-second-stage/unit`. Tests with the same source context share a second-stage status on GitHub; the runner still tracks each ProwJob separately.
+
+Imported tests use `--with-test-from` to select the test from the source configuration. Existing ci-operator arguments are preserved.
+
+With `--dry-run`, the command prints one ProwJob YAML document per test, in the order requested. Progress and errors are logged as plain text on stderr, so you can redirect stdout to save the manifests. No jobs are submitted.
+
+Omit `--dry-run` to submit jobs to the Prow infrastructure cluster and wait for their results. Inside a cluster, Prow uses the service account for infrastructure access. Outside a cluster, use `--kubeconfig /path/to/config` with the Prow cluster as its current context. With no explicit file or directory, Prow uses the standard kubeconfig loading rules (including `KUBECONFIG`). Credentials need permission to create and get ProwJobs in the selected namespace. The jobs retain their configured build clusters and use the scheduler when enabled.
+
+The command accepts Prow's full Kubernetes flag group: `--kubeconfig`, `--kubeconfig-dir`, `--kubeconfig-suffix` (filters directory entries), `--projected-token-file` (for in-cluster authentication), and `--no-in-cluster-config`. The last flag omits the infrastructure context needed for live submission. Dry runs do not create a Kubernetes client.
+
+If a create response is lost, the runner checks for the job by name. It retries transient status reads and waits for Prow to mark each job complete, including aborted jobs. A rejected submission, a permanent read error, or any completed job that did not succeed causes an unsuccessful exit after the remaining jobs finish. Interrupting the command stops waiting but does not cancel or delete submitted jobs.
+
+## Container image
+
+Build the Linux binary and image from the repository root:
+
+```sh
+mkdir -p _output/bin
+GOOS=linux GOARCH=amd64 go build -o _output/bin/prow-job-runner ./cmd/prow-job-runner
+podman build --platform linux/amd64 -f images/prow-job-runner/Dockerfile \
+  -t prow-job-runner:latest _output/bin
+```
+
+The image includes the runner as its entrypoint, but not the release checkout or test plan. Mount those inputs when running it:
+
+```sh
+podman run --rm \
+  -v /path/to/release:/home/prow/go/src/github.com/openshift/release:ro,z \
+  -v /path/to/test-plan.yaml:/etc/prow-job-runner/test-plan.yaml:ro,Z \
+  prow-job-runner:latest --dry-run \
+  --test-plan /etc/prow-job-runner/test-plan.yaml \
+  --pull-request 'openshift/installer#123'
+```
+
+For live submission outside a cluster, also mount a kubeconfig and pass its container path with `--kubeconfig`.

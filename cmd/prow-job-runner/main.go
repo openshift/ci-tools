@@ -6,6 +6,8 @@ import (
 	"fmt"
 	"io"
 	"os"
+	"os/signal"
+	"syscall"
 
 	"github.com/sirupsen/logrus"
 
@@ -22,6 +24,8 @@ func run(ctx context.Context, fs *flag.FlagSet, args []string, out io.Writer) er
 	fs.StringVar(&opts.TestPlan, "test-plan", "", "Local path or gs:// URL of the test plan YAML (required)")
 	fs.StringVar(&opts.PullRequest, "pull-request", "", "GitHub pull request, as <org>/<repo>#<number>")
 	fs.StringVar(&opts.PullRequestData, "pull-request-data", "", "Path to a GitHub pull request API response (JSON)")
+	fs.StringVar(&opts.ProwJobNamespace, "pj-namespace", "", "Namespace for ProwJob resources (defaults to prowjob_namespace from the release checkout)")
+	opts.Kubernetes.AddFlags(fs)
 	if err := fs.Parse(args); err != nil {
 		return err
 	}
@@ -33,9 +37,11 @@ func run(ctx context.Context, fs *flag.FlagSet, args []string, out io.Writer) er
 
 // main runs prow-job-runner and reports errors on stderr.
 func main() {
-	logrusutil.ComponentInit()
+	logrusutil.Init(&logrusutil.DefaultFieldsFormatter{WrappedFormatter: &logrus.TextFormatter{DisableColors: true}})
+	ctx, cancel := signal.NotifyContext(context.Background(), os.Interrupt, syscall.SIGTERM)
+	defer cancel()
 	fs := flag.NewFlagSet("prow-job-runner", flag.ExitOnError)
-	if err := run(context.Background(), fs, os.Args[1:], os.Stdout); err != nil {
+	if err := run(ctx, fs, os.Args[1:], os.Stdout); err != nil {
 		logrus.WithError(err).Fatal("prow-job-runner failed")
 	}
 }

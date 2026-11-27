@@ -6,9 +6,13 @@ import (
 	"errors"
 	"fmt"
 	"io"
+	"strings"
+	"time"
 
 	"github.com/sirupsen/logrus"
 
+	"k8s.io/apimachinery/pkg/util/validation"
+	"sigs.k8s.io/prow/pkg/flagutil"
 	"sigs.k8s.io/yaml"
 
 	"github.com/openshift/ci-tools/pkg/prow-job-runner/presubmits"
@@ -16,15 +20,17 @@ import (
 
 // Options selects the release checkout, ci-operator tests, pull request, and execution mode.
 type Options struct {
-	ReleaseRepo     string
-	TestPlan        string // Required local path or gs:// URL of the test plan.
-	PullRequest     string // GitHub org/repo#number; mutually exclusive with PullRequestData.
-	PullRequestData string // Path to a saved GitHub pull request API response.
-	DryRun          bool
+	ReleaseRepo      string
+	TestPlan         string // Required local path or gs:// URL of the test plan.
+	PullRequest      string // GitHub org/repo#number; mutually exclusive with PullRequestData.
+	PullRequestData  string // Path to a saved GitHub pull request API response.
+	ProwJobNamespace string // Optional override for the release configuration's prowjob_namespace.
+	DryRun           bool
+	Kubernetes       flagutil.KubernetesOptions
 }
 
-// Run resolves all requested tests before writing their ProwJob manifests to out in dry-run mode.
-// If neither PR source is supplied, it uses JOB_SPEC. Live submission returns an error.
+// Run resolves all requested tests, then submits and waits for them or writes their manifests to out in dry-run mode.
+// If neither PR source is supplied, it uses JOB_SPEC. It returns an error if any submitted job fails.
 func Run(ctx context.Context, opts Options, out io.Writer) error {
 	switch {
 	case opts.ReleaseRepo == "":
@@ -33,6 +39,14 @@ func Run(ctx context.Context, opts Options, out io.Writer) error {
 		return errors.New("--pull-request and --pull-request-data are mutually exclusive")
 	case opts.TestPlan == "":
 		return errors.New("--test-plan is required")
+	}
+	if opts.ProwJobNamespace != "" {
+		if errs := validation.IsDNS1123Label(opts.ProwJobNamespace); len(errs) != 0 {
+			return fmt.Errorf("invalid --pj-namespace %q: %s", opts.ProwJobNamespace, strings.Join(errs, "; "))
+		}
+	}
+	if err := opts.Kubernetes.Validate(opts.DryRun); err != nil {
+		return fmt.Errorf("validating Kubernetes options: %w", err)
 	}
 	tests, err := readTestPlan(ctx, opts.TestPlan, readGCSObject)
 	if err != nil {
@@ -51,8 +65,17 @@ func Run(ctx context.Context, opts Options, out io.Writer) error {
 	if err != nil {
 		return err
 	}
+	if opts.ProwJobNamespace != "" {
+		for _, job := range jobs {
+			job.Namespace = opts.ProwJobNamespace
+		}
+	}
 	if !opts.DryRun {
-		return errors.New("running presubmits: Not Implemented")
+		client, err := newProwJobClient(&opts.Kubernetes)
+		if err != nil {
+			return err
+		}
+		return execute(ctx, client, jobs, 10*time.Second)
 	}
 	for _, job := range jobs {
 		data, err := yaml.Marshal(job)

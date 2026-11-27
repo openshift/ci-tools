@@ -71,6 +71,7 @@ func ForTests(releaseRepo string, tests []api.MetadataWithTest, refs *prowapi.Re
 		if err != nil {
 			return nil, fmt.Errorf("resolving test %q from %s: %w", source.Test, source.AsString(), err)
 		}
+		job.Namespace = cfg.ProwJobNamespace
 		result = append(result, job)
 	}
 	return result, nil
@@ -81,13 +82,18 @@ func configurePresubmit(job *prowconfig.Presubmit, source api.MetadataWithTest, 
 	native := source.Org == refs.Org && source.Repo == refs.Repo && (source.Branch == refs.BaseRef ||
 		(strings.HasPrefix(refs.BaseRef, source.Branch+"-") && job.Brancher.ShouldRun(refs.BaseRef)))
 	spec := pjutil.PresubmitSpec(*job, *refs)
+	const contextPrefix = "ci/prow/dynamic-second-stage/"
+	spec.Report = true
+	if !strings.HasPrefix(spec.Context, contextPrefix) {
+		spec.Context = contextPrefix + strings.TrimPrefix(spec.Context, "ci/prow/")
+	}
 	if !native {
 		// Source-specific checkout settings, such as clone_uri, must not redirect the PR checkout.
 		spec.Refs = refs
 	}
 	pj := pjutil.NewProwJob(spec, job.Labels, job.Annotations, pjutil.RequireScheduling(schedulerEnabled))
 	logrus.WithFields(api.LogFieldsFor(source.Metadata)).WithFields(logrus.Fields{
-		"test": source.Test, "job": job.Name, "native": native,
+		"test": source.Test, "job": job.Name, "native": native, "context": spec.Context,
 		"cluster": pj.Spec.Cluster, "state": pj.Status.State,
 	}).Info("Configuring presubmit")
 	pod := pj.Spec.PodSpec

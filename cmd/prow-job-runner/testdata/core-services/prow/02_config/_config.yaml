@@ -1,3 +1,4 @@
+prowjob_namespace: ci
 scheduler:
   enabled: true
 presets:

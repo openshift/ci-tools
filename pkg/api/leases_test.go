@@ -4,6 +4,8 @@ import (
 	"testing"
 
 	"github.com/google/go-cmp/cmp"
+
+	"k8s.io/utils/ptr"
 )
 
 func TestLeasesForTest(t *testing.T) {
@@ -183,6 +185,26 @@ func TestIPPoolLeaseForTest(t *testing.T) {
 			ret := IPPoolLeaseForTest(tc.tests.ClusterProfileLiteral.IPPoolLeaseType, tc.metadata.Branch)
 			if diff := cmp.Diff(tc.expected, ret); diff != "" {
 				t.Errorf("incorrect lease returned, diff: %s", diff)
+			}
+		})
+	}
+}
+
+func TestLeasesForTestGCPWorkloadIdentity(t *testing.T) {
+	for _, tc := range []struct {
+		name string
+		flag *bool
+	}{{"unset", nil}, {"enabled", ptr.To(true)}, {"disabled", ptr.To(false)}} {
+		t.Run(tc.name, func(t *testing.T) {
+			leases := LeasesForTest(&TestStepConfiguration{MultiStageTestConfigurationLiteral: &MultiStageTestConfigurationLiteral{GCPWorkloadIdentity: tc.flag, ClusterProfileLiteral: &ClusterProfileLiteral{Name: "gcp"}, Leases: []StepLease{{ResourceType: "other"}}}})
+			if len(leases) != 2 {
+				t.Fatalf("expected two leases, got %d", len(leases))
+			}
+			if diff := cmp.Diff(tc.flag, leases[0].GCPWorkloadIdentity); diff != "" {
+				t.Fatal(diff)
+			}
+			if leases[1].GCPWorkloadIdentity != nil {
+				t.Fatal("unrelated lease inherited the opt-in")
 			}
 		})
 	}

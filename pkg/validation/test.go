@@ -12,6 +12,7 @@ import (
 	"k8s.io/apimachinery/pkg/api/resource"
 	"k8s.io/apimachinery/pkg/util/sets"
 	"k8s.io/apimachinery/pkg/util/validation"
+	"k8s.io/utils/ptr"
 
 	"github.com/openshift/ci-tools/pkg/api"
 	gsmvalidation "github.com/openshift/ci-tools/pkg/gsm-validation"
@@ -680,6 +681,9 @@ func (v *Validator) validateTestConfigurationType(
 			validationErrors = append(validationErrors, fmt.Errorf("%s: non-literal test found in fully-resolved configuration", fieldRoot))
 		}
 		typeCount++
+		if ptr.Deref(testConfig.GCPWorkloadIdentity, false) && testConfig.ClusterProfile == "" && testConfig.Workflow == nil {
+			validationErrors = append(validationErrors, fmt.Errorf("%s: gcp_workload_identity requires a cluster profile", fieldRoot))
+		}
 		if testConfig.ClusterProfile != "" {
 			clusterCount++
 			validationErrors = append(validationErrors, v.validateClusterProfile(fieldRoot, testConfig.ClusterProfile, test.As, metadata)...)
@@ -696,6 +700,9 @@ func (v *Validator) validateTestConfigurationType(
 	if testConfig := test.MultiStageTestConfigurationLiteral; testConfig != nil {
 		typeCount++
 		context := newContext(fieldPath(fieldRoot).addField("steps"), testConfig.Environment, releases, inputImagesSeen)
+		if ptr.Deref(testConfig.GCPWorkloadIdentity, false) && (testConfig.ClusterProfileLiteral == nil || testConfig.ClusterProfileLiteral.ClusterType != "gcp") {
+			validationErrors = append(validationErrors, fmt.Errorf("%s: gcp_workload_identity requires a GCP cluster profile", fieldRoot))
+		}
 		if testConfig.ClusterProfileLiteral != nil {
 			clusterCount++
 			validationErrors = append(validationErrors, v.validateClusterProfile(fieldRoot, testConfig.ClusterProfileLiteral.Name, test.As, metadata)...)

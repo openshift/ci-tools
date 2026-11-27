@@ -439,3 +439,12 @@ func TestProfileSecretName(t *testing.T) {
 		t.Fatalf("result does not match expected, diff: %s", diff)
 	}
 }
+
+func TestRunGCPWorkloadIdentityWithoutFederation(t *testing.T) {
+	params := api.NewDeferredParameters(nil)
+	params.Set(api.ClusterProfileParam, &api.ClusterProfile{Name: "other", ClusterType: "gcp"})
+	step := multiStageTestStep{params: params, gcpWorkloadIdentity: true}
+	if err := step.run(context.Background()); err == nil || err.Error() != "GCP workload identity requires a supported leased GCP profile" {
+		t.Fatalf("unexpected result: %v", err)
+	}
+}

@@ -10,6 +10,7 @@ import (
 
 	"k8s.io/apimachinery/pkg/util/diff"
 	utilerrors "k8s.io/apimachinery/pkg/util/errors"
+	"k8s.io/utils/ptr"
 
 	"github.com/openshift/ci-tools/pkg/api"
 	"github.com/openshift/ci-tools/pkg/testhelper"
@@ -2149,4 +2150,28 @@ func TestResolveLeasesCopy(t *testing.T) {
 	leases := []api.StepLease{ret0.Test[0].Leases[0], ret1.Test[0].Leases[0]}
 	expected := []api.StepLease{{Count: 42}, {Count: 0}}
 	testhelper.Diff(t, "leases", leases, expected)
+}
+
+func TestResolveGCPWorkloadIdentity(t *testing.T) {
+	for _, tc := range []struct {
+		name                string
+		workflow, job, want *bool
+	}{
+		{"unspecified", nil, nil, nil},
+		{"inherit true", ptr.To(true), nil, ptr.To(true)},
+		{"inherit false", ptr.To(false), nil, ptr.To(false)},
+		{"disable workflow", ptr.To(true), ptr.To(false), ptr.To(false)},
+		{"enable job", ptr.To(false), ptr.To(true), ptr.To(true)},
+	} {
+		t.Run(tc.name, func(t *testing.T) {
+			r := NewResolver(nil, nil, WorkflowByName{"workflow": {GCPWorkloadIdentity: tc.workflow}}, nil, api.ClusterProfiles{})
+			got, err := r.Resolve("test", api.MultiStageTestConfiguration{Workflow: ptr.To("workflow"), GCPWorkloadIdentity: tc.job})
+			if err != nil {
+				t.Fatal(err)
+			}
+			if diff := cmp.Diff(tc.want, got.GCPWorkloadIdentity); diff != "" {
+				t.Fatal(diff)
+			}
+		})
+	}
 }

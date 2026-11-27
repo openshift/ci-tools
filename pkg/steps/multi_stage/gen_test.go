@@ -801,3 +801,26 @@ func TestSetSecurityContexts(t *testing.T) {
 		})
 	}
 }
+
+func TestGCPWorkloadIdentityPod(t *testing.T) {
+	for _, tc := range []struct{ name, account string }{{"leased member two", "jobs2@example.com"}, {"leased member three", "jobs3@example.com"}} {
+		t.Run(tc.name, func(t *testing.T) {
+			pod := &coreapi.Pod{Spec: coreapi.PodSpec{Containers: []coreapi.Container{{Name: "test"}}}}
+			addGCPWorkloadIdentity(pod, "home", &api.GCPFederation{HubRoleARN: "hub", Provider: "provider", ServiceAccount: tc.account})
+			c := pod.Spec.Containers[0]
+			if len(c.VolumeMounts) != 1 || c.VolumeMounts[0].Name != "gcp-access-token" || !c.VolumeMounts[0].ReadOnly {
+				t.Fatalf("unexpected workload mounts: %+v", c.VolumeMounts)
+			}
+			if len(c.Env) != 1 || c.Env[0].Name != "CLOUDSDK_AUTH_ACCESS_TOKEN_FILE" {
+				t.Fatalf("unexpected workload environment: %+v", c.Env)
+			}
+			helper := pod.Spec.InitContainers[0]
+			if helper.VolumeMounts[1].Name != stsTokenVolumeName || helper.RestartPolicy == nil || *helper.RestartPolicy != coreapi.ContainerRestartPolicyAlways || helper.StartupProbe == nil {
+				t.Fatal("helper lacks an AWS identity or startup ordering")
+			}
+			if got := helper.Command[len(helper.Command)-1]; got != tc.account {
+				t.Fatalf("wrong destination: %s", got)
+			}
+		})
+	}
+}

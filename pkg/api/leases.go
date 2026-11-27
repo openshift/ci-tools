@@ -12,10 +12,11 @@ func LeasesForTest(test *TestStepConfiguration) (ret []StepLease) {
 	multiStageTest := test.MultiStageTestConfigurationLiteral
 	if p := multiStageTest.ClusterProfileLiteral; p != nil {
 		ret = append(ret, StepLease{
-			ResourceType:   p.LeaseType,
-			Env:            DefaultLeaseEnv,
-			Count:          1,
-			ClusterProfile: p,
+			ResourceType:        p.LeaseType,
+			Env:                 DefaultLeaseEnv,
+			Count:               1,
+			ClusterProfile:      p,
+			GCPWorkloadIdentity: multiStageTest.GCPWorkloadIdentity,
 		})
 	}
 	for _, step := range append(multiStageTest.Pre, append(multiStageTest.Test, multiStageTest.Post...)...) {

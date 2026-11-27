@@ -223,6 +223,7 @@ func (s *inputImageTagStep) Objects() []ctrlruntimeclient.Object {
 	return s.client.Objects()
 }
 
+// InputImageTagStep resolves an external input image and tags it into the job's pipeline image stream.
 func InputImageTagStep(
 	config *api.InputImageTagStepConfiguration,
 	client loggingclient.LoggingClient,

@@ -39,3 +39,27 @@ Omit `--dry-run` to submit jobs to the Prow infrastructure cluster and wait for 
 The command accepts Prow's full Kubernetes flag group: `--kubeconfig`, `--kubeconfig-dir`, `--kubeconfig-suffix` (filters directory entries), `--projected-token-file` (for in-cluster authentication), and `--no-in-cluster-config`. The last flag omits the infrastructure context needed for live submission. Dry runs do not create a Kubernetes client.
 
 If a create response is lost, the runner checks for the job by name. It retries transient status reads and waits for Prow to mark each job complete, including aborted jobs. A rejected submission, a permanent read error, or any completed job that did not succeed causes an unsuccessful exit after the remaining jobs finish. Interrupting the command stops waiting but does not cancel or delete submitted jobs.
+
+## Container image
+
+Build the Linux binary and image from the repository root:
+
+```sh
+mkdir -p _output/bin
+GOOS=linux GOARCH=amd64 go build -o _output/bin/prow-job-runner ./cmd/prow-job-runner
+podman build --platform linux/amd64 -f images/prow-job-runner/Dockerfile \
+  -t prow-job-runner:latest _output/bin
+```
+
+The image includes the runner as its entrypoint, but not the release checkout or test plan. Mount those inputs when running it:
+
+```sh
+podman run --rm \
+  -v /path/to/release:/home/prow/go/src/github.com/openshift/release:ro,z \
+  -v /path/to/test-plan.yaml:/etc/prow-job-runner/test-plan.yaml:ro,Z \
+  prow-job-runner:latest --dry-run \
+  --test-plan /etc/prow-job-runner/test-plan.yaml \
+  --pull-request 'openshift/installer#123'
+```
+
+For live submission outside a cluster, also mount a kubeconfig and pass its container path with `--kubeconfig`.

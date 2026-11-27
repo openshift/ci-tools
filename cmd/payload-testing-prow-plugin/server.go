@@ -29,6 +29,7 @@ import (
 
 	"github.com/openshift/ci-tools/pkg/api"
 	prpqv1 "github.com/openshift/ci-tools/pkg/api/pullrequestpayloadqualification/v1"
+	cioperatorconfig "github.com/openshift/ci-tools/pkg/config"
 	"github.com/openshift/ci-tools/pkg/release/config"
 )
 
@@ -145,6 +146,11 @@ func (c *githubTrustedChecker) trustedUser(author, org, repo string, _ int) (boo
 	return triggerTrustedResponse.IsTrusted, nil
 }
 
+// publicConfigInventory supplies the public repository naming inventory.
+type publicConfigInventory interface {
+	GetAll() cioperatorconfig.ByOrgRepo
+}
+
 type server struct {
 	ghc                 githubClient
 	ctx                 context.Context
@@ -154,6 +160,7 @@ type server struct {
 	testResolver        testResolver
 	trustedChecker      trustedChecker
 	ciOpConfigResolver  ciOpConfigResolver
+	publicConfigs       publicConfigInventory
 	privatePayloadGroup string
 	isTrustedApp        func(string) bool
 }
@@ -444,7 +451,17 @@ func (s *server) handle(l *logrus.Entry, ic github.IssueCommentEvent) (string, [
 		return deny, nil
 	}
 
-	ciOpConfig, err := s.ciOpConfigResolver.Config(&api.Metadata{Org: org, Repo: repo, Branch: pr.Base.Ref})
+	eligibility := api.Metadata{Org: org, Repo: repo, Branch: pr.Base.Ref}
+	if org == "openshift-priv" {
+		if s.publicConfigs == nil {
+			return formatError(fmt.Errorf("public configuration inventory is unavailable")), nil
+		}
+		eligibility, err = publicCounterpart(eligibility, s.publicConfigs.GetAll())
+		if err != nil {
+			return formatError(err), nil
+		}
+	}
+	ciOpConfig, err := s.ciOpConfigResolver.Config(&eligibility)
 	if err != nil {
 		logger.WithError(err).Error("could not resolve ci-operator's config")
 		return formatError(fmt.Errorf("could not resolve ci-operator's config for %s/%s/%s: %w", org, repo, pr.Base.Ref, err)), nil
